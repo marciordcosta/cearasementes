@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BI Local — Análise de Relatórios</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { darkMode: 'class' };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --page:      #f9f9f7;
+    --surface:   #fcfcfb;
+    --text-1:    #0b0b0b;
+    --text-2:    #52514e;
+    --muted:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+  }
+  html.dark {
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --text-1:    #ffffff;
+    --text-2:    #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --baseline:  #383835;
+    --border:    rgba(255,255,255,0.10);
+  }
+  body { background: var(--page); color: var(--text-1); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .card { background: var(--surface); border: 1px solid var(--border); }
+  ::-webkit-scrollbar { height: 8px; width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--baseline); border-radius: 4px; }
+  .dropzone.drag-over { border-color: #2a78d6; background: rgba(42,120,214,0.06); }
+  .tabular { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<header class="sticky top-0 z-10 backdrop-blur card border-b" style="border-bottom:1px solid var(--border);">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
+    <div>
+      <h1 class="text-lg font-semibold" style="color:var(--text-1)">BI Local — Análise de Relatórios</h1>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap shrink-0">
+      <div id="yearFilterWrap" class="hidden items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-1">
+          <label for="periodMode" class="text-sm" style="color:var(--text-2)">Agrupar por:</label>
+          <select id="periodMode" class="text-sm px-2 py-1.5 rounded-md border" style="border-color:var(--border); color:var(--text-2); background:var(--surface)">
+            <option value="calendar">Ano civil</option>
+            <option value="season">Safra</option>
+          </select>
+        </div>
+        <div id="seasonStartWrap" class="hidden items-center gap-1">
+          <label for="seasonStartMonth" class="text-sm" style="color:var(--text-2)">Início da safra:</label>
+          <select id="seasonStartMonth" class="text-sm px-2 py-1.5 rounded-md border" style="border-color:var(--border); color:var(--text-2); background:var(--surface)">
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10" selected>Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-1">
+          <label for="yearFilter" id="yearFilterLabel" class="text-sm" style="color:var(--text-2)">Ano:</label>
+          <select id="yearFilter" class="text-sm px-2 py-1.5 rounded-md border" style="border-color:var(--border); color:var(--text-2); background:var(--surface)"></select>
+        </div>
+      </div>
+      <button id="exportPdfBtn" class="text-sm px-3 py-1.5 rounded-md border" style="border-color:var(--border); color:var(--text-2)">
+        <span id="exportPdfLabel">Exportar PDF</span>
+      </button>
+      <button id="themeToggle" class="text-sm px-3 py-1.5 rounded-md border" style="border-color:var(--border); color:var(--text-2)">
+        <span id="themeToggleLabel">Modo escuro</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 space-y-10">
+
+  <!-- Upload -->
+  <section id="uploadSection" class="space-y-3">
+    <div id="dropzone" class="dropzone rounded-xl border-2 border-dashed p-10 text-center cursor-pointer transition-colors" style="border-color:var(--baseline);">
+      <p class="font-medium" style="color:var(--text-1)">Arraste e solte os arquivos XLS/XLSX/CSV aqui</p>
+      <p class="text-sm mt-1" style="color:var(--text-2)">ou clique para selecionar (aceita múltiplos arquivos — relatórios 124 e 396)</p>
+      <input id="fileInput" type="file" accept=".csv,.xls,.xlsx" multiple class="hidden">
+    </div>
+    <div>
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold" style="color:var(--text-2)">Arquivos processados</h3>
+        <button id="clearBtn" class="text-xs px-2 py-1 rounded border" style="border-color:var(--border); color:var(--text-2)">Limpar tudo</button>
+      </div>
+      <ul id="fileLog" class="mt-2 space-y-1 text-sm"></ul>
+    </div>
+  </section>
+
+  <!-- Comparativo Anual -->
+  <section id="yearComparisonSection" class="hidden space-y-4">
+    <h2 id="yearComparisonHeading" class="text-base font-semibold" style="color:var(--text-1)">Comparativo Anual</h2>
+    <div class="card rounded-xl overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left" style="color:var(--muted); border-bottom:1px solid var(--border);">
+            <th id="yearComparisonColHeading" class="px-4 py-2 font-medium">Ano</th>
+            <th class="px-4 py-2 font-medium text-right">Faturamento Líquido</th>
+            <th class="px-4 py-2 font-medium text-right">Registros</th>
+            <th class="px-4 py-2 font-medium text-right">Clientes</th>
+            <th class="px-4 py-2 font-medium text-right">Pedidos (Transportadoras)</th>
+            <th class="px-4 py-2 font-medium text-right">Valor Transportado</th>
+          </tr>
+        </thead>
+        <tbody id="yearComparisonBody" class="tabular"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 396 -->
+  <section class="space-y-4">
+    <h2 class="text-base font-semibold" style="color:var(--text-1)">Vendas por Tabela de Preço <span class="font-normal" style="color:var(--text-2)">(Relatório 396)</span></h2>
+    <div id="emptyState396" class="text-sm rounded-lg card p-4" style="color:var(--text-2)">Nenhum arquivo do relatório 396 importado ainda.</div>
+    <div id="content396" class="hidden space-y-6">
+      <div id="totalCard396"></div>
+      <div class="card rounded-xl overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left" style="color:var(--muted); border-bottom:1px solid var(--border);">
+              <th class="px-4 py-2 font-medium">Tabela de Preço</th>
+              <th class="px-4 py-2 font-medium text-right">Valor Bruto</th>
+              <th class="px-4 py-2 font-medium text-right">Desconto</th>
+              <th class="px-4 py-2 font-medium text-right">Valor Líquido</th>
+              <th class="px-4 py-2 font-medium text-right">Registros</th>
+              <th class="px-4 py-2 font-medium text-right">Clientes</th>
+              <th class="px-4 py-2 font-medium">Arquivo</th>
+            </tr>
+          </thead>
+          <tbody id="table396Body" class="tabular"></tbody>
+        </table>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold mb-2" style="color:var(--text-2)">Faturamento por Mês</h3>
+        <div id="monthlyCards396" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 124 -->
+  <section class="space-y-4">
+    <h2 class="text-base font-semibold" style="color:var(--text-1)">Entregas por Transportadora <span class="font-normal" style="color:var(--text-2)">(Relatório 124)</span></h2>
+    <div id="emptyState124" class="text-sm rounded-lg card p-4" style="color:var(--text-2)">Nenhum arquivo do relatório 124 importado ainda.</div>
+    <div id="content124" class="hidden space-y-6">
+      <div id="cards124" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+      <div class="card rounded-xl overflow-x-auto max-h-96 overflow-y-auto">
+        <table class="w-full text-sm">
+          <thead class="sticky top-0" style="background:var(--surface);">
+            <tr class="text-left" style="color:var(--muted); border-bottom:1px solid var(--border);">
+              <th class="px-4 py-2 font-medium">Transportadora</th>
+              <th class="px-4 py-2 font-medium text-right">Pedidos</th>
+              <th class="px-4 py-2 font-medium text-right">Valor Total</th>
+            </tr>
+          </thead>
+          <tbody id="table124Body" class="tabular"></tbody>
+        </table>
+      </div>
+      <div class="card rounded-xl p-4">
+        <p class="text-sm font-medium mb-2" style="color:var(--text-2)">Envios por Transportadora e Mês</p>
+        <div id="chart124MonthlyWrap" class="h-72"><canvas id="chart124Monthly"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const CAT_LIGHT = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+const CAT_DARK  = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+
+const COL_124_ENTREGADOR = 14; // coluna O
+const COL_124_VALOR      = 15; // coluna P
+const COL_124_DATA       = 10; // coluna K
+const COL_396_VLR_BRUTO    = 5;  // coluna F — fallback se o cabeçalho não for encontrado
+const COL_396_DESCONTO     = 6;  // coluna G — fallback
+const COL_396_VLR_LIQUIDO  = 8;  // coluna I (Vlr.C.Desc) — fallback
+const COL_396_DATA         = 15; // coluna P (Data) — fallback
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+const state = {
+  carriers: new Map(),    // nome -> {pedidos, valor, monthly: Map('YYYY-MM' -> {pedidos, valor})}
+  priceTables: [],        // [{name, fileName, overall, monthly: [{year, month, label, valor, valorBruto, desconto, registros, clientSet}]}]
+  selectedYear: 'all',
+  periodMode: 'calendar', // 'calendar' | 'season'
+  seasonStartMonth: 10    // mês (1-12) em que a safra começa, quando periodMode === 'season'
+};
+const charts = {};
+
+// Ano civil: cada período é o próprio ano ("2025"). Safra: um período cobre
+// seasonStartMonth do ano Y até o mês anterior do ano Y+1 ("2024/2025").
+function getPeriodKeyFor(year, month) {
+  if (state.periodMode === 'season') {
+    return month >= state.seasonStartMonth ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+  }
+  return String(year);
+}
+
+function getPeriodLabel(key) {
+  if (state.periodMode === 'season') {
+    const [y1, y2] = key.split('/');
+    return `Safra ${y1.slice(2)}/${y2.slice(2)}`;
+  }
+  return key;
+}
+
+function getAvailableYears() {
+  const periods = new Set();
+  state.priceTables.forEach(t => t.monthly.forEach(m => periods.add(getPeriodKeyFor(m.year, m.month))));
+  state.carriers.forEach(c => c.monthly.forEach((_, key) => {
+    const [y, mo] = key.split('-');
+    periods.add(getPeriodKeyFor(Number(y), Number(mo)));
+  }));
+  return Array.from(periods).sort();
+}
+
+function tablePeriodStats(t, periodKey) {
+  const months = t.monthly.filter(m => getPeriodKeyFor(m.year, m.month) === periodKey);
+  if (months.length === 0) return null;
+  const clientSet = new Set();
+  months.forEach(m => m.clientSet.forEach(code => clientSet.add(code)));
+  return {
+    valorBruto: months.reduce((s, m) => s + m.valorBruto, 0),
+    desconto: months.reduce((s, m) => s + m.desconto, 0),
+    valorLiquido: months.reduce((s, m) => s + m.valor, 0),
+    registros: months.reduce((s, m) => s + m.registros, 0),
+    qtdCliente: clientSet.size
+  };
+}
+
+// Junta o faturamento (todas as tabelas de preço) e os dados de transportadoras
+// de um mês/ano específico, não importa a qual período (ano civil ou safra) ele
+// pertença. Retorna null se não há nenhum dado reconhecido para esse mês.
+function getMonthAggregate(year, month) {
+  const key = `${year}-${String(month).padStart(2, '0')}`;
+  let valorLiquido = 0, registros = 0, pedidos = 0, valorTransportado = 0;
+  const clientSet = new Set();
+  let found = false;
+  state.priceTables.forEach(t => {
+    t.monthly.forEach(m => {
+      if (m.year === year && m.month === month) {
+        found = true;
+        valorLiquido += m.valor;
+        registros += m.registros;
+        m.clientSet.forEach(code => clientSet.add(code));
+      }
+    });
+  });
+  state.carriers.forEach(c => {
+    const m = c.monthly.get(key);
+    if (m) { found = true; pedidos += m.pedidos; valorTransportado += m.valor; }
+  });
+  if (!found) return null;
+  return { key, year, month, label: `${MESES_PT[month - 1]}/${year}`, valorLiquido, registros, qtdCliente: clientSet.size, pedidos, valorTransportado };
+}
+
+// Lista os meses (com seus totais) dentro de um período (ano civil ou safra),
+// para o detalhe expansível do Comparativo.
+function getPeriodMonthlyBreakdown(periodKey) {
+  const monthKeys = new Set();
+  state.priceTables.forEach(t => t.monthly.forEach(m => {
+    if (getPeriodKeyFor(m.year, m.month) === periodKey) monthKeys.add(`${m.year}-${String(m.month).padStart(2, '0')}`);
+  }));
+  state.carriers.forEach(c => c.monthly.forEach((_, key) => {
+    const [y, mo] = key.split('-');
+    if (getPeriodKeyFor(Number(y), Number(mo)) === periodKey) monthKeys.add(key);
+  }));
+
+  return Array.from(monthKeys).sort().map(key => {
+    const [y, mo] = key.split('-');
+    return getMonthAggregate(Number(y), Number(mo));
+  });
+}
+
+// Retorna uma "visão" de cada tabela de preço com os números já recortados
+// para o período selecionado (ou o total geral, se "all"). Tabelas sem dado
+// no período escolhido ficam de fora.
+function getFilteredPriceTables() {
+  return state.priceTables.map(t => {
+    const stats = state.selectedYear === 'all' ? t.overall : tablePeriodStats(t, state.selectedYear);
+    if (!stats) return null;
+    const monthly = state.selectedYear === 'all' ? t.monthly : t.monthly.filter(m => getPeriodKeyFor(m.year, m.month) === state.selectedYear);
+    return {
+      name: t.name, fileName: t.fileName,
+      valorBruto: stats.valorBruto, desconto: stats.desconto, valorLiquido: stats.valorLiquido,
+      totalReg: stats.registros, qtdCliente: stats.qtdCliente,
+      monthly, ref: t
+    };
+  }).filter(v => v !== null);
+}
+
+function getFilteredCarrierRows() {
+  const rows = [];
+  state.carriers.forEach((c, name) => {
+    if (state.selectedYear === 'all') {
+      rows.push({ name, pedidos: c.pedidos, valor: c.valor });
+      return;
+    }
+    let pedidos = 0, valor = 0;
+    c.monthly.forEach((m, key) => {
+      const [y, mo] = key.split('-');
+      if (getPeriodKeyFor(Number(y), Number(mo)) === state.selectedYear) { pedidos += m.pedidos; valor += m.valor; }
+    });
+    if (pedidos > 0) rows.push({ name, pedidos, valor });
+  });
+  return rows;
+}
+
+const fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtInt = new Intl.NumberFormat('pt-BR');
+
+function fmtPct(part, total) {
+  if (!total) return '—';
+  return (part / total * 100).toFixed(1).replace('.', ',') + '%';
+}
+
+function isDark() { return document.documentElement.classList.contains('dark'); }
+function palette() { return isDark() ? CAT_DARK : CAT_LIGHT; }
+function chrome() {
+  return isDark()
+    ? { text2: '#c3c2b7', muted: '#898781', grid: '#2c2c2a', baseline: '#383835' }
+    : { text2: '#52514e', muted: '#898781', grid: '#e1e0d9', baseline: '#c3c2b7' };
+}
+
+function compact(v) {
+  const abs = Math.abs(v);
+  if (abs >= 1e6) return 'R$ ' + (v / 1e6).toFixed(1).replace('.', ',') + 'M';
+  if (abs >= 1e3) return 'R$ ' + (v / 1e3).toFixed(1).replace('.', ',') + 'K';
+  return fmtBRL.format(v);
+}
+
+// ---------- Theme toggle ----------
+const themeToggle = document.getElementById('themeToggle');
+const themeToggleLabel = document.getElementById('themeToggleLabel');
+function applyTheme(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  themeToggleLabel.textContent = dark ? 'Modo claro' : 'Modo escuro';
+  localStorage.setItem('bi-theme', dark ? 'dark' : 'light');
+  renderYearComparison();
+  renderMonthly396();
+  renderChart124Monthly();
+}
+const savedTheme = localStorage.getItem('bi-theme');
+applyTheme(savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches);
+themeToggle.addEventListener('click', () => applyTheme(!isDark()));
+
+// ---------- File log ----------
+function addLog(message, level) {
+  const li = document.createElement('li');
+  const color = level === 'ok' ? '#0ca30c' : level === 'warn' ? '#fab219' : '#d03b3b';
+  li.className = 'flex items-start gap-2';
+  li.innerHTML = `<span style="color:${color}">●</span><span style="color:var(--text-2)">${message}</span>`;
+  document.getElementById('fileLog').prepend(li);
+}
+
+// ---------- CSV helpers ----------
+async function readFileSmart(file) {
+  const buf = await file.arrayBuffer();
+  let text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
+  if (text.includes('�')) {
+    text = new TextDecoder('windows-1252').decode(buf);
+  }
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  return text;
+}
+
+function detectDelimiter(lines) {
+  let semi = 0, comma = 0, checked = 0;
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    semi += (line.match(/;/g) || []).length;
+    comma += (line.match(/,/g) || []).length;
+    checked++;
+    if (checked >= 8) break;
+  }
+  return semi >= comma ? ';' : ',';
+}
+
+function parseCSVLine(line, delimiter) {
+  const result = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuotes = false;
+      } else cur += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === delimiter) { result.push(cur); cur = ''; }
+      else cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function parseAnyDate(raw) {
+  if (raw instanceof Date && !isNaN(raw)) return raw;
+  if (typeof raw === 'number' && raw > 0 && typeof XLSX !== 'undefined' && XLSX.SSF && typeof XLSX.SSF.parse_date_code === 'function') {
+    const parsed = XLSX.SSF.parse_date_code(raw);
+    if (parsed) return new Date(parsed.y, parsed.m - 1, parsed.d);
+  }
+  if (typeof raw === 'string') {
+    const m = raw.trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if (m) {
+      let [, d, mo, y] = m;
+      if (y.length === 2) y = '20' + y;
+      const dt = new Date(Number(y), Number(mo) - 1, Number(d));
+      if (!isNaN(dt)) return dt;
+    }
+  }
+  return null;
+}
+
+function parseBRNumber(raw) {
+  if (raw === undefined || raw === null) return NaN;
+  if (typeof raw === 'number') return raw;
+  let s = String(raw).trim();
+  s = s.replace(/[^\d,.\-]/g, '');
+  if (s === '' || s === '-') return NaN;
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  if (hasComma && hasDot) s = s.replace(/\./g, '').replace(',', '.');
+  else if (hasComma) s = s.replace(',', '.');
+  const n = parseFloat(s);
+  return n;
+}
+
+function findColumnByHeader(rows, headerRegex) {
+  for (const row of rows) {
+    for (let c = 0; c < row.length; c++) {
+      if (headerRegex.test(String(row[c] ?? '').trim())) return c;
+    }
+  }
+  return -1;
+}
+
+// ---------- File → rows (XLS/XLSX via SheetJS, CSV via manual parser) ----------
+async function extractRowGroups(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    const buf = await file.arrayBuffer();
+    const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+    return workbook.SheetNames.map(sheetName => ({
+      label: workbook.SheetNames.length > 1 ? `${file.name} (${sheetName})` : file.name,
+      rows: XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '', raw: true, blankrows: true })
+    }));
+  }
+  const text = await readFileSmart(file);
+  const lines = text.split(/\r\n|\r|\n/);
+  const delimiter = detectDelimiter(lines);
+  return [{ label: file.name, rows: lines.map(line => parseCSVLine(line, delimiter)) }];
+}
+
+// ---------- Report processors ----------
+function process124(fileName, rows) {
+  const colData = findColumnByHeader(rows, /^Data$/i);
+  const dataIdx = colData >= 0 ? colData : COL_124_DATA;
+  let added = 0;
+  let withDate = 0;
+  for (const row of rows) {
+    if (!row || row.length <= COL_124_VALOR) continue;
+    const nome = String(row[COL_124_ENTREGADOR] ?? '').trim();
+    if (!nome) continue;
+    if (/entregador/i.test(nome) || /total/i.test(nome) || /retirada/i.test(nome)) continue;
+    const valor = parseBRNumber(row[COL_124_VALOR]);
+    if (isNaN(valor)) continue;
+    if (!state.carriers.has(nome)) state.carriers.set(nome, { pedidos: 0, valor: 0, monthly: new Map() });
+    const c = state.carriers.get(nome);
+    c.pedidos += 1;
+    c.valor += valor;
+    added++;
+    const date = parseAnyDate(row[dataIdx]);
+    if (date) {
+      withDate++;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!c.monthly.has(key)) c.monthly.set(key, { pedidos: 0, valor: 0 });
+      const m = c.monthly.get(key);
+      m.pedidos += 1;
+      m.valor += valor;
+    }
+  }
+  if (added > 0) addLog(`<strong style="color:var(--text-1)">${fileName}</strong> — Relatório 124 processado (${fmtInt.format(added)} linhas agregadas${withDate > 0 ? `, ${fmtInt.format(withDate)} com data reconhecida` : ''}).`, 'ok');
+  else addLog(`<strong style="color:var(--text-1)">${fileName}</strong> identificado como Relatório 124, mas nenhuma linha válida foi encontrada na coluna O/P.`, 'warn');
+}
+
+function process396(fileName, rows) {
+  let tableName = 'Tabela não identificada';
+  const fullText = rows.map(r => r.join(' | ')).join('\n');
+  const tableMatch = fullText.match(/Tab\.?\s*Pre[çc]o\.?\s*:?\s*([^|,\n\r]+)/i);
+  if (tableMatch) tableName = tableMatch[1].trim();
+
+  let totalsRow = null;
+  for (const row of rows) {
+    if (row.some(cell => /Total\s*Reg\.?\s*:/i.test(String(cell ?? '')))) totalsRow = row;
+  }
+
+  const colBruto = findColumnByHeader(rows, /^Vlr\.?\s*S\.?\s*Desc\.?$/i);
+  const colDesconto = findColumnByHeader(rows, /^V\.?\s*Desc\.?$/i);
+  const colLiquido = findColumnByHeader(rows, /^Vlr\.?\s*C\.?\s*Desc\.?$/i);
+  const colData = findColumnByHeader(rows, /^Data$/i);
+  const colCliente = findColumnByHeader(rows, /^C[oó]d\.?\s*Cli/i);
+
+  const brutoIdx = colBruto >= 0 ? colBruto : COL_396_VLR_BRUTO;
+  const descontoIdx = colDesconto >= 0 ? colDesconto : COL_396_DESCONTO;
+  const liquidoIdx = colLiquido >= 0 ? colLiquido : COL_396_VLR_LIQUIDO;
+  const dataIdx = colData >= 0 ? colData : COL_396_DATA;
+  const clienteIdx = colCliente >= 0 ? colCliente : 0;
+
+  // Soma tudo a partir das linhas de detalhe (não do rodapé) — assim cada linha
+  // carrega sua própria data. O agrupamento em "período" (ano civil ou safra)
+  // é feito depois, na hora de exibir — não fica travado no ano civil aqui.
+  const overall = { valorBruto: 0, desconto: 0, valorLiquido: 0, registros: 0, clientes: new Set() };
+  const monthlyMap = new Map(); // 'YYYY-MM' -> {valorLiquido, valorBruto, desconto, registros, clientes:Set}
+
+  for (const row of rows) {
+    if (row === totalsRow) continue;
+    const liquidoVal = parseBRNumber(row[liquidoIdx]);
+    if (isNaN(liquidoVal)) continue;
+
+    const brutoVal = parseBRNumber(row[brutoIdx]) || 0;
+    const descontoVal = parseBRNumber(row[descontoIdx]) || 0;
+    const clienteCode = String(row[clienteIdx] ?? '').trim();
+
+    overall.valorBruto += brutoVal;
+    overall.desconto += descontoVal;
+    overall.valorLiquido += liquidoVal;
+    overall.registros += 1;
+    if (clienteCode) overall.clientes.add(clienteCode);
+
+    const date = parseAnyDate(row[dataIdx]);
+    if (date) {
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyMap.has(key)) monthlyMap.set(key, { valorLiquido: 0, valorBruto: 0, desconto: 0, registros: 0, clientes: new Set() });
+      const mm = monthlyMap.get(key);
+      mm.valorLiquido += liquidoVal;
+      mm.valorBruto += brutoVal;
+      mm.desconto += descontoVal;
+      mm.registros += 1;
+      if (clienteCode) mm.clientes.add(clienteCode);
+    }
+  }
+
+  if (overall.registros === 0) {
+    addLog(`<strong style="color:var(--text-1)">${fileName}</strong> identificado como Relatório 396, mas nenhuma linha de detalhe foi reconhecida.`, 'error');
+    return;
+  }
+
+  if (totalsRow) {
+    const footerLiquido = parseBRNumber(totalsRow[liquidoIdx]) || 0;
+    if (footerLiquido > 0) {
+      const diff = Math.abs(footerLiquido - overall.valorLiquido) / footerLiquido;
+      if (diff > 0.01) {
+        addLog(`<strong style="color:var(--text-1)">${fileName}</strong>: soma das linhas (${fmtBRL.format(overall.valorLiquido)}) difere do total do rodapé (${fmtBRL.format(footerLiquido)}) em ${(diff * 100).toFixed(1)}% — confira se todas as linhas têm valores reconhecíveis.`, 'warn');
+      }
+    }
+  }
+
+  const monthly = Array.from(monthlyMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, m]) => {
+      const [y, mo] = key.split('-');
+      return {
+        year: Number(y), month: Number(mo), label: `${MESES_PT[Number(mo) - 1]}/${y}`,
+        valor: m.valorLiquido, valorBruto: m.valorBruto, desconto: m.desconto, registros: m.registros,
+        clientSet: m.clientes
+      };
+    });
+
+  state.priceTables.push({
+    name: tableName, fileName,
+    overall: { valorBruto: overall.valorBruto, desconto: overall.desconto, valorLiquido: overall.valorLiquido, registros: overall.registros, qtdCliente: overall.clientes.size },
+    monthly
+  });
+  addLog(`<strong style="color:var(--text-1)">${fileName}</strong> — Relatório 396 processado (Tabela: ${tableName}${monthly.length ? `, ${monthly.length} mês(es)` : ''}).`, 'ok');
+}
+
+async function handleFiles(fileList) {
+  for (const file of Array.from(fileList)) {
+    if (!/\.(csv|xls|xlsx)$/i.test(file.name)) {
+      addLog(`<strong style="color:var(--text-1)">${file.name}</strong> ignorado (formato não suportado — use .csv, .xls ou .xlsx).`, 'warn');
+      continue;
+    }
+    let groups;
+    try {
+      groups = await extractRowGroups(file);
+    } catch (err) {
+      addLog(`<strong style="color:var(--text-1)">${file.name}</strong> não pôde ser lido (${err.message}).`, 'error');
+      continue;
+    }
+    for (const group of groups) {
+      const lower = group.rows.map(r => r.join(' ')).join('\n').toLowerCase();
+      if (lower.includes('124 - supervisão de entregas') || lower.includes('124 - supervisao de entregas')) {
+        process124(group.label, group.rows);
+      } else if (lower.includes('396 - vendas por cliente')) {
+        process396(group.label, group.rows);
+      } else {
+        addLog(`<strong style="color:var(--text-1)">${group.label}</strong> não reconhecido — cabeçalho não corresponde a 124 ou 396.`, 'warn');
+      }
+    }
+  }
+  renderDashboard();
+}
+
+// ---------- Rendering ----------
+function statTile(label, value, sub) {
+  return `<div>
+    <p class="text-xs" style="color:var(--muted)">${label}</p>
+    <p class="text-lg font-semibold tabular" style="color:var(--text-1)">${value}</p>
+    ${sub ? `<p class="text-xs" style="color:var(--text-2)">${sub}</p>` : ''}
+  </div>`;
+}
+
+function renderDashboard() {
+  renderYearFilterUI();
+  renderYearComparison();
+  renderTables396();
+  renderMonthly396();
+  renderTables124();
+  renderChart124Monthly();
+}
+
+function renderYearFilterUI() {
+  const periods = getAvailableYears();
+  const wrap = document.getElementById('yearFilterWrap');
+  const select = document.getElementById('yearFilter');
+  const periodLabel = document.getElementById('yearFilterLabel');
+  if (periodLabel) periodLabel.textContent = state.periodMode === 'season' ? 'Safra:' : 'Ano:';
+  if (periods.length < 2) {
+    wrap.classList.add('hidden');
+    wrap.classList.remove('flex');
+    state.selectedYear = 'all';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  wrap.classList.add('flex');
+  const current = select.value;
+  select.innerHTML = periods.map(p => `<option value="${p}">${getPeriodLabel(p)}</option>`).join('');
+  select.value = periods.includes(current) ? current : periods[periods.length - 1];
+  state.selectedYear = select.value;
+}
+
+function renderYearComparison() {
+  const periods = getAvailableYears();
+  const section = document.getElementById('yearComparisonSection');
+  const heading = document.getElementById('yearComparisonHeading');
+  const colHeading = document.getElementById('yearComparisonColHeading');
+  if (periods.length < 2) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  if (heading) heading.textContent = state.periodMode === 'season' ? 'Comparativo entre Safras' : 'Comparativo Anual';
+  if (colHeading) colHeading.textContent = state.periodMode === 'season' ? 'Safra' : 'Ano';
+
+  const colors = palette();
+  const rowsByPeriod = periods.map(period => {
+    const stats = state.priceTables.map(t => tablePeriodStats(t, period)).filter(Boolean);
+    const valorLiquido = stats.reduce((s, st) => s + st.valorLiquido, 0);
+    const totalReg = stats.reduce((s, st) => s + st.registros, 0);
+    const qtdCliente = stats.reduce((s, st) => s + st.qtdCliente, 0);
+    let pedidos = 0, valorTransportado = 0;
+    state.carriers.forEach(c => {
+      c.monthly.forEach((m, key) => {
+        const [y, mo] = key.split('-');
+        if (getPeriodKeyFor(Number(y), Number(mo)) === period) { pedidos += m.pedidos; valorTransportado += m.valor; }
+      });
+    });
+    return { period, valorLiquido, totalReg, qtdCliente, pedidos, valorTransportado };
+  });
+
+  const deltaBadge = (current, previous) => {
+    if (previous === undefined || !previous) return '<span class="w-14 text-left shrink-0" style="font-size:10px"></span>';
+    const pct = ((current - previous) / previous) * 100;
+    const color = pct >= 0 ? '#0ca30c' : '#d03b3b';
+    const arrow = pct >= 0 ? '▲' : '▼';
+    return `<span class="w-14 text-left shrink-0" style="font-size:10px; color:${color}; opacity:0.8">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+  };
+  const metricCell = (value, current, previous, bold) => `
+    <td class="px-4 py-2">
+      <div class="flex items-center justify-end gap-1">
+        <span class="tabular${bold ? ' font-medium' : ''}" style="color:var(--text-1)">${value}</span>
+        ${deltaBadge(current, previous)}
+      </div>
+    </td>`;
+
+  document.getElementById('yearComparisonBody').innerHTML = rowsByPeriod.map((r, i) => {
+    const prev = rowsByPeriod[i - 1];
+    const months = getPeriodMonthlyBreakdown(r.period);
+
+    const monthRows = months.map(m => {
+      const pm = getMonthAggregate(m.year - 1, m.month); // mesmo mês, ano anterior
+      return `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td class="px-3 py-1.5" style="color:var(--text-2)">${m.label}</td>
+          ${metricCell(fmtBRL.format(m.valorLiquido), m.valorLiquido, pm && pm.valorLiquido, false)}
+          ${metricCell(fmtInt.format(m.registros), m.registros, pm && pm.registros, false)}
+          ${metricCell(fmtInt.format(m.qtdCliente), m.qtdCliente, pm && pm.qtdCliente, false)}
+          ${metricCell(fmtInt.format(m.pedidos), m.pedidos, pm && pm.pedidos, false)}
+          ${metricCell(fmtBRL.format(m.valorTransportado), m.valorTransportado, pm && pm.valorTransportado, false)}
+        </tr>`;
+    }).join('');
+
+    return `
+    <tr class="period-row cursor-pointer" style="border-bottom:1px solid var(--border)">
+      <td class="px-4 py-2 flex items-center gap-2" style="color:var(--text-1)">
+        <span class="chevron inline-block text-xs" style="color:var(--muted)">▸</span>
+        <span class="inline-block w-2 h-2 rounded-full" style="background:${colors[i % colors.length]}"></span>${getPeriodLabel(r.period)}
+      </td>
+      ${metricCell(fmtBRL.format(r.valorLiquido), r.valorLiquido, prev && prev.valorLiquido, true)}
+      ${metricCell(fmtInt.format(r.totalReg), r.totalReg, prev && prev.totalReg, false)}
+      ${metricCell(fmtInt.format(r.qtdCliente), r.qtdCliente, prev && prev.qtdCliente, false)}
+      ${metricCell(fmtInt.format(r.pedidos), r.pedidos, prev && prev.pedidos, false)}
+      ${metricCell(fmtBRL.format(r.valorTransportado), r.valorTransportado, prev && prev.valorTransportado, false)}
+    </tr>
+    <tr class="period-detail hidden">
+      <td colspan="6" class="px-4 pb-3 pt-0">
+        <div class="rounded-lg overflow-x-auto" style="background:var(--page); border:1px solid var(--border)">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="text-left" style="color:var(--muted); border-bottom:1px solid var(--border);">
+                <th class="px-3 py-1.5 font-medium">Mês</th>
+                <th class="px-4 py-1.5 font-medium text-right">Faturamento Líquido</th>
+                <th class="px-4 py-1.5 font-medium text-right">Registros</th>
+                <th class="px-4 py-1.5 font-medium text-right">Clientes</th>
+                <th class="px-4 py-1.5 font-medium text-right">Pedidos</th>
+                <th class="px-4 py-1.5 font-medium text-right">Valor Transportado</th>
+              </tr>
+            </thead>
+            <tbody>${monthRows || `<tr><td colspan="6" class="px-3 py-2" style="color:var(--muted)">Sem meses reconhecíveis neste período.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTables396() {
+  const empty = document.getElementById('emptyState396');
+  const content = document.getElementById('content396');
+  const filtered = getFilteredPriceTables();
+  if (filtered.length === 0) {
+    empty.textContent = state.priceTables.length === 0
+      ? 'Nenhum arquivo do relatório 396 importado ainda.'
+      : `Nenhuma tabela do relatório 396 encontrada para ${getPeriodLabel(state.selectedYear)}.`;
+    empty.classList.remove('hidden');
+    content.classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+
+  const colors = palette();
+
+  const totalBruto = filtered.reduce((s, t) => s + t.valorBruto, 0);
+  const totalDesconto = filtered.reduce((s, t) => s + t.desconto, 0);
+  const totalLiquido = filtered.reduce((s, t) => s + t.valorLiquido, 0);
+  const totalReg = filtered.reduce((s, t) => s + t.totalReg, 0);
+  const totalCli = filtered.reduce((s, t) => s + t.qtdCliente, 0);
+
+  document.getElementById('totalCard396').innerHTML = `
+    <div class="card rounded-xl p-4" style="border-color:var(--baseline)">
+      <p class="font-medium mb-2" style="color:var(--text-1)">Total Geral <span class="font-normal text-xs" style="color:var(--muted)">(todas as tabelas)</span></p>
+      <p class="text-2xl font-semibold tabular" style="color:var(--text-1)">${fmtBRL.format(totalLiquido)}</p>
+      <p class="text-xs mb-3" style="color:var(--text-2)">Valor líquido</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        ${statTile('Valor Bruto', fmtBRL.format(totalBruto))}
+        ${statTile('Desconto', fmtBRL.format(totalDesconto), `${fmtPct(totalDesconto, totalBruto)} do valor bruto`)}
+        ${statTile('Registros', fmtInt.format(totalReg))}
+        ${statTile('Clientes', fmtInt.format(totalCli))}
+      </div>
+    </div>`;
+
+  const tableColor = t => colors[state.priceTables.indexOf(t.ref) % colors.length];
+  const sortedTables = [...filtered].sort((a, b) => b.valorLiquido - a.valorLiquido);
+
+  document.getElementById('table396Body').innerHTML = sortedTables.map(t => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td class="px-4 py-2 flex items-center gap-2" style="color:var(--text-1)">
+        <span class="inline-block w-2 h-2 rounded-full" style="background:${tableColor(t)}"></span>${t.name}
+      </td>
+      <td class="px-4 py-2 text-right">${fmtBRL.format(t.valorBruto)}</td>
+      <td class="px-4 py-2 text-right">${fmtBRL.format(t.desconto)} <span class="text-xs" style="color:var(--muted)">(${fmtPct(t.desconto, t.valorBruto)})</span></td>
+      <td class="px-4 py-2 text-right font-medium" style="color:var(--text-1)">${fmtBRL.format(t.valorLiquido)} <span class="text-xs font-normal" style="color:var(--muted)">(${fmtPct(t.valorLiquido, totalLiquido)})</span></td>
+      <td class="px-4 py-2 text-right">${fmtInt.format(t.totalReg)} <span class="text-xs" style="color:var(--muted)">(${fmtPct(t.totalReg, totalReg)})</span></td>
+      <td class="px-4 py-2 text-right">${fmtInt.format(t.qtdCliente)} <span class="text-xs" style="color:var(--muted)">(${fmtPct(t.qtdCliente, totalCli)})</span></td>
+      <td class="px-4 py-2" style="color:var(--text-2)">${t.fileName}</td>
+    </tr>`).join('');
+}
+
+function baseBarOptions(horizontal) {
+  const c = chrome();
+  return {
+    indexAxis: horizontal ? 'y' : 'x',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: isDark() ? '#1a1a19' : '#fcfcfb',
+        titleColor: c.text2, bodyColor: c.text2,
+        borderColor: c.baseline, borderWidth: 1
+      },
+      directLabel: { enabled: !horizontal, color: c.text2, formatter: compact }
+    },
+    scales: horizontal ? {
+      x: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.muted } },
+      y: { grid: { display: false }, ticks: { color: c.text2 } }
+    } : {
+      x: { grid: { display: false }, ticks: { color: c.text2 } },
+      y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.muted } }
+    }
+  };
+}
+
+function destroyChart(key) {
+  if (charts[key]) { charts[key].destroy(); delete charts[key]; }
+}
+
+function renderMonthly396() {
+  const filtered = getFilteredPriceTables();
+  Object.keys(charts).filter(k => k.startsWith('monthly-')).forEach(destroyChart);
+  if (filtered.length === 0) { document.getElementById('monthlyCards396').innerHTML = ''; return; }
+  const colors = palette();
+  const c = chrome();
+  const sortedTables = [...filtered].sort((a, b) => b.valorLiquido - a.valorLiquido);
+
+  document.getElementById('monthlyCards396').innerHTML = sortedTables.map((t, i) => {
+    const color = colors[state.priceTables.indexOf(t.ref) % colors.length];
+    const hasData = t.monthly && t.monthly.length > 0;
+    return `
+      <div class="card rounded-xl p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${color}"></span>
+          <p class="font-medium" style="color:var(--text-1)">${t.name}</p>
+        </div>
+        <div class="h-56">
+          ${hasData ? `<canvas id="monthlyChart-${i}"></canvas>` : `<p class="text-xs pt-4" style="color:var(--muted)">Sem coluna de Data reconhecível no arquivo.</p>`}
+        </div>
+      </div>`;
+  }).join('');
+
+  sortedTables.forEach((t, i) => {
+    if (!t.monthly || !t.monthly.length) return;
+    const color = colors[state.priceTables.indexOf(t.ref) % colors.length];
+    charts[`monthly-${i}`] = new Chart(document.getElementById(`monthlyChart-${i}`), {
+      type: 'bar',
+      data: {
+        labels: t.monthly.map(m => m.label),
+        datasets: [{ label: 'Valor Líquido', data: t.monthly.map(m => m.valor), backgroundColor: color, borderRadius: 4, borderSkipped: false, barThickness: 24, maxBarThickness: 32 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark() ? '#1a1a19' : '#fcfcfb',
+            titleColor: c.text2, bodyColor: c.text2,
+            borderColor: c.baseline, borderWidth: 1,
+            callbacks: { label: ctx => fmtBRL.format(ctx.raw) }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: c.text2 } },
+          y: { beginAtZero: true, grid: { color: c.grid }, ticks: { display: false }, border: { display: false } }
+        }
+      }
+    });
+  });
+}
+
+function renderTables124() {
+  const empty = document.getElementById('emptyState124');
+  const content = document.getElementById('content124');
+  const rows = getFilteredCarrierRows().sort((a, b) => b.pedidos - a.pedidos);
+  if (state.carriers.size === 0 || rows.length === 0) {
+    empty.textContent = state.carriers.size === 0
+      ? 'Nenhum arquivo do relatório 124 importado ainda.'
+      : `Nenhuma transportadora do relatório 124 encontrada para ${getPeriodLabel(state.selectedYear)}.`;
+    empty.classList.remove('hidden');
+    content.classList.add('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  content.classList.remove('hidden');
+
+  const totalPedidos = rows.reduce((s, r) => s + r.pedidos, 0);
+  const totalValor = rows.reduce((s, r) => s + r.valor, 0);
+
+  const filteredPriceTables = getFilteredPriceTables();
+  const refRegistros = filteredPriceTables.length > 0 ? filteredPriceTables.reduce((s, t) => s + t.totalReg, 0) : totalPedidos;
+  const refValor = filteredPriceTables.length > 0 ? filteredPriceTables.reduce((s, t) => s + t.valorLiquido, 0) : totalValor;
+
+  document.getElementById('cards124').innerHTML = `
+    <div class="card rounded-xl p-4">${statTile('Total de Pedidos', fmtInt.format(totalPedidos), `${fmtPct(totalPedidos, refRegistros)} do total de registros`)}</div>
+    <div class="card rounded-xl p-4">${statTile('Valor Total Transportado', fmtBRL.format(totalValor), `${fmtPct(totalValor, refValor)} do total líquido`)}</div>
+    <div class="card rounded-xl p-4">${statTile('Transportadoras', fmtInt.format(rows.length))}</div>`;
+
+  document.getElementById('table124Body').innerHTML = rows.map(r => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td class="px-4 py-2" style="color:var(--text-1)">${r.name}</td>
+      <td class="px-4 py-2 text-right">${fmtInt.format(r.pedidos)} <span class="text-xs" style="color:var(--muted)">(${fmtPct(r.pedidos, refRegistros)})</span></td>
+      <td class="px-4 py-2 text-right font-medium" style="color:var(--text-1)">${fmtBRL.format(r.valor)} <span class="text-xs font-normal" style="color:var(--muted)">(${fmtPct(r.valor, refValor)})</span></td>
+    </tr>`).join('');
+}
+
+const TOP_CARRIERS = 5;
+
+function renderChart124Monthly() {
+  destroyChart('c124monthly');
+  const wrap = document.getElementById('chart124MonthlyWrap');
+  const allNames = Array.from(state.carriers.keys());
+  const carrierColor = name => palette()[allNames.indexOf(name) % palette().length];
+
+  const scoped = allNames.map(name => {
+    const c = state.carriers.get(name);
+    const monthly = new Map();
+    c.monthly.forEach((m, key) => {
+      const [y, mo] = key.split('-');
+      if (state.selectedYear === 'all' || getPeriodKeyFor(Number(y), Number(mo)) === state.selectedYear) monthly.set(key, m.pedidos);
+    });
+    return { name, monthly, total: Array.from(monthly.values()).reduce((s, v) => s + v, 0) };
+  }).filter(c => c.total > 0);
+
+  if (scoped.length === 0) {
+    wrap.innerHTML = `<p class="text-xs pt-4" style="color:var(--muted)">Nenhum envio com data reconhecível para montar o gráfico mensal.</p>`;
+    return;
+  }
+  wrap.innerHTML = '<canvas id="chart124Monthly"></canvas>';
+
+  scoped.sort((a, b) => b.total - a.total);
+  const top = scoped.slice(0, TOP_CARRIERS);
+  const rest = scoped.slice(TOP_CARRIERS);
+
+  const monthKeys = Array.from(new Set(scoped.flatMap(c => Array.from(c.monthly.keys())))).sort();
+  const labels = monthKeys.map(key => {
+    const [y, m] = key.split('-');
+    return `${MESES_PT[Number(m) - 1]}/${y}`;
+  });
+
+  const datasets = top.map(c => ({
+    label: c.name,
+    data: monthKeys.map(key => c.monthly.get(key) || 0),
+    backgroundColor: carrierColor(c.name),
+    borderRadius: 4, borderSkipped: false,
+    barThickness: 12, maxBarThickness: 14, categoryPercentage: 0.75, barPercentage: 0.85
+  }));
+  if (rest.length > 0) {
+    datasets.push({
+      label: 'Outros',
+      data: monthKeys.map(key => rest.reduce((s, c) => s + (c.monthly.get(key) || 0), 0)),
+      backgroundColor: chrome().muted,
+      borderRadius: 4, borderSkipped: false,
+      barThickness: 12, maxBarThickness: 14, categoryPercentage: 0.75, barPercentage: 0.85
+    });
+  }
+
+  const c = chrome();
+  charts.c124monthly = new Chart(document.getElementById('chart124Monthly'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'top', align: 'start', labels: { color: c.text2, boxWidth: 10, boxHeight: 10 } },
+        tooltip: {
+          backgroundColor: isDark() ? '#1a1a19' : '#fcfcfb',
+          titleColor: c.text2, bodyColor: c.text2,
+          borderColor: c.baseline, borderWidth: 1
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: c.text2 } },
+        y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.muted, callback: v => fmtInt.format(v) } }
+      }
+    }
+  });
+}
+
+// ---------- Direct-label plugin ----------
+const directLabelPlugin = {
+  id: 'directLabel',
+  afterDatasetsDraw(chart, args, opts) {
+    if (!opts || !opts.enabled) return;
+    const { ctx } = chart;
+    const horizontal = chart.options.indexAxis === 'y';
+    chart.data.datasets.forEach((dataset, di) => {
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((bar, i) => {
+        const value = dataset.data[i];
+        if (value === undefined || value === null) return;
+        const label = opts.formatter ? opts.formatter(value, { datasetIndex: di, dataset }) : String(value);
+        ctx.save();
+        ctx.fillStyle = opts.colorForDataset ? opts.colorForDataset(di, dataset) : (opts.color || '#52514e');
+        ctx.font = `600 ${opts.fontSize || 11}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+        if (horizontal) {
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(label, bar.x + 6, bar.y);
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(label, bar.x, bar.y - 6);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(directLabelPlugin);
+Chart.defaults.animation = false;
+
+// ---------- Exportar PDF ----------
+async function exportPDF() {
+  const btn = document.getElementById('exportPdfBtn');
+  const label = document.getElementById('exportPdfLabel');
+  const originalLabel = label.textContent;
+  btn.disabled = true;
+  label.textContent = 'Gerando PDF...';
+
+  const main = document.querySelector('main');
+  const scrollAreas = Array.from(main.querySelectorAll('.overflow-y-auto, .overflow-x-auto'));
+  const savedStyles = scrollAreas.map(el => el.getAttribute('style'));
+  scrollAreas.forEach(el => {
+    el.style.overflow = 'visible';
+    el.style.maxHeight = 'none';
+  });
+
+  const uploadSection = document.getElementById('uploadSection');
+  const uploadOriginalDisplay = uploadSection.style.display;
+  uploadSection.style.display = 'none';
+
+  const wasDark = isDark();
+  if (wasDark) {
+    document.documentElement.classList.remove('dark');
+    renderYearComparison();
+    renderMonthly396();
+    renderChart124Monthly();
+  }
+
+  // html2canvas não captura <canvas> ao vivo de forma confiável — troca cada
+  // gráfico por uma imagem estática (pixel-a-pixel igual ao que já está desenhado).
+  const chartSwaps = Object.values(charts).filter(ch => ch && ch.canvas).map(ch => {
+    const canvasEl = ch.canvas;
+    const rect = canvasEl.getBoundingClientRect();
+    const img = document.createElement('img');
+    img.src = ch.toBase64Image('image/png', 1);
+    img.style.width = rect.width + 'px';
+    img.style.height = rect.height + 'px';
+    img.style.display = 'block';
+    canvasEl.insertAdjacentElement('afterend', img);
+    canvasEl.style.display = 'none';
+    return { canvasEl, img };
+  });
+
+  try {
+    const canvas = await html2canvas(main, {
+      backgroundColor: '#f9f9f7',
+      scale: 2,
+      useCORS: true
+    });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const imgData = canvas.toDataURL('image/png');
+
+    const totalPages = Math.max(1, Math.ceil(imgHeight / pageHeight));
+    for (let page = 0; page < totalPages; page++) {
+      if (page > 0) pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, -page * pageHeight, imgWidth, imgHeight);
+    }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    pdf.save(`bi-local-relatorio-${dateStr}.pdf`);
+  } catch (err) {
+    addLog(`Falha ao gerar PDF: ${err.message}`, 'error');
+  } finally {
+    chartSwaps.forEach(({ canvasEl, img }) => {
+      img.remove();
+      canvasEl.style.display = '';
+    });
+    scrollAreas.forEach((el, i) => {
+      if (savedStyles[i] === null) el.removeAttribute('style');
+      else el.setAttribute('style', savedStyles[i]);
+    });
+    uploadSection.style.display = uploadOriginalDisplay;
+    if (wasDark) {
+      document.documentElement.classList.add('dark');
+      renderYearComparison();
+      renderMonthly396();
+      renderChart124Monthly();
+    }
+    btn.disabled = false;
+    label.textContent = originalLabel;
+  }
+}
+document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
+
+// ---------- Upload wiring ----------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); fileInput.value = ''; });
+['dragenter', 'dragover'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('drag-over'); }));
+['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('drag-over'); }));
+dropzone.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); });
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  state.carriers.clear();
+  state.priceTables = [];
+  state.selectedYear = 'all';
+  document.getElementById('fileLog').innerHTML = '';
+  Object.keys(charts).forEach(destroyChart);
+  renderDashboard();
+});
+
+document.getElementById('yearFilter').addEventListener('change', e => {
+  state.selectedYear = e.target.value;
+  renderTables396();
+  renderMonthly396();
+  renderTables124();
+  renderChart124Monthly();
+});
+
+document.getElementById('yearComparisonBody').addEventListener('click', e => {
+  const row = e.target.closest('tr.period-row');
+  if (!row) return;
+  const detail = row.nextElementSibling;
+  if (!detail || !detail.classList.contains('period-detail')) return;
+  const isHidden = detail.classList.contains('hidden');
+  detail.classList.toggle('hidden');
+  const chevron = row.querySelector('.chevron');
+  if (chevron) chevron.textContent = isHidden ? '▾' : '▸';
+});
+
+document.getElementById('periodMode').addEventListener('change', e => {
+  state.periodMode = e.target.value;
+  const seasonWrap = document.getElementById('seasonStartWrap');
+  seasonWrap.classList.toggle('hidden', state.periodMode !== 'season');
+  seasonWrap.classList.toggle('flex', state.periodMode === 'season');
+  renderDashboard();
+});
+
+document.getElementById('seasonStartMonth').addEventListener('change', e => {
+  state.seasonStartMonth = Number(e.target.value);
+  renderDashboard();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Precificação Inteligente & Gerenciamento de Vendas</title>
+<style>
+  :root{
+    --navy:#10233F;
+    --navy-2:#16304F;
+    --paper:#F5F7FA;
+    --surface:#FFFFFF;
+    --line:#E2E6ED;
+    --text:#1A2233;
+    --text-soft:#67718A;
+    --warn:#C98A1E;      --warn-soft:#FBF0DD;
+    --bad:#C24444;       --bad-soft:#FBE9E9;
+    --good-soft:#E4F6EF; --good:#0B6E52;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--paper);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:'IBM Plex Mono','SFMono-Regular',Menlo,monospace; font-variant-numeric: tabular-nums; letter-spacing:-0.2px;}
+
+  /* ===== Barra superior fixa ===== */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:60;
+    background:var(--navy); color:#fff; padding:10px 18px;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    box-shadow:0 2px 10px rgba(16,35,63,.28);
+  }
+  .topbar .brand{
+    font-weight:700; font-size:14.5px; letter-spacing:.2px; margin-right:4px; white-space:nowrap;
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:#0E9D74;display:inline-block;}
+  .topbar form{display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex:1;}
+  .topbar input, .topbar select{
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2);
+    color:#fff; border-radius:6px; padding:7px 9px; font-size:12.5px; outline:none;
+  }
+  .topbar input::placeholder{color:rgba(255,255,255,.55);}
+  .topbar input:focus, .topbar select:focus{border-color:#0E9D74; background:rgba(255,255,255,.16);}
+  .topbar select option{color:#000;}
+  .in-classe{width:150px;} .in-produto{width:170px;} .in-peso{width:90px;} .in-custo{width:100px;}
+  .btn{
+    border:none; border-radius:6px; padding:8px 14px; font-size:12.5px; font-weight:600;
+    cursor:pointer; transition:filter .15s ease, transform .05s ease; white-space:nowrap;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-add{background:#0E9D74; color:#04241A;}
+  .btn-add:hover{filter:brightness(1.08);}
+  .btn-export{background:transparent; color:#fff; border:1px solid rgba(255,255,255,.4);}
+  .btn-export:hover{background:rgba(255,255,255,.12);}
+
+  .export-dropdown{position:relative;}
+  .dropdown-menu{
+    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:70;
+    background:#fff; border:1px solid var(--line); border-radius:8px; min-width:190px;
+    box-shadow:0 10px 28px rgba(16,35,63,.25); overflow:hidden;
+  }
+  .dropdown-menu.show{display:block;}
+  .dropdown-item{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    padding:10px 14px; font-size:12.5px; color:var(--text); cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .dropdown-item:last-child{border-bottom:none;}
+  .dropdown-item:hover{background:#F0F3F8;}
+
+  .page{padding:55px 20px 20px; max-width:1700px; margin:0 auto;}
+
+  /* ===== Abas ===== */
+  .tabs{display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--line);}
+  .tab-btn{
+    background:none; border:none; padding:11px 18px; font-size:13.5px; font-weight:600;
+    color:var(--text-soft); cursor:pointer; position:relative; top:1px;
+  }
+  .tab-btn.active{color:var(--navy); border-bottom:2px solid #0E9D74;}
+  .tab-btn:hover{color:var(--navy);}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; box-shadow:0 1px 2px rgba(16,35,63,.05);
+  }
+
+  /* ===== Barra de filtro e ordenação ===== */
+  .table-toolbar{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    padding:12px 16px; border-bottom:1px solid var(--line); background:#FAFBFD;
+  }
+  .table-toolbar .tlabel{font-size:12px; color:var(--text-soft); font-weight:600; white-space:nowrap;}
+  .table-toolbar select{
+    padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;
+    color:var(--text); background:#fff; min-width:170px;
+  }
+  .table-toolbar select:focus{outline:none; border-color:var(--navy);}
+  .btn-sort{background:var(--navy); color:#fff;}
+  .btn-sort:hover{filter:brightness(1.2);}
+  .btn-sort.alt{background:#fff; color:var(--navy); border:1px solid var(--line);}
+  .btn-sort.alt:hover{background:#F0F3F8;}
+  .toolbar-spacer{flex:1;}
+  .toolbar-check{display:flex; align-items:center; gap:6px; cursor:pointer;}
+  .toolbar-check input[type="checkbox"]{accent-color:var(--navy); cursor:pointer;}
+
+  /* ===== Tabela principal ===== */
+  .tbl-wrap{overflow:auto;}
+  #tbl-wrap-precos{ overflow:auto; }
+  table.precos{border-collapse:separate; border-spacing:0; width:100%; min-width:1100px; font-size:12.5px;}
+  table.precos thead th{
+    background:var(--navy); color:#EAF0FA; font-weight:600; padding:9px 10px;
+    position:sticky; top:0; z-index:2; text-align:left; white-space:nowrap;
+  }
+  table.precos thead tr.grp th{
+    font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+    text-align:center; padding:7px 8px; color:#fff; border-left:2px solid rgba(255,255,255,.3);
+  }
+  table.precos thead tr.grp th.canal-clicavel{cursor:pointer; transition:filter .15s ease;}
+  table.precos thead tr.grp th.canal-clicavel:hover{filter:brightness(1.25);}
+  table.precos thead tr.grp th.canal-clicavel::after{content:" ⤢"; opacity:.75; font-size:10px;}
+  table.precos tbody td{padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  table.precos tbody tr.grupo-novo td{border-top:2px solid #C7CEDA;}
+  table.precos tbody tr:hover{background:#FAFBFD;}
+  table.precos tbody tr:hover td.produto-cat, table.precos tbody tr:hover td.produto-nome{background:#FAFBFD;}
+  table.precos tbody tr.row-highlight td{background:#FFF6CC !important;}
+
+  td.produto-nome{
+    font-weight:600; color:var(--navy);
+    position:sticky; left:120px; z-index:1; background:var(--surface);
+    width:190px; min-width:190px; max-width:190px;
+    overflow:hidden; text-overflow:ellipsis;
+    box-shadow:2px 0 4px rgba(16,35,63,.12);
+    border-right:1px solid var(--line);
+  }
+  td.produto-cat{
+    color:var(--text-soft); font-size:11.5px;
+    position:sticky; left:0; z-index:1; background:var(--surface);
+    width:120px; min-width:120px; max-width:120px;
+    overflow:hidden; text-overflow:ellipsis;
+  }
+  table.precos thead th.th-classe,
+  table.precos thead th.th-produto{
+    position:sticky; z-index:4; background:var(--navy);
+  }
+  table.precos thead th.th-classe{ left:0; width:120px; min-width:120px; max-width:120px; }
+  table.precos thead th.th-produto{
+    left:120px; width:190px; min-width:190px; max-width:190px;
+    box-shadow:2px 0 4px rgba(16,35,63,.25);
+    border-right:1px solid rgba(255,255,255,.15);
+  }
+  th.th-editar{ width:44px; min-width:44px; max-width:44px; text-align:center; }
+  td.col-editar{ width:44px; min-width:44px; max-width:44px; text-align:center; }
+  .btn-editar-linha{
+    border:none; background:#F0F3F8; color:var(--navy); border-radius:5px;
+    padding:4px 7px; cursor:pointer; font-size:13px;
+  }
+  .btn-editar-linha:hover{ background:var(--line); }
+
+  .price-input{
+    width:92px; padding:5px 6px; font-size:12.5px; border:1px solid var(--line); border-radius:5px;
+    font-family:'IBM Plex Mono',monospace; background:#fff; color:var(--navy); font-weight:600;
+  }
+  .price-input:focus{outline:none; box-shadow:0 0 0 2px rgba(0,0,0,.08);}
+  .price-input.manual{border-color:var(--warn); background:var(--warn-soft);}
+  .cost-input{
+    width:88px; padding:5px 6px; font-size:12.5px; border:1px solid var(--line); border-radius:5px;
+    font-family:'IBM Plex Mono',monospace; background:#fff; color:var(--navy); font-weight:600;
+  }
+  .cost-input:focus{outline:none; border-color:var(--navy); box-shadow:0 0 0 2px rgba(16,35,63,.1);}
+  .reset-btn{
+    border:none; background:none; cursor:pointer; color:var(--text-soft); font-size:13px;
+    margin-left:3px; padding:2px 4px; border-radius:4px; visibility:hidden;
+  }
+  .reset-btn.show{visibility:visible;}
+  .reset-btn:hover{color:var(--navy); background:var(--line);}
+  .cell-margin{padding:3px 7px; border-radius:5px; display:inline-block; min-width:52px; text-align:right;}
+  .m-good{background:var(--good-soft); color:var(--good);}
+  .m-warn{background:var(--warn-soft); color:#8A5B10;}
+  .m-bad{background:var(--bad-soft); color:#8F2E2E;}
+  .del-row{border:none; background:none; color:var(--text-soft); cursor:pointer; font-size:15px;}
+  .del-row:hover{color:var(--bad);}
+  .frete-nao-considerado{text-decoration:line-through; text-decoration-thickness:1.5px; color:var(--text-soft) !important; opacity:.8;}
+
+  .helper{padding:14px 18px; font-size:12px; color:var(--text-soft); line-height:1.65; border-top:1px solid var(--line);}
+  .helper b{color:var(--navy);}
+  code.f{background:#F0F3F8; padding:1px 5px; border-radius:4px; font-family:'IBM Plex Mono',monospace;}
+
+  /* ===== Parametrização — Tabelas de Preço (canais) ===== */
+  .section-title{font-size:14px; font-weight:700; color:var(--navy); margin:0;}
+  .section-sub{font-size:12px; color:var(--text-soft); margin:0 0 10px;}
+  .grid-canais{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:26px;}
+  .pcard{background:var(--surface); border:1px solid var(--line); border-radius:10px; overflow:hidden; box-shadow:0 1px 2px rgba(16,35,63,.05);}
+  .pcard .phead{
+    padding:11px 14px; font-size:13px; font-weight:700; color:#fff; letter-spacing:.2px;
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .pcard .phead .del-canal{border:none; background:rgba(255,255,255,.18); color:#fff; border-radius:5px; padding:3px 7px; cursor:pointer; font-size:12px;}
+  .pcard .phead .del-canal:hover{background:rgba(255,255,255,.32);}
+  .pcard .pbody{padding:14px 16px; display:flex; flex-direction:column; gap:6px;}
+  .field-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .field-row label{font-size:12.5px; color:var(--text-soft);}
+  .field-row.toggle-row{padding-bottom:6px; border-bottom:1px dashed var(--line); margin-bottom:0;}
+  .field-row.toggle-row span{font-size:12.5px; color:var(--navy); font-weight:600;}
+  .field-row.toggle-row input[type="checkbox"]{width:auto; accent-color:#0E9D74; cursor:pointer;}
+  .field-row input, .field-row select{
+    width:96px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;
+    font-family:'IBM Plex Mono',monospace; text-align:right;
+  }
+  .field-row select{font-family:inherit; text-align:left;}
+  .field-row input:focus, .field-row select:focus{outline:none; box-shadow:0 0 0 2px rgba(0,0,0,.08);}
+
+  .add-canal-card{border:2px dashed var(--line); background:#FAFBFD;}
+  .add-canal-card .phead{background:transparent; color:var(--navy);}
+  .add-canal-card input, .add-canal-card select{
+    width:96px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .add-canal-card input#nc-nome-canal{font-family:inherit;}
+  .add-canal-card .field-stack{display:flex; align-items: center;justify-content: space-between; gap:3px;}
+  .add-canal-card .field-stack label{font-size:13px; color:var(--text-soft); font-weight:300;}
+  .btn-add-canal{background:#0E9D74; color:#04241A; width:100%; margin-top:20px;}
+  .btn-add-canal:hover{filter:brightness(1.08);}
+
+  /* ===== Categorias ===== */
+  .cat-card{margin-bottom:22px;}
+  table.catmargin{width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px;}
+  table.catmargin th{background:#F0F3F8; color:var(--navy); text-align:left; padding:9px 12px; font-weight:600; border-bottom:1px solid var(--line); white-space:nowrap;}
+  table.catmargin td{padding:8px 12px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  table.catmargin input{
+    width:78px; padding:5px 7px; border:1px solid var(--line); border-radius:5px; font-size:12.5px;
+    font-family:'IBM Plex Mono',monospace; text-align:right;
+  }
+  table.catmargin input:focus{outline:none; box-shadow:0 0 0 2px rgba(0,0,0,.08);}
+  .cat-name{font-weight:600; color:var(--navy);}
+  .del-cat{border:none; background:none; color:var(--text-soft); cursor:pointer; font-size:15px;}
+  .del-cat:hover{color:var(--bad);}
+
+  .add-cat-bar{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:12px 16px; border-top:1px solid var(--line); background:#FAFBFD;
+  }
+  .add-cat-bar .tlabel{font-size:12px; color:var(--text-soft); font-weight:600; white-space:nowrap;}
+  .nc-nome{width:180px; padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:12.5px;}
+  .nc-pct{width:100px; padding:7px 9px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; font-family:'IBM Plex Mono',monospace;}
+  .nc-nome:focus, .nc-pct:focus{outline:none; border-color:var(--navy);}
+  .btn-add-cat{background:var(--navy); color:#fff;}
+  .btn-add-cat:hover{filter:brightness(1.2);}
+
+  @media (max-width:640px){
+    .topbar form{width:100%;}
+    .in-classe,.in-produto{width:100%;}
+  }
+
+  /* ===== Modal — Exportar PDF ===== */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; z-index:100;
+    background:rgba(16,35,63,.45);
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--surface); border-radius:12px; width:100%; max-width:420px;
+    box-shadow:0 12px 40px rgba(16,35,63,.35); overflow:hidden;
+    display:flex; flex-direction:column; max-height:85vh;
+  }
+  .modal-head{
+    background:var(--navy); color:#fff; padding:14px 18px; font-size:14.5px; font-weight:700;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .modal-close{border:none; background:rgba(255,255,255,.15); color:#fff; border-radius:6px; padding:4px 9px; cursor:pointer; font-size:13px;}
+  .modal-close:hover{background:rgba(255,255,255,.28);}
+  .modal-body{padding:16px 18px; overflow-y:auto;}
+  .modal-hint{font-size:12px; color:var(--text-soft); line-height:1.6; margin:0 0 14px;}
+  .modal-lista-canais{display:flex; flex-direction:column; gap:8px;}
+  .lista-ordem-categorias{display:flex; flex-direction:column; gap:6px;}
+  .item-ordem-categoria{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:9px 12px; border:1px solid var(--line); border-radius:8px; font-size:13px; font-weight:600; color:var(--navy);
+  }
+  .item-ordem-categoria .setas{display:flex; gap:4px;}
+  .item-ordem-categoria .setas button{
+    border:1px solid var(--line); background:#fff; border-radius:5px; width:26px; height:26px;
+    cursor:pointer; font-size:13px; color:var(--navy);
+  }
+  .item-ordem-categoria .setas button:hover{background:#F0F3F8;}
+  .item-ordem-categoria .setas button:disabled{opacity:.35; cursor:default;}
+  .item-ordem-categoria .setas button:disabled:hover{background:#fff;}
+  .modal-canal-opcao{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line);
+    border-radius:8px; cursor:pointer; font-size:13px;
+  }
+  .modal-canal-opcao:hover{background:#FAFBFD;}
+  .modal-canal-opcao input{margin:0;}
+  .modal-canal-swatch{width:12px; height:12px; border-radius:50%; flex-shrink:0;}
+  .modal-footer{
+    padding:14px 18px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:10px;
+  }
+  .btn-modal-cancelar{background:#fff; color:var(--text-soft); border:1px solid var(--line);}
+  .btn-modal-cancelar:hover{background:#F0F3F8;}
+  .btn-modal-confirmar{background:#0E9D74; color:#04241A;}
+  .btn-modal-confirmar:hover{filter:brightness(1.08);}
+
+  /* ===== Modal — Tabela de Preço em tela cheia ===== */
+  .modal-tela-box{
+    width:95vw; max-width:1240px; height:90vh; max-height:90vh;
+  }
+  .modal-tela-box .modal-body{
+    padding:0; flex:1; overflow:auto;
+  }
+  .modal-tela-box table.precos{min-width:900px;}
+  .modal-tela-box table.precos thead th{position:sticky; top:0;}
+
+  .edit-field{display:flex; flex-direction:column; gap:5px; margin-bottom:14px;}
+  .edit-field:last-child{margin-bottom:0;}
+  .edit-field label{font-size:13px; color:var(--text-soft); font-weight:300;}
+  .edit-field input, .edit-field select{
+    padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:13px; color:var(--text);
+  }
+  .edit-field input:focus, .edit-field select:focus{outline:none; border-color:var(--navy); box-shadow:0 0 0 2px rgba(16,35,63,.08);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Precificação Inteligente</div>
+  <form id="form-add">
+    <select class="in-classe" id="f-classe"></select>
+    <input class="in-produto" id="f-produto" placeholder="Produto" required>
+    <input class="in-peso" id="f-peso" type="number" step="1" min="0" placeholder="Peso (Kg)" required>
+    <input class="in-custo" id="f-custo" type="number" step="0.1" min="0" placeholder="Custo (R$)" required>
+    <button type="submit" class="btn btn-add">+ Adicionar produto</button>
+  </form>
+  <div class="export-dropdown">
+    <button class="btn btn-export" id="btn-exportar-menu">⇩ Exportar ▾</button>
+    <div class="dropdown-menu" id="dropdown-exportar">
+      <button class="dropdown-item" id="menu-export-xls">📊 Excel (.xls)</button>
+      <button class="dropdown-item" id="menu-export-pdf">📄 PDF (Catálogo)</button>
+      <button class="dropdown-item" id="menu-export-json">💾 Backup (.json)</button>
+    </div>
+  </div>
+  <button class="btn btn-export" id="btn-backup-import">⇧ Importar Backup (.json)</button>
+  <input type="file" id="input-backup-import" accept="application/json" style="display:none;">
+</div>
+
+<div class="modal-overlay" id="modal-pdf-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span>Exportar Catálogo em PDF</span>
+      <button class="modal-close" id="btn-modal-pdf-fechar" title="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">Escolha qual Tabela de Preço será usada como coluna "Valor (R$)" no catálogo. O relatório respeitará o filtro de Classe/Categoria atualmente selecionado na tela.</p>
+      <div id="lista-canais-modal" class="modal-lista-canais"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-modal-cancelar" id="btn-modal-pdf-cancelar">Cancelar</button>
+      <button class="btn btn-modal-confirmar" id="btn-modal-pdf-confirmar">Confirmar Impressão</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-editar-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span>Editar Produto</span>
+      <button class="modal-close" id="btn-modal-editar-fechar" title="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="edit-field"><label>Classe</label><select id="edit-classe"></select></div>
+      <div class="edit-field"><label>ID</label><input type="text" id="edit-codigo"></div>
+      <div class="edit-field"><label>Produto</label><input type="text" id="edit-nome"></div>
+      <div class="edit-field"><label>Peso (Kg)</label><input type="number" step="1" min="0" id="edit-peso"></div>
+      <div class="edit-field">
+        <label>Despesa Extra do Produto (R$)</label>
+        <div style="display:flex; gap:8px;">
+          <input type="number" step="0.1" min="0" id="edit-despesa-valor" placeholder="Valor R$" style="flex:1;">
+          <select id="edit-despesa-destino" style="flex:1;">
+            <option value="frete">Somar ao Frete</option>
+            <option value="impostos">Somar ao Imposto</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-modal-cancelar" id="btn-modal-editar-cancelar">Cancelar</button>
+      <button class="btn btn-modal-confirmar" id="btn-modal-editar-salvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-tela-canal-overlay">
+  <div class="modal-box modal-tela-box">
+    <div class="modal-head">
+      <span id="modal-tela-canal-titulo">Tabela de Preço</span>
+      <button class="modal-close" id="btn-modal-tela-canal-fechar" title="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <table class="precos">
+        <thead id="thead-modal-tela-canal"></thead>
+        <tbody id="tbody-modal-tela-canal"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-ordem-categorias-overlay">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span>Ordem Personalizada das Categorias</span>
+      <button class="modal-close" id="btn-modal-ordem-fechar" title="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">Use as setas para colocar as categorias na ordem que preferir. Os produtos na Tabela de Preços seguirão sempre essa ordem, agrupados por categoria.</p>
+      <div id="lista-ordem-categorias" class="lista-ordem-categorias"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-modal-cancelar" id="btn-modal-ordem-cancelar">Cancelar</button>
+      <button class="btn btn-modal-confirmar" id="btn-modal-ordem-salvar">Salvar Ordem</button>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-precos">Tabela de Preços e Margens</button>
+    <button class="tab-btn" data-tab="tab-param">Parametrização de Custos</button>
+  </div>
+
+  <!-- ===================== ABA 1 — TABELA DE PREÇOS ===================== -->
+  <div class="panel active" id="tab-precos">
+    <div class="card">
+      <div class="table-toolbar">
+        <span class="tlabel">Filtrar por classe:</span>
+        <select id="filtro-classe"></select>
+        <label class="toolbar-check">
+          <input type="checkbox" id="toggle-coluna-id" checked>
+          <span class="tlabel">Exibir coluna ID</span>
+        </label>
+        <div class="toolbar-spacer"></div>
+        <span class="tlabel">Ordem das categorias:</span>
+        <button class="btn btn-sort" id="btn-categorias-personalizar" title="Defina livremente a ordem das categorias">↕ Ordem Personalizada</button>
+      </div>
+      <div class="tbl-wrap" id="tbl-wrap-precos">
+        <table class="precos">
+          <thead id="thead-precos"></thead>
+          <tbody id="tbody-precos"></tbody>
+        </table>
+      </div>
+      <div class="helper" id="helper-precos">
+        <b>Markup por dentro:</b> <code class="f">Edite qualquer campo de Preço ou de Custo para recalcular Frete, Imposto e ML.</code> Use o botão <b>↺</b> para restaurar o valor sugerido.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== ABA 2 — PARAMETRIZAÇÃO ===================== -->
+  <div class="panel" id="tab-param">
+
+    <p class="section-title">Tabelas de Preço / Canais de Venda</p>
+    <p class="section-sub">Cada tabela gera automaticamente um bloco de colunas (Preço, Frete, Imposto, ML % e ML $) na Tabela de Preços. Exclua uma tabela para removê-la imediatamente da tela e da exportação.</p>
+    <div class="grid-canais" id="grid-canais"></div>
+
+    <p class="section-title">Gerenciamento de Categorias</p>
+    <p class="section-sub">Para cada categoria, defina as alíquotas de imposto e a margem de lucro sugerida para cada Tabela de Preço existente.</p>
+    <div class="pcard cat-card navy">
+      <div class="tbl-wrap">
+        <table class="catmargin">
+          <thead id="thead-catmargin"></thead>
+          <tbody id="tbody-catmargin"></tbody>
+        </table>
+      </div>
+      <div class="add-cat-bar">
+        <span class="tlabel">Nova categoria:</span>
+        <input type="text" id="nc-nome" placeholder="Nome da categoria" class="nc-nome">
+        <input type="number" id="nc-estadual" step="0.1" min="0" placeholder="Estadual %" class="nc-pct">
+        <input type="number" id="nc-interestadual" step="0.1" min="0" placeholder="Interestadual %" class="nc-pct">
+        <button class="btn btn-add-cat" id="btn-add-categoria">+ Adicionar categoria</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// ESTADO
+// =====================================================================
+function gerarCorCanal(indice){
+  const hue = Math.round((210 + indice * 137.508) % 360);
+  return {
+    dark:   `hsl(${hue}, 55%, 32%)`,
+    mid:    `hsl(${hue}, 55%, 45%)`,
+    soft:   `hsl(${hue}, 60%, 94%)`,
+    subtle: `hsl(${hue}, 40%, 97%)`
+  };
+}
+
+let canaisPreco = [
+  { id:'canal_consumidor', nome:'Venda Consumidor',  desconto:5,  comissao:0, cartao:1,   outrosEncargos:0, freteKg:0.50, fretePct:1, freteAdicionalTipo:'fixo', freteAdicionalValor:0, tipoImposto:'estadual',      visivel:true, freteIncluso:true, cor:gerarCorCanal(0) },
+  { id:'canal_ce',         nome:'Revenda CE',        desconto:5,  comissao:0, cartao:0,   outrosEncargos:0, freteKg:0.50, fretePct:1, freteAdicionalTipo:'fixo', freteAdicionalValor:0, tipoImposto:'estadual',      visivel:true, freteIncluso:true, cor:gerarCorCanal(1) },
+  { id:'canal_pi',         nome:'Revenda PI',        desconto:5,  comissao:0, cartao:0,   outrosEncargos:0, freteKg:0.50, fretePct:0, freteAdicionalTipo:'fixo', freteAdicionalValor:0, tipoImposto:'interestadual', visivel:true, freteIncluso:true, cor:gerarCorCanal(2) }
+];
+
+let categorias = [
+  { id:'capim',      nome:'Capim',              estadual:3.5, interestadual:7.8, margens:{ canal_consumidor:20, canal_ce:15, canal_pi:15 } },
+  { id:'milho',      nome:'Milho',              estadual:3.5, interestadual:7.8, margens:{ canal_consumidor:15, canal_ce:10, canal_pi:10 } },
+  { id:'sorgo',      nome:'Sorgo',              estadual:3.5, interestadual:7.8, margens:{ canal_consumidor:15, canal_ce:10, canal_pi:10 } },
+];
+
+let produtos = [
+  { id:'p1', nome:'Andropogon Gayanus', codigo:'0002', categoriaId:'capim', custo:35.00, peso:6.0,
+    precos:{ canal_consumidor:{preco:null,manual:false}, canal_ce:{preco:null,manual:false}, canal_pi:{preco:null,manual:false} } },
+  { id:'p2', nome:'Milho Híbrido BRS 2022', codigo:'0039', categoriaId:'milho', custo:200.00, peso:20.0,
+    precos:{ canal_consumidor:{preco:null,manual:false}, canal_ce:{preco:null,manual:false}, canal_pi:{preco:null,manual:false} } },
+  { id:'p3', nome:'Sorgo BRS POnta Negra', codigo:'0043', categoriaId:'sorgo', custo:100.00, peso:10.0,
+    precos:{ canal_consumidor:{preco:null,manual:false}, canal_ce:{preco:null,manual:false}, canal_pi:{preco:null,manual:false} } }
+];
+
+let uid = 6;
+let canalSeq = 3;
+let filtroClasseAtual = 'todas';
+let mostrarColunaId = true;
+
+// =====================================================================
+// PERSISTÊNCIA (LocalStorage)
+// Protegida com try/catch: se o ambiente bloquear o acesso ao
+// localStorage (ex.: pré-visualização em iframe restrito), o sistema
+// segue funcionando só em memória. Ao abrir o .html baixado direto no
+// navegador, o salvamento e o carregamento funcionam normalmente.
+// =====================================================================
+const STORAGE_KEY = 'precificacao-inteligente-estado-v2';
+
+function salvarEstado(){
+  try{
+    const payload = JSON.stringify({ canaisPreco, categorias, produtos, uid, canalSeq, mostrarColunaId });
+    localStorage.setItem(STORAGE_KEY, payload);
+  }catch(e){ /* sem acesso ao localStorage neste ambiente */ }
+}
+
+function carregarEstado(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const dados = JSON.parse(raw);
+    if (Array.isArray(dados.canaisPreco) && dados.canaisPreco.length) canaisPreco = dados.canaisPreco;
+    if (Array.isArray(dados.categorias) && dados.categorias.length) categorias = dados.categorias;
+    if (Array.isArray(dados.produtos)) produtos = dados.produtos;
+    if (typeof dados.uid === 'number') uid = dados.uid;
+    if (typeof dados.canalSeq === 'number') canalSeq = dados.canalSeq;
+    if (typeof dados.mostrarColunaId === 'boolean') mostrarColunaId = dados.mostrarColunaId;
+  }catch(e){
+    return false;
+  }
+
+  // Autocorreção silenciosa: garante que toda categoria tenha uma margem
+  // válida para cada Tabela de Preço existente, evitando que uma chave
+  // ausente (de dados antigos) faça o cálculo usar margem 0% sem avisar.
+  categorias.forEach(cat=>{
+    if (!cat.margens || typeof cat.margens !== 'object') cat.margens = {};
+    if (typeof cat.estadual !== 'number') cat.estadual = 18;
+    if (typeof cat.interestadual !== 'number') cat.interestadual = 12;
+    canaisPreco.forEach(canal=>{
+      if (typeof cat.margens[canal.id] !== 'number') cat.margens[canal.id] = 20;
+    });
+  });
+
+  return true;
+}
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+function getCategoria(id){ return categorias.find(c=>c.id===id) || categorias[0]; }
+function getCanal(id){ return canaisPreco.find(c=>c.id===id); }
+function canaisAtivos(){ return canaisPreco.filter(c=> c.visivel !== false); }
+
+// Índice da categoria dentro do array `categorias` — essa ORDEM é o que
+// define o agrupamento dos produtos na tabela (segue a ordem alfabética por
+// padrão, ou a ordem personalizada definida em "Ordenar Categorias").
+function indiceCategoria(categoriaId){
+  const idx = categorias.findIndex(c=>c.id===categoriaId);
+  return idx === -1 ? categorias.length : idx;
+}
+
+// Reordena o array `produtos` respeitando SEMPRE o agrupamento por categoria
+// (na ordem atual do array `categorias`) e, dentro de cada grupo, pelo
+// critério secundário escolhido (Nome A-Z ou ID).
+function ordenarProdutos(){
+  produtos.sort((a,b)=>{
+    const diffCategoria = indiceCategoria(a.categoriaId) - indiceCategoria(b.categoriaId);
+    if (diffCategoria !== 0) return diffCategoria;
+    return a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+}
+
+function getEstadoPreco(produto, canalId){
+  if (!produto.precos[canalId]) produto.precos[canalId] = { preco:null, manual:false };
+  return produto.precos[canalId];
+}
+
+function fmtR(v){ return v.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtP(v){ return v.toLocaleString('pt-BR',{minimumFractionDigits:1, maximumFractionDigits:1}); }
+
+function margemClasse(margemPct, alvo){
+  if (margemPct < 0) return 'm-bad';
+  if (margemPct < alvo * 0.6) return 'm-warn';
+  return 'm-good';
+}
+
+function montarTituloFrete(r, freteIncluso){
+  const partes = [];
+  if (r.freteAdicionalReais > 0){
+    partes.push(`Valor do Frete R$ ${fmtR(r.freteBruto)} − Cobrado do Cliente R$ ${fmtR(r.freteAdicionalReais)} = R$ ${fmtR(r.freteReais)}`);
+  }
+  if (r.despesaParaFrete > 0){
+    partes.push(`Produto contém despesa extra de ${fmtR(r.despesaParaFrete)}`);
+  }
+  if (!freteIncluso){
+    partes.push('Frete não considerado no cálculo da margem');
+  }
+  return partes.join(' — ');
+}
+
+// =====================================================================
+// CÁLCULO
+// =====================================================================
+function calcularCanal(produto, canal){
+  const cat = getCategoria(produto.categoriaId);
+  const impostoPct = canal.tipoImposto === 'interestadual' ? cat.interestadual : cat.estadual;
+  const margemPctAlvo = (cat.margens && typeof cat.margens[canal.id] === 'number') ? cat.margens[canal.id] : 0;
+  const encargosPct = canal.desconto + canal.comissao + canal.cartao;
+  const outrosEncargos = canal.outrosEncargos || 0;
+
+  const freteKgComponente = produto.peso * canal.freteKg;
+  // Despesa Extra (por produto): custo personalizado que o usuário escolhe
+  // jogar no Frete ou no Imposto daquele produto específico, em qualquer
+  // Tabela de Preço.
+  const despesaExtra = produto.despesaExtra || { valor:0, destino:'frete' };
+  const valorDespesaExtra = despesaExtra.valor || 0;
+  const despesaParaFrete = despesaExtra.destino === 'frete' ? valorDespesaExtra : 0;
+  const despesaParaImposto = despesaExtra.destino === 'impostos' ? valorDespesaExtra : 0;
+
+  // Frete Adicional (por Tabela de Preço): valor cobrado à parte do cliente
+  // (fixo em R$ ou por Kg). Como essa parcela do frete já é paga separadamente
+  // pelo cliente, ela precisa ser descontada do CUSTO BASE antes de calcular
+  // o preço sugerido — senão o preço fica "gordo demais" (calculado como se a
+  // empresa precisasse cobrir o frete inteiro) e, ao abater o adicional só na
+  // exibição, a margem sobe sozinha em vez do preço sugerido cair.
+  const freteAdicionalReais = canal.freteAdicionalValor
+    ? (canal.freteAdicionalTipo === 'kg' ? produto.peso * canal.freteAdicionalValor : canal.freteAdicionalValor)
+    : 0;
+
+  const custoBase = Math.max(0, produto.custo + freteKgComponente + outrosEncargos + valorDespesaExtra - freteAdicionalReais);
+  const totalPct = impostoPct + encargosPct + canal.fretePct + margemPctAlvo;
+
+  const estado = getEstadoPreco(produto, canal.id);
+  let preco;
+  if (estado.manual && estado.preco !== null && !isNaN(estado.preco)){
+    preco = estado.preco;
+  } else {
+    const divisor = 1 - (totalPct/100);
+    preco = divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor;
+    preco = Math.round(preco);
+    estado.preco = preco;
+  }
+
+  const freteBruto = freteKgComponente + (preco * canal.fretePct/100) + despesaParaFrete;
+  const freteReais = Math.max(0, freteBruto - freteAdicionalReais);
+
+  const impostoReais = (preco * (impostoPct + encargosPct) / 100) + outrosEncargos + despesaParaImposto;
+  const freteConsiderado = canal.freteIncluso !== false;
+  const margemReais = preco - produto.custo - impostoReais - (freteConsiderado ? freteReais : 0);
+  const margemPct = preco > 0 ? (margemReais/preco)*100 : 0;
+
+  return {
+    preco, freteReais, impostoReais, margemReais, margemPct, margemAlvo:margemPctAlvo,
+    impostoPct, encargosPct, outrosEncargos,
+    freteBruto, freteAdicionalReais, despesaParaFrete, despesaParaImposto
+  };
+}
+
+// =====================================================================
+// RENDER — ABA 1 — CABEÇALHO DINÂMICO
+// =====================================================================
+function renderTheadPrecos(){
+  const thead = document.getElementById('thead-precos');
+  const canais = canaisAtivos();
+  const colspanBase = mostrarColunaId ? 6 : 5;
+
+  let grpHtml = `<tr class="grp" id="thead-linha-grupo"><th colspan="${colspanBase}"></th>`;
+  canais.forEach(canal=>{
+    grpHtml += `<th colspan="5" class="canal-clicavel" data-canal-id="${canal.id}" title="Clique para abrir esta tabela em tela cheia" style="background:${canal.cor.dark}">${canal.nome}</th>`;
+  });
+  grpHtml += `<th></th></tr>`;
+
+  let labelHtml = `<tr id="thead-linha-rotulos">
+    <th class="th-editar"></th>
+    <th class="th-classe">Classe</th>
+    ${mostrarColunaId ? '<th>ID</th>' : ''}
+    <th class="th-produto">Produto</th><th>Peso (Kg)</th><th>Custo (R$)</th>`;
+  canais.forEach(canal=>{
+    labelHtml += `
+      <th style="border-left:2px solid ${canal.cor.mid}">Preço</th>
+      <th>Frete (R$)</th><th>Encargos (R$)</th><th>ML (%)</th><th>ML ($)</th>
+    `;
+  });
+  labelHtml += `<th></th></tr>`;
+
+  thead.innerHTML = grpHtml + labelHtml;
+
+  // A linha de rótulos (Preço, Frete...) precisa "empilhar" logo abaixo da
+  // linha de grupo (Venda Consumidor, Revenda CE...), senão as duas ficam
+  // sobrepostas no mesmo topo:0 e a linha de grupo some por baixo.
+  const linhaGrupo = document.getElementById('thead-linha-grupo');
+  const linhaRotulos = document.getElementById('thead-linha-rotulos');
+  if (linhaGrupo && linhaRotulos){
+    const alturaGrupo = linhaGrupo.getBoundingClientRect().height;
+    linhaRotulos.querySelectorAll('th').forEach(th=>{ th.style.top = alturaGrupo + 'px'; });
+  }
+
+  thead.querySelectorAll('.canal-clicavel').forEach(th=>{
+    th.onclick = ()=> abrirModalCanal(th.dataset.canalId);
+  });
+}
+
+// =====================================================================
+// RENDER — ABA 1 — CORPO DA TABELA
+// =====================================================================
+function getProdutosExibidos(){
+  if (filtroClasseAtual === 'todas') return produtos;
+  return produtos.filter(p=> p.categoriaId === filtroClasseAtual);
+}
+
+function ajustarAlturaTabelaPrecos(){
+  const wrap = document.getElementById('tbl-wrap-precos');
+  const helper = document.getElementById('helper-precos');
+  if (!wrap || wrap.offsetParent === null) return; // aba não está visível no momento
+  const topo = wrap.getBoundingClientRect().top;
+  const alturaHelper = helper ? helper.getBoundingClientRect().height : 0;
+  const folga = 28;
+  const disponivel = window.innerHeight - topo - alturaHelper - folga;
+  wrap.style.maxHeight = Math.max(260, disponivel) + 'px';
+}
+
+let _resizeTimeout = null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(_resizeTimeout);
+  _resizeTimeout = setTimeout(ajustarAlturaTabelaPrecos, 120);
+});
+
+function renderTabelaPrecos(){
+  const tbody = document.getElementById('tbody-precos');
+  tbody.innerHTML = '';
+
+  let categoriaAnterior = null;
+  getProdutosExibidos().forEach((produto, indice)=>{
+    const cat = getCategoria(produto.categoriaId);
+    const tr = document.createElement('tr');
+    tr.id = 'row-' + produto.id;
+    if (indice > 0 && produto.categoriaId !== categoriaAnterior){
+      tr.classList.add('grupo-novo');
+    }
+    categoriaAnterior = produto.categoriaId;
+
+    let html = `
+      <td class="col-editar"><button class="btn-editar-linha" data-prod="${produto.id}" title="Editar produto">✎</button></td>
+      <td class="produto-cat">${cat.nome}</td>
+      ${mostrarColunaId ? `<td class="num">${produto.codigo || ''}</td>` : ''}
+      <td class="produto-nome">${produto.nome}</td>
+      <td class="num">${produto.peso.toLocaleString('pt-BR',{minimumFractionDigits:2})} kg</td>
+      <td class="num">
+        <input type="number" step="0.1" min="0" class="cost-input"
+               id="custo-${produto.id}" data-prod="${produto.id}" value="${produto.custo.toFixed(2)}">
+      </td>
+    `;
+
+    canaisAtivos().forEach(canal=>{
+      const r = calcularCanal(produto, canal);
+      const manual = getEstadoPreco(produto, canal.id).manual;
+      const tituloImp = `Imposto ${fmtP(r.impostoPct)}% + Encargos ${fmtP(r.encargosPct)}%${r.outrosEncargos ? ' + Outros Encargos ' + fmtR(r.outrosEncargos) : ''}${r.despesaParaImposto ? ' + Despesa Extra ' + fmtR(r.despesaParaImposto) : ''}`;
+      const freteIncluso = canal.freteIncluso !== false;
+      const tituloFrete = montarTituloFrete(r, freteIncluso);
+      html += `
+        <td style="border-left:2px solid ${canal.cor.mid}; background:${canal.cor.soft};">
+          <input type="number" step="1" class="price-input ${manual?'manual':''}"
+                 id="price-${produto.id}-${canal.id}"
+                 data-prod="${produto.id}" data-canal="${canal.id}"
+                 value="${r.preco.toFixed(2)}">
+          <button class="reset-btn ${manual?'show':''}" id="reset-${produto.id}-${canal.id}"
+                  data-prod="${produto.id}" data-canal="${canal.id}" title="Voltar ao preço sugerido">↺</button>
+        </td>
+        <td class="num ${freteIncluso?'':'frete-nao-considerado'}" id="frete-${produto.id}-${canal.id}" style="background:${canal.cor.subtle};" ${tituloFrete ? `title="${tituloFrete}"` : ''}>R$ ${fmtR(r.freteReais)}</td>
+        <td class="num" id="imp-${produto.id}-${canal.id}" style="background:${canal.cor.subtle};" title="${tituloImp}">R$ ${fmtR(r.impostoReais)}</td>
+        <td id="mp-${produto.id}-${canal.id}" style="background:${canal.cor.subtle};"><span class="cell-margin ${margemClasse(r.margemPct,r.margemAlvo)} num">${fmtP(r.margemPct)}%</span></td>
+        <td class="num" id="mv-${produto.id}-${canal.id}" style="background:${canal.cor.subtle};">R$ ${fmtR(r.margemReais)}</td>
+      `;
+    });
+
+    html += `<td><button class="del-row" data-prod="${produto.id}" title="Remover produto">✕</button></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+  });
+
+  attachPriceListeners();
+  attachCostListeners();
+  attachDeleteListeners();
+  attachEditListeners();
+  ajustarAlturaTabelaPrecos();
+}
+
+function attachEditListeners(){
+  document.querySelectorAll('.btn-editar-linha').forEach(btn=>{
+    btn.onclick = (e)=> abrirModalEditar(e.currentTarget.dataset.prod);
+  });
+}
+
+function destacarLinhaProduto(prodId){
+  document.querySelectorAll('table.precos tbody tr.row-highlight').forEach(tr=> tr.classList.remove('row-highlight'));
+  const row = document.getElementById('row-' + prodId);
+  if (row) row.classList.add('row-highlight');
+}
+
+function attachPriceListeners(){
+  document.querySelectorAll('.price-input').forEach(inp=>{
+    inp.addEventListener('focus', ()=> destacarLinhaProduto(inp.dataset.prod));
+    inp.oninput = (e)=>{
+      const produto = produtos.find(p=>p.id===e.target.dataset.prod);
+      const canalId = e.target.dataset.canal;
+      const val = parseFloat(e.target.value);
+      const estado = getEstadoPreco(produto, canalId);
+      estado.manual = true;
+      estado.preco = isNaN(val) ? 0 : val;
+      updateRowChannel(produto, canalId);
+      destacarLinhaProduto(produto.id);
+      salvarEstado();
+    };
+  });
+  document.querySelectorAll('.reset-btn').forEach(btn=>{
+    btn.onclick = (e)=>{
+      const produto = produtos.find(p=>p.id===e.target.dataset.prod);
+      const canalId = e.target.dataset.canal;
+      const estado = getEstadoPreco(produto, canalId);
+      estado.manual = false;
+      estado.preco = null;
+      updateRowChannel(produto, canalId);
+      salvarEstado();
+    };
+  });
+}
+
+function attachCostListeners(){
+  document.querySelectorAll('.cost-input').forEach(inp=>{
+    inp.addEventListener('focus', ()=> destacarLinhaProduto(inp.dataset.prod));
+    inp.oninput = (e)=>{
+      const produto = produtos.find(p=>p.id===e.target.dataset.prod);
+      const val = parseFloat(e.target.value);
+      produto.custo = isNaN(val) ? 0 : val;
+      canaisPreco.forEach(canal=> updateRowChannel(produto, canal.id));
+      destacarLinhaProduto(produto.id);
+      salvarEstado();
+    };
+  });
+}
+
+function attachDeleteListeners(){
+  document.querySelectorAll('.del-row').forEach(btn=>{
+    btn.onclick = (e)=>{
+      produtos = produtos.filter(p=>p.id!==e.target.dataset.prod);
+      renderTabelaPrecos();
+      salvarEstado();
+    };
+  });
+}
+
+function updateRowChannel(produto, canalId){
+  const canal = getCanal(canalId);
+  if (!canal) return;
+  const r = calcularCanal(produto, canal);
+  const manual = getEstadoPreco(produto, canalId).manual;
+
+  const priceInput = document.getElementById(`price-${produto.id}-${canalId}`);
+  if (!priceInput) return;
+  if (document.activeElement !== priceInput){ priceInput.value = r.preco.toFixed(2); }
+  priceInput.classList.toggle('manual', manual);
+
+  document.getElementById(`reset-${produto.id}-${canalId}`).classList.toggle('show', manual);
+  const freteCell = document.getElementById(`frete-${produto.id}-${canalId}`);
+  const freteIncluso = canal.freteIncluso !== false;
+  freteCell.textContent = `R$ ${fmtR(r.freteReais)}`;
+  freteCell.classList.toggle('frete-nao-considerado', !freteIncluso);
+  freteCell.title = montarTituloFrete(r, freteIncluso);
+
+  const impCell = document.getElementById(`imp-${produto.id}-${canalId}`);
+  impCell.textContent = `R$ ${fmtR(r.impostoReais)}`;
+  impCell.title = `Imposto ${fmtP(r.impostoPct)}% + Encargos ${fmtP(r.encargosPct)}%${r.outrosEncargos ? ' + Outros Encargos R$ ' + fmtR(r.outrosEncargos) : ''}${r.despesaParaImposto ? ' + Despesa Extra do produto ' + fmtR(r.despesaParaImposto) : ''}`;
+
+  document.getElementById(`mp-${produto.id}-${canalId}`).innerHTML =
+    `<span class="cell-margin ${margemClasse(r.margemPct,r.margemAlvo)} num">${fmtP(r.margemPct)}%</span>`;
+  document.getElementById(`mv-${produto.id}-${canalId}`).textContent = `R$ ${fmtR(r.margemReais)}`;
+}
+
+function recalcularTudo(){
+  produtos.forEach(produto=>{
+    canaisPreco.forEach(canal=> updateRowChannel(produto, canal.id));
+  });
+}
+
+// =====================================================================
+// RENDER — ABA 2 — TABELAS DE PREÇO (CANAIS)
+// =====================================================================
+function renderCanaisCards(){
+  const grid = document.getElementById('grid-canais');
+  let html = '';
+
+  canaisPreco.forEach(canal=>{
+    const visivel = canal.visivel !== false;
+    const freteIncluso = canal.freteIncluso !== false;
+    html += `
+      <div class="pcard" data-canal="${canal.id}">
+        <div class="phead" style="background:${canal.cor.dark}">
+          <span>${canal.nome}</span>
+          <button class="del-canal" data-id="${canal.id}" title="Excluir esta Tabela de Preço">🗑 Excluir</button>
+        </div>
+        <div class="pbody">
+          <label class="field-row toggle-row">
+            <span>Exibir na Tabela Principal</span>
+            <input type="checkbox" class="toggle-visivel" data-id="${canal.id}" ${visivel?'checked':''}>
+          </label>
+          <label class="field-row toggle-row">
+            <span>Frete Incluso na Margem</span>
+            <input type="checkbox" class="toggle-frete" data-id="${canal.id}" ${freteIncluso?'checked':''}>
+          </label>
+          <div class="field-row"><label>Média de Desconto (%)</label><input data-id="${canal.id}" data-field="desconto" type="number" step="0.1" min="0" value="${canal.desconto}"></div>
+          <div class="field-row"><label>Comissão Vendedor (%)</label><input data-id="${canal.id}" data-field="comissao" type="number" step="0.1" min="0" value="${canal.comissao}"></div>
+          <div class="field-row"><label>Taxa de Cartão (%)</label><input data-id="${canal.id}" data-field="cartao" type="number" step="0.1" min="0" value="${canal.cartao}"></div>
+          <div class="field-row"><label>Outros Encargos (R$)</label><input data-id="${canal.id}" data-field="outrosEncargos" type="number" step="0.1" min="0" value="${canal.outrosEncargos || 0}"></div>
+          <div class="field-row"><label>Frete Kg (R$)</label><input data-id="${canal.id}" data-field="freteKg" type="number" step="0.1" min="0" value="${canal.freteKg}"></div>
+          <div class="field-row"><label>Frete NF (%)</label><input data-id="${canal.id}" data-field="fretePct" type="number" step="0.1" min="0" value="${canal.fretePct}"></div>
+          <div class="field-row">
+            <label>Frete Cobrado</label>
+            <span style="display:flex; gap:5px;">
+              <select data-id="${canal.id}" data-field="freteAdicionalTipo" style="width:78px; text-align:left;">
+                <option value="fixo" ${(!canal.freteAdicionalTipo || canal.freteAdicionalTipo==='fixo')?'selected':''}>R$ Fixo</option>
+                <option value="kg" ${canal.freteAdicionalTipo==='kg'?'selected':''}>R$/Kg</option>
+              </select>
+              <input data-id="${canal.id}" data-field="freteAdicionalValor" type="number" step="0.1" min="0" value="${canal.freteAdicionalValor || 0}" style="width:76px;">
+            </span>
+          </div>
+          <div class="field-row"><label>Tipo de Imposto (ICMS)</label>
+            <select data-id="${canal.id}" data-field="tipoImposto">
+              <option value="estadual" ${canal.tipoImposto==='estadual'?'selected':''}>Estadual</option>
+              <option value="interestadual" ${canal.tipoImposto==='interestadual'?'selected':''}>Interestadual</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    <div class="pcard add-canal-card">
+      <div class="phead"><span>+ Adicionar Nova Tabela de Preço</span></div>
+      <div class="pbody">
+        <div class="field-stack"><label>Nome da tabela</label><input type="text" id="nc-nome-canal" placeholder="Nome da tabela"></div>
+        <div class="field-stack"><label>Média de Desconto (%)</label><input type="number" id="nc-canal-desconto" step="0.1" min="0" value="0"></div>
+        <div class="field-stack"><label>Comissão Vendedor (%)</label><input type="number" id="nc-canal-comissao" step="0.1" min="0" value="0"></div>
+        <div class="field-stack"><label>Taxa de Cartão (%)</label><input type="number" id="nc-canal-cartao" step="0.1" min="0" value="0"></div>
+        <div class="field-stack"><label>Outros Encargos (R$)</label><input type="number" id="nc-canal-outros" step="0.1" min="0" value="0"></div>
+        <div class="field-stack"><label>Frete Kg (R$)</label><input type="number" id="nc-canal-fretekg" step="0.1" min="0" value="0"></div>
+        <div class="field-stack"><label>Frete NF (%)</label><input type="number" id="nc-canal-fretepct" step="0.1" min="0" value="0"></div>
+        <div class="field-stack"><label>Frete cobrado (Tipo)</label>
+          <select id="nc-canal-frete-adicional-tipo">
+            <option value="fixo">R$ Fixo</option>
+            <option value="kg">R$/Kg</option>
+          </select>
+        </div>
+        <div class="field-stack"><label>Frete cobrado (Valor R$)</label><input type="number" id="nc-canal-frete-adicional-valor" step="0.01" min="0" value="0"></div>
+        <div class="field-stack"><label>Tipo de Imposto (ICMS)</label>
+          <select id="nc-canal-tipo">
+            <option value="estadual">Estadual</option>
+            <option value="interestadual">Interestadual</option>
+          </select>
+        </div>
+        <button class="btn btn-add-canal" id="btn-add-canal">+ Adicionar Nova Tabela de Preço</button>
+      </div>
+    </div>
+  `;
+
+  grid.innerHTML = html;
+  ligarCanaisCards();
+}
+
+function ligarCanaisCards(){
+  document.querySelectorAll('.pcard[data-canal] input:not(.toggle-visivel), .pcard[data-canal] select').forEach(campo=>{
+    campo.oninput = (e)=>{
+      const id = e.target.dataset.id;
+      const field = e.target.dataset.field;
+      const canal = getCanal(id);
+      if (!canal) return;
+      if (field === 'tipoImposto' || field === 'freteAdicionalTipo'){
+        canal[field] = e.target.value;
+      } else {
+        const v = parseFloat(e.target.value);
+        canal[field] = isNaN(v) ? 0 : v;
+      }
+      recalcularTudo();
+      salvarEstado();
+    };
+  });
+
+  document.querySelectorAll('.toggle-visivel').forEach(chk=>{
+    chk.onchange = (e)=>{
+      const canal = getCanal(e.target.dataset.id);
+      if (!canal) return;
+      canal.visivel = e.target.checked;
+      renderTheadPrecos();
+      renderTabelaPrecos();
+      salvarEstado();
+    };
+  });
+
+  document.querySelectorAll('.toggle-frete').forEach(chk=>{
+    chk.onchange = (e)=>{
+      const canal = getCanal(e.target.dataset.id);
+      if (!canal) return;
+      canal.freteIncluso = e.target.checked;
+      renderTabelaPrecos();
+      salvarEstado();
+    };
+  });
+
+  document.querySelectorAll('.del-canal').forEach(btn=>{
+    btn.onclick = (e)=> removerCanal(e.target.dataset.id);
+  });
+
+  document.getElementById('btn-add-canal').onclick = adicionarCanal;
+}
+
+function removerCanal(id){
+  if (canaisPreco.length <= 1){
+    alert('É necessário manter ao menos uma Tabela de Preço ativa no sistema.');
+    return;
+  }
+  const canal = getCanal(id);
+  const confirmar = confirm(`Excluir a Tabela de Preço "${canal.nome}"? As colunas dela vão sumir da Tabela de Preços e da exportação para Excel imediatamente.`);
+  if (!confirmar) return;
+
+  canaisPreco = canaisPreco.filter(c=> c.id !== id);
+  categorias.forEach(cat=>{ if (cat.margens) delete cat.margens[id]; });
+  produtos.forEach(p=>{ if (p.precos) delete p.precos[id]; });
+
+  renderCanaisCards();
+  renderTheadPrecos();
+  renderTabelaPrecos();
+  renderCategoriasTabela();
+  salvarEstado();
+}
+
+function adicionarCanal(){
+  const nomeInput = document.getElementById('nc-nome-canal');
+  const nome = nomeInput.value.trim();
+  if (!nome){
+    alert('Informe um nome para a nova Tabela de Preço.');
+    return;
+  }
+  if (canaisPreco.some(c=> c.nome.toLowerCase() === nome.toLowerCase())){
+    alert('Já existe uma Tabela de Preço com esse nome.');
+    return;
+  }
+
+  const desconto  = parseFloat(document.getElementById('nc-canal-desconto').value);
+  const comissao  = parseFloat(document.getElementById('nc-canal-comissao').value);
+  const cartao    = parseFloat(document.getElementById('nc-canal-cartao').value);
+  const outros    = parseFloat(document.getElementById('nc-canal-outros').value);
+  const freteKg   = parseFloat(document.getElementById('nc-canal-fretekg').value);
+  const fretePct  = parseFloat(document.getElementById('nc-canal-fretepct').value);
+  const freteAdicionalTipo = document.getElementById('nc-canal-frete-adicional-tipo').value;
+  const freteAdicionalValor = parseFloat(document.getElementById('nc-canal-frete-adicional-valor').value);
+  const tipoImposto = document.getElementById('nc-canal-tipo').value;
+
+  const novoId = 'canal_' + Date.now();
+  canaisPreco.push({
+    id: novoId, nome,
+    desconto: isNaN(desconto) ? 0 : desconto,
+    comissao: isNaN(comissao) ? 0 : comissao,
+    cartao: isNaN(cartao) ? 0 : cartao,
+    outrosEncargos: isNaN(outros) ? 0 : outros,
+    freteKg: isNaN(freteKg) ? 0 : freteKg,
+    fretePct: isNaN(fretePct) ? 0 : fretePct,
+    freteAdicionalTipo: freteAdicionalTipo || 'fixo',
+    freteAdicionalValor: isNaN(freteAdicionalValor) ? 0 : freteAdicionalValor,
+    tipoImposto,
+    visivel: true,
+    freteIncluso: true,
+    cor: gerarCorCanal(canalSeq++)
+  });
+
+  categorias.forEach(cat=>{
+    if (!cat.margens) cat.margens = {};
+    cat.margens[novoId] = 20;
+  });
+  produtos.forEach(p=>{
+    if (!p.precos) p.precos = {};
+    p.precos[novoId] = { preco:null, manual:false };
+  });
+
+  renderCanaisCards();
+  renderTheadPrecos();
+  renderTabelaPrecos();
+  renderCategoriasTabela();
+  salvarEstado();
+}
+
+// =====================================================================
+// RENDER — ABA 2 — CATEGORIAS (impostos por categoria + margens por canal)
+// =====================================================================
+function renderCategoriasTabela(){
+  const thead = document.getElementById('thead-catmargin');
+  const tbody = document.getElementById('tbody-catmargin');
+
+  let headHtml = `<tr><th>Categoria</th><th>Estadual (%)</th><th>Interestadual (%)</th>`;
+  canaisPreco.forEach(canal=>{
+    headHtml += `<th style="color:${canal.cor.dark}">${canal.nome} (%)</th>`;
+  });
+  headHtml += `<th></th></tr>`;
+  thead.innerHTML = headHtml;
+
+  let bodyHtml = '';
+  categorias.forEach(cat=>{
+    if (!cat.margens) cat.margens = {};
+    bodyHtml += `<tr>
+      <td class="cat-name">${cat.nome}</td>
+      <td><input data-id="${cat.id}" data-field="estadual" type="number" step="0.1" min="0" value="${cat.estadual}"></td>
+      <td><input data-id="${cat.id}" data-field="interestadual" type="number" step="0.1" min="0" value="${cat.interestadual}"></td>
+    `;
+    canaisPreco.forEach(canal=>{
+      const v = typeof cat.margens[canal.id] === 'number' ? cat.margens[canal.id] : 20;
+      bodyHtml += `<td><input data-id="${cat.id}" data-canal="${canal.id}" data-field="margem" type="number" step="0.1" min="0" value="${v}"></td>`;
+    });
+    bodyHtml += `<td><button class="del-cat" data-id="${cat.id}" title="Deletar categoria">🗑</button></td></tr>`;
+  });
+  tbody.innerHTML = bodyHtml;
+
+  tbody.querySelectorAll('input').forEach(inp=>{
+    inp.oninput = (e)=>{
+      const id = e.target.dataset.id;
+      const field = e.target.dataset.field;
+      const cat = categorias.find(c=>c.id===id);
+      const v = parseFloat(e.target.value);
+      const valor = isNaN(v) ? 0 : v;
+
+      if (field === 'margem'){
+        const canalId = e.target.dataset.canal;
+        if (!cat.margens) cat.margens = {};
+        cat.margens[canalId] = valor;
+      } else {
+        cat[field] = valor;
+      }
+      recalcularTudo();
+      salvarEstado();
+    };
+  });
+
+  tbody.querySelectorAll('.del-cat').forEach(btn=>{
+    btn.onclick = (e)=> removerCategoria(e.target.dataset.id);
+  });
+}
+
+function removerCategoria(id){
+  const emUso = produtos.some(p=> p.categoriaId === id);
+  if (emUso){
+    alert('Não é possível deletar esta categoria: existem produtos cadastrados na Tabela de Preços vinculados a ela. Reatribua ou remova esses produtos antes de excluir a categoria.');
+    return;
+  }
+  if (categorias.length <= 1){
+    alert('É necessário manter ao menos uma categoria cadastrada no sistema.');
+    return;
+  }
+  categorias = categorias.filter(c=> c.id !== id);
+  if (filtroClasseAtual === id) filtroClasseAtual = 'todas';
+  ordenarProdutos();
+  renderTabelaPrecos();
+  renderCategoriasTabela();
+  renderClasseOptions(document.getElementById('f-classe'), categorias[0].id);
+  renderFiltroClasse();
+  salvarEstado();
+}
+
+document.getElementById('btn-add-categoria').addEventListener('click', ()=>{
+  const nomeInput = document.getElementById('nc-nome');
+  const nome = nomeInput.value.trim();
+  const estadual = parseFloat(document.getElementById('nc-estadual').value);
+  const interestadual = parseFloat(document.getElementById('nc-interestadual').value);
+
+  if (!nome){
+    alert('Informe um nome para a nova categoria.');
+    return;
+  }
+  if (categorias.some(c=> c.nome.toLowerCase() === nome.toLowerCase())){
+    alert('Já existe uma categoria com esse nome.');
+    return;
+  }
+
+  const margens = {};
+  canaisPreco.forEach(canal=>{ margens[canal.id] = 20; });
+
+  const novoId = 'cat_' + Date.now();
+  categorias.push({
+    id: novoId,
+    nome,
+    estadual: isNaN(estadual) ? 18 : estadual,
+    interestadual: isNaN(interestadual) ? 12 : interestadual,
+    margens
+  });
+
+  renderCategoriasTabela();
+  renderClasseOptions(document.getElementById('f-classe'), novoId);
+  renderFiltroClasse();
+  ordenarProdutos();
+  renderTabelaPrecos();
+  salvarEstado();
+
+  nomeInput.value = '';
+  document.getElementById('nc-estadual').value = '';
+  document.getElementById('nc-interestadual').value = '';
+});
+
+// =====================================================================
+// FILTRO E ORDENAÇÃO
+// =====================================================================
+function renderClasseOptions(select, selectedId){
+  select.innerHTML = categorias.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.nome}</option>`).join('');
+}
+
+function renderFiltroClasse(){
+  const select = document.getElementById('filtro-classe');
+  const atual = select.value || filtroClasseAtual;
+  select.innerHTML = `<option value="todas">Mostrar Todas</option>` +
+    categorias.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  select.value = categorias.some(c=>c.id===atual) ? atual : 'todas';
+  filtroClasseAtual = select.value;
+}
+
+document.getElementById('filtro-classe').addEventListener('change', (e)=>{
+  filtroClasseAtual = e.target.value;
+  renderTabelaPrecos();
+});
+
+document.getElementById('toggle-coluna-id').addEventListener('change', (e)=>{
+  mostrarColunaId = e.target.checked;
+  renderTheadPrecos();
+  renderTabelaPrecos();
+  salvarEstado();
+});
+
+document.getElementById('btn-categorias-personalizar').addEventListener('click', abrirModalOrdemCategorias);
+
+// =====================================================================
+// NOVO PRODUTO
+// =====================================================================
+document.getElementById('form-add').addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const categoriaId = document.getElementById('f-classe').value;
+  const nome = document.getElementById('f-produto').value.trim();
+  const peso = parseFloat(document.getElementById('f-peso').value);
+  const custo = parseFloat(document.getElementById('f-custo').value);
+  if (!nome || isNaN(peso) || isNaN(custo)) return;
+
+  const precos = {};
+  canaisPreco.forEach(canal=>{ precos[canal.id] = { preco:null, manual:false }; });
+
+  const codigo = String(uid).padStart(4, '0');
+  produtos.push({ id:'p' + (uid++), nome, codigo, categoriaId, custo, peso, precos });
+
+  ordenarProdutos();
+  renderTabelaPrecos();
+  salvarEstado();
+  e.target.reset();
+  renderClasseOptions(document.getElementById('f-classe'), categoriaId);
+  document.getElementById('f-produto').focus();
+});
+
+// =====================================================================
+// ABAS
+// =====================================================================
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.onclick = ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'tab-precos') ajustarAlturaTabelaPrecos();
+  };
+});
+
+// =====================================================================
+// EXPORTAÇÃO PARA EXCEL (.xls) — dinâmica conforme as Tabelas de Preço ativas
+// =====================================================================
+function fecharDropdownExportar(){
+  document.getElementById('dropdown-exportar').classList.remove('show');
+}
+
+document.getElementById('btn-exportar-menu').onclick = (e)=>{
+  e.stopPropagation();
+  document.getElementById('dropdown-exportar').classList.toggle('show');
+};
+document.getElementById('dropdown-exportar').addEventListener('click', (e)=> e.stopPropagation());
+document.addEventListener('click', fecharDropdownExportar);
+
+document.getElementById('menu-export-xls').onclick = ()=>{
+  fecharDropdownExportar();
+  const f = (v)=> v.toFixed(2).replace('.',',');
+
+  let cabecalho = `<tr><th>ID</th><th>Produto</th>`;
+  canaisAtivos().forEach(canal=>{
+    const divisor = canal.tipoImposto === 'interestadual' ? '0,928' : '0,80';
+    cabecalho += `<th>Vlr ${canal.nome}</th><th>${canal.nome} com ICMS (÷ ${divisor})</th>`;
+  });
+  cabecalho += `</tr>`;
+
+  let linhas = '';
+  produtos.forEach(produto=>{
+    let cols = `<td>${produto.codigo || ''}</td><td>${produto.nome}</td>`;
+    canaisAtivos().forEach(canal=>{
+      const r = calcularCanal(produto, canal);
+      const divisorIcms = canal.tipoImposto === 'interestadual' ? 0.928 : 0.80;
+      const comIcms = r.preco / divisorIcms;
+      cols += `<td>${f(r.preco)}</td><td>${f(comIcms)}</td>`;
+    });
+    linhas += `<tr>${cols}</tr>`;
+  });
+
+  const htmlTabela = `
+    <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+    <head>
+      <meta charset="UTF-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>Precificação</x:Name>
+              <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+    </head>
+    <body>
+      <table border="1">${cabecalho}${linhas}</table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\ufeff' + htmlTabela], { type:'application/vnd.ms-excel' });
+  const link = document.createElement('a');
+  const dataStr = new Date().toISOString().slice(0,10);
+  link.href = URL.createObjectURL(blob);
+  link.download = `precificacao-${dataStr}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+};
+
+// =====================================================================
+// EXPORTAÇÃO PARA PDF (Catálogo) — modal de seleção + agrupamento
+// =====================================================================
+function abrirModalPDF(){
+  const lista = document.getElementById('lista-canais-modal');
+  const canais = canaisAtivos();
+  lista.innerHTML = canais.map((canal, i)=>`
+    <label class="modal-canal-opcao">
+      <input type="radio" name="canal-pdf" value="${canal.id}" ${i===0?'checked':''}>
+      <span class="modal-canal-swatch" style="background:${canal.cor.dark}"></span>
+      <span>${canal.nome}</span>
+    </label>
+  `).join('') || '<p class="modal-hint">Nenhuma Tabela de Preço visível no momento. Ative alguma em Parametrização de Custos.</p>';
+  document.getElementById('modal-pdf-overlay').classList.add('show');
+}
+
+function fecharModalPDF(){
+  document.getElementById('modal-pdf-overlay').classList.remove('show');
+}
+
+document.getElementById('menu-export-pdf').onclick = ()=>{
+  fecharDropdownExportar();
+  abrirModalPDF();
+};
+document.getElementById('btn-modal-pdf-fechar').onclick = fecharModalPDF;
+document.getElementById('btn-modal-pdf-cancelar').onclick = fecharModalPDF;
+document.getElementById('modal-pdf-overlay').addEventListener('click', (e)=>{
+  if (e.target.id === 'modal-pdf-overlay') fecharModalPDF();
+});
+
+// =====================================================================
+// MODAL — EDITAR PRODUTO (Classe, ID, Nome, Peso)
+// =====================================================================
+let produtoEditandoId = null;
+
+function abrirModalEditar(prodId){
+  const produto = produtos.find(p=>p.id===prodId);
+  if (!produto) return;
+  produtoEditandoId = prodId;
+  renderClasseOptions(document.getElementById('edit-classe'), produto.categoriaId);
+  document.getElementById('edit-codigo').value = produto.codigo || '';
+  document.getElementById('edit-nome').value = produto.nome;
+  document.getElementById('edit-peso').value = produto.peso;
+  const despesa = produto.despesaExtra || { valor:0, destino:'frete' };
+  document.getElementById('edit-despesa-valor').value = despesa.valor || 0;
+  document.getElementById('edit-despesa-destino').value = despesa.destino || 'frete';
+  document.getElementById('modal-editar-overlay').classList.add('show');
+}
+
+function fecharModalEditar(){
+  document.getElementById('modal-editar-overlay').classList.remove('show');
+  produtoEditandoId = null;
+}
+
+document.getElementById('btn-modal-editar-fechar').onclick = fecharModalEditar;
+document.getElementById('btn-modal-editar-cancelar').onclick = fecharModalEditar;
+document.getElementById('modal-editar-overlay').addEventListener('click', (e)=>{
+  if (e.target.id === 'modal-editar-overlay') fecharModalEditar();
+});
+
+document.getElementById('btn-modal-editar-salvar').onclick = ()=>{
+  const produto = produtos.find(p=>p.id===produtoEditandoId);
+  if (!produto) return;
+
+  const novaClasse = document.getElementById('edit-classe').value;
+  const novoCodigo = document.getElementById('edit-codigo').value.trim();
+  const novoNome = document.getElementById('edit-nome').value.trim();
+  const novoPeso = parseFloat(document.getElementById('edit-peso').value);
+  const novaDespesaValor = parseFloat(document.getElementById('edit-despesa-valor').value);
+  const novaDespesaDestino = document.getElementById('edit-despesa-destino').value;
+
+  if (!novoNome){
+    alert('Informe o nome do produto.');
+    return;
+  }
+  if (isNaN(novoPeso) || novoPeso <= 0){
+    alert('Informe um peso válido para o produto.');
+    return;
+  }
+
+  produto.categoriaId = novaClasse;
+  produto.codigo = novoCodigo;
+  produto.nome = novoNome;
+  produto.peso = novoPeso;
+  produto.despesaExtra = {
+    valor: isNaN(novaDespesaValor) ? 0 : novaDespesaValor,
+    destino: novaDespesaDestino === 'impostos' ? 'impostos' : 'frete'
+  };
+
+  ordenarProdutos();
+  renderTabelaPrecos();
+  salvarEstado();
+  fecharModalEditar();
+};
+
+// =====================================================================
+// MODAL — TABELA DE PREÇO EM TELA CHEIA (facilita a edição de uma
+// Tabela específica sem precisar rolar a tela toda para os lados)
+// =====================================================================
+function abrirModalCanal(canalId){
+  const canal = getCanal(canalId);
+  if (!canal) return;
+  document.getElementById('modal-tela-canal-titulo').textContent = canal.nome;
+  renderModalTelaCanal(canal);
+  document.getElementById('modal-tela-canal-overlay').classList.add('show');
+}
+
+function fecharModalTelaCanal(){
+  document.getElementById('modal-tela-canal-overlay').classList.remove('show');
+}
+
+document.getElementById('btn-modal-tela-canal-fechar').onclick = fecharModalTelaCanal;
+document.getElementById('modal-tela-canal-overlay').addEventListener('click', (e)=>{
+  if (e.target.id === 'modal-tela-canal-overlay') fecharModalTelaCanal();
+});
+
+function renderModalTelaCanal(canal){
+  const thead = document.getElementById('thead-modal-tela-canal');
+  thead.innerHTML = `
+    <tr>
+      <th>Classe</th><th>ID</th><th>Produto</th><th>Peso (Kg)</th><th>Custo (R$)</th>
+      <th style="border-left:2px solid ${canal.cor.mid}">Preço</th>
+      <th>Frete (R$)</th><th>Encargos (R$)</th><th>ML (%)</th><th>ML ($)</th>
+    </tr>
+  `;
+
+  const tbody = document.getElementById('tbody-modal-tela-canal');
+  tbody.innerHTML = '';
+  let categoriaAnterior = null;
+  getProdutosExibidos().forEach((produto, indice)=>{
+    const cat = getCategoria(produto.categoriaId);
+    const tr = document.createElement('tr');
+    tr.id = 'mt-row-' + produto.id;
+    if (indice > 0 && produto.categoriaId !== categoriaAnterior){
+      tr.classList.add('grupo-novo');
+    }
+    categoriaAnterior = produto.categoriaId;
+    tr.innerHTML = `
+      <td>${cat.nome}</td>
+      <td class="num">${produto.codigo || ''}</td>
+      <td style="font-weight:600; color:var(--navy);">${produto.nome}</td>
+      <td class="num">${produto.peso.toLocaleString('pt-BR',{minimumFractionDigits:2})} kg</td>
+      <td class="num">
+        <input type="number" step="0.01" min="0" class="cost-input" id="mt-custo-${produto.id}" data-prod="${produto.id}" value="${produto.custo.toFixed(2)}">
+      </td>
+      <td style="border-left:2px solid ${canal.cor.mid}; background:${canal.cor.soft};" id="mt-precocel-${produto.id}"></td>
+      <td class="num" id="mt-frete-${produto.id}"></td>
+      <td class="num" id="mt-imp-${produto.id}"></td>
+      <td id="mt-mp-${produto.id}"></td>
+      <td class="num" id="mt-mv-${produto.id}"></td>
+    `;
+    tbody.appendChild(tr);
+    preencherLinhaModalTelaCanal(produto, canal);
+  });
+
+  tbody.querySelectorAll('.cost-input').forEach(inp=>{
+    inp.oninput = (e)=>{
+      const produto = produtos.find(p=>p.id===e.target.dataset.prod);
+      const val = parseFloat(e.target.value);
+      produto.custo = isNaN(val) ? 0 : val;
+      canaisPreco.forEach(c=> updateRowChannel(produto, c.id));
+      atualizarLinhaModalTelaCanal(produto, canal);
+      salvarEstado();
+    };
+  });
+}
+
+// Monta o conteúdo da célula de Preço (input + botão ↺) uma única vez por
+// linha, na criação da tabela do modal.
+function preencherLinhaModalTelaCanal(produto, canal){
+  const r = calcularCanal(produto, canal);
+  const manual = getEstadoPreco(produto, canal.id).manual;
+
+  document.getElementById(`mt-precocel-${produto.id}`).innerHTML = `
+    <input type="number" step="1" class="price-input ${manual?'manual':''}"
+           id="mt-price-${produto.id}" data-prod="${produto.id}" data-canal="${canal.id}"
+           value="${r.preco.toFixed(2)}">
+    <button class="reset-btn ${manual?'show':''}" id="mt-reset-${produto.id}"
+            data-prod="${produto.id}" data-canal="${canal.id}" title="Voltar ao preço sugerido">↺</button>
+  `;
+
+  document.getElementById(`mt-price-${produto.id}`).oninput = (e)=>{
+    const val = parseFloat(e.target.value);
+    const estado = getEstadoPreco(produto, canal.id);
+    estado.manual = true;
+    estado.preco = isNaN(val) ? 0 : val;
+    updateRowChannel(produto, canal.id);
+    atualizarLinhaModalTelaCanal(produto, canal);
+    salvarEstado();
+  };
+  document.getElementById(`mt-reset-${produto.id}`).onclick = ()=>{
+    const estado = getEstadoPreco(produto, canal.id);
+    estado.manual = false;
+    estado.preco = null;
+    updateRowChannel(produto, canal.id);
+    atualizarLinhaModalTelaCanal(produto, canal);
+    salvarEstado();
+  };
+
+  atualizarLinhaModalTelaCanal(produto, canal);
+}
+
+// Atualiza apenas os valores derivados (Frete, Encargos, ML), sem recriar o
+// input de Preço — assim o campo não perde o foco/cursor durante a digitação.
+function atualizarLinhaModalTelaCanal(produto, canal){
+  const r = calcularCanal(produto, canal);
+  const manual = getEstadoPreco(produto, canal.id).manual;
+  const freteIncluso = canal.freteIncluso !== false;
+
+  const custoInput = document.getElementById(`mt-custo-${produto.id}`);
+  if (custoInput && document.activeElement !== custoInput){ custoInput.value = produto.custo.toFixed(2); }
+
+  const priceInput = document.getElementById(`mt-price-${produto.id}`);
+  if (priceInput){
+    if (document.activeElement !== priceInput){ priceInput.value = r.preco.toFixed(2); }
+    priceInput.classList.toggle('manual', manual);
+  }
+  const resetBtn = document.getElementById(`mt-reset-${produto.id}`);
+  if (resetBtn) resetBtn.classList.toggle('show', manual);
+
+  const freteCell = document.getElementById(`mt-frete-${produto.id}`);
+  freteCell.textContent = `R$ ${fmtR(r.freteReais)}`;
+  freteCell.classList.toggle('frete-nao-considerado', !freteIncluso);
+  freteCell.title = montarTituloFrete(r, freteIncluso);
+
+  const impCell = document.getElementById(`mt-imp-${produto.id}`);
+  impCell.textContent = `R$ ${fmtR(r.impostoReais)}`;
+  impCell.title = `Imposto ${fmtP(r.impostoPct)}% + Encargos ${fmtP(r.encargosPct)}%${r.outrosEncargos ? ' + Outros Encargos R$ ' + fmtR(r.outrosEncargos) : ''}${r.despesaParaImposto ? ' + Despesa Extra do produto ' + fmtR(r.despesaParaImposto) : ''}`;
+
+  document.getElementById(`mt-mp-${produto.id}`).innerHTML =
+    `<span class="cell-margin ${margemClasse(r.margemPct,r.margemAlvo)} num">${fmtP(r.margemPct)}%</span>`;
+  document.getElementById(`mt-mv-${produto.id}`).textContent = `R$ ${fmtR(r.margemReais)}`;
+}
+
+// =====================================================================
+// MODAL — ORDEM PERSONALIZADA DAS CATEGORIAS
+// =====================================================================
+let ordemCategoriasTemp = [];
+
+function abrirModalOrdemCategorias(){
+  ordemCategoriasTemp = categorias.slice();
+  renderListaOrdemCategorias();
+  document.getElementById('modal-ordem-categorias-overlay').classList.add('show');
+}
+
+function fecharModalOrdemCategorias(){
+  document.getElementById('modal-ordem-categorias-overlay').classList.remove('show');
+}
+
+function renderListaOrdemCategorias(){
+  const lista = document.getElementById('lista-ordem-categorias');
+  lista.innerHTML = ordemCategoriasTemp.map((cat, i)=> `
+    <div class="item-ordem-categoria">
+      <span>${cat.nome}</span>
+      <span class="setas">
+        <button data-i="${i}" data-dir="-1" title="Mover para cima" ${i===0?'disabled':''}>▲</button>
+        <button data-i="${i}" data-dir="1" title="Mover para baixo" ${i===ordemCategoriasTemp.length-1?'disabled':''}>▼</button>
+      </span>
+    </div>
+  `).join('');
+
+  lista.querySelectorAll('button').forEach(btn=>{
+    btn.onclick = (e)=>{
+      const i = parseInt(e.target.dataset.i, 10);
+      const dir = parseInt(e.target.dataset.dir, 10);
+      const j = i + dir;
+      if (j < 0 || j >= ordemCategoriasTemp.length) return;
+      const temp = ordemCategoriasTemp[i];
+      ordemCategoriasTemp[i] = ordemCategoriasTemp[j];
+      ordemCategoriasTemp[j] = temp;
+      renderListaOrdemCategorias();
+    };
+  });
+}
+
+document.getElementById('btn-modal-ordem-fechar').onclick = fecharModalOrdemCategorias;
+document.getElementById('btn-modal-ordem-cancelar').onclick = fecharModalOrdemCategorias;
+document.getElementById('modal-ordem-categorias-overlay').addEventListener('click', (e)=>{
+  if (e.target.id === 'modal-ordem-categorias-overlay') fecharModalOrdemCategorias();
+});
+
+document.getElementById('btn-modal-ordem-salvar').onclick = ()=>{
+  categorias = ordemCategoriasTemp.slice();
+  ordenarProdutos();
+  renderTabelaPrecos();
+  renderCategoriasTabela();
+  renderClasseOptions(document.getElementById('f-classe'), categorias[0].id);
+  renderFiltroClasse();
+  salvarEstado();
+  fecharModalOrdemCategorias();
+};
+
+document.getElementById('btn-modal-pdf-confirmar').onclick = ()=>{
+  const selecionado = document.querySelector('input[name="canal-pdf"]:checked');
+  if (!selecionado){
+    alert('Selecione uma Tabela de Preço para gerar o catálogo.');
+    return;
+  }
+  const canal = getCanal(selecionado.value);
+  fecharModalPDF();
+  gerarCatalogoPDF(canal);
+};
+
+function gerarCatalogoPDF(canal){
+  // Respeita estritamente o filtro de Classe/Categoria ativo na tela no momento do clique
+  const produtosFiltrados = getProdutosExibidos();
+
+  // Agrupa por categoria e ordena categorias por nome
+  const categoriasPresentes = {};
+  produtosFiltrados.forEach(p=>{
+    if (!categoriasPresentes[p.categoriaId]) categoriasPresentes[p.categoriaId] = [];
+    categoriasPresentes[p.categoriaId].push(p);
+  });
+
+  const categoriasOrdenadas = Object.keys(categoriasPresentes)
+    .map(id=> getCategoria(id))
+    .sort((a,b)=> a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  const f = (v)=> v.toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
+
+  let corpoHtml = '';
+  categoriasOrdenadas.forEach(cat=>{
+    const itens = categoriasPresentes[cat.id].slice().sort((a,b)=> a.nome.localeCompare(b.nome, 'pt-BR'));
+    let linhas = '';
+    itens.forEach(produto=>{
+      const r = calcularCanal(produto, canal);
+      linhas += `
+        <tr>
+          <td>${produto.nome}</td>
+          <td>${produto.peso.toLocaleString('pt-BR',{minimumFractionDigits:2})} kg</td>
+          <td>R$ ${f(r.preco)}</td>
+        </tr>
+      `;
+    });
+
+    corpoHtml += `
+      <h2 class="cat-titulo">${cat.nome}</h2>
+      <table class="tabela-catalogo">
+        <thead>
+          <tr><th>Produto</th><th>Peso (Kg)</th><th>Valor (R$)</th></tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    `;
+  });
+
+  if (categoriasOrdenadas.length === 0){
+    corpoHtml = `<p class="vazio">Nenhum produto encontrado para o filtro atual.</p>`;
+  }
+
+  const dataEmissao = new Date().toLocaleDateString('pt-BR');
+  const htmlCompleto = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Catálogo — ${canal.nome}</title>
+      <style>
+        @page{ margin:18mm 14mm; }
+        *{ box-sizing:border-box; }
+        body{
+          font-family:'Inter',Arial,sans-serif; color:#000000; background:#FFFFFF;
+          margin:0; padding:0 4mm;
+        }
+        .cabecalho{
+          display:flex; justify-content:space-between; align-items:flex-start;
+          border-bottom:2px solid #000000; padding-bottom:8px; margin-bottom:18px;
+        }
+        .cabecalho .marca{ display:flex; flex-direction:column; gap:2px; }
+        .cabecalho h1{font-size:20px; font-weight:700; margin:0; letter-spacing:.3px;}
+        .cabecalho .subtitulo{font-size:12.5px; font-weight:400; color:#333333; margin:0;}
+        .cabecalho .meta{font-size:11px; color:#333333; text-align:right; line-height:1.5; white-space:nowrap;}
+        .cat-titulo{
+          font-size:13.5px; text-transform:uppercase; letter-spacing:.6px;
+          background:#EFEFEF; color:#000000; padding:7px 10px; margin:20px 0 0;
+          border-left:4px solid #000000; page-break-after:avoid;
+        }
+        table.tabela-catalogo{
+          width:100%; border-collapse:collapse; font-size:12px; margin:0 0 4px;
+        }
+        table.tabela-catalogo thead th{
+          text-align:left; padding:7px 10px; border-bottom:1px solid #000000;
+          font-weight:700; color:#000000;
+        }
+        table.tabela-catalogo tbody td{
+          padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
+        }
+        table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
+        .vazio{ font-size:13px; color:#000000; padding:20px 0; }
+        @media print{
+          .cabecalho{ position:running(head); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="cabecalho">
+        <div class="marca">
+          <h1>Ceará Sementes</h1>
+          <p class="subtitulo">Rua Engenheiro Henrique Morize, 236, Cajazeiras, Fortaleza-CE</p>
+          <p class="subtitulo">Fone/Whatsapp: (85) 3275-2074</p>
+          <p class="subtitulo">${canal.nome}</p>
+        </div>
+        <div class="meta">${dataEmissao}</div>
+      </div>
+      ${corpoHtml}
+    </body>
+    </html>
+  `;
+
+  const janela = window.open('', '_blank', 'width=900,height=1000');
+  if (!janela){
+    alert('O navegador bloqueou a abertura da janela de impressão. Permita pop-ups para este site e tente novamente.');
+    return;
+  }
+  janela.document.open();
+  janela.document.write(htmlCompleto);
+  janela.document.close();
+  janela.onload = ()=>{
+    janela.focus();
+    janela.print();
+  };
+  // Fallback para navegadores que não disparam onload de forma confiável em document.write
+  setTimeout(()=>{ janela.focus(); janela.print(); }, 400);
+}
+
+// =====================================================================
+// BACKUP MANUAL (Exportar / Importar .json)
+// =====================================================================
+document.getElementById('menu-export-json').onclick = ()=>{
+  fecharDropdownExportar();
+  const payload = JSON.stringify({ canaisPreco, categorias, produtos, uid, canalSeq, mostrarColunaId }, null, 2);
+  const blob = new Blob([payload], { type:'application/json' });
+  const link = document.createElement('a');
+  const dataStr = new Date().toISOString().slice(0,10);
+  link.href = URL.createObjectURL(blob);
+  link.download = `backup-precificacao-${dataStr}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+};
+
+document.getElementById('btn-backup-import').onclick = ()=>{
+  document.getElementById('input-backup-import').click();
+};
+
+document.getElementById('input-backup-import').addEventListener('change', (e)=>{
+  const arquivo = e.target.files[0];
+  if (!arquivo) return;
+
+  const leitor = new FileReader();
+  leitor.onload = (evt)=>{
+    try{
+      const dados = JSON.parse(evt.target.result);
+      if (!dados || !Array.isArray(dados.categorias) || !Array.isArray(dados.produtos) || !Array.isArray(dados.canaisPreco)){
+        alert('Arquivo de backup inválido: estrutura de dados não reconhecida.');
+        return;
+      }
+
+      const confirmar = confirm('Importar este backup vai substituir todas as Tabelas de Preço, categorias e produtos atuais. Deseja continuar?');
+      if (!confirmar) return;
+
+      canaisPreco = dados.canaisPreco;
+      categorias = dados.categorias;
+      produtos = dados.produtos;
+      uid = typeof dados.uid === 'number' ? dados.uid : uid;
+      canalSeq = typeof dados.canalSeq === 'number' ? dados.canalSeq : canalSeq;
+      mostrarColunaId = typeof dados.mostrarColunaId === 'boolean' ? dados.mostrarColunaId : mostrarColunaId;
+      filtroClasseAtual = 'todas';
+
+      ordenarProdutos();
+      renderCanaisCards();
+      renderTheadPrecos();
+      renderClasseOptions(document.getElementById('f-classe'), categorias[0].id);
+      renderFiltroClasse();
+      renderTabelaPrecos();
+      renderCategoriasTabela();
+      const chkColunaId = document.getElementById('toggle-coluna-id');
+      if (chkColunaId) chkColunaId.checked = mostrarColunaId;
+      salvarEstado();
+
+      alert('Backup importado com sucesso.');
+    }catch(err){
+      alert('Não foi possível ler o arquivo: verifique se é um backup .json válido gerado por este sistema.');
+    }finally{
+      e.target.value = '';
+    }
+  };
+  leitor.readAsText(arquivo);
+});
+
+// =====================================================================
+// INICIALIZAÇÃO
+// =====================================================================
+carregarEstado();
+document.getElementById('toggle-coluna-id').checked = mostrarColunaId;
+ordenarProdutos();
+renderCanaisCards();
+renderTheadPrecos();
+renderClasseOptions(document.getElementById('f-classe'), categorias[0].id);
+renderFiltroClasse();
+renderTabelaPrecos();
+renderCategoriasTabela();
+</script>
+</body>
+</html>

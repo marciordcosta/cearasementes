@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Identidade visual única do ERP — herdada do sistema de Precificação
+  Inteligente (navy #10233F + verde de destaque #0E9D74). O modo escuro
+  usa os mesmos tokens semânticos (--surface, --text, --line...) só que
+  com valores diferentes, para não precisar de classes "dark:" espalhadas
+  pelos componentes.
+*/
+:root {
+  --color-navy: #10233f;
+  --color-navy-2: #16304f;
+  --color-page: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-line: #e2e6ed;
+  --color-text: #1a2233;
+  --color-text-soft: #67718a;
+  --color-accent: #0e9d74;
+}
+
+:root.dark {
+  --color-navy: #0b1526;
+  --color-navy-2: #0f1d33;
+  --color-page: #0d1420;
+  --color-surface: #141d2e;
+  --color-line: #263349;
+  --color-text: #eef1f7;
+  --color-text-soft: #94a1b8;
+  --color-accent: #17c993;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+}
+
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 4px;
+}
