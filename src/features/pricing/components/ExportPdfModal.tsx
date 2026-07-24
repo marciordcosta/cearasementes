@@ -33,7 +33,7 @@ export function ExportPdfModal({ open, canaisVisiveis, onFechar, onConfirmar }: 
           <Button variant="outline" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={confirmar}>
+          <Button variant="action" onClick={confirmar}>
             Confirmar Impressão
           </Button>
         </>

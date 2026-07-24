@@ -1,3 +1,4 @@
+import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal } from './calculations';
 import type { Canal, Categoria, Produto } from './types';
 
@@ -6,7 +7,7 @@ import type { Canal, Categoria, Produto } from './types';
  * canal específico, respeitando o filtro de Classe/Categoria já aplicado na
  * tela — portado 1:1 do precificacao-inteligente.html original.
  */
-export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], categorias: Categoria[]): void {
+export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], categorias: Categoria[], transportadoraPorId: Map<string, Transportadora>): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
 
   const categoriasPresentes = new Map<string, Produto[]>();
@@ -27,7 +28,7 @@ export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], cat
     const itens = [...(categoriasPresentes.get(cat.id) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     let linhas = '';
     itens.forEach((produto) => {
-      const r = calcularCanal(produto, canal, cat);
+      const r = calcularCanal(produto, canal, cat, transportadoraPorId);
       linhas += `
         <tr>
           <td>${produto.nome}</td>

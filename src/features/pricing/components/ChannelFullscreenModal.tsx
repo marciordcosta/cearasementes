@@ -1,4 +1,5 @@
 import { Modal } from '@/components/ui/Modal';
+import type { Transportadora } from '@/features/fretes/types';
 import type { Canal, Categoria, Produto } from '../types';
 import { PricingTable } from './PricingTable';
 
@@ -6,6 +7,7 @@ interface ChannelFullscreenModalProps {
   canal: Canal | null;
   produtos: Produto[];
   categorias: Categoria[];
+  transportadoras: Transportadora[];
   mostrarColunaId: boolean;
   onFechar: () => void;
   onUpdateCusto: (produtoId: string, custo: number) => void;
@@ -13,7 +15,7 @@ interface ChannelFullscreenModalProps {
   onResetPreco: (produtoId: string, canalId: string) => void;
 }
 
-export function ChannelFullscreenModal({ canal, produtos, categorias, mostrarColunaId, onFechar, onUpdateCusto, onUpdatePreco, onResetPreco }: ChannelFullscreenModalProps) {
+export function ChannelFullscreenModal({ canal, produtos, categorias, transportadoras, mostrarColunaId, onFechar, onUpdateCusto, onUpdatePreco, onResetPreco }: ChannelFullscreenModalProps) {
   return (
     <Modal open={canal !== null} title={canal?.nome ?? ''} onClose={onFechar} widthClassName="max-w-[95vw]">
       <div className="max-h-[75vh]">
@@ -22,6 +24,7 @@ export function ChannelFullscreenModal({ canal, produtos, categorias, mostrarCol
             produtos={produtos}
             categorias={categorias}
             canaisVisiveis={[canal]}
+            transportadoras={transportadoras}
             mostrarColunaId={mostrarColunaId}
             onUpdateCusto={onUpdateCusto}
             onUpdatePreco={onUpdatePreco}

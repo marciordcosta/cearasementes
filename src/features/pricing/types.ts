@@ -1,6 +1,5 @@
 export type FreteAdicionalTipo = 'fixo' | 'kg';
 export type TipoImposto = 'estadual' | 'interestadual';
-export type DespesaDestino = 'frete' | 'impostos';
 
 export interface Canal {
   id: string;
@@ -18,6 +17,8 @@ export interface Canal {
   freteIncluso: boolean;
   corIndice: number;
   ordem: number;
+  /** Transportadora+Região (módulo Fretes) que alimentou frete_kg/frete_pct — null se preenchido manualmente */
+  transportadoraId: string | null;
 }
 
 export interface Categoria {
@@ -42,8 +43,10 @@ export interface Produto {
   categoriaId: string;
   custo: number;
   peso: number;
+  /** Sempre entra como Encargos na precificação (não afeta mais o frete — pra isso, ver `cubagem`). */
   despesaExtraValor: number;
-  despesaExtraDestino: DespesaDestino;
+  /** "C x L x A" em metros (ex.: "0,60x0,40x0,10") — preenchida, o cálculo de frete usa o peso cubado (volume x 300) no lugar de `peso`. */
+  cubagem: string | null;
   /** canalId -> preço sugerido/manual daquele canal */
   precos: Record<string, PrecoCanal>;
 }
@@ -60,6 +63,9 @@ export interface ResultadoCalculo {
   outrosEncargos: number;
   freteBruto: number;
   freteAdicionalReais: number;
-  despesaParaFrete: number;
-  despesaParaImposto: number;
+  despesaExtra: number;
+  /** Peso realmente usado no cálculo de frete — igual a `produto.peso`, a menos que a cubagem esteja preenchida. */
+  pesoUsado: number;
+  /** true quando `pesoUsado` veio da cubagem (peso cubado), não do peso cadastrado. */
+  pesoCubado: boolean;
 }

@@ -56,7 +56,7 @@ export function AddProductForm({ categorias, onAdicionar }: AddProductFormProps)
         required
         className={`num w-28 ${campoClasse}`}
       />
-      <button type="submit" className="whitespace-nowrap rounded-md bg-[var(--color-accent)] px-3.5 py-2 text-sm font-semibold text-[#04241A] transition hover:brightness-105 active:translate-y-px">
+      <button type="submit" className="whitespace-nowrap rounded-md bg-[var(--color-accent)] px-3.5 py-2 text-sm font-semibold text-white transition hover:brightness-105 active:translate-y-px">
         + Adicionar produto
       </button>
     </form>

@@ -53,7 +53,7 @@ export function OrderModal<T extends ItemOrdenavel>({ open, titulo, dica, itens,
         {ordemTemp.map((item, i) => (
           <div
             key={item.id}
-            className="flex items-center justify-between gap-2.5 rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm font-semibold text-[var(--color-navy)]"
+            className="flex items-center justify-between gap-2.5 rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm font-semibold text-[var(--color-text)]"
           >
             <span>{item.nome}</span>
             <span className="flex gap-1">

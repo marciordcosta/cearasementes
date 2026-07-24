@@ -1,0 +1,115 @@
+import type { ConteudoExtraido } from './extrairConteudoArquivo';
+
+export interface CamposDoConteudo {
+  nomeProduto: string | null;
+  lote: string | null;
+  anoSafra: string | null;
+  /** Campos extras achados no laudo, só pra exibir (Espécie, Categoria, Processo...) — não tem coluna própria no banco. */
+  extras: Record<string, string>;
+}
+
+/** Corta no fim da frase/célula — evita pegar "MARANDU Categoria: S2" quando os dois campos vêm colados na mesma linha. */
+function valorAposRotulo(linha: string, rotulo: string): string | null {
+  const regex = new RegExp(`\\b${rotulo}\\s*:?\\s*([^:]*?)(?:\\s{2,}|$)`, 'i');
+  const m = linha.match(regex);
+  if (!m) return null;
+  // se o valor capturado ainda contém um outro "Rótulo" grudado, corta antes dele
+  const valor = m[1].split(/\s+(?=[A-ZÀ-Ú][a-zà-ú]*\s*:)/)[0].trim();
+  return valor || null;
+}
+
+function buscarRotulo(linhas: string[], rotulos: string[]): string | null {
+  for (const linha of linhas) {
+    for (const rotulo of rotulos) {
+      const valor = valorAposRotulo(linha, rotulo);
+      if (valor) return valor;
+    }
+  }
+  return null;
+}
+
+/** "MARANDU" + "TRADICIONAL" -> "Marandu Tradicional" — os laudos escrevem Cultivar/Processo em caixa alta. */
+function capitalizarPalavras(texto: string): string {
+  return texto
+    .split(' ')
+    .map((palavra) => (palavra ? palavra[0].toUpperCase() + palavra.slice(1).toLowerCase() : palavra))
+    .join(' ');
+}
+
+/** Lote vem em coluna de tabela (cabeçalho "Lote Nº" + valor na linha de baixo), não em "Rótulo: valor" — só dá pra achar em .docx (temos a tabela estruturada); em PDF cai pro nome do arquivo. */
+function buscarLoteEmTabelas(tabelas: string[][][]): string | null {
+  return buscarRotuloEmTabelas(tabelas, ['lote']);
+}
+
+/**
+ * Igual buscarLoteEmTabelas, mas genérico pra outros campos (Pureza,
+ * Germinação, Validade) que em boletins de análise de sementes também costumam
+ * vir em tabela — cabeçalho na(s) linha(s) de cima + valor embaixo (mesma
+ * coluna). O cabeçalho às vezes ocupa 2 linhas (rowspan reconstruído em
+ * tabelaParaMatriz repete o texto do cabeçalho nas duas), então desce linha a
+ * linha até achar um valor DIFERENTE do texto do cabeçalho — não dá pra
+ * assumir "sempre uma linha abaixo". "Mesma linha" é o último recurso, pra
+ * tabelas em formato rótulo/valor lado a lado.
+ */
+function buscarRotuloEmTabelas(tabelas: string[][][], rotulos: string[]): string | null {
+  const bate = (celula: string) => rotulos.some((rotulo) => new RegExp(`\\b${rotulo}\\b`, 'i').test(celula));
+  for (const tabela of tabelas) {
+    for (let l = 0; l < tabela.length; l++) {
+      const col = tabela[l].findIndex(bate);
+      if (col === -1) continue;
+      const textoCabecalho = tabela[l][col];
+      for (let baixo = l + 1; baixo < tabela.length; baixo++) {
+        const valor = tabela[baixo]?.[col]?.trim();
+        if (valor && valor !== textoCabecalho) return valor;
+      }
+      const mesmaLinha = tabela[l][col + 1]?.trim();
+      if (mesmaLinha) return mesmaLinha;
+    }
+  }
+  return null;
+}
+
+/**
+ * Lê os campos do CONTEÚDO do laudo (não do nome do arquivo) — é a fonte
+ * PRINCIPAL: quando o laudo segue o modelo "Termo de Conformidade" (rótulos
+ * tipo "Cultivar:", "Safra:"), o dado vem direto de dentro do documento, que
+ * é mais confiável que adivinhar pelo nome do arquivo. Campos que não bater
+ * aqui voltam null — quem chama cai pro nome do arquivo como reforço.
+ */
+export function interpretarConteudoLaudo(conteudo: ConteudoExtraido): CamposDoConteudo {
+  const { linhas, tabelas } = conteudo;
+
+  const cultivar = buscarRotulo(linhas, ['cultivar']);
+  const processo = buscarRotulo(linhas, ['processo']);
+  // Nome do produto = Cultivar + Processo (ex.: "Marandu Tradicional") — quando só um dos dois bate, usa o que tem.
+  const nomeProduto = cultivar && processo ? capitalizarPalavras(`${cultivar} ${processo}`) : cultivar ? capitalizarPalavras(cultivar) : null;
+  const anoSafra = buscarRotulo(linhas, ['safra']);
+  const lote = buscarLoteEmTabelas(tabelas);
+
+  const extras: Record<string, string> = {};
+
+  // Modelo "Termo de Conformidade": rótulo solto em texto corrido ("Espécie: X") — tenta a linha primeiro, tabela como reforço.
+  const camposDeTexto: Record<string, string[]> = {
+    Espécie: ['espécie', 'especie'],
+    Categoria: ['categoria'],
+    Processo: ['processo'],
+  };
+  for (const [rotuloExibido, variacoes] of Object.entries(camposDeTexto)) {
+    const valor = buscarRotulo(linhas, variacoes) ?? buscarRotuloEmTabelas(tabelas, variacoes);
+    if (valor) extras[rotuloExibido] = valor;
+  }
+
+  // Modelo "Boletim de Análise": vem na mesma tabela do Lote (cabeçalho na linha de cima, valor embaixo) — tabela primeiro.
+  // Tentar a linha antes pegaria o próprio texto do cabeçalho da tabela (ex.: "Validade do teste de viabilidade (mês/ano)"), que também vira "linha" quando a célula é lida — e não tem valor nenhum colado nela.
+  const camposDeTabela: Record<string, string[]> = {
+    Validade: ['validade', 'válido até', 'valido ate'],
+    Pureza: ['pureza', 'sementes puras', 'puras'],
+    Germinação: ['germinação', 'germinacao', 'faculdade germinativa', 'poder germinativo', 'viabilidade'],
+  };
+  for (const [rotuloExibido, variacoes] of Object.entries(camposDeTabela)) {
+    const valor = buscarRotuloEmTabelas(tabelas, variacoes) ?? buscarRotulo(linhas, variacoes);
+    if (valor) extras[rotuloExibido] = valor;
+  }
+
+  return { nomeProduto, lote, anoSafra, extras };
+}

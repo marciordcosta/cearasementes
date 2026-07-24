@@ -38,7 +38,7 @@ export function CategoryMarginsPanel({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-bold text-[var(--color-navy)]">Gerenciamento de Categorias</p>
+      <p className="text-sm font-bold text-[var(--color-text)]">Gerenciamento de Categorias</p>
       <p className="text-xs text-[var(--color-text-soft)]">
         Para cada categoria, defina as alíquotas de imposto e a margem de lucro sugerida para cada Tabela de Preço existente.
       </p>
@@ -46,7 +46,7 @@ export function CategoryMarginsPanel({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-xs">
             <thead>
-              <tr className="bg-[var(--color-page)] text-left text-[var(--color-navy)]">
+              <tr className="bg-[var(--color-page)] text-left text-[var(--color-text)]">
                 <th className="px-3 py-2 font-semibold">Categoria</th>
                 <th className="px-3 py-2 font-semibold">Estadual (%)</th>
                 <th className="px-3 py-2 font-semibold">Interestadual (%)</th>
@@ -61,7 +61,7 @@ export function CategoryMarginsPanel({
             <tbody>
               {categorias.map((cat) => (
                 <tr key={cat.id} className="border-t border-[var(--color-line)]">
-                  <td className="px-3 py-2 font-semibold text-[var(--color-navy)]">{cat.nome}</td>
+                  <td className="px-3 py-2 font-semibold text-[var(--color-text)]">{cat.nome}</td>
                   <td className="px-3 py-2">
                     <input
                       type="number"
@@ -69,7 +69,7 @@ export function CategoryMarginsPanel({
                       min="0"
                       defaultValue={cat.estadual}
                       onBlur={(e) => onAtualizarCategoria(cat.id, 'estadual', parseFloat(e.target.value) || 0)}
-                      className="num w-20 rounded-md border border-[var(--color-line)] px-2 py-1.5 text-right"
+                      className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -79,7 +79,7 @@ export function CategoryMarginsPanel({
                       min="0"
                       defaultValue={cat.interestadual}
                       onBlur={(e) => onAtualizarCategoria(cat.id, 'interestadual', parseFloat(e.target.value) || 0)}
-                      className="num w-20 rounded-md border border-[var(--color-line)] px-2 py-1.5 text-right"
+                      className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
                     />
                   </td>
                   {canais.map((canal) => (
@@ -90,7 +90,7 @@ export function CategoryMarginsPanel({
                         min="0"
                         defaultValue={cat.margens[canal.id] ?? 20}
                         onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
-                        className="num w-20 rounded-md border border-[var(--color-line)] px-2 py-1.5 text-right"
+                        className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
                       />
                     </td>
                   ))}
@@ -111,7 +111,7 @@ export function CategoryMarginsPanel({
             placeholder="Nome da categoria"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            className="w-44 rounded-md border border-[var(--color-line)] px-2 py-1.5 text-xs"
+            className="w-44 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)]"
           />
           <input
             type="number"
@@ -120,7 +120,7 @@ export function CategoryMarginsPanel({
             placeholder="Estadual %"
             value={estadual}
             onChange={(e) => setEstadual(e.target.value)}
-            className="w-24 rounded-md border border-[var(--color-line)] px-2 py-1.5 text-xs num"
+            className="w-24 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)] num"
           />
           <input
             type="number"
@@ -129,7 +129,7 @@ export function CategoryMarginsPanel({
             placeholder="Interestadual %"
             value={interestadual}
             onChange={(e) => setInterestadual(e.target.value)}
-            className="w-28 rounded-md border border-[var(--color-line)] px-2 py-1.5 text-xs num"
+            className="w-28 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)] num"
           />
           <Button variant="primary" onClick={submeter}>
             + Adicionar categoria

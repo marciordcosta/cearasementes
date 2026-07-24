@@ -4,6 +4,7 @@ import { fmtBRL, fmtInt } from '@/lib/format';
 import { palette } from '@/lib/chartSetup';
 import {
   getAvailableYears,
+  getFilteredPriceTables,
   getPeriodKeyFor,
   getPeriodLabel,
   getPeriodMonthlyBreakdown,
@@ -11,6 +12,7 @@ import {
   type PeriodContext,
 } from '../calculations';
 import type { CarrierAgg, PriceTableAgg } from '../types';
+import type { ItemTooltip } from './chartTooltipShared';
 import { ComparativoGraficoModal } from './ComparativoGraficoModal';
 import { MonthlyBarChart } from './MonthlyBarChart';
 
@@ -18,6 +20,7 @@ interface YearComparisonTableProps {
   ctx: PeriodContext;
   priceTables: PriceTableAgg[];
   carriers: Map<string, CarrierAgg>;
+  selectedPeriod: string;
   isDark: boolean;
 }
 
@@ -29,7 +32,7 @@ function MetricCell({ value, bold }: { value: string; bold?: boolean }) {
   );
 }
 
-export function YearComparisonTable({ ctx, priceTables, carriers, isDark }: YearComparisonTableProps) {
+export function YearComparisonTable({ ctx, priceTables, carriers, selectedPeriod, isDark }: YearComparisonTableProps) {
   const [expandido, setExpandido] = useState<Set<string>>(new Set());
   const [emGrafico, setEmGrafico] = useState<Set<string>>(new Set());
   const [modalGraficoAberto, setModalGraficoAberto] = useState(false);
@@ -37,6 +40,20 @@ export function YearComparisonTable({ ctx, priceTables, carriers, isDark }: Year
   if (periods.length < 2) return null;
 
   const colors = palette(isDark);
+
+  // A barra continua sendo o total do mês (igual sempre foi) — só o tooltip mostra a
+  // quebra por Tabela de Preço daquele mês específico, com % do total do mês.
+  function detalheDoMes(period: string, ano: number, mes: number, totalDoMes: number): ItemTooltip[] {
+    return getFilteredPriceTables(ctx, priceTables, period)
+      .map((t, idx) => {
+        const registro = t.monthly.find((m) => m.year === ano && m.month === mes);
+        if (!registro || registro.valor <= 0) return null;
+        return { key: t.name, label: t.name, color: colors[idx % colors.length], valor: registro.valor };
+      })
+      .filter((it): it is { key: string; label: string; color: string; valor: number } => it !== null)
+      .sort((a, b) => b.valor - a.valor)
+      .map((it) => ({ ...it, pctTotal: totalDoMes > 0 ? (it.valor / totalDoMes) * 100 : 0 }));
+  }
 
   function toggleGrafico(period: string, e: React.MouseEvent) {
     e.stopPropagation();
@@ -48,7 +65,13 @@ export function YearComparisonTable({ ctx, priceTables, carriers, isDark }: Year
     });
   }
 
-  const rowsByPeriod = periods.map((period) => {
+  // A tabela mostra só o que está selecionado no filtro do topo — um ano
+  // específico vira uma linha só com aquele ano; "Todos" volta a listar um ano
+  // por linha (o somatório geral já aparece no card Total Geral, em cima).
+  const periodoAtivo = selectedPeriod === 'all' || periods.includes(selectedPeriod) ? selectedPeriod : periods[periods.length - 1];
+  const periodosExibidos = periodoAtivo === 'all' ? periods : [periodoAtivo];
+
+  function calcularLinha(period: string) {
     const stats = priceTables.map((t) => tablePeriodStats(ctx, t, period)).filter((s): s is NonNullable<typeof s> => s !== null);
     const valorLiquido = stats.reduce((s, st) => s + st.valorLiquido, 0);
     const totalReg = stats.reduce((s, st) => s + st.registros, 0);
@@ -67,15 +90,22 @@ export function YearComparisonTable({ ctx, priceTables, carriers, isDark }: Year
     });
 
     return { period, valorLiquido, totalReg, qtdCliente, pedidos, valorTransportado };
-  });
+  }
+
+  const rowsByPeriod = periodosExibidos.map(calcularLinha);
 
   function toggle(period: string) {
+    const estaAberto = expandido.has(period);
     setExpandido((prev) => {
       const next = new Set(prev);
-      if (next.has(period)) next.delete(period);
+      if (estaAberto) next.delete(period);
       else next.add(period);
       return next;
     });
+    // Toda vez que abre (não quando fecha), volta a mostrar o gráfico por padrão — mesmo que da última vez tivesse ficado na tabela.
+    if (!estaAberto) {
+      setEmGrafico((prev) => new Set(prev).add(period));
+    }
   }
 
   return (
@@ -148,6 +178,7 @@ export function YearComparisonTable({ ctx, priceTables, carriers, isDark }: Year
                                 <MonthlyBarChart
                                   labels={months.map((m) => m.label)}
                                   data={months.map((m) => m.valorLiquido)}
+                                  detalhePorMes={months.map((m) => detalheDoMes(r.period, m.year, m.month, m.valorLiquido))}
                                   color={colors[i % colors.length]}
                                   isDark={isDark}
                                 />

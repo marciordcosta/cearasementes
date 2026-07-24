@@ -95,10 +95,12 @@ interface LinhaItemTooltipProps {
   clicavel: boolean;
   referencia?: string | null;
   onSelecionar?: (key: string) => void;
+  /** Como formatar item.valor — default é moeda (BRL); gráficos de contagem (ex.: nº de envios) passam fmtInt.format. */
+  formatarValor?: (v: number) => string;
 }
 
 /** Uma linha do tooltip: quadradinho colorido (clicável se `clicavel`) + rótulo + valor + delta opcional. */
-export function LinhaItemTooltip({ item, clicavel, referencia, onSelecionar }: LinhaItemTooltipProps) {
+export function LinhaItemTooltip({ item, clicavel, referencia, onSelecionar, formatarValor = (v) => fmtBRL.format(v) }: LinhaItemTooltipProps) {
   const ehReferencia = clicavel && item.key === referencia;
   const quadrado = (
     <span
@@ -125,7 +127,7 @@ export function LinhaItemTooltip({ item, clicavel, referencia, onSelecionar }: L
         {item.label}:
       </span>
       <span className="whitespace-nowrap font-medium" style={{ color: TOOLTIP_TEXTO }}>
-        {fmtBRL.format(item.valor)}
+        {formatarValor(item.valor)}
       </span>
       {item.delta !== null && item.delta !== undefined && (
         <span className="whitespace-nowrap" style={{ color: item.delta >= 0 ? '#3ddc72' : '#ff6b6b' }}>

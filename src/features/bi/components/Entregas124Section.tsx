@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { CardMetrica } from '@/components/ui/CardMetrica';
 import { TabelaDados } from '@/components/ui/TabelaDados';
+import { TabToggle } from '@/components/ui/TabToggle';
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format';
 import { getFilteredCarrierRows, getFilteredPriceTables, type PeriodContext } from '../calculations';
 import type { CarrierAgg, PriceTableAgg } from '../types';
-import { CarrierMonthlyChart } from './CarrierMonthlyChart';
+import { CarrierMonthlyChart, type ModoCarrierChart } from './CarrierMonthlyChart';
 
 interface Entregas124SectionProps {
   ctx: PeriodContext;
@@ -16,12 +18,24 @@ interface Entregas124SectionProps {
 
 export function Entregas124Section({ ctx, carriers, priceTables, selectedPeriod, isDark }: Entregas124SectionProps) {
   const rows = getFilteredCarrierRows(ctx, carriers, selectedPeriod).sort((a, b) => b.pedidos - a.pedidos);
+  const [modoGrafico, setModoGrafico] = useState<ModoCarrierChart>('quantidade');
+  const [mostrarGrafico, setMostrarGrafico] = useState(false);
 
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-semibold text-[var(--color-text)]">
-        Entregas por Transportadora <span className="font-normal text-[var(--color-text-soft)]">(Relatório 124)</span>
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-[var(--color-text)]">
+          Entregas por Transportadora <span className="font-normal text-[var(--color-text-soft)]">(Relatório 124)</span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => setMostrarGrafico((v) => !v)}
+          title={mostrarGrafico ? 'Ocultar gráfico de linha' : 'Ver Envios por Transportadora em gráfico de linha'}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-sm shadow-sm hover:bg-[var(--color-line)]/40"
+        >
+          📈
+        </button>
+      </div>
 
       {carriers.size === 0 || rows.length === 0 ? (
         <Card className="p-4 text-sm text-[var(--color-text-soft)]">
@@ -70,12 +84,26 @@ export function Entregas124Section({ ctx, carriers, priceTables, selectedPeriod,
             />
           </Card>
 
-          <Card className="p-4">
-            <p className="mb-2 text-sm font-medium text-[var(--color-text-soft)]">Envios por Transportadora e Mês</p>
-            <div className="h-72">
-              <CarrierMonthlyChart ctx={ctx} carriers={carriers} selectedPeriod={selectedPeriod} isDark={isDark} />
-            </div>
-          </Card>
+          {mostrarGrafico && (
+            <Card className="p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-medium text-[var(--color-text-soft)]">
+                  {modoGrafico === 'valor' ? 'Valor Transportado por Transportadora e Mês' : 'Envios por Transportadora e Mês'}
+                </p>
+                <TabToggle
+                  value={modoGrafico}
+                  onChange={setModoGrafico}
+                  options={[
+                    { value: 'quantidade', label: 'Quantidade' },
+                    { value: 'valor', label: 'Valor' },
+                  ]}
+                />
+              </div>
+              <div className="h-72">
+                <CarrierMonthlyChart ctx={ctx} carriers={carriers} selectedPeriod={selectedPeriod} modo={modoGrafico} isDark={isDark} />
+              </div>
+            </Card>
+          )}
         </div>
       )}
     </section>

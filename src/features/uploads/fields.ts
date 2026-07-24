@@ -1,4 +1,4 @@
-import type { CampoAlvo, TipoRelatorio } from './types';
+import type { CampoAlvo, TipoRelatorio, TipoRelatorioLog } from './types';
 
 // Campos que o ERP realmente precisa gravar no Supabase para cada relatório.
 // Qualquer outra coluna da planilha original é ignorada — é isso que evita
@@ -15,6 +15,12 @@ export const CAMPOS_POR_RELATORIO: Record<TipoRelatorio, CampoAlvo[]> = {
     { chave: 'valor_liquido', rotulo: 'Valor Líquido (Vlr. C/Desc.)', obrigatorio: true, palpiteCabecalho: /^Vlr\.?\s*C\.?\s*Desc\.?$/i },
     { chave: 'data_venda', rotulo: 'Data da Venda', obrigatorio: false, palpiteCabecalho: /^Data$/i },
     { chave: 'codigo_cliente', rotulo: 'Código do Cliente', obrigatorio: false, palpiteCabecalho: /^C[oó]d\.?\s*Cli/i },
+    {
+      chave: 'num_doc',
+      rotulo: 'Nº Documento (N.Doc.) — evita duplicar venda se o período se repetir em outro upload',
+      obrigatorio: false,
+      palpiteCabecalho: /^N\.?\s*Doc\.?$/i,
+    },
   ],
   '333': [
     { chave: 'codigo', rotulo: 'Código Interno', obrigatorio: true, palpiteCabecalho: /^C[oó]digo$/i },
@@ -23,8 +29,10 @@ export const CAMPOS_POR_RELATORIO: Record<TipoRelatorio, CampoAlvo[]> = {
   ],
 };
 
-export const NOME_RELATORIO: Record<TipoRelatorio, string> = {
+export const NOME_RELATORIO: Record<TipoRelatorioLog, string> = {
   '124': 'Relatório 124 — Entregas por Transportadora',
   '396': 'Relatório 396 — Vendas por Tabela de Preço',
   '333': 'Relatório 333 — Produtos Vendidos (CMV)',
+  ofx: 'Conciliação — Extrato Bancário (OFX)',
+  sistema: 'Conciliação — Relatório do Sistema',
 };

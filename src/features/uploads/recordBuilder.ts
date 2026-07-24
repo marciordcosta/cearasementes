@@ -93,6 +93,7 @@ export function construirRegistros396(grupo: GrupoLinhas, mapeamento: Mapeamento
     const valorBruto = parseBRNumber(val(row, mapeamento, 'valor_bruto')) || 0;
     const desconto = parseBRNumber(val(row, mapeamento, 'desconto')) || 0;
     const codigoCliente = String(val(row, mapeamento, 'codigo_cliente') ?? '').trim() || null;
+    const numDoc = String(val(row, mapeamento, 'num_doc') ?? '').trim() || null;
     const data = parseAnyDate(val(row, mapeamento, 'data_venda'));
 
     registros.push({
@@ -103,6 +104,7 @@ export function construirRegistros396(grupo: GrupoLinhas, mapeamento: Mapeamento
       valor_liquido: valorLiquido,
       data_venda: data ? toISODate(data) : null,
       arquivo_origem: grupo.label,
+      num_doc: numDoc,
     });
   }
 

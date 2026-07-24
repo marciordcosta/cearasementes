@@ -1,24 +1,27 @@
 import { useMemo } from 'react';
-import { Bar } from 'react-chartjs-2';
 import { chartChrome, palette } from '@/lib/chartSetup';
-import { fmtInt, MESES_PT } from '@/lib/format';
+import { fmtBRL, fmtInt, MESES_PT } from '@/lib/format';
 import { getPeriodKeyFor, type PeriodContext } from '../calculations';
 import type { CarrierAgg } from '../types';
+import { MultiLineChart } from './MultiLineChart';
 
 const TOP_CARRIERS = 5;
+
+export type ModoCarrierChart = 'quantidade' | 'valor';
 
 interface CarrierMonthlyChartProps {
   ctx: PeriodContext;
   carriers: Map<string, CarrierAgg>;
   selectedPeriod: string;
+  modo: ModoCarrierChart;
   isDark: boolean;
 }
 
-export function CarrierMonthlyChart({ ctx, carriers, selectedPeriod, isDark }: CarrierMonthlyChartProps) {
+export function CarrierMonthlyChart({ ctx, carriers, selectedPeriod, modo, isDark }: CarrierMonthlyChartProps) {
   const colors = palette(isDark);
-  const c = chartChrome(isDark);
+  const corOutros = chartChrome(isDark).muted;
 
-  const { labels, datasets } = useMemo(() => {
+  const { labels, series } = useMemo(() => {
     const allNames = Array.from(carriers.keys());
     const carrierColor = (name: string) => colors[allNames.indexOf(name) % colors.length];
 
@@ -29,7 +32,7 @@ export function CarrierMonthlyChart({ ctx, carriers, selectedPeriod, isDark }: C
         carrier.monthly.forEach((m, key) => {
           const [y, mo] = key.split('-');
           if (selectedPeriod === 'all' || getPeriodKeyFor(ctx, Number(y), Number(mo)) === selectedPeriod) {
-            monthly.set(key, m.pedidos);
+            monthly.set(key, modo === 'valor' ? m.valor : m.pedidos);
           }
         });
         const total = Array.from(monthly.values()).reduce((s, v) => s + v, 0);
@@ -37,7 +40,7 @@ export function CarrierMonthlyChart({ ctx, carriers, selectedPeriod, isDark }: C
       })
       .filter((c) => c.total > 0);
 
-    if (scoped.length === 0) return { labels: [] as string[], datasets: [] };
+    if (scoped.length === 0) return { labels: [] as string[], series: [] };
 
     scoped.sort((a, b) => b.total - a.total);
     const top = scoped.slice(0, TOP_CARRIERS);
@@ -49,54 +52,29 @@ export function CarrierMonthlyChart({ ctx, carriers, selectedPeriod, isDark }: C
       return `${MESES_PT[Number(m) - 1]}/${y}`;
     });
 
-    const datasets = top.map((carrier) => ({
+    const series = top.map((carrier) => ({
+      key: carrier.name,
       label: carrier.name,
-      data: monthKeys.map((key) => carrier.monthly.get(key) || 0),
-      backgroundColor: carrierColor(carrier.name),
-      borderRadius: 4,
-      borderSkipped: false,
-      barThickness: 12,
-      maxBarThickness: 14,
-      categoryPercentage: 0.75,
-      barPercentage: 0.85,
+      data: monthKeys.map((key) => carrier.monthly.get(key) ?? 0),
+      color: carrierColor(carrier.name),
     }));
 
     if (rest.length > 0) {
-      datasets.push({
+      series.push({
+        key: 'outros',
         label: 'Outros',
-        data: monthKeys.map((key) => rest.reduce((s, carrier) => s + (carrier.monthly.get(key) || 0), 0)),
-        backgroundColor: c.muted,
-        borderRadius: 4,
-        borderSkipped: false,
-        barThickness: 12,
-        maxBarThickness: 14,
-        categoryPercentage: 0.75,
-        barPercentage: 0.85,
+        data: monthKeys.map((key) => rest.reduce((s, carrier) => s + (carrier.monthly.get(key) ?? 0), 0)),
+        color: corOutros,
       });
     }
 
-    return { labels, datasets };
-  }, [carriers, ctx, selectedPeriod, colors, c.muted]);
+    return { labels, series };
+  }, [carriers, ctx, selectedPeriod, modo, colors, corOutros]);
 
-  if (datasets.length === 0) {
+  if (series.length === 0) {
     return <p className="pt-4 text-xs text-[var(--color-text-soft)]">Nenhum envio com data reconhecível para montar o gráfico mensal.</p>;
   }
 
-  return (
-    <Bar
-      data={{ labels, datasets }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: true, position: 'top', align: 'start', labels: { color: c.text2, boxWidth: 10, boxHeight: 10 } },
-          tooltip: { backgroundColor: c.tooltipBg, titleColor: c.text2, bodyColor: c.text2, borderColor: c.baseline, borderWidth: 1 },
-        },
-        scales: {
-          x: { grid: { display: false }, ticks: { color: c.text2 } },
-          y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.muted, callback: (v) => fmtInt.format(Number(v)) } },
-        },
-      }}
-    />
-  );
+  const formatarValor = modo === 'valor' ? (v: number) => fmtBRL.format(v) : (v: number) => fmtInt.format(v);
+  return <MultiLineChart labels={labels} series={series} isDark={isDark} formatarValor={formatarValor} />;
 }

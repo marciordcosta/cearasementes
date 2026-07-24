@@ -10,6 +10,7 @@
   pelos componentes.
 */
 :root {
+  color-scheme: light;
   --color-navy: #10233f;
   --color-navy-2: #16304f;
   --color-page: #f5f7fa;
@@ -18,9 +19,14 @@
   --color-text: #1a2233;
   --color-text-soft: #67718a;
   --color-accent: #0e9d74;
+  /* Destaque de linha (clique num produto) — sempre translúcido, nunca cor sólida. */
+  --color-highlight-row: rgba(250, 204, 21, 0.22);
+  /* Reforço bem mais sutil pra dentro dos campos (Custo/Preço) da linha destacada. */
+  --color-highlight-row-subtle: rgba(250, 204, 21, 0.08);
 }
 
 :root.dark {
+  color-scheme: dark;
   --color-navy: #0b1526;
   --color-navy-2: #0f1d33;
   --color-page: #0d1420;
@@ -29,6 +35,8 @@
   --color-text: #eef1f7;
   --color-text-soft: #94a1b8;
   --color-accent: #17c993;
+  --color-highlight-row: rgba(96, 165, 250, 0.1);
+  --color-highlight-row-subtle: rgba(96, 165, 250, 0.05);
 }
 
 html,
@@ -44,10 +52,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Antes usava uma fonte monoespaçada (IBM Plex Mono) — o usuário achou o
+   visual estranho comparado ao resto do texto, então agora só mantém os
+   dígitos com largura fixa (tabular-nums), na mesma fonte padrão do app. */
 .num {
-  font-family: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.2px;
 }
 
 ::-webkit-scrollbar {
@@ -57,4 +66,20 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-line);
   border-radius: 4px;
+}
+
+/* HTML gerado pelo mammoth (preview de .docx antes de enviar) — sem essas
+   regras, tabela/parágrafo saem sem espaçamento nem borda nenhuma. */
+.preview-docx p {
+  margin: 0 0 0.6em;
+}
+.preview-docx table {
+  border-collapse: collapse;
+  margin-bottom: 0.6em;
+  width: 100%;
+}
+.preview-docx td,
+.preview-docx th {
+  border: 1px solid #d5d9e0;
+  padding: 4px 8px;
 }

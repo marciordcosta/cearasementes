@@ -1,18 +1,6 @@
 import * as XLSX from 'xlsx';
+import { readFileSmart } from '@/lib/readFileSmart';
 import type { GrupoClassificado, GrupoLinhas, TipoRelatorio } from './types';
-
-// ---------------------------------------------------------------------
-// Leitura de arquivo -> texto/linhas (portado do BI local original)
-// ---------------------------------------------------------------------
-async function readFileSmart(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  let text = new TextDecoder('utf-8', { fatal: false }).decode(buf);
-  if (text.includes('�')) {
-    text = new TextDecoder('windows-1252').decode(buf);
-  }
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-  return text;
-}
 
 function detectDelimiter(lines: string[]): ',' | ';' {
   let semi = 0;
@@ -157,6 +145,26 @@ export function detectarNomeTabelaPreco(rows: unknown[][]): string {
   const fullText = rows.map((r) => r.join(' | ')).join('\n');
   const match = fullText.match(/Tab\.?\s*Pre[çc]o\.?\s*:?\s*([^|,\n\r]+)/i);
   return match ? match[1].trim() : 'Tabela não identificada';
+}
+
+/**
+ * Extrai o período do filtro do cabeçalho do relatório (ex.: "Filtros: Tab.
+ * Preço.: REVENDA CE, Período: 01/01/2025 a 30/06/2026" no 396, ou "Filtros:
+ * Período: 01/07/2025 a 01/07/2026" no 333). Essa é a data mostrada na
+ * descrição e no aviso de atraso pra qualquer relatório — puxar pela data
+ * dos REGISTROS em vez do cabeçalho dava falso atraso quando uma tabela
+ * simplesmente não tem venda no fim do período (não é dado desatualizado,
+ * é dado zerado). O 124 costuma vir com esse filtro em branco no relatório
+ * original — nesse caso retorna null e a tela mostra "sem período informado".
+ */
+export function detectarPeriodoFiltroCabecalho(rows: unknown[][]): { inicio: Date; fim: Date } | null {
+  const fullText = rows.map((r) => r.join(' | ')).join('\n');
+  const match = fullText.match(/Per[íi]odo:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})\s*a\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+  if (!match) return null;
+  const inicio = parseAnyDate(match[1]);
+  const fim = parseAnyDate(match[2]);
+  if (!inicio || !fim) return null;
+  return { inicio, fim };
 }
 
 /** Número de colunas real da planilha (maior linha), para montar os seletores do mapeamento */

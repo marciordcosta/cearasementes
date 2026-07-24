@@ -47,6 +47,9 @@ export function PeriodFilter({ ctx, periods, selectedPeriod, onChangeMode, onCha
       <div className="flex items-center gap-1.5">
         <label className="text-sm text-white/70">{ctx.mode === 'season' ? 'Safra:' : 'Ano:'}</label>
         <select value={selectedPeriod} onChange={(e) => onChangeSelectedPeriod(e.target.value)} className={campoClasse}>
+          <option value="all" className="text-[var(--color-text)]">
+            {getPeriodLabel(ctx, 'all')}
+          </option>
           {periods.map((p) => (
             <option key={p} value={p} className="text-[var(--color-text)]">
               {getPeriodLabel(ctx, p)}

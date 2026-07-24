@@ -34,14 +34,14 @@ export function Dropzone({ onFiles }: DropzoneProps) {
         arrastando ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/6' : 'border-[var(--color-line)]'
       }`}
     >
-      <p className="font-medium text-[var(--color-text)]">Arraste e solte os arquivos XLS/XLSX/CSV aqui</p>
+      <p className="font-medium text-[var(--color-text)]">Arraste e solte os arquivos aqui</p>
       <p className="mt-1 text-sm text-[var(--color-text-soft)]">
-        ou clique para selecionar (aceita múltiplos arquivos — relatórios 124 e 396)
+        ou clique para selecionar — relatórios 124/396/333 (XLS/XLSX/CSV) e Conciliação Bancária (OFX/HTML), à vontade misturados
       </p>
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.xls,.xlsx"
+        accept=".csv,.xls,.xlsx,.ofx,.html,.htm"
         multiple
         className="hidden"
         onChange={(e) => {

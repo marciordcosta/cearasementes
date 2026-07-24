@@ -25,6 +25,7 @@ function canalFromRow(row: CanalRow): Canal {
     freteIncluso: row.frete_incluso,
     corIndice: row.cor_indice,
     ordem: row.ordem,
+    transportadoraId: row.transportadora_id,
   };
 }
 
@@ -53,6 +54,7 @@ export async function inserirCanal(input: {
   freteAdicionalTipo: FreteAdicionalTipo;
   freteAdicionalValor: number;
   tipoImposto: TipoImposto;
+  transportadoraId?: string | null;
   ordem: number;
 }): Promise<Canal> {
   const { data, error } = await supabase
@@ -72,6 +74,7 @@ export async function inserirCanal(input: {
       frete_incluso: true,
       cor_indice: input.ordem,
       ordem: input.ordem,
+      transportadora_id: input.transportadoraId ?? null,
     })
     .select('*')
     .single();
@@ -220,7 +223,7 @@ export async function fetchProdutos(): Promise<Produto[]> {
       custo: row.custo,
       peso: row.peso,
       despesaExtraValor: row.despesa_extra_valor,
-      despesaExtraDestino: row.despesa_extra_destino,
+      cubagem: row.cubagem,
       precos,
     };
   });
@@ -237,6 +240,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
       peso: input.peso,
       despesa_extra_valor: 0,
       despesa_extra_destino: 'frete',
+      cubagem: null,
     })
     .select('*')
     .single();
@@ -259,14 +263,14 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
     custo: data.custo,
     peso: data.peso,
     despesaExtraValor: data.despesa_extra_valor,
-    despesaExtraDestino: data.despesa_extra_destino,
+    cubagem: data.cubagem,
     precos,
   };
 }
 
 export async function atualizarProduto(
   id: string,
-  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'despesa_extra_destino'>>,
+  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem'>>,
 ): Promise<void> {
   const payload: Database['public']['Tables']['produtos']['Update'] = { ...patch, atualizado_em: new Date().toISOString() };
   const { error } = await supabase.from('produtos').update(payload).eq('id', id);
@@ -352,6 +356,7 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
         peso: inferirPesoDoNome(item.nome),
         despesa_extra_valor: 0,
         despesa_extra_destino: 'frete' as const,
+        cubagem: null,
       });
     }
     const { data, error } = await supabase.from('produtos').insert(linhas).select('id');

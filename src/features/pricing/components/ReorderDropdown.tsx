@@ -22,7 +22,7 @@ export function ReorderDropdown({ onEscolherCategorias, onEscolherCanais }: Reor
 
   return (
     <div ref={ref} className="relative">
-      <Button variant="primary" onClick={() => setAberto((v) => !v)} title="Defina livremente a ordem de categorias ou tabelas">
+      <Button variant="action" onClick={() => setAberto((v) => !v)} title="Defina livremente a ordem de categorias ou tabelas">
         ↕ Ordem Personalizada ▾
       </Button>
       {aberto && (

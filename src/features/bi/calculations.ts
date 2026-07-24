@@ -26,6 +26,7 @@ export function getPeriodKeyFor(ctx: PeriodContext, year: number, month: number)
 }
 
 export function getPeriodLabel(ctx: PeriodContext, key: string): string {
+  if (key === 'all') return ctx.mode === 'season' ? 'Todas as Safras' : 'Todos os Anos';
   if (ctx.mode === 'season') {
     const [y1, y2] = key.split('/');
     return `Safra ${y1.slice(2)}/${y2.slice(2)}`;

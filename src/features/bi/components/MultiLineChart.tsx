@@ -14,6 +14,8 @@ interface MultiLineChartProps {
   labels: string[];
   series: LinhaSerie[];
   isDark: boolean;
+  /** Como formatar os valores no tooltip — default é moeda (BRL); gráficos de contagem passam fmtInt.format. */
+  formatarValor?: (v: number) => string;
 }
 
 interface TooltipState {
@@ -27,7 +29,7 @@ function mesmoTooltip(a: TooltipState | null, b: TooltipState): boolean {
 }
 
 /** Mesmo tooltip flutuante/arrastável do gráfico por Ano/Safra, mas sem clique-pra-referência (Tabela de Preço não tem esse conceito). */
-export function MultiLineChart({ labels, series, isDark }: MultiLineChartProps) {
+export function MultiLineChart({ labels, series, isDark, formatarValor }: MultiLineChartProps) {
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -121,7 +123,7 @@ export function MultiLineChart({ labels, series, isDark }: MultiLineChartProps) 
           </div>
           <div className="space-y-1">
             {tooltip.itens.map((item) => (
-              <LinhaItemTooltip key={item.key} item={item} clicavel={false} />
+              <LinhaItemTooltip key={item.key} item={item} clicavel={false} formatarValor={formatarValor} />
             ))}
           </div>
         </ChartTooltipFlutuante>

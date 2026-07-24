@@ -1,4 +1,8 @@
+/** Tipos que passam pelo fluxo de mapeamento de coluna (planilha). */
 export type TipoRelatorio = '124' | '396' | '333';
+
+/** TipoRelatorio + os tipos da Conciliação Bancária (ofx/sistema) — não passam por mapeamento, mas mesclam na mesma lista "Arquivos processados recentemente". */
+export type TipoRelatorioLog = TipoRelatorio | 'ofx' | 'sistema';
 
 export interface GrupoLinhas {
   /** Nome do arquivo (+ aba, se a planilha tiver mais de uma) */
@@ -24,8 +28,13 @@ export type MapeamentoColunas = Record<string, number | null>;
 
 export interface LogUpload {
   arquivoNome: string;
-  tipoRelatorio: TipoRelatorio;
+  tipoRelatorio: TipoRelatorioLog;
   linhasImportadas: number;
   status: 'sucesso' | 'aviso' | 'erro';
   mensagem?: string;
+  /** Nome do sub-grupo pra mesclar numa linha só: Tabela de Preço (396), banco (ofx) ou tipo de lançamento (sistema). */
+  tabelaPreco?: string | null;
+  /** Menor/maior data (do cabeçalho ou das linhas, conforme o tipo), formato ISO (YYYY-MM-DD). Null pro 333. */
+  dataMin?: string | null;
+  dataMax?: string | null;
 }

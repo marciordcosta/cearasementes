@@ -1,11 +1,11 @@
+import { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
-import { CardMetrica } from '@/components/ui/CardMetrica';
 import { TabelaDados } from '@/components/ui/TabelaDados';
-import { fmtBRL, fmtInt, fmtPct } from '@/lib/format';
+import { fmtBRL, fmtInt, fmtPct, MESES_PT } from '@/lib/format';
 import { palette } from '@/lib/chartSetup';
-import { getFilteredPriceTables, type PeriodContext } from '../calculations';
+import { getFilteredPriceTables, mesesDoPeriodo, posicaoNoPeriodo, type PeriodContext } from '../calculations';
 import type { FilteredPriceTableView, PriceTableAgg } from '../types';
-import { MonthlyBarChart } from './MonthlyBarChart';
+import { MultiLineChart } from './MultiLineChart';
 
 interface Vendas396SectionProps {
   ctx: PeriodContext;
@@ -15,15 +15,60 @@ interface Vendas396SectionProps {
 }
 
 export function Vendas396Section({ ctx, priceTables, selectedPeriod, isDark }: Vendas396SectionProps) {
+  const [mostrarGrafico, setMostrarGrafico] = useState(false);
   const filtered = getFilteredPriceTables(ctx, priceTables, selectedPeriod);
   const colors = palette(isDark);
   const tableColor = (t: FilteredPriceTableView) => colors[priceTables.indexOf(t.ref) % colors.length];
 
+  // Faturamento Líquido por Tabela de Preço, mês a mês — segue o filtro geral
+  // do topo. Com um ano/safra específico, o eixo é o período (12 meses);
+  // com "Todos", não existe "um período" pra usar de eixo, então o eixo vira
+  // a linha do tempo inteira (todo mês em que alguma tabela tem dado).
+  const chavesMesesTodos = useMemo(() => {
+    if (selectedPeriod !== 'all') return null;
+    const chaves = new Set<string>();
+    filtered.forEach((t) => t.monthly.forEach((m) => chaves.add(`${m.year}-${String(m.month).padStart(2, '0')}`)));
+    return Array.from(chaves).sort();
+  }, [selectedPeriod, filtered]);
+
+  const labelsMeses = useMemo(() => {
+    if (chavesMesesTodos) return chavesMesesTodos.map((k) => `${MESES_PT[Number(k.split('-')[1]) - 1]}/${k.split('-')[0]}`);
+    return mesesDoPeriodo(ctx);
+  }, [chavesMesesTodos, ctx]);
+
+  const seriesPorTabela = useMemo(
+    () =>
+      filtered.map((t, i) => {
+        let data: (number | null)[];
+        if (chavesMesesTodos) {
+          const porChave = new Map(t.monthly.map((m) => [`${m.year}-${String(m.month).padStart(2, '0')}`, m.valor]));
+          data = chavesMesesTodos.map((k) => porChave.get(k) ?? null);
+        } else {
+          data = Array(12).fill(null);
+          t.monthly.forEach((m) => {
+            data[posicaoNoPeriodo(ctx, m.month)] = m.valor;
+          });
+        }
+        return { key: t.name, label: t.name, data, color: colors[i % colors.length] };
+      }),
+    [filtered, chavesMesesTodos, ctx, colors],
+  );
+
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-semibold text-[var(--color-text)]">
-        Vendas por Tabela de Preço <span className="font-normal text-[var(--color-text-soft)]">(Relatório 396)</span>
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-[var(--color-text)]">
+          Vendas por Tabela de Preço <span className="font-normal text-[var(--color-text-soft)]">(Relatório 396)</span>
+        </h2>
+        <button
+          type="button"
+          onClick={() => setMostrarGrafico((v) => !v)}
+          title={mostrarGrafico ? 'Ocultar gráfico de linha' : 'Ver Faturamento Líquido por Tabela de Preço em gráfico de linha'}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-sm shadow-sm hover:bg-[var(--color-line)]/40"
+        >
+          📈
+        </button>
+      </div>
 
       {filtered.length === 0 ? (
         <Card className="p-4 text-sm text-[var(--color-text-soft)]">
@@ -33,8 +78,6 @@ export function Vendas396Section({ ctx, priceTables, selectedPeriod, isDark }: V
         </Card>
       ) : (
         <div className="space-y-6">
-          <TotalCard396 filtered={filtered} />
-
           <Card className="overflow-x-auto">
             <TabelaDados
               chaveLinha={(t) => t.name}
@@ -106,58 +149,20 @@ export function Vendas396Section({ ctx, priceTables, selectedPeriod, isDark }: V
             />
           </Card>
 
-          <div>
-            <h3 className="mb-2 text-sm font-semibold text-[var(--color-text-soft)]">Faturamento por Mês</h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[...filtered]
-                .sort((a, b) => b.valorLiquido - a.valorLiquido)
-                .map((t) => (
-                  <Card key={t.name} className="p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: tableColor(t) }} />
-                      <p className="font-medium text-[var(--color-text)]">{t.name}</p>
-                    </div>
-                    <div className="h-56">
-                      {t.monthly.length > 0 ? (
-                        <MonthlyBarChart
-                          labels={t.monthly.map((m) => m.label)}
-                          data={t.monthly.map((m) => m.valor)}
-                          color={tableColor(t)}
-                          isDark={isDark}
-                        />
-                      ) : (
-                        <p className="pt-4 text-xs text-[var(--color-text-soft)]">Sem data reconhecível neste período.</p>
-                      )}
-                    </div>
-                  </Card>
-                ))}
-            </div>
-          </div>
+          {mostrarGrafico && (
+            <Card className="p-4">
+              <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">Faturamento Líquido por Tabela de Preço — mês a mês</h3>
+              <div className="h-80">
+                {seriesPorTabela.length === 0 ? (
+                  <p className="pt-6 text-sm text-[var(--color-text-soft)]">Sem Tabelas de Preço com dados neste período.</p>
+                ) : (
+                  <MultiLineChart labels={labelsMeses} series={seriesPorTabela} isDark={isDark} />
+                )}
+              </div>
+            </Card>
+          )}
         </div>
       )}
     </section>
-  );
-}
-
-function TotalCard396({ filtered }: { filtered: FilteredPriceTableView[] }) {
-  const totalBruto = filtered.reduce((s, t) => s + t.valorBruto, 0);
-  const totalDesconto = filtered.reduce((s, t) => s + t.desconto, 0);
-  const totalLiquido = filtered.reduce((s, t) => s + t.valorLiquido, 0);
-  const totalReg = filtered.reduce((s, t) => s + t.totalReg, 0);
-  const totalCli = filtered.reduce((s, t) => s + t.qtdCliente, 0);
-
-  return (
-    <Card className="p-4">
-      <p className="mb-2 font-medium text-[var(--color-text)]">
-        Total Geral <span className="text-xs font-normal text-[var(--color-text-soft)]">(todas as tabelas)</span>
-      </p>
-      <CardMetrica label="Valor líquido" value={fmtBRL.format(totalLiquido)} destaque />
-      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        <CardMetrica label="Valor Bruto" value={fmtBRL.format(totalBruto)} />
-        <CardMetrica label="Desconto" value={fmtBRL.format(totalDesconto)} sub={`${fmtPct(totalDesconto, totalBruto)} do valor bruto`} />
-        <CardMetrica label="Registros" value={fmtInt.format(totalReg)} />
-        <CardMetrica label="Clientes" value={fmtInt.format(totalCli)} />
-      </div>
-    </Card>
   );
 }

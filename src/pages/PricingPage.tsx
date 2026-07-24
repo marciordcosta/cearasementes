@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
+import { aplicarTransportadoraNoCanal, fetchTransportadoras } from '@/features/fretes/api';
 import {
   apagarCanal,
   apagarCategoria,
@@ -34,7 +35,8 @@ import { ExportPdfModal } from '@/features/pricing/components/ExportPdfModal';
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
-import type { Canal, Categoria, DespesaDestino, FreteAdicionalTipo, Produto, TipoImposto } from '@/features/pricing/types';
+import type { Canal, Categoria, FreteAdicionalTipo, Produto, TipoImposto } from '@/features/pricing/types';
+import { mensagemDeErro } from '@/lib/errors';
 
 type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
 
@@ -50,6 +52,8 @@ const CAMPO_PARA_COLUNA: Record<CampoNumericoCanal, string> = {
 
 export function PricingPage() {
   const { data: canaisData } = useQuery({ queryKey: ['pricing', 'canais'], queryFn: fetchCanais });
+  const { data: transportadoras = [] } = useQuery({ queryKey: ['fretes', 'transportadoras'], queryFn: fetchTransportadoras });
+  const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   const { data: categoriasData } = useQuery({ queryKey: ['pricing', 'categorias'], queryFn: fetchCategorias });
   const { data: produtosData } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
 
@@ -71,7 +75,8 @@ export function PricingPage() {
     seeded.current = true;
   }, [canaisData, categoriasData, produtosData]);
 
-  const [aba, setAba] = useState<'precos' | 'parametrizacao'>('precos');
+  const [modalParametrizacaoAberto, setModalParametrizacaoAberto] = useState(false);
+  const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarColunaId, setMostrarColunaId] = useState(true);
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
@@ -83,17 +88,19 @@ export function PricingPage() {
   const [erro, setErro] = useState<string | null>(null);
 
   const debounced = useDebouncedCallback((acao: () => Promise<void>) => {
-    acao().catch((e: unknown) => setErro(e instanceof Error ? e.message : 'Falha ao salvar no Supabase.'));
+    acao().catch((e: unknown) => setErro(mensagemDeErro(e, 'Falha ao salvar no Supabase.')));
   }, 500);
 
   function salvarAgora(acao: () => Promise<void>) {
-    acao().catch((e: unknown) => setErro(e instanceof Error ? e.message : 'Falha ao salvar no Supabase.'));
+    acao().catch((e: unknown) => setErro(mensagemDeErro(e, 'Falha ao salvar no Supabase.')));
   }
 
   const canaisVisiveis = canais.filter((c) => c.visivel);
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
-  const produtosExibidos = filtroClasse === 'todas' ? produtos : produtos.filter((p) => p.categoriaId === filtroClasse);
+  const produtosExibidos = produtos
+    .filter((p) => filtroClasse === 'todas' || p.categoriaId === filtroClasse)
+    .filter((p) => p.nome.toLowerCase().includes(buscaProduto.trim().toLowerCase()));
 
   // ---------- Produtos ----------
   function onUpdateCusto(produtoId: string, custo: number) {
@@ -122,17 +129,17 @@ export function PricingPage() {
       const produto = await inserirProduto({ ...input, codigo }, canais);
       setProdutos((prev) => ordenarProdutos([...prev, produto], categorias));
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao adicionar produto.');
+      setErro(mensagemDeErro(e, 'Falha ao adicionar produto.'));
     }
   }
 
-  function onSalvarEdicaoProduto(patch: { nome: string; codigo: string; categoriaId: string; peso: number; despesaExtraValor: number; despesaExtraDestino: DespesaDestino }) {
+  function onSalvarEdicaoProduto(patch: { nome: string; codigo: string; categoriaId: string; peso: number; despesaExtraValor: number; cubagem: string | null }) {
     if (!produtoEditandoId) return;
     setProdutos((prev) =>
       ordenarProdutos(
         prev.map((p) =>
           p.id === produtoEditandoId
-            ? { ...p, nome: patch.nome, codigo: patch.codigo || null, categoriaId: patch.categoriaId, peso: patch.peso, despesaExtraValor: patch.despesaExtraValor, despesaExtraDestino: patch.despesaExtraDestino }
+            ? { ...p, nome: patch.nome, codigo: patch.codigo || null, categoriaId: patch.categoriaId, peso: patch.peso, despesaExtraValor: patch.despesaExtraValor, cubagem: patch.cubagem }
             : p,
         ),
         categorias,
@@ -145,7 +152,7 @@ export function PricingPage() {
         categoria_id: patch.categoriaId,
         peso: patch.peso,
         despesa_extra_valor: patch.despesaExtraValor,
-        despesa_extra_destino: patch.despesaExtraDestino,
+        cubagem: patch.cubagem,
       }),
     );
     setProdutoEditandoId(null);
@@ -155,6 +162,34 @@ export function PricingPage() {
   function onAtualizarCampoCanal(canalId: string, campo: CampoNumericoCanal, valor: number) {
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, [campo]: valor } : c)));
     debounced(`canal-${canalId}-${campo}`, () => atualizarCanal(canalId, { [CAMPO_PARA_COLUNA[campo]]: valor }));
+  }
+
+  async function onSelecionarTransportadora(canalId: string, transportadoraId: string | null) {
+    if (transportadoraId === null) {
+      setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, transportadoraId: null } : c)));
+      salvarAgora(() => atualizarCanal(canalId, { transportadora_id: null }));
+      return;
+    }
+
+    const transportadora = transportadoras.find((t) => t.id === transportadoraId);
+    if (!transportadora) return;
+    try {
+      const { pctAplicado } = await aplicarTransportadoraNoCanal(canalId, transportadora);
+      setCanais((prev) =>
+        prev.map((c) =>
+          c.id === canalId
+            ? { ...c, transportadoraId, freteKg: transportadora.valorPorKg, fretePct: pctAplicado ? transportadora.valorPorNf * 100 : c.fretePct }
+            : c,
+        ),
+      );
+      if (!pctAplicado) {
+        setErro(
+          `${transportadora.nome} cobra NF como valor fixo (R$ ${transportadora.valorPorNf.toFixed(2)}), não como %. O cálculo vai usar o Frete Kg dela ao vivo; o Custo NF continua manual — ajuste em Outros Encargos se precisar refletir no preço.`,
+        );
+      }
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Falha ao aplicar a transportadora no Supabase.'));
+    }
   }
 
   function onAtualizarTipoImposto(canalId: string, valor: TipoImposto) {
@@ -207,7 +242,7 @@ export function PricingPage() {
       setCategorias((prev) => prev.map((cat) => ({ ...cat, margens: { ...cat.margens, [canal.id]: 20 } })));
       setProdutos((prev) => prev.map((p) => ({ ...p, precos: { ...p.precos, [canal.id]: { preco: null, manual: false } } })));
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao adicionar Tabela de Preço.');
+      setErro(mensagemDeErro(e, 'Falha ao adicionar Tabela de Preço.'));
     }
   }
 
@@ -245,7 +280,7 @@ export function PricingPage() {
       const categoria = await inserirCategoria({ ...input, ordem: categorias.length }, canais);
       setCategorias((prev) => [...prev, categoria]);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao adicionar categoria.');
+      setErro(mensagemDeErro(e, 'Falha ao adicionar categoria.'));
     }
   }
 
@@ -279,7 +314,7 @@ export function PricingPage() {
       setProdutos([]);
       setModalLimparAberto(false);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao limpar a tabela no Supabase.');
+      setErro(mensagemDeErro(e, 'Falha ao limpar a tabela no Supabase.'));
     } finally {
       setLimpandoTabela(false);
     }
@@ -288,8 +323,9 @@ export function PricingPage() {
   return (
     <AppShell
       topbarNavy
-      hideTopbar={aba === 'parametrizacao'}
       title={<AddProductForm categorias={categorias} onAdicionar={onAdicionarProduto} />}
+      mostrarParametrizacao
+      onAbrirParametrizacao={() => setModalParametrizacaoAberto(true)}
       actions={
         <>
           <ExportDropdown onExportarPdf={() => setModalPdfAberto(true)} />
@@ -309,84 +345,50 @@ export function PricingPage() {
           </Card>
         )}
 
-        {aba === 'precos' ? (
-          <div className="space-y-4">
-            <Card className="p-0">
-              <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-page)] px-4 py-3">
-                <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar por classe:</span>
-                <select value={filtroClasse} onChange={(e) => setFiltroClasse(e.target.value)} className="rounded-md border border-[var(--color-line)] px-2 py-1.5 text-sm">
-                  <option value="todas">Mostrar Todas</option>
-                  {categorias.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nome}
-                    </option>
-                  ))}
-                </select>
-                <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
-                  <input type="checkbox" checked={mostrarColunaId} onChange={(e) => setMostrarColunaId(e.target.checked)} className="accent-[var(--color-navy)]" />
-                  Exibir coluna ID
-                </label>
-                <div className="flex-1" />
-                <ReorderDropdown
-                  onEscolherCategorias={() => setModalOrdemTipo('categorias')}
-                  onEscolherCanais={() => setModalOrdemTipo('canais')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setAba('parametrizacao')}
-                  title="Ir para Parametrização de Custos"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-sm shadow-sm hover:bg-[var(--color-page)]"
-                >
-                  ⚙️
-                </button>
-              </div>
-
-              <PricingTable
-                produtos={produtosExibidos}
-                categorias={categorias}
-                canaisVisiveis={canaisVisiveis}
-                mostrarColunaId={mostrarColunaId}
-                onUpdateCusto={onUpdateCusto}
-                onUpdatePreco={onUpdatePreco}
-                onResetPreco={onResetPreco}
-                onEditarProduto={setProdutoEditandoId}
-                onRemoverProduto={onRemoverProduto}
-                onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
+        <div className="space-y-4">
+          <Card className="p-0">
+            <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-line)] bg-[var(--color-page)] px-4 py-3">
+              <input
+                value={buscaProduto}
+                onChange={(e) => setBuscaProduto(e.target.value)}
+                placeholder="Buscar produto pelo nome…"
+                className="w-full max-w-xs rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)]"
               />
-            </Card>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            <ChannelsPanel
-              canais={canais}
-              onAtualizarCampo={onAtualizarCampoCanal}
-              onAtualizarTipoImposto={onAtualizarTipoImposto}
-              onAtualizarFreteAdicionalTipo={onAtualizarFreteAdicionalTipo}
-              onToggleVisivel={onToggleVisivel}
-              onToggleFreteIncluso={onToggleFreteIncluso}
-              onRemoverCanal={onRemoverCanal}
-              onAdicionarCanal={onAdicionarCanal}
-              acaoTitulo={
-                <button
-                  type="button"
-                  onClick={() => setAba('precos')}
-                  title="Voltar para a Tabela de Preços"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-sm shadow-sm hover:bg-[var(--color-page)]"
-                >
-                  ▦
-                </button>
-              }
-            />
-            <CategoryMarginsPanel
+              <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar por classe:</span>
+              <select value={filtroClasse} onChange={(e) => setFiltroClasse(e.target.value)} className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]">
+                <option value="todas" className="text-[var(--color-text)]">Mostrar Todas</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id} className="text-[var(--color-text)]">
+                    {c.nome}
+                  </option>
+                ))}
+              </select>
+              <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
+                <input type="checkbox" checked={mostrarColunaId} onChange={(e) => setMostrarColunaId(e.target.checked)} className="accent-[var(--color-navy)]" />
+                Exibir coluna ID
+              </label>
+              <div className="flex-1" />
+              <ReorderDropdown
+                onEscolherCategorias={() => setModalOrdemTipo('categorias')}
+                onEscolherCanais={() => setModalOrdemTipo('canais')}
+              />
+            </div>
+
+            <PricingTable
+              produtos={produtosExibidos}
               categorias={categorias}
-              canais={canais}
-              onAtualizarCategoria={onAtualizarCategoria}
-              onAtualizarMargem={onAtualizarMargem}
-              onRemoverCategoria={onRemoverCategoria}
-              onAdicionarCategoria={onAdicionarCategoria}
+              canaisVisiveis={canaisVisiveis}
+              transportadoras={transportadoras}
+              mostrarColunaId={mostrarColunaId}
+              onUpdateCusto={onUpdateCusto}
+              onUpdatePreco={onUpdatePreco}
+              onResetPreco={onResetPreco}
+              onEditarProduto={setProdutoEditandoId}
+              onRemoverProduto={onRemoverProduto}
+              onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
             />
-          </div>
-        )}
+          </Card>
+        </div>
       </div>
 
       <EditProductModal produto={produtoEditando} categorias={categorias} onFechar={() => setProdutoEditandoId(null)} onSalvar={onSalvarEdicaoProduto} />
@@ -395,6 +397,7 @@ export function PricingPage() {
         canal={canalTelaCheia}
         produtos={produtosExibidos}
         categorias={categorias}
+        transportadoras={transportadoras}
         mostrarColunaId={mostrarColunaId}
         onFechar={() => setCanalTelaCheiaId(null)}
         onUpdateCusto={onUpdateCusto}
@@ -426,7 +429,7 @@ export function PricingPage() {
         onFechar={() => setModalPdfAberto(false)}
         onConfirmar={(canal) => {
           setModalPdfAberto(false);
-          gerarCatalogoPDF(canal, produtosExibidos, categorias);
+          gerarCatalogoPDF(canal, produtosExibidos, categorias, transportadoraPorId);
         }}
       />
 
@@ -449,6 +452,36 @@ export function PricingPage() {
           Isso vai apagar <strong>todos os {produtos.length} produtos</strong> cadastrados e os preços deles em cada Tabela de
           Preço. As Tabelas de Preço (canais) e as Categorias continuam intactas. Não tem como desfazer.
         </p>
+      </Modal>
+
+      <Modal
+        open={modalParametrizacaoAberto}
+        title="Parametrização de Custos"
+        onClose={() => setModalParametrizacaoAberto(false)}
+        widthClassName="max-w-[95vw]"
+      >
+        <div className="space-y-8">
+          <ChannelsPanel
+            canais={canais}
+            transportadoras={transportadoras}
+            onSelecionarTransportadora={onSelecionarTransportadora}
+            onAtualizarCampo={onAtualizarCampoCanal}
+            onAtualizarTipoImposto={onAtualizarTipoImposto}
+            onAtualizarFreteAdicionalTipo={onAtualizarFreteAdicionalTipo}
+            onToggleVisivel={onToggleVisivel}
+            onToggleFreteIncluso={onToggleFreteIncluso}
+            onRemoverCanal={onRemoverCanal}
+            onAdicionarCanal={onAdicionarCanal}
+          />
+          <CategoryMarginsPanel
+            categorias={categorias}
+            canais={canais}
+            onAtualizarCategoria={onAtualizarCategoria}
+            onAtualizarMargem={onAtualizarMargem}
+            onRemoverCategoria={onRemoverCategoria}
+            onAdicionarCategoria={onAdicionarCategoria}
+          />
+        </div>
       </Modal>
     </AppShell>
   );
