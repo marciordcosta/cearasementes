@@ -1,8 +1,7 @@
-import type { ArquivoConciliacao, FiltrosConciliacao as FiltrosConciliacaoType } from '../types';
+import type { FiltrosConciliacao as FiltrosConciliacaoType } from '../types';
 
 interface FiltrosConciliacaoProps {
   filtros: FiltrosConciliacaoType;
-  arquivosOfx: ArquivoConciliacao[];
   onChange: (filtros: FiltrosConciliacaoType) => void;
 }
 
@@ -11,24 +10,21 @@ interface FiltrosConciliacaoProps {
 const campoClasse =
   'rounded-md border border-white/20 bg-white/10 px-2 py-1.5 text-sm text-white placeholder:text-white/55 focus:border-[var(--color-accent)] focus:bg-white/20 focus:outline-none';
 
-export function FiltrosConciliacao({ filtros, arquivosOfx, onChange }: FiltrosConciliacaoProps) {
+export function FiltrosConciliacao({ filtros, onChange }: FiltrosConciliacaoProps) {
   function atualizar<K extends keyof FiltrosConciliacaoType>(campo: K, valor: FiltrosConciliacaoType[K]) {
     onChange({ ...filtros, [campo]: valor });
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      <select value={filtros.arquivoBancoId ?? ''} onChange={(e) => atualizar('arquivoBancoId', e.target.value || null)} className={campoClasse}>
-        <option value="" className="text-[var(--color-text)]">Todos os arquivos OFX</option>
-        {arquivosOfx.map((a) => (
-          <option key={a.id} value={a.id} className="text-[var(--color-text)]">
-            {a.nomeArquivo}
-          </option>
-        ))}
-      </select>
-
-      <input type="date" value={filtros.dataInicio ?? ''} onChange={(e) => atualizar('dataInicio', e.target.value || null)} className={campoClasse} title="Data início" />
-      <input type="date" value={filtros.dataFim ?? ''} onChange={(e) => atualizar('dataFim', e.target.value || null)} className={campoClasse} title="Data fim" />
+      <label className="flex items-center gap-1.5 text-xs text-white/70">
+        Data início
+        <input type="date" value={filtros.dataInicio ?? ''} onChange={(e) => atualizar('dataInicio', e.target.value || null)} className={campoClasse} />
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-white/70">
+        Data fim
+        <input type="date" value={filtros.dataFim ?? ''} onChange={(e) => atualizar('dataFim', e.target.value || null)} className={campoClasse} />
+      </label>
 
       <select value={filtros.formaPagamento ?? ''} onChange={(e) => atualizar('formaPagamento', (e.target.value || null) as FiltrosConciliacaoType['formaPagamento'])} className={campoClasse}>
         <option value="" className="text-[var(--color-text)]">Todas as formas</option>
@@ -57,7 +53,7 @@ export function FiltrosConciliacao({ filtros, arquivosOfx, onChange }: FiltrosCo
 
       <button
         type="button"
-        onClick={() => onChange({ arquivoBancoId: null, dataInicio: null, dataFim: null, formaPagamento: null, tipoLancamento: null, conciliado: null, busca: '' })}
+        onClick={() => onChange({ bancoNome: null, dataInicio: null, dataFim: null, formaPagamento: null, tipoLancamento: null, conciliado: null, busca: '' })}
         className="whitespace-nowrap rounded-md border border-white/40 px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-white/12"
       >
         Limpar Filtros

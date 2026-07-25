@@ -242,6 +242,41 @@ function extrairRegistro(celulas: Celula[], tipoLancamento: TipoLancamentoSistem
   };
 }
 
+// "NF13379-1/4" — o MAX-Manager imprime esse "-1/4" (parcela atual/total)
+// IDÊNTICO em todas as linhas de um documento parcelado (bug do próprio
+// relatório: o número da parcela atual nunca varia, sempre fica "1"). O
+// total ("/4") é confiável; a posição atual não é — por isso ela é
+// recalculada em corrigirNumeracaoParcelas em vez de usada como veio.
+const REGEX_DOC_PARCELADO = /^(.*)-(\d+)\/(\d+)$/;
+
+/**
+ * Corrige a numeração de parcela do `documento`: agrupa linhas com o mesmo
+ * documento-base (+ cliente + valor, pra não misturar documentos de
+ * clientes diferentes que por coincidência tenham o mesmo número-base),
+ * ordena pela data de pagamento e renumera "1/4, 2/4, 3/4, 4/4" na ordem
+ * real — em vez do "-1/4" fixo que vem repetido em toda linha impressa.
+ */
+function corrigirNumeracaoParcelas(registros: RegistroSistemaParseado[]): void {
+  const grupos = new Map<string, RegistroSistemaParseado[]>();
+  for (const r of registros) {
+    if (!r.documento || !REGEX_DOC_PARCELADO.test(r.documento)) continue;
+    const base = r.documento.match(REGEX_DOC_PARCELADO)![1];
+    const chave = `${base}|${r.cliente ?? ''}|${r.valor}`;
+    const lista = grupos.get(chave);
+    if (lista) lista.push(r);
+    else grupos.set(chave, [r]);
+  }
+
+  for (const lista of grupos.values()) {
+    lista.sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''));
+    lista.forEach((r, i) => {
+      const match = r.documento!.match(REGEX_DOC_PARCELADO)!;
+      const [, base, , total] = match;
+      r.documento = `${base}-${i + 1}/${total}`;
+    });
+  }
+}
+
 export function parseMatricial(html: string, filename: string): RegistroSistemaParseado[] {
   const tipoLancamento = detectarTipoLancamento(html, filename);
   const linhas = agruparPorLinha(extrairCelulas(html));
@@ -252,5 +287,6 @@ export function parseMatricial(html: string, filename: string): RegistroSistemaP
     const registro = extrairRegistro(celulasDaLinha, tipoLancamento);
     if (registro) registros.push(registro);
   }
+  corrigirNumeracaoParcelas(registros);
   return registros;
 }

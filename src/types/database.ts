@@ -289,10 +289,33 @@ export interface Database {
           grupo_id: string | null;
           /** documento, ou (se não tiver) cliente|vendedor|forma_pagamento_raw — chave de upsert junto com data+valor (nem todo lançamento tem nº de documento). */
           chave_dedup: string | null;
+          /** True depois que o usuário confirma (na "bolha" de registros manuais) que a NF foi de fato emitida e o lançamento já foi replicado no ERP. */
+          lancado_erp: boolean;
           criado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'], 'id' | 'criado_em' | 'chave_dedup'> & { chave_dedup?: string | null };
+        Insert: Omit<Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'], 'id' | 'criado_em' | 'chave_dedup' | 'lancado_erp'> & {
+          chave_dedup?: string | null;
+          lancado_erp?: boolean;
+        };
         Update: Partial<Database['public']['Tables']['conciliacao_lancamentos_sistema']['Insert']>;
+        Relationships: [];
+      };
+      conciliacao_regras: {
+        Row: {
+          id: string;
+          forma_pagamento: 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO' | 'CHEQUE';
+          tolerancia_valor: number;
+          dias_uteis_min: number | null;
+          dias_uteis_max: number | null;
+          taxa_min_percentual: number | null;
+          taxa_max_percentual: number | null;
+          nome_min_contido: number | null;
+          nome_min_sobrenome: number | null;
+          exigir_nf_automatica: boolean;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['conciliacao_regras']['Row'], 'id' | 'atualizado_em'>;
+        Update: Partial<Database['public']['Tables']['conciliacao_regras']['Insert']>;
         Relationships: [];
       };
 

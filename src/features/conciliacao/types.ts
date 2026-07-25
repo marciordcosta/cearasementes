@@ -38,6 +38,8 @@ export interface LancamentoSistema {
   taxaValor: number;
   taxaPercentual: number;
   grupoId: string | null;
+  /** True depois que o usuário confirma (na "bolha" de registros manuais) que a NF foi de fato emitida e já replicou o lançamento no ERP. */
+  lancadoErp: boolean;
 }
 
 export interface ArquivoConciliacao {
@@ -59,7 +61,7 @@ export interface SugestoesConciliacao {
 }
 
 export interface FiltrosConciliacao {
-  arquivoBancoId: string | null;
+  bancoNome: string | null;
   dataInicio: string | null;
   dataFim: string | null;
   formaPagamento: FormaPagamento | null;
@@ -71,6 +73,9 @@ export interface FiltrosConciliacao {
 export interface NovoLancamentoManual {
   data: string;
   valor: number;
+  formaPagamento: FormaPagamento;
+  /** Cliente/Documento(pedido)/NF ficam em branco quando o registro vem do fluxo "pré-lançamento" (criado a partir de um OFX sem par no Sistema) — são completados depois, na baixa. */
   cliente: string;
+  documento: string;
   nf: string;
 }

@@ -10,9 +10,9 @@ export function removerAcentos(str: unknown): string {
     .replace(/[^a-zA-Z0-9\s]/g, '');
 }
 
-/** Compara dois valores com tolerância de 1 centavo (evita erro de ponto flutuante). */
+/** Compara dois valores com tolerância (evita erro de ponto flutuante) — `<=` pra uma regra com tolerância 0 ainda aceitar valores exatamente iguais. */
 export function valoresIguais(a: number, b: number, tolerancia = 0.01): boolean {
-  return Math.abs(a - b) < tolerancia;
+  return Math.abs(a - b) <= tolerancia;
 }
 
 /** Diferença em DIAS ÚTEIS entre duas datas ISO (YYYY-MM-DD); negativo se dataSistema vier depois de dataOfx. */
@@ -53,14 +53,15 @@ export function normalizarNomeClienteOfx(str: unknown): string | null {
  * "Nomes fortemente parecidos" — usado no match PIX (nome do OFX x cliente
  * do sistema): nome completo contido um no outro, OU primeiro nome igual +
  * inicial do sobrenome batendo (ex.: OFX "francisco l" x Sistema "francisco lima").
+ * `minContido`/`minSobrenome` vêm da regra parametrizável de PIX (ver regras.ts).
  */
-export function nomesSemelhantesFortes(nomeOfx: string | null, nomeSys: string | null): boolean {
+export function nomesSemelhantesFortes(nomeOfx: string | null, nomeSys: string | null, minContido = 8, minSobrenome = 5): boolean {
   if (!nomeOfx || !nomeSys) return false;
   const a = nomeOfx.trim();
   const b = nomeSys.trim();
 
-  if (a.length >= 8 && b.includes(a)) return true;
-  if (b.length >= 8 && a.includes(b)) return true;
+  if (a.length >= minContido && b.includes(a)) return true;
+  if (b.length >= minContido && a.includes(b)) return true;
 
   const pa = a.split(' ');
   const pb = b.split(' ');
@@ -71,7 +72,7 @@ export function nomesSemelhantesFortes(nomeOfx: string | null, nomeSys: string |
   if (pa.length === 2 && pa[1].length === 1) {
     const inicial = pa[1];
     const sobrenomeSys = pb[1];
-    if (sobrenomeSys && sobrenomeSys.length >= 5 && sobrenomeSys.startsWith(inicial)) return true;
+    if (sobrenomeSys && sobrenomeSys.length >= minSobrenome && sobrenomeSys.startsWith(inicial)) return true;
   }
 
   return false;

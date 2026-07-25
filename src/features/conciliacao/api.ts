@@ -70,6 +70,7 @@ function sistemaFromRow(row: SistemaRow): LancamentoSistema {
     taxaValor: row.taxa_valor,
     taxaPercentual: row.taxa_percentual,
     grupoId: row.grupo_id,
+    lancadoErp: row.lancado_erp,
   };
 }
 
@@ -196,24 +197,40 @@ export async function apagarGrupoConciliacao(tipo: TipoArquivo, subGrupo: string
   if (error) throw error;
 }
 
-export async function inserirLancamentoManualSistema(input: NovoLancamentoManual): Promise<void> {
-  const { error } = await supabase.from('conciliacao_lancamentos_sistema').insert({
-    arquivo_id: null,
-    origem: 'manual',
-    tipo_lancamento: input.valor >= 0 ? 'Entrada' : 'Saída',
-    cliente: input.cliente,
-    documento: null,
-    nf: input.nf || null,
-    vendedor: null,
-    forma_pagamento_raw: 'Outros',
-    valor: input.valor,
-    data: input.data,
-    conciliado: false,
-    desativado: false,
-    taxa_valor: 0,
-    taxa_percentual: 0,
-    grupo_id: null,
-  });
+export async function inserirLancamentoManualSistema(input: NovoLancamentoManual): Promise<LancamentoSistema> {
+  const { data, error } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .insert({
+      arquivo_id: null,
+      origem: 'manual',
+      tipo_lancamento: input.valor >= 0 ? 'Entrada' : 'Saída',
+      cliente: input.cliente.trim() || null,
+      documento: input.documento.trim() || null,
+      nf: input.nf.trim() || null,
+      vendedor: null,
+      // Guarda o próprio enum (PIX/CARTAO/BOLETO/...) como texto — getCategoriaSistema()
+      // reconhece essas palavras, então a tag da grade já sai certa sem precisar de mapeamento à parte.
+      forma_pagamento_raw: input.formaPagamento,
+      valor: input.valor,
+      data: input.data,
+      conciliado: false,
+      desativado: false,
+      taxa_valor: 0,
+      taxa_percentual: 0,
+      grupo_id: null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return sistemaFromRow(data);
+}
+
+/** "Baixa" do pré-lançamento: completa cliente/documento(pedido)/NF do registro manual criado a partir de um OFX sem par no Sistema — some do azul assim que a NF for preenchida. */
+export async function completarPreLancamento(id: string, dados: { cliente: string; documento: string; nf: string }): Promise<void> {
+  const { error } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .update({ cliente: dados.cliente.trim() || null, documento: dados.documento.trim() || null, nf: dados.nf.trim() })
+    .eq('id', id);
   if (error) throw error;
 }
 
@@ -224,6 +241,18 @@ export async function toggleDesativadoBanco(id: string, desativado: boolean): Pr
 
 export async function toggleDesativadoSistema(id: string, desativado: boolean): Promise<void> {
   const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ desativado }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Marca (ou desmarca) um lançamento manual como já replicado no ERP — some da "bolha" de pendências quando true. */
+export async function marcarLancadoErp(id: string, lancado: boolean): Promise<void> {
+  const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ lancado_erp: lancado }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Completa a NF de um lançamento já pré-conciliado (conciliado=true, mas ainda sem NF) — vira conciliação "de verdade" (some do amarelo) sem precisar chamar conciliar() de novo, já que o grupo já existe. */
+export async function salvarNfSistema(id: string, nf: string): Promise<void> {
+  const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ nf }).eq('id', id);
   if (error) throw error;
 }
 
@@ -271,14 +300,24 @@ async function garantirLinhaTaxaCartao(dataRef: string): Promise<SistemaRow> {
   return nova;
 }
 
+export interface ResultadoConciliar {
+  bancoAtualizados: LancamentoBanco[];
+  sistemaAtualizados: LancamentoSistema[];
+}
+
 /**
  * Concilia N lançamentos do banco com M do sistema num único grupo — porte
  * de conciliar(). Quando algum lançamento do banco é CARTAO, calcula (e
  * acumula numa linha "Administradora de Cartão" automática) a diferença
  * entre o valor do sistema e o valor creditado no banco como taxa da
  * maquininha — mesma conta do protótipo original, par a par.
+ *
+ * Retorna só as linhas que realmente mudaram (em vez de o chamador ter que
+ * recarregar as tabelas inteiras do zero) — com o Sistema passando de
+ * milhares de linhas, um refetch completo a cada conciliação deixava a
+ * ação extremamente lenta.
  */
-export async function conciliar(bancoIds: string[], sistemaIds: string[]): Promise<void> {
+export async function conciliar(bancoIds: string[], sistemaIds: string[]): Promise<ResultadoConciliar> {
   if (bancoIds.length === 0 || sistemaIds.length === 0) throw new Error('Selecione pelo menos 1 item do banco e 1 do sistema.');
 
   const { data: grupo, error: errGrupo } = await supabase.from('conciliacao_grupos').insert({}).select('id').single();
@@ -300,63 +339,121 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[]): Promi
       if (valorSys <= 0 || valorSys < valorOfx) continue;
       const taxaValor = +(valorSys - valorOfx).toFixed(2);
       const taxaPercentual = +((taxaValor / valorSys) * 100).toFixed(2);
-      await supabase.from('conciliacao_lancamentos_sistema').update({ taxa_valor: taxaValor, taxa_percentual: taxaPercentual }).eq('id', s.id);
+      const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ taxa_valor: taxaValor, taxa_percentual: taxaPercentual }).eq('id', s.id);
+      if (error) throw error;
       taxaAcumulada += taxaValor;
     }
   }
 
+  let linhaTaxaAtualizada: SistemaRow | null = null;
   if (taxaAcumulada > 0) {
     const linhaTaxa = await garantirLinhaTaxaCartao(bancoSelecionado[0]?.data ?? new Date().toISOString().slice(0, 10));
-    await supabase
+    const { data, error } = await supabase
       .from('conciliacao_lancamentos_sistema')
       .update({ valor: +(linhaTaxa.valor - taxaAcumulada).toFixed(2) })
-      .eq('id', linhaTaxa.id);
+      .eq('id', linhaTaxa.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    linhaTaxaAtualizada = data;
   }
 
-  const { error: errUpdBanco } = await supabase.from('conciliacao_lancamentos_banco').update({ conciliado: true, marcado: false, grupo_id: grupo.id }).in('id', bancoIds);
+  const { data: bancoAtualizados, error: errUpdBanco } = await supabase
+    .from('conciliacao_lancamentos_banco')
+    .update({ conciliado: true, marcado: false, grupo_id: grupo.id })
+    .in('id', bancoIds)
+    .select('*');
   if (errUpdBanco) throw errUpdBanco;
 
-  const { error: errUpdSistema } = await supabase.from('conciliacao_lancamentos_sistema').update({ conciliado: true, grupo_id: grupo.id }).in('id', sistemaIds);
+  const { data: sistemaAtualizados, error: errUpdSistema } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .update({ conciliado: true, grupo_id: grupo.id })
+    .in('id', sistemaIds)
+    .select('*');
   if (errUpdSistema) throw errUpdSistema;
+
+  // A linha de taxa automática não faz parte de `sistemaIds` (é sempre a
+  // mesma linha fixa, não uma selecionada pelo usuário) — some ela na mão
+  // se foi tocada, senão o card de "Administradora de Cartão" ficaria com
+  // o valor antigo até a página ser recarregada.
+  const todosSistema = linhaTaxaAtualizada && !sistemaAtualizados.some((s) => s.id === linhaTaxaAtualizada!.id) ? [...sistemaAtualizados, linhaTaxaAtualizada] : sistemaAtualizados;
+
+  return {
+    bancoAtualizados: bancoAtualizados.map(bancoFromRow),
+    sistemaAtualizados: todosSistema.map(sistemaFromRow),
+  };
+}
+
+export interface ResultadoConciliarManual {
+  bancoCriado: LancamentoBanco;
+  sistemaAtualizado: LancamentoSistema;
 }
 
 /**
  * "Conciliar manual (Sistema → OFX)" — quando um lançamento do sistema não
  * tem correspondente real no banco, cria um lançamento de banco origem
- * 'manual' com os mesmos dados, já conciliado com ele.
+ * 'manual' com os mesmos dados, já conciliado com ele. Retorna as duas
+ * linhas afetadas pro chamador atualizar o estado local direto, sem
+ * recarregar as tabelas inteiras (a de Sistema tem milhares de linhas).
  */
-export async function conciliarManualSistema(sistemaId: string): Promise<void> {
+export async function conciliarManualSistema(sistemaId: string): Promise<ResultadoConciliarManual> {
   const { data: s, error: errS } = await supabase.from('conciliacao_lancamentos_sistema').select('*').eq('id', sistemaId).single();
   if (errS) throw errS;
   if (s.conciliado) throw new Error('Este item já está conciliado.');
+  if (!s.nf) throw new Error('Conciliação manual só é permitida para lançamentos com NF.');
 
   const { data: grupo, error: errGrupo } = await supabase.from('conciliacao_grupos').insert({}).select('id').single();
   if (errGrupo) throw errGrupo;
 
-  const descricao = [s.cliente, s.forma_pagamento_raw, s.documento].filter(Boolean).join(' — ');
-  const { error: errBanco } = await supabase.from('conciliacao_lancamentos_banco').insert({
-    arquivo_id: null,
-    origem: 'manual',
-    banco_codigo: '999',
-    banco_nome: 'Manual',
-    data: s.data ?? '1900-01-01',
-    valor: s.valor,
-    descricao,
-    forma_pagamento: 'OUTRO',
-    conciliado: true,
-    desativado: false,
-    marcado: false,
-    observacao: null,
-    grupo_id: grupo.id,
-  });
+  // Na grade Banco (OFX) a NF é a informação que o usuário reconhece de
+  // relance — o nº de documento interno do Sistema não diz muito ali.
+  const descricao = [s.cliente, s.forma_pagamento_raw, s.nf ? `NF ${s.nf}` : s.documento].filter(Boolean).join(' — ');
+  const { data: bancoNovo, error: errBanco } = await supabase
+    .from('conciliacao_lancamentos_banco')
+    .insert({
+      arquivo_id: null,
+      origem: 'manual',
+      banco_codigo: '999',
+      banco_nome: 'Manual',
+      data: s.data ?? '1900-01-01',
+      valor: s.valor,
+      descricao,
+      forma_pagamento: 'OUTRO',
+      conciliado: true,
+      desativado: false,
+      marcado: false,
+      observacao: null,
+      grupo_id: grupo.id,
+    })
+    .select('*')
+    .single();
   if (errBanco) throw errBanco;
 
-  const { error: errUpd } = await supabase.from('conciliacao_lancamentos_sistema').update({ conciliado: true, grupo_id: grupo.id }).eq('id', sistemaId);
+  const { data: sistemaAtualizado, error: errUpd } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .update({ conciliado: true, grupo_id: grupo.id })
+    .eq('id', sistemaId)
+    .select('*')
+    .single();
   if (errUpd) throw errUpd;
+
+  return { bancoCriado: bancoFromRow(bancoNovo), sistemaAtualizado: sistemaFromRow(sistemaAtualizado) };
 }
 
-/** Desfaz um grupo de conciliação: reverte flags, apaga lançamentos "manuais" criados só pra conciliar, e devolve a taxa de cartão acumulada. */
-export async function cancelarConciliacao(grupoId: string): Promise<void> {
+export interface ResultadoCancelarConciliacao {
+  bancoIdsRemovidos: string[];
+  bancoRevertidos: LancamentoBanco[];
+  sistemaRevertidos: LancamentoSistema[];
+  linhaTaxaAtualizada: LancamentoSistema | null;
+}
+
+/**
+ * Desfaz um grupo de conciliação: reverte flags, apaga lançamentos
+ * "manuais" criados só pra conciliar, e devolve a taxa de cartão
+ * acumulada. Retorna as mudanças pro chamador aplicar no estado local
+ * (sem recarregar as tabelas inteiras do zero).
+ */
+export async function cancelarConciliacao(grupoId: string): Promise<ResultadoCancelarConciliacao> {
   const [{ data: bancoDoGrupo, error: errB }, { data: sistemaDoGrupo, error: errS }] = await Promise.all([
     supabase.from('conciliacao_lancamentos_banco').select('*').eq('grupo_id', grupoId),
     supabase.from('conciliacao_lancamentos_sistema').select('*').eq('grupo_id', grupoId),
@@ -371,27 +468,45 @@ export async function cancelarConciliacao(grupoId: string): Promise<void> {
     const { error } = await supabase.from('conciliacao_lancamentos_banco').delete().in('id', manuaisParaApagar);
     if (error) throw error;
   }
+
+  let bancoRevertidos: BancoRow[] = [];
   if (bancoParaReverter.length > 0) {
-    const { error } = await supabase.from('conciliacao_lancamentos_banco').update({ conciliado: false, grupo_id: null }).in('id', bancoParaReverter);
+    const { data, error } = await supabase.from('conciliacao_lancamentos_banco').update({ conciliado: false, grupo_id: null }).in('id', bancoParaReverter).select('*');
     if (error) throw error;
+    bancoRevertidos = data;
   }
 
   const taxaParaReverter = sistemaDoGrupo.reduce((soma, s) => soma + (s.taxa_valor > 0 ? s.taxa_valor : 0), 0);
+  let sistemaRevertidos: SistemaRow[] = [];
   if (sistemaDoGrupo.length > 0) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('conciliacao_lancamentos_sistema')
       .update({ conciliado: false, grupo_id: null })
-      .in('id', sistemaDoGrupo.map((s) => s.id));
+      .in('id', sistemaDoGrupo.map((s) => s.id))
+      .select('*');
     if (error) throw error;
+    sistemaRevertidos = data;
   }
 
+  let linhaTaxaAtualizada: SistemaRow | null = null;
   if (taxaParaReverter > 0) {
     const { data: linhaTaxa } = await supabase.from('conciliacao_lancamentos_sistema').select('*').eq('origem', 'taxa_automatica').maybeSingle();
     if (linhaTaxa) {
-      await supabase
+      const { data, error } = await supabase
         .from('conciliacao_lancamentos_sistema')
         .update({ valor: +(linhaTaxa.valor + taxaParaReverter).toFixed(2) })
-        .eq('id', linhaTaxa.id);
+        .eq('id', linhaTaxa.id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      linhaTaxaAtualizada = data;
     }
   }
+
+  return {
+    bancoIdsRemovidos: manuaisParaApagar,
+    bancoRevertidos: bancoRevertidos.map(bancoFromRow),
+    sistemaRevertidos: sistemaRevertidos.map(sistemaFromRow),
+    linhaTaxaAtualizada: linhaTaxaAtualizada ? sistemaFromRow(linhaTaxaAtualizada) : null,
+  };
 }

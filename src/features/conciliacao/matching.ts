@@ -1,13 +1,44 @@
-import type { LancamentoBanco, LancamentoSistema, SugestoesConciliacao } from './types';
+import type { FormaRegra, RegraConciliacao } from './regras';
+import type { FormaPagamento, LancamentoBanco, LancamentoSistema, SugestoesConciliacao } from './types';
 import { diffDiasUteis, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, removerAcentos, valoresIguais } from './utils';
+
+type RegrasPorForma = Record<FormaRegra, RegraConciliacao>;
+
+/** Regra usada apenas por RENDIMENTO/OUTRO — essas duas formas não são parametrizáveis hoje (fora da lista pedida), mantém o comportamento antigo de igualdade exata. */
+const REGRA_GENERICA_SEM_PARAMETRIZACAO: RegraConciliacao = {
+  formaPagamento: 'CHEQUE',
+  toleranciaValor: 0,
+  diasUteisMin: null,
+  diasUteisMax: null,
+  taxaMinPercentual: null,
+  taxaMaxPercentual: null,
+  nomeMinContido: null,
+  nomeMinSobrenome: null,
+  exigirNfAutomatica: true,
+};
+
+function regraParaFormaGenerica(tipo: Exclude<FormaPagamento, 'CARTAO'>, regras: RegrasPorForma): RegraConciliacao {
+  if (tipo === 'PIX') return regras.PIX;
+  if (tipo === 'CHEQUE') return regras.CHEQUE;
+  if (tipo === 'BOLETO') return regras.BOLETO;
+  return REGRA_GENERICA_SEM_PARAMETRIZACAO;
+}
+
+function regraParaCartao(subtipo: 'DEBITO' | 'CREDITO', regras: RegrasPorForma): RegraConciliacao {
+  return subtipo === 'DEBITO' ? regras.CARTAO_DEBITO : regras.CARTAO_CREDITO;
+}
 
 /**
  * Sugestões de conciliação pra UM lançamento do banco — porte de
  * buscarSugestoes() do conciliacao.js. Cada categoria é checada em ordem de
  * prioridade e a função retorna assim que encontra uma correspondência boa
  * o bastante (ex.: PIX com nome idêntico não continua checando "mesmo valor").
+ *
+ * Todos os limites numéricos (tolerância de valor, dias úteis, faixa de
+ * taxa de cartão, tamanho mínimo de nome) vêm de `regras` — parametrizável
+ * no modal de Regras de Conciliação, em vez de fixos no código.
  */
-export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBanco[], sistema: LancamentoSistema[]): SugestoesConciliacao {
+export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma): SugestoesConciliacao {
   const tipoOfx = itemBanco.formaPagamento;
   const valorOfxAbs = Math.abs(itemBanco.valor);
   const dataOfx = itemBanco.data || null;
@@ -36,16 +67,22 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
     if (iguais.length > 0) resp.mesmoRemetente = [itemBanco, ...iguais];
   }
 
-  // ---- PIX: nome do sistema parecido (prioritário) ----
+  // ---- PIX: nome do sistema parecido (prioritário — não deve ser sobrescrito pelo match genérico de nome logo abaixo) ----
   if (tipoOfx === 'PIX') {
+    const regraPix = regras.PIX;
     const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
     if (nomeOfx) {
-      resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) => nomesSemelhantesFortes(nomeOfx, removerAcentos(s.cliente || '').toLowerCase()));
+      resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) =>
+        nomesSemelhantesFortes(nomeOfx, removerAcentos(s.cliente || '').toLowerCase(), regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5),
+      );
     }
   }
 
-  // ---- BOLETO: título pago 2 ou 3 dias úteis antes, valor exato OU soma de vários títulos ----
+  // ---- BOLETO: título pago dentro da janela de dias úteis (regra), valor exato OU soma de vários títulos ----
   if (tipoOfx === 'BOLETO') {
+    const regraBoleto = regras.BOLETO;
+    const diasMin = regraBoleto.diasUteisMin ?? 2;
+    const diasMax = regraBoleto.diasUteisMax ?? 3;
     if (!dataOfx) return resp;
     const dataOfxDate = new Date(dataOfx);
 
@@ -59,12 +96,12 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
         cur.setDate(cur.getDate() + 1);
         const dia = cur.getDay();
         if (dia !== 0 && dia !== 6) diasUteis++;
-        if (diasUteis > 3) return false;
+        if (diasUteis > diasMax) return false;
       }
-      return diasUteis === 2 || diasUteis === 3;
+      return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
-    const valorExato = candidatos.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs));
+    const valorExato = candidatos.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraBoleto.toleranciaValor));
     if (valorExato.length > 0) {
       resp.mesmoValorMesmaData = valorExato;
       return resp;
@@ -79,7 +116,7 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
 
     for (const lista of porData.values()) {
       const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
-      const combinacao = combinacaoExata(ordenada, valorOfxAbs);
+      const combinacao = combinacaoExata(ordenada, valorOfxAbs, regraBoleto.toleranciaValor);
       if (combinacao && combinacao.length > 1) {
         resp.combinacaoCartao = combinacao;
         return resp;
@@ -88,40 +125,47 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
     return resp;
   }
 
-  // ---- Demais formas (exceto cartão): mesmo valor, e nome com 2+ palavras em comum ----
+  // ---- Demais formas (exceto cartão): mesmo valor (com tolerância da regra), e nome com 2+ palavras em comum ----
   if (tipoOfx !== 'CARTAO') {
-    const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => Math.abs(s.valor) === valorOfxAbs);
+    const regraForma = regraParaFormaGenerica(tipoOfx, regras);
+    const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor));
     resp.mesmoValorMesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx);
     resp.mesmoValorOutraData = mesmoValorTodos.filter((s) => !dataOfx || s.data !== dataOfx);
 
-    const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
-    resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) => {
-      const nomeSys = removerAcentos(s.cliente || '').toLowerCase();
-      if (!nomeOfx || !nomeSys) return false;
-      const partesOfx = nomeOfx.split(' ').filter((p) => p.length >= 4);
-      if (partesOfx.length < 2) return false;
-      let comuns = 0;
-      for (const p of partesOfx) {
-        if (nomeSys.includes(p)) comuns++;
-        if (comuns >= 2) return true;
-      }
-      return false;
-    });
+    // PIX já calculou o próprio mesmoNome (mais preciso) acima — não sobrescreve.
+    if (tipoOfx !== 'PIX') {
+      const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
+      resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) => {
+        const nomeSys = removerAcentos(s.cliente || '').toLowerCase();
+        if (!nomeOfx || !nomeSys) return false;
+        const partesOfx = nomeOfx.split(' ').filter((p) => p.length >= 4);
+        if (partesOfx.length < 2) return false;
+        let comuns = 0;
+        for (const p of partesOfx) {
+          if (nomeSys.includes(p)) comuns++;
+          if (comuns >= 2) return true;
+        }
+        return false;
+      });
+    }
     return resp;
   }
 
-  // ---- CARTÃO: taxa da maquininha — sistema vale mais que o creditado, dentro de uma faixa de % ----
+  // ---- CARTÃO: taxa da maquininha — sistema vale mais que o creditado, dentro da faixa de % da regra ----
   if (!dataOfx) return resp;
   const subtipoOfx = getSubtipoCartaoOfx(itemBanco.descricao);
   if (!subtipoOfx) return resp;
 
-  const { minPerc, maxPerc } = faixaTaxaCartao(subtipoOfx);
+  const regraCartaoAtual = regraParaCartao(subtipoOfx, regras);
+  const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
+  const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
+  const diasMax = regraCartaoAtual.diasUteisMax ?? 2;
 
   const candidatos = sistemaFiltradoPorTipo.filter((s) => {
     if (!s.data) return false;
     if (getSubtipoCartaoSistema(s.formaPagamentoRaw) !== subtipoOfx) return false;
     if (s.data > dataOfx) return false;
-    return diffDiasUteis(s.data, dataOfx) <= 2;
+    return diffDiasUteis(s.data, dataOfx) <= diasMax;
   });
 
   resp.mesmoValorMesmaData = candidatos.filter((s) => s.data === dataOfx);
@@ -147,20 +191,16 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
   return resp;
 }
 
-/** Backtracking: subconjunto de `lista` cuja soma absoluta bate exatamente com `alvo` (tolerância de 1 centavo). */
-function combinacaoExata(lista: LancamentoSistema[], alvo: number): LancamentoSistema[] | null {
+/** Backtracking: subconjunto de `lista` cuja soma absoluta bate com `alvo`, dentro da `tolerancia` da regra. */
+function combinacaoExata(lista: LancamentoSistema[], alvo: number, tolerancia: number): LancamentoSistema[] | null {
   function backtrack(i: number, soma: number, usados: LancamentoSistema[]): LancamentoSistema[] | null {
-    if (valoresIguais(soma, alvo)) return usados;
-    if (i >= lista.length || soma > alvo + 0.01) return null;
+    if (valoresIguais(soma, alvo, tolerancia)) return usados;
+    if (i >= lista.length || soma > alvo + tolerancia) return null;
     const com = backtrack(i + 1, soma + Math.abs(lista[i].valor), [...usados, lista[i]]);
     if (com) return com;
     return backtrack(i + 1, soma, usados);
   }
   return backtrack(0, 0, []);
-}
-
-function faixaTaxaCartao(subtipo: 'DEBITO' | 'CREDITO'): { minPerc: number; maxPerc: number } {
-  return subtipo === 'DEBITO' ? { minPerc: 0.009, maxPerc: 0.03 } : { minPerc: 0.019, maxPerc: 0.05 };
 }
 
 /** Como combinacaoExata, mas aceita a soma passando do alvo desde que a diferença fique dentro da faixa de taxa de cartão. */
@@ -182,6 +222,21 @@ function combinacaoComTaxa(lista: LancamentoSistema[], alvo: number, minPerc: nu
   return backtrack(0, 0, []);
 }
 
+/**
+ * Lançamento sintético representando a SOMA de vários selecionados — usado
+ * quando o usuário escolhe buscar sugestões pelo valor total de N itens
+ * marcados de uma vez, em vez de cada um isoladamente. Mantém data/forma de
+ * pagamento do último selecionado (o mais recente marcado).
+ */
+export function itemBancoCombinado(itens: LancamentoBanco[]): LancamentoBanco {
+  const ultimo = itens[itens.length - 1];
+  return {
+    ...ultimo,
+    valor: itens.reduce((soma, b) => soma + b.valor, 0),
+    descricao: itens.map((b) => b.descricao).filter(Boolean).join(' + '),
+  };
+}
+
 export interface GrupoParaConciliar {
   bancoIds: string[];
   sistemaIds: string[];
@@ -190,11 +245,12 @@ export interface GrupoParaConciliar {
 /**
  * Conciliação 100% automática — porte de conciliacaoAutomatica(). Mais
  * conservadora que buscarSugestoes(): só liga automaticamente quando existe
- * exatamente UM candidato (ou UMA combinação) sem ambiguidade, e exige que
- * o lançamento do sistema tenha NF preenchida. Casos ambíguos ficam pra
- * conciliação manual, guiada pelas sugestões de buscarSugestoes().
+ * exatamente UM candidato (ou UMA combinação) sem ambiguidade, e (por
+ * padrão, configurável por regra) exige que o lançamento do sistema tenha
+ * NF preenchida. Casos ambíguos ficam pra conciliação manual, guiada pelas
+ * sugestões de buscarSugestoes().
  */
-export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: LancamentoSistema[]): GrupoParaConciliar[] {
+export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma): GrupoParaConciliar[] {
   const grupos: GrupoParaConciliar[] = [];
   const sistemaJaUsado = new Set<string>();
 
@@ -206,17 +262,16 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
     const dataOfx = ofx.data;
     if (!dataOfx) continue;
 
-    const candidatosBase = sistema.filter((s) => {
-      if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
-      if (!s.data) return false;
-      if (getCategoriaSistema(s.formaPagamentoRaw) !== tipo) return false;
-      if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
-      if (!s.nf || !s.nf.trim()) return false;
-      return true;
-    });
-
     if (tipo !== 'CARTAO') {
-      const candidatosValidos = candidatosBase.filter((s) => Math.abs(s.valor) === valorOfxAbs && s.data === dataOfx);
+      const regraForma = regraParaFormaGenerica(tipo, regras);
+      const candidatosValidos = sistema.filter((s) => {
+        if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+        if (!s.data) return false;
+        if (getCategoriaSistema(s.formaPagamentoRaw) !== tipo) return false;
+        if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
+        if (regraForma.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
+        return s.data === dataOfx && valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor);
+      });
       if (candidatosValidos.length === 1) {
         grupos.push({ bancoIds: [ofx.id], sistemaIds: [candidatosValidos[0].id] });
         sistemaJaUsado.add(candidatosValidos[0].id);
@@ -226,12 +281,24 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
 
     const subtipoOfx = getSubtipoCartaoOfx(ofx.descricao);
     if (!subtipoOfx) continue;
-    const { minPerc, maxPerc } = faixaTaxaCartao(subtipoOfx);
+    const regraCartaoAtual = regraParaCartao(subtipoOfx, regras);
+    const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
+    const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
+    const diasMax = regraCartaoAtual.diasUteisMax ?? 2;
+
+    const candidatosBase = sistema.filter((s) => {
+      if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+      if (!s.data) return false;
+      if (getCategoriaSistema(s.formaPagamentoRaw) !== 'CARTAO') return false;
+      if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
+      if (regraCartaoAtual.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
+      return true;
+    });
 
     const unicos = candidatosBase.filter((s) => {
       if (getSubtipoCartaoSistema(s.formaPagamentoRaw) !== subtipoOfx) return false;
       if (s.data! > dataOfx) return false;
-      if (diffDiasUteis(s.data!, dataOfx) > 2) return false;
+      if (diffDiasUteis(s.data!, dataOfx) > diasMax) return false;
       const vSys = Math.abs(s.valor);
       if (vSys < valorOfxAbs) return false;
       const perc = (vSys - valorOfxAbs) / vSys;
