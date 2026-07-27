@@ -19,10 +19,10 @@
   --color-text: #1a2233;
   --color-text-soft: #67718a;
   --color-accent: #0e9d74;
-  /* Destaque de linha (clique num produto) — sempre translúcido, nunca cor sólida. */
-  --color-highlight-row: rgba(250, 204, 21, 0.22);
-  /* Reforço bem mais sutil pra dentro dos campos (Custo/Preço) da linha destacada. */
-  --color-highlight-row-subtle: rgba(250, 204, 21, 0.08);
+  /* Destaque de linha (clique num produto) — cor sólida (mesma tonalidade amarela de antes, só que opaca, pra não deixar o conteúdo de baixo transparecendo). */
+  --color-highlight-row: #fdf1be;
+  /* Reforço mais sutil pra dentro dos campos (Custo/Preço) da linha destacada — mesma tonalidade, bem mais clara. */
+  --color-highlight-row-subtle: #fffae0;
 }
 
 :root.dark {
@@ -35,8 +35,8 @@
   --color-text: #eef1f7;
   --color-text-soft: #94a1b8;
   --color-accent: #17c993;
-  --color-highlight-row: rgba(96, 165, 250, 0.1);
-  --color-highlight-row-subtle: rgba(96, 165, 250, 0.05);
+  --color-highlight-row: #1e3a5c;
+  --color-highlight-row-subtle: #17293d;
 }
 
 html,

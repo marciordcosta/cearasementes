@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { Transportadora } from '@/features/fretes/types';
 import type { Canal, Categoria, Produto } from '../types';
@@ -16,12 +17,42 @@ interface ChannelFullscreenModalProps {
 }
 
 export function ChannelFullscreenModal({ canal, produtos, categorias, transportadoras, mostrarColunaId, onFechar, onUpdateCusto, onUpdatePreco, onResetPreco }: ChannelFullscreenModalProps) {
+  const [busca, setBusca] = useState('');
+
+  // Cada abertura do modal (canal diferente, ou reabrir o mesmo) começa sem
+  // busca — não faz sentido herdar o termo de uma sessão anterior do modal.
+  useEffect(() => {
+    if (canal) setBusca('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canal?.id]);
+
+  const produtosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return produtos;
+    return produtos.filter((p) => p.nome.toLowerCase().includes(termo));
+  }, [produtos, busca]);
+
   return (
-    <Modal open={canal !== null} title={canal?.nome ?? ''} onClose={onFechar} widthClassName="max-w-[95vw]">
+    <Modal
+      open={canal !== null}
+      title={
+        <>
+          <span className="shrink-0">{canal?.nome ?? ''}</span>
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar produto…"
+            className="w-full max-w-xs rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-normal text-white placeholder:text-white/55 focus:border-[var(--color-accent)] focus:bg-white/20 focus:outline-none"
+          />
+        </>
+      }
+      onClose={onFechar}
+      widthClassName="max-w-[95vw]"
+    >
       <div className="max-h-[75vh]">
         {canal && (
           <PricingTable
-            produtos={produtos}
+            produtos={produtosFiltrados}
             categorias={categorias}
             canaisVisiveis={[canal]}
             transportadoras={transportadoras}

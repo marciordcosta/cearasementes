@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { CAMPOS_POR_RELATORIO, NOME_RELATORIO } from '../fields';
 import { contarColunas, encontrarLinhaCabecalho, rotularColuna } from '../parsing';
-import type { GrupoLinhas, MapeamentoColunas, TipoRelatorio } from '../types';
+import type { GrupoLinhas, MapeamentoColunas, TipoRelatorioMapeado } from '../types';
 
 /** Datas lidas do Excel vêm como objeto Date de verdade — sem isso, a prévia mostrava o .toString() inteiro (com fuso, hora etc.). */
 function formatarValorPrevia(valor: unknown): string {
@@ -14,7 +14,7 @@ function formatarValorPrevia(valor: unknown): string {
 }
 
 interface MappingPanelProps {
-  tipo: TipoRelatorio;
+  tipo: TipoRelatorioMapeado;
   grupos: GrupoLinhas[];
   mapeamento: MapeamentoColunas;
   onChangeMapeamento: (mapeamento: MapeamentoColunas) => void;

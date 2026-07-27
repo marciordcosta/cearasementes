@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
+import { CAMPO_CLASSE as campoClasse } from '../constants';
 import type { LancamentoSistema } from '../types';
 
 interface CompletarPreLancamentoModalProps {
@@ -10,8 +11,6 @@ interface CompletarPreLancamentoModalProps {
   onFechar: () => void;
   onSalvar: (dados: { cliente: string; documento: string; nf: string }) => void;
 }
-
-const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
 
 /**
  * "Baixa" do pré-lançamento (azul): o registro foi criado direto do OFX, sem

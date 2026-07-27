@@ -8,6 +8,14 @@ function parseDataISO(iso: string | null): { year: number; month: number } | nul
   return { year: Number(y), month: Number(m) };
 }
 
+/**
+ * Código-balcão do Consumidor Final no Max-Manager — usado em toda venda
+ * sem cadastro de cliente (quase metade das vendas reais). Contar por
+ * código (Set) juntaria centenas de pessoas diferentes num "cliente só" —
+ * por isso essas vendas somam direto na contagem em vez de deduplicar.
+ */
+const CODIGO_CONSUMIDOR_FINAL = '1';
+
 /** Uma linha por entrega -> agregado por transportadora (+ por mês), igual ao process124 original. */
 export function agregarEntregas(rows: EntregaRow[]): Map<string, CarrierAgg> {
   const carriers = new Map<string, CarrierAgg>();
@@ -45,28 +53,30 @@ export function agregarVendas(rows: VendaRow[]): PriceTableAgg[] {
   }
 
   return Array.from(porTabela.entries()).map(([name, tabelaRows]) => {
-    const overall = { valorBruto: 0, desconto: 0, valorLiquido: 0, registros: 0, clientes: new Set<string>() };
-    const monthlyMap = new Map<string, { valorLiquido: number; valorBruto: number; desconto: number; registros: number; clientes: Set<string> }>();
+    const overall = { valorBruto: 0, desconto: 0, valorLiquido: 0, registros: 0, clientes: new Set<string>(), avulsos: 0 };
+    const monthlyMap = new Map<string, { valorLiquido: number; valorBruto: number; desconto: number; registros: number; clientes: Set<string>; avulsos: number }>();
 
     for (const row of tabelaRows) {
       overall.valorBruto += row.valor_bruto;
       overall.desconto += row.desconto;
       overall.valorLiquido += row.valor_liquido;
       overall.registros += 1;
-      if (row.codigo_cliente) overall.clientes.add(row.codigo_cliente);
+      if (row.codigo_cliente === CODIGO_CONSUMIDOR_FINAL) overall.avulsos += 1;
+      else if (row.codigo_cliente) overall.clientes.add(row.codigo_cliente);
 
       const data = parseDataISO(row.data_venda);
       if (data) {
         const key = `${data.year}-${String(data.month).padStart(2, '0')}`;
         if (!monthlyMap.has(key)) {
-          monthlyMap.set(key, { valorLiquido: 0, valorBruto: 0, desconto: 0, registros: 0, clientes: new Set() });
+          monthlyMap.set(key, { valorLiquido: 0, valorBruto: 0, desconto: 0, registros: 0, clientes: new Set(), avulsos: 0 });
         }
         const mm = monthlyMap.get(key)!;
         mm.valorLiquido += row.valor_liquido;
         mm.valorBruto += row.valor_bruto;
         mm.desconto += row.desconto;
         mm.registros += 1;
-        if (row.codigo_cliente) mm.clientes.add(row.codigo_cliente);
+        if (row.codigo_cliente === CODIGO_CONSUMIDOR_FINAL) mm.avulsos += 1;
+        else if (row.codigo_cliente) mm.clientes.add(row.codigo_cliente);
       }
     }
 
@@ -83,6 +93,7 @@ export function agregarVendas(rows: VendaRow[]): PriceTableAgg[] {
           desconto: m.desconto,
           registros: m.registros,
           clientSet: m.clientes,
+          avulsos: m.avulsos,
         };
       });
 
@@ -93,7 +104,7 @@ export function agregarVendas(rows: VendaRow[]): PriceTableAgg[] {
         desconto: overall.desconto,
         valorLiquido: overall.valorLiquido,
         registros: overall.registros,
-        qtdCliente: overall.clientes.size,
+        qtdCliente: overall.clientes.size + overall.avulsos,
       },
       monthly,
     };

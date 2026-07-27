@@ -16,9 +16,9 @@ export interface LancamentoBanco {
   formaPagamento: FormaPagamento;
   conciliado: boolean;
   desativado: boolean;
-  marcado: boolean;
-  observacao: string | null;
   grupoId: string | null;
+  /** Anotação livre do usuário (observações, informações adicionais) — independente de conciliado/desativado. */
+  observacao: string | null;
 }
 
 export interface LancamentoSistema {
@@ -38,8 +38,6 @@ export interface LancamentoSistema {
   taxaValor: number;
   taxaPercentual: number;
   grupoId: string | null;
-  /** True depois que o usuário confirma (na "bolha" de registros manuais) que a NF foi de fato emitida e já replicou o lançamento no ERP. */
-  lancadoErp: boolean;
 }
 
 export interface ArquivoConciliacao {
@@ -53,7 +51,6 @@ export interface ArquivoConciliacao {
 
 /** Espelha `resp` do buscarSugestoes() original — cada chave é uma categoria de sugestão, já em ordem de prioridade. */
 export interface SugestoesConciliacao {
-  mesmoRemetente?: LancamentoBanco[];
   mesmoNome?: LancamentoSistema[];
   mesmoValorMesmaData?: LancamentoSistema[];
   mesmoValorOutraData?: LancamentoSistema[];
@@ -74,7 +71,7 @@ export interface FiltrosConciliacao {
   dataFim: string | null;
   formaPagamento: FormaPagamento | null;
   tipoLancamento: TipoLancamentoSistema | null;
-  conciliado: 'sim' | 'nao' | 'preConciliados' | 'preLancamentos' | 'ocultados' | null;
+  conciliado: 'sim' | 'nao' | 'preConciliados' | 'preLancamentos' | 'divergentes' | 'editados' | null;
   busca: string;
 }
 

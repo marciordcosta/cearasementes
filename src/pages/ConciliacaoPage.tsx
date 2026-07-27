@@ -10,10 +10,13 @@ import {
   completarPreLancamento,
   conciliar,
   conciliarManualSistema,
+  dispensarAvisoDivergenca,
+  fetchGruposComAviso,
   fetchLancamentosBanco,
   fetchLancamentosSistema,
   inserirLancamentoManualSistema,
   salvarNfSistema,
+  salvarObservacaoBanco,
   toggleDesativadoBanco,
   toggleDesativadoSistema,
 } from '@/features/conciliacao/api';
@@ -23,9 +26,12 @@ import { InformarNfModal } from '@/features/conciliacao/components/InformarNfMod
 import { ListaBanco } from '@/features/conciliacao/components/ListaBanco';
 import { ListaSistema } from '@/features/conciliacao/components/ListaSistema';
 import { NovoLancamentoManualModal } from '@/features/conciliacao/components/NovoLancamentoManualModal';
+import { ObservacaoModal } from '@/features/conciliacao/components/ObservacaoModal';
+import { PendenciasBancoModal } from '@/features/conciliacao/components/PendenciasBancoModal';
 import { PendenciasModal } from '@/features/conciliacao/components/PendenciasModal';
 import { RegrasConciliacaoModal } from '@/features/conciliacao/components/RegrasConciliacaoModal';
 import { SugestoesPainel } from '@/features/conciliacao/components/SugestoesPainel';
+import { BANCO_FILTRO_OCULTADOS } from '@/features/conciliacao/constants';
 import { buscarSugestoes, buscarSugestoesInverso, conciliacaoAutomatica, itemBancoCombinado, itemSistemaCombinado } from '@/features/conciliacao/matching';
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
 import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
@@ -75,6 +81,7 @@ export function ConciliacaoPage() {
   const { data: bancoData } = useQuery({ queryKey: ['conciliacao', 'banco'], queryFn: fetchLancamentosBanco });
   const { data: sistemaData } = useQuery({ queryKey: ['conciliacao', 'sistema'], queryFn: fetchLancamentosSistema });
   const { data: regrasData } = useQuery({ queryKey: ['conciliacao', 'regras'], queryFn: fetchRegras });
+  const { data: gruposAvisoData } = useQuery({ queryKey: ['conciliacao', 'grupos-aviso'], queryFn: fetchGruposComAviso });
 
   const [banco, setBanco] = useState<LancamentoBanco[]>([]);
   const [sistema, setSistema] = useState<LancamentoSistema[]>([]);
@@ -108,9 +115,11 @@ export function ConciliacaoPage() {
   const [filtroGrupoSistema, setFiltroGrupoSistema] = useState<string | null>(null);
   const [filtroGrupoBanco, setFiltroGrupoBanco] = useState<string | null>(null);
   const [ordemData, setOrdemData] = useState<'asc' | 'desc'>('asc');
-  const [filtroNfSistema, setFiltroNfSistema] = useState<'com' | 'sem' | null>(null);
+  const [filtroNfSistema, setFiltroNfSistema] = useState<'com' | 'sem' | 'ocultados' | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<string | null>(null);
-  const [pendenteSemNf, setPendenteSemNf] = useState<{ bancoIds: string[]; sistemaIds: string[] } | null>(null);
+  const [pendenteSemNf, setPendenteSemNf] = useState<{ bancoIds: string[]; sistemaIds: string[]; avisoDiferenca: string | null } | null>(null);
+  const [grupoAvisoAberto, setGrupoAvisoAberto] = useState<string | null>(null);
+  const [itemObservacao, setItemObservacao] = useState<LancamentoBanco | null>(null);
   const [itemInformarNf, setItemInformarNf] = useState<LancamentoSistema | null>(null);
   const [contextoLancamentoManual, setContextoLancamentoManual] = useState<{ bancoIds: string[] } | null>(null);
   const [itemParaConciliarManual, setItemParaConciliarManual] = useState<LancamentoSistema | null>(null);
@@ -127,24 +136,24 @@ export function ConciliacaoPage() {
   const [sucessoAutomatico, setSucessoAutomatico] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Se o usuário já tem uma sugestão aberta pra um lado (ex.: Banco) e marca
-  // um registro na OUTRA grade (Sistema) — sinal de que quer conciliar esses
-  // dois manualmente, não seguir a sugestão — minimiza o painel sozinho pra
-  // não tampar a barra "Conciliar X do banco com Y do sistema" (e o aviso de
-  // diferença, se houver). Só volta clicando na bolha ou marcando outro
-  // registro do MESMO lado da sugestão (o que já reabre o painel sozinho).
+  // Se as duas grades (Banco e Sistema) tiverem marcação AO MESMO TEMPO, o
+  // painel de sugestão some de vez — não só minimiza — como se não houvesse
+  // seleção nenhuma: é sinal de que o usuário quer conciliar esses registros
+  // manualmente, não seguir a sugestão. Só volta (ver efeito abaixo) quando a
+  // seleção cair de novo pra apenas um dos lados.
   useEffect(() => {
-    if (!sugestaoAtiva || sugestaoMinimizada) return;
-    const outroLadoSelecionado = sugestaoAtiva.direcao === 'banco' ? selecionadosSistema.size > 0 : selecionadosBanco.size > 0;
-    if (outroLadoSelecionado) setSugestaoMinimizada(true);
-  }, [sugestaoAtiva, sugestaoMinimizada, selecionadosBanco, selecionadosSistema]);
+    if (!sugestaoAtiva) return;
+    if (selecionadosBanco.size > 0 && selecionadosSistema.size > 0) {
+      setSugestaoAtiva(null);
+      setSugestaoMinimizada(false);
+    }
+  }, [sugestaoAtiva, selecionadosBanco, selecionadosSistema]);
 
   // Garantia central (independente de qualquer lógica pontual de desmarcar):
   // enquanto sobrar QUALQUER item selecionado do lado em que a sugestão está
-  // ancorada, ela (e o balão) continuam existindo — só fecha de vez quando
-  // esse lado zera de verdade. Isso é o que decide "tem balão ou não",
-  // sempre a partir da contagem real de selecionados, nunca de um cálculo
-  // feito no momento do clique (que pode ficar defasado).
+  // ancorada, ela continua existindo — só fecha de vez quando esse lado zera
+  // de verdade. Sempre a partir da contagem real de selecionados, nunca de um
+  // cálculo feito no momento do clique (que pode ficar defasado).
   useEffect(() => {
     if (!sugestaoAtiva) return;
     const aindaTemSelecao = sugestaoAtiva.direcao === 'banco' ? selecionadosBanco.size > 0 : selecionadosSistema.size > 0;
@@ -153,6 +162,25 @@ export function ConciliacaoPage() {
       setSugestaoMinimizada(false);
     }
   }, [sugestaoAtiva, selecionadosBanco, selecionadosSistema]);
+
+  // Ao desmarcar (ou até ao marcar) até sobrar seleção em só UM dos lados —
+  // o outro zerado — a sugestão volta sozinha, refletindo TUDO que estiver
+  // selecionado nesse lado agora (soma automática, igual ao onMarcarESomar).
+  // Cobre o caso de ela ter sumido de vez por causa da marcação cruzada acima.
+  useEffect(() => {
+    if (sugestaoAtiva || !modoSugestaoAtivo) return;
+    if (selecionadosBanco.size > 0 && selecionadosSistema.size === 0) {
+      const itens = banco.filter((b) => selecionadosBanco.has(b.id));
+      if (itens.length === 0) return;
+      setSugestaoAtiva({ direcao: 'banco', item: itemBancoCombinado(itens), idsFixos: itens.map((b) => b.id) });
+      setFiltroIdsSugestaoBanco(null);
+    } else if (selecionadosSistema.size > 0 && selecionadosBanco.size === 0) {
+      const itens = sistema.filter((s) => selecionadosSistema.has(s.id));
+      if (itens.length === 0) return;
+      setSugestaoAtiva({ direcao: 'sistema', item: itemSistemaCombinado(itens), idsFixos: itens.map((s) => s.id) });
+      setFiltroIdsSugestaoSistema(null);
+    }
+  }, [sugestaoAtiva, modoSugestaoAtivo, selecionadosBanco, selecionadosSistema, banco, sistema]);
 
   function tratarErro(e: unknown) {
     setErro(mensagemDeErro(e, 'Falha ao falar com o Supabase.'));
@@ -222,6 +250,24 @@ export function ConciliacaoPage() {
     return mapa;
   }, [sistema]);
 
+  // grupoId -> texto do aviso: TODOS os grupos com aviso (usado pro "!" no
+  // lançamento, pro modal de detalhe e pro filtro de Status "Divergentes" —
+  // nunca some, mesmo já dispensado da lista de pendências) vs. só os ainda
+  // NÃO dispensados (usado na lista de pendências e no contador do sino).
+  const avisoPorGrupo = useMemo(() => {
+    const mapa = new Map<string, string>();
+    gruposAvisoData?.forEach((g, id) => mapa.set(id, g.avisoDiferenca));
+    return mapa;
+  }, [gruposAvisoData]);
+
+  const avisoPendentePorGrupo = useMemo(() => {
+    const mapa = new Map<string, string>();
+    gruposAvisoData?.forEach((g, id) => {
+      if (!g.avisoDispensado) mapa.set(id, g.avisoDiferenca);
+    });
+    return mapa;
+  }, [gruposAvisoData]);
+
   const bancoFiltrado = useMemo(() => {
     // O filtro de grupo (ícone de filtro nas sugestões, pra inspecionar um
     // lançamento já conciliado) tem prioridade sobre o filtro de "mesmo
@@ -236,7 +282,9 @@ export function ConciliacaoPage() {
     }
     const termo = buscaBanco.trim().toLowerCase();
     const filtrado = banco.filter((b) => {
-      if (filtros.bancoNome && b.bancoNome !== filtros.bancoNome) return false;
+      if (filtros.bancoNome === BANCO_FILTRO_OCULTADOS) {
+        if (!b.desativado) return false;
+      } else if (filtros.bancoNome && b.bancoNome !== filtros.bancoNome) return false;
       if (filtros.dataInicio && b.data < filtros.dataInicio) return false;
       if (filtros.dataFim && b.data > filtros.dataFim) return false;
       if (filtros.formaPagamento && b.formaPagamento !== filtros.formaPagamento) return false;
@@ -245,7 +293,8 @@ export function ConciliacaoPage() {
       if (filtros.conciliado === 'nao' && b.conciliado) return false;
       if (filtros.conciliado === 'preConciliados' && !(b.grupoId && sistemaSemNfPorGrupo.has(b.grupoId))) return false;
       if (filtros.conciliado === 'preLancamentos' && !(b.grupoId && sistemaPreLancamentoPorGrupo.has(b.grupoId))) return false;
-      if (filtros.conciliado === 'ocultados' && !b.desativado) return false;
+      if (filtros.conciliado === 'divergentes' && !(b.grupoId && avisoPorGrupo.has(b.grupoId))) return false;
+      if (filtros.conciliado === 'editados' && !(b.observacao && b.observacao.trim())) return false;
       const camposBanco = [
         b.descricao,
         b.bancoNome,
@@ -261,7 +310,7 @@ export function ConciliacaoPage() {
       return true;
     });
     return ordenarPorData(filtrado, ordemData);
-  }, [banco, filtros, buscaBanco, infoSistemaPorGrupo, sistemaSemNfPorGrupo, sistemaPreLancamentoPorGrupo, filtroIdsSugestaoBanco, filtroGrupoBanco, ordemData]);
+  }, [banco, filtros, buscaBanco, infoSistemaPorGrupo, sistemaSemNfPorGrupo, sistemaPreLancamentoPorGrupo, avisoPorGrupo, filtroIdsSugestaoBanco, filtroGrupoBanco, ordemData]);
 
   const sistemaFiltrado = useMemo(() => {
     if (filtroGrupoSistema) {
@@ -281,7 +330,9 @@ export function ConciliacaoPage() {
       if (filtros.conciliado === 'nao' && s.conciliado) return false;
       if (filtros.conciliado === 'preConciliados' && !(s.conciliado && s.origem === 'sistema' && !(s.nf && s.nf.trim()))) return false;
       if (filtros.conciliado === 'preLancamentos' && !(s.conciliado && s.origem === 'manual' && !(s.nf && s.nf.trim()))) return false;
-      if (filtros.conciliado === 'ocultados' && !s.desativado) return false;
+      if (filtros.conciliado === 'divergentes' && !(s.grupoId && avisoPorGrupo.has(s.grupoId))) return false;
+      if (filtros.conciliado === 'editados') return false;
+      if (filtroNfSistema === 'ocultados' && !s.desativado) return false;
       if (filtroNfSistema === 'com' && !(s.nf && s.nf.trim())) return false;
       if (filtroNfSistema === 'sem' && s.nf && s.nf.trim()) return false;
       const camposSistema = [
@@ -299,7 +350,7 @@ export function ConciliacaoPage() {
       return true;
     });
     return ordenarPorData(filtrado, ordemData);
-  }, [sistema, filtros, buscaSistema, filtroGrupoSistema, filtroIdsSugestaoSistema, filtroNfSistema, ordemData]);
+  }, [sistema, filtros, buscaSistema, filtroGrupoSistema, filtroIdsSugestaoSistema, filtroNfSistema, avisoPorGrupo, ordemData]);
 
   // Item(s) fixado(s) no topo da grade (checkbox marcado) — calculado a
   // partir da lista COMPLETA (não da filtrada), pra nunca sumir da tela só
@@ -360,12 +411,13 @@ export function ConciliacaoPage() {
   // a NF depois pelo ícone que aparece nesses lançamentos.
   async function onConfirmarPreConciliacao() {
     if (!pendenteSemNf) return;
-    const { bancoIds, sistemaIds } = pendenteSemNf;
+    const { bancoIds, sistemaIds, avisoDiferenca } = pendenteSemNf;
     setPendenteSemNf(null);
     try {
-      const { bancoAtualizados, sistemaAtualizados } = await conciliar(bancoIds, sistemaIds);
+      const { bancoAtualizados, sistemaAtualizados } = await conciliar(bancoIds, sistemaIds, avisoDiferenca);
       aplicarAtualizacaoBanco(bancoAtualizados);
       aplicarAtualizacaoSistema(sistemaAtualizados);
+      if (avisoDiferenca) queryClient.invalidateQueries({ queryKey: ['conciliacao', 'grupos-aviso'] });
       setSelecionadosBanco(new Set());
       setSelecionadosSistema(new Set());
       setSugestaoAtiva(null);
@@ -384,12 +436,54 @@ export function ConciliacaoPage() {
   const registrosPreConciliados = useMemo(() => Array.from(sistemaSemNfPorGrupo.values()), [sistemaSemNfPorGrupo]);
   const registrosPreLancamento = useMemo(() => Array.from(sistemaPreLancamentoPorGrupo.values()), [sistemaPreLancamentoPorGrupo]);
 
+  // Lançamento(s) do Banco cujo grupo teve o aviso de valor/forma de
+  // pagamento diferentes confirmado na hora e ainda não foi dispensado —
+  // aparecem na seção "Conciliações divergentes" do modal de pendências.
+  const registrosDivergencia = useMemo(() => banco.filter((b) => b.grupoId && avisoPendentePorGrupo.has(b.grupoId)), [banco, avisoPendentePorGrupo]);
+
+  // Lançamento(s) do Banco com observação (informação adicional) preenchida
+  // — aparecem na seção "Registros com informações extras" do modal de pendências.
+  const registrosObservacao = useMemo(() => banco.filter((b) => b.observacao && b.observacao.trim()), [banco]);
+
   function onAbrirPendenciasBanco() {
     setModalPendenciasAberto('preConciliados');
   }
 
   function onAbrirPendenciasSistema() {
     setModalPendenciasAberto('preLancamentos');
+  }
+
+  function onDispensarAvisoDivergencia(grupoId: string) {
+    dispensarAvisoDivergenca(grupoId)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['conciliacao', 'grupos-aviso'] }))
+      .catch(tratarErro);
+  }
+
+  // Ícone de editar na grade (abre o modal dedicado) e edição inline no
+  // próprio card da notificação (seção "Informações extras") reaproveitam as
+  // duas mesmas funções — só muda de onde são chamadas.
+  function onAbrirObservacao(item: LancamentoBanco) {
+    setItemObservacao(item);
+  }
+
+  async function onSalvarObservacaoBanco(id: string, texto: string) {
+    try {
+      const atualizado = await salvarObservacaoBanco(id, texto.trim() || null);
+      setBanco((prev) => prev.map((b) => (b.id === id ? atualizado : b)));
+      setItemObservacao(null);
+    } catch (e) {
+      tratarErro(e);
+    }
+  }
+
+  async function onExcluirObservacaoBanco(id: string) {
+    try {
+      const atualizado = await salvarObservacaoBanco(id, null);
+      setBanco((prev) => prev.map((b) => (b.id === id ? atualizado : b)));
+      setItemObservacao(null);
+    } catch (e) {
+      tratarErro(e);
+    }
   }
 
   // "Informar NF" a partir do modal de pendências: fecha o modal e abre o
@@ -471,13 +565,14 @@ export function ConciliacaoPage() {
     const bancoIds = Array.from(selecionadosBanco);
     const sistemaIds = sistemaIdsForcados ?? Array.from(selecionadosSistema);
     if (algumSemNf(sistemaIds)) {
-      setPendenteSemNf({ bancoIds, sistemaIds });
+      setPendenteSemNf({ bancoIds, sistemaIds, avisoDiferenca: avisoSelecao });
       return;
     }
     try {
-      const { bancoAtualizados, sistemaAtualizados } = await conciliar(bancoIds, sistemaIds);
+      const { bancoAtualizados, sistemaAtualizados } = await conciliar(bancoIds, sistemaIds, avisoSelecao);
       aplicarAtualizacaoBanco(bancoAtualizados);
       aplicarAtualizacaoSistema(sistemaAtualizados);
+      if (avisoSelecao) queryClient.invalidateQueries({ queryKey: ['conciliacao', 'grupos-aviso'] });
       setSelecionadosBanco(new Set());
       setSelecionadosSistema(new Set());
       setSugestaoAtiva(null);
@@ -492,22 +587,22 @@ export function ConciliacaoPage() {
   // marcação "já conciliado" sem precisar reabrir a busca.
   const sugestoes = useMemo(() => {
     if (!sugestaoAtiva) return null;
-    if (sugestaoAtiva.direcao === 'banco') return buscarSugestoes(sugestaoAtiva.item, banco, sistema, regras);
-    return buscarSugestoesInverso(sugestaoAtiva.item, banco, sistema, regras);
+    const combinado = sugestaoAtiva.idsFixos.length > 1;
+    if (sugestaoAtiva.direcao === 'banco') return buscarSugestoes(sugestaoAtiva.item, banco, sistema, regras, combinado);
+    return buscarSugestoesInverso(sugestaoAtiva.item, banco, sistema, regras, combinado);
   }, [sugestaoAtiva, banco, sistema, regras]);
 
   function onVerSugestoes(item: LancamentoBanco) {
-    // Só bloqueia se a sugestão do OUTRO lado estiver VISÍVEL agora — assim
-    // que ela minimiza (balão), qualquer marcação seguinte (nessa grade ou
-    // na outra) já pode abrir/atualizar a sugestão livremente.
-    if (sugestaoAtiva?.direcao === 'sistema' && !sugestaoMinimizada) return;
+    // Se a outra grade (Sistema) já tem qualquer marcação, a sugestão fica
+    // escondida — só aparece com seleção em apenas um dos lados por vez.
+    if (selecionadosSistema.size > 0) return;
     setSugestaoAtiva({ direcao: 'banco', item, idsFixos: [item.id] });
     setSugestaoMinimizada(false);
     setFiltroIdsSugestaoBanco(null);
   }
 
   function onVerSugestoesCombinadas(itens: LancamentoBanco[]) {
-    if (sugestaoAtiva?.direcao === 'sistema' && !sugestaoMinimizada) return;
+    if (selecionadosSistema.size > 0) return;
     const combinado = itemBancoCombinado(itens);
     setSugestaoAtiva({ direcao: 'banco', item: combinado, idsFixos: itens.map((b) => b.id) });
     setSugestaoMinimizada(false);
@@ -515,15 +610,15 @@ export function ConciliacaoPage() {
   }
 
   function onVerSugestoesSistema(item: LancamentoSistema) {
-    // Mesmo motivo do onVerSugestoes: só bloqueia se a sugestão do Banco estiver visível agora.
-    if (sugestaoAtiva?.direcao === 'banco' && !sugestaoMinimizada) return;
+    // Mesmo motivo do onVerSugestoes: só bloqueia se o Banco já tiver alguma marcação.
+    if (selecionadosBanco.size > 0) return;
     setSugestaoAtiva({ direcao: 'sistema', item, idsFixos: [item.id] });
     setSugestaoMinimizada(false);
     setFiltroIdsSugestaoSistema(null);
   }
 
   function onVerSugestoesSistemaCombinadas(itens: LancamentoSistema[]) {
-    if (sugestaoAtiva?.direcao === 'banco' && !sugestaoMinimizada) return;
+    if (selecionadosBanco.size > 0) return;
     const combinado = itemSistemaCombinado(itens);
     setSugestaoAtiva({ direcao: 'sistema', item: combinado, idsFixos: itens.map((s) => s.id) });
     setSugestaoMinimizada(false);
@@ -591,7 +686,7 @@ export function ConciliacaoPage() {
     const bancoIds = sugestaoAtiva.direcao === 'banco' ? sugestaoAtiva.idsFixos : candidatoIds;
     const sistemaIds = sugestaoAtiva.direcao === 'banco' ? candidatoIds : sugestaoAtiva.idsFixos;
     if (algumSemNf(sistemaIds)) {
-      setPendenteSemNf({ bancoIds, sistemaIds });
+      setPendenteSemNf({ bancoIds, sistemaIds, avisoDiferenca: null });
       return;
     }
     if (sugestaoAtiva.direcao === 'banco') setSelecionadosBanco(new Set(bancoIds));
@@ -677,6 +772,13 @@ export function ConciliacaoPage() {
   // confirmação abaixo, só desfaz de verdade se o usuário confirmar.
   function onPedirCancelarConciliacao(grupoId: string) {
     setGrupoParaCancelar(grupoId);
+  }
+
+  // Ícone "!" nos lançamentos já conciliados cujo grupo teve o aviso de
+  // valor/forma de pagamento diferentes confirmado na hora — abre um modal
+  // só informativo com o texto (congelado) desse aviso.
+  function onAbrirAvisoDiferenca(grupoId: string) {
+    setGrupoAvisoAberto(grupoId);
   }
 
   async function onConfirmarCancelarConciliacao() {
@@ -909,8 +1011,11 @@ export function ConciliacaoPage() {
             onAbrirInformarNf={onAbrirInformarNf}
             sistemaPreLancamentoPorGrupo={sistemaPreLancamentoPorGrupo}
             onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
-            pendenciasCount={registrosPreConciliados.length}
+            pendenciasCount={registrosPreConciliados.length + registrosDivergencia.length + registrosObservacao.length}
             onAbrirPendencias={onAbrirPendenciasBanco}
+            avisoPorGrupo={avisoPorGrupo}
+            onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
+            onAbrirObservacao={onAbrirObservacao}
           />
           <ListaSistema
             itens={sistemaFiltrado}
@@ -935,6 +1040,8 @@ export function ConciliacaoPage() {
             onDesmarcarSistema={onDesmarcarSistema}
             filtroSugestaoAtivo={filtroIdsSugestaoSistema !== null}
             onLimparFiltroSugestao={() => setFiltroIdsSugestaoSistema(null)}
+            avisoPorGrupo={avisoPorGrupo}
+            onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
           />
         </div>
       </div>
@@ -1035,6 +1142,12 @@ export function ConciliacaoPage() {
         <p className="text-sm text-[var(--color-text)]">Registro sem NF emitida, é preciso emissão da NF posteriormente para concluir a conciliação.</p>
       </Modal>
 
+      <Modal open={grupoAvisoAberto !== null} title="Diferença na conciliação" onClose={() => setGrupoAvisoAberto(null)} widthClassName="max-w-[440px]" footer={<Button variant="outline" onClick={() => setGrupoAvisoAberto(null)}>Fechar</Button>}>
+        <p className="text-sm text-[var(--color-text)]">
+          {grupoAvisoAberto && (avisoPorGrupo.get(grupoAvisoAberto) ?? 'Sem detalhes registrados para esse grupo.')}
+        </p>
+      </Modal>
+
       <InformarNfModal open={itemInformarNf !== null} item={itemInformarNf} onFechar={() => setItemInformarNf(null)} onSalvar={onSalvarNf} />
 
       <CompletarPreLancamentoModal
@@ -1045,14 +1158,30 @@ export function ConciliacaoPage() {
       />
 
       <PendenciasModal
-        open={modalPendenciasAberto !== null}
-        titulo={modalPendenciasAberto === 'preLancamentos' ? 'Pré-lançamentos pendentes' : 'Pré-conciliados pendentes de NF'}
-        itens={modalPendenciasAberto === 'preLancamentos' ? registrosPreLancamento : registrosPreConciliados}
+        open={modalPendenciasAberto === 'preLancamentos'}
+        titulo="Pré-lançamentos pendentes"
+        itens={registrosPreLancamento}
         banco={banco}
         onFechar={() => setModalPendenciasAberto(null)}
         onInformarNf={onInformarNfDaLista}
         onCompletarPreLancamento={onCompletarDaLista}
       />
+
+      <PendenciasBancoModal
+        open={modalPendenciasAberto === 'preConciliados'}
+        onFechar={() => setModalPendenciasAberto(null)}
+        semNf={registrosPreConciliados}
+        banco={banco}
+        onInformarNf={onInformarNfDaLista}
+        divergencia={registrosDivergencia}
+        avisoPorGrupo={avisoPendentePorGrupo}
+        onDispensarAviso={onDispensarAvisoDivergencia}
+        observacao={registrosObservacao}
+        onSalvarObservacao={onSalvarObservacaoBanco}
+        onExcluirObservacao={onExcluirObservacaoBanco}
+      />
+
+      <ObservacaoModal open={itemObservacao !== null} item={itemObservacao} onFechar={() => setItemObservacao(null)} onSalvar={onSalvarObservacaoBanco} onExcluir={onExcluirObservacaoBanco} />
     </AppShell>
   );
 }

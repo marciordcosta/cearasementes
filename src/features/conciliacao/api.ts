@@ -7,6 +7,7 @@ import type { ArquivoConciliacao, LancamentoBanco, LancamentoSistema, NovoLancam
 type ArquivoRow = Database['public']['Tables']['conciliacao_arquivos']['Row'];
 type BancoRow = Database['public']['Tables']['conciliacao_lancamentos_banco']['Row'];
 type SistemaRow = Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'];
+type GrupoRow = Database['public']['Tables']['conciliacao_grupos']['Row'];
 
 /**
  * O Postgres recusa um upsert em lote se duas linhas do MESMO lote tiverem
@@ -46,9 +47,8 @@ function bancoFromRow(row: BancoRow): LancamentoBanco {
     formaPagamento: row.forma_pagamento,
     conciliado: row.conciliado,
     desativado: row.desativado,
-    marcado: row.marcado,
-    observacao: row.observacao,
     grupoId: row.grupo_id,
+    observacao: row.observacao,
   };
 }
 
@@ -70,7 +70,6 @@ function sistemaFromRow(row: SistemaRow): LancamentoSistema {
     taxaValor: row.taxa_valor,
     taxaPercentual: row.taxa_percentual,
     grupoId: row.grupo_id,
-    lancadoErp: row.lancado_erp,
   };
 }
 
@@ -88,6 +87,31 @@ export async function fetchLancamentosBanco(): Promise<LancamentoBanco[]> {
 export async function fetchLancamentosSistema(): Promise<LancamentoSistema[]> {
   const rows = await fetchAllRows<SistemaRow>((from, to) => supabase.from('conciliacao_lancamentos_sistema').select('*').order('data').range(from, to));
   return rows.map(sistemaFromRow);
+}
+
+export interface AvisoGrupo {
+  avisoDiferenca: string;
+  /** true depois que o usuário clica no "x" pra dispensar a notificação no modal de pendências — o aviso em si (e o "!" no lançamento) continuam existindo, só some da lista de pendências. */
+  avisoDispensado: boolean;
+}
+
+/** grupoId -> aviso (valor/forma de pagamento diferentes) mostrado ao usuário quando ele confirmou essa conciliação mesmo com a diferença sinalizada — só grupos que tiveram aviso aparecem aqui. */
+export async function fetchGruposComAviso(): Promise<Map<string, AvisoGrupo>> {
+  const rows = await fetchAllRows<GrupoRow>((from, to) => supabase.from('conciliacao_grupos').select('*').not('aviso_diferenca', 'is', null).range(from, to));
+  return new Map(rows.filter((g) => g.aviso_diferenca).map((g) => [g.id, { avisoDiferenca: g.aviso_diferenca as string, avisoDispensado: g.aviso_dispensado }]));
+}
+
+/** "x" no modal de pendências — dispensa só a NOTIFICAÇÃO desse grupo, o aviso gravado (e o "!" no lançamento) continuam intactos. */
+export async function dispensarAvisoDivergenca(grupoId: string): Promise<void> {
+  const { error } = await supabase.from('conciliacao_grupos').update({ aviso_dispensado: true }).eq('id', grupoId);
+  if (error) throw error;
+}
+
+/** Observação livre (informações adicionais) num lançamento do Banco — `null` apaga a observação. */
+export async function salvarObservacaoBanco(id: string, observacao: string | null): Promise<LancamentoBanco> {
+  const { data, error } = await supabase.from('conciliacao_lancamentos_banco').update({ observacao }).eq('id', id).select('*').single();
+  if (error) throw error;
+  return bancoFromRow(data);
 }
 
 /**
@@ -244,25 +268,9 @@ export async function toggleDesativadoSistema(id: string, desativado: boolean): 
   if (error) throw error;
 }
 
-/** Marca (ou desmarca) um lançamento manual como já replicado no ERP — some da "bolha" de pendências quando true. */
-export async function marcarLancadoErp(id: string, lancado: boolean): Promise<void> {
-  const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ lancado_erp: lancado }).eq('id', id);
-  if (error) throw error;
-}
-
 /** Completa a NF de um lançamento já pré-conciliado (conciliado=true, mas ainda sem NF) — vira conciliação "de verdade" (some do amarelo) sem precisar chamar conciliar() de novo, já que o grupo já existe. */
 export async function salvarNfSistema(id: string, nf: string): Promise<void> {
   const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ nf }).eq('id', id);
-  if (error) throw error;
-}
-
-export async function toggleMarcado(id: string, marcado: boolean): Promise<void> {
-  const { error } = await supabase.from('conciliacao_lancamentos_banco').update({ marcado }).eq('id', id);
-  if (error) throw error;
-}
-
-export async function salvarObservacao(id: string, observacao: string): Promise<void> {
-  const { error } = await supabase.from('conciliacao_lancamentos_banco').update({ observacao }).eq('id', id);
   if (error) throw error;
 }
 
@@ -316,11 +324,17 @@ export interface ResultadoConciliar {
  * recarregar as tabelas inteiras do zero) — com o Sistema passando de
  * milhares de linhas, um refetch completo a cada conciliação deixava a
  * ação extremamente lenta.
+ *
+ * `avisoDiferenca`: quando a conciliação manual foi confirmada com o aviso
+ * de valor/forma de pagamento diferentes na tela, o texto desse aviso fica
+ * gravado no grupo — permite mostrar o "!" informativo nos lançamentos já
+ * conciliados depois, sem recalcular nada (fica congelado no momento em
+ * que o usuário confirmou "Conciliar mesmo assim?").
  */
-export async function conciliar(bancoIds: string[], sistemaIds: string[]): Promise<ResultadoConciliar> {
+export async function conciliar(bancoIds: string[], sistemaIds: string[], avisoDiferenca?: string | null): Promise<ResultadoConciliar> {
   if (bancoIds.length === 0 || sistemaIds.length === 0) throw new Error('Selecione pelo menos 1 item do banco e 1 do sistema.');
 
-  const { data: grupo, error: errGrupo } = await supabase.from('conciliacao_grupos').insert({}).select('id').single();
+  const { data: grupo, error: errGrupo } = await supabase.from('conciliacao_grupos').insert({ aviso_diferenca: avisoDiferenca ?? null }).select('id').single();
   if (errGrupo) throw errGrupo;
 
   const [{ data: bancoSelecionado, error: errB }, { data: sistemaSelecionado, error: errS }] = await Promise.all([
@@ -360,7 +374,7 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[]): Promi
 
   const { data: bancoAtualizados, error: errUpdBanco } = await supabase
     .from('conciliacao_lancamentos_banco')
-    .update({ conciliado: true, marcado: false, grupo_id: grupo.id })
+    .update({ conciliado: true, grupo_id: grupo.id })
     .in('id', bancoIds)
     .select('*');
   if (errUpdBanco) throw errUpdBanco;
@@ -421,8 +435,6 @@ export async function conciliarManualSistema(sistemaId: string): Promise<Resulta
       forma_pagamento: 'OUTRO',
       conciliado: true,
       desativado: false,
-      marcado: false,
-      observacao: null,
       grupo_id: grupo.id,
     })
     .select('*')

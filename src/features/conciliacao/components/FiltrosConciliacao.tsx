@@ -186,7 +186,8 @@ export function FiltrosConciliacao({ filtros, onChange, onLimparTudo }: FiltrosC
           { value: 'nao', label: 'Não conciliados' },
           { value: 'preConciliados', label: 'Pré-conciliados' },
           { value: 'preLancamentos', label: 'Pré-lançamentos' },
-          { value: 'ocultados', label: 'Ocultados' },
+          { value: 'divergentes', label: 'Divergentes' },
+          { value: 'editados', label: 'Editados' },
         ]}
       />
 

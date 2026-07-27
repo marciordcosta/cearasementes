@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
+import { CAMPO_CLASSE as campoClasse } from '../constants';
 import type { LancamentoSistema } from '../types';
 
 interface InformarNfModalProps {
@@ -10,8 +11,6 @@ interface InformarNfModalProps {
   onFechar: () => void;
   onSalvar: (nf: string) => void;
 }
-
-const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
 
 /**
  * Aparece pra completar um lançamento "pré-conciliado" (já travado junto com

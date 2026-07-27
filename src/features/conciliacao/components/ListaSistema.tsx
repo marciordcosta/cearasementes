@@ -1,12 +1,13 @@
-import { Filter, FileText, X } from 'lucide-react';
+import { AlertTriangle, Filter, FileText, RotateCcw, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { VirtualList } from '@/components/ui/VirtualList';
-import { fmtBRL } from '@/lib/format';
+import { fmtBRL, fmtDataBR } from '@/lib/format';
+import { ALTURA_LINHA } from '../constants';
 import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
 import type { LancamentoSistema } from '../types';
-import { getCategoriaSistema } from '../utils';
+import { getCategoriaSistema, getSubtipoCartaoSistema } from '../utils';
 
 interface ListaSistemaProps {
   itens: LancamentoSistema[];
@@ -27,9 +28,9 @@ interface ListaSistemaProps {
   /** Total de pendências (pré-conciliados + pré-lançamentos) — bolinha vermelha ao lado do título. */
   pendenciasCount: number;
   onAbrirPendencias: () => void;
-  /** Filtro "Com NF"/"Sem NF" do cabeçalho — mesmo padrão do filtro de banco na grade OFX. */
-  filtroNf: 'com' | 'sem' | null;
-  onChangeFiltroNf: (filtro: 'com' | 'sem' | null) => void;
+  /** Filtro "Com NF"/"Sem NF"/"Ocultados" do cabeçalho — mesmo padrão do filtro de banco na grade OFX. */
+  filtroNf: 'com' | 'sem' | 'ocultados' | null;
+  onChangeFiltroNf: (filtro: 'com' | 'sem' | 'ocultados' | null) => void;
   /** Quando ativo (toggle global, no topbar), marcar o checkbox de um lançamento já abre o painel de sugestões (buscando no OFX) automaticamente. */
   modoSugestaoAtivo: boolean;
   onVerSugestoesSistema: (item: LancamentoSistema) => void;
@@ -40,9 +41,10 @@ interface ListaSistemaProps {
   /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) da sugestão aberta — mostra o aviso pra voltar a ver todos. */
   filtroSugestaoAtivo: boolean;
   onLimparFiltroSugestao: () => void;
+  /** grupoId -> texto do aviso (valor/forma de pagamento diferentes) confirmado na hora da conciliação — presença na tabela decide se mostra o "!" informativo. */
+  avisoPorGrupo: Map<string, string>;
+  onAbrirAvisoDiferenca: (grupoId: string) => void;
 }
-
-const ALTURA_LINHA = 76;
 
 export function ListaSistema({
   itens,
@@ -67,6 +69,8 @@ export function ListaSistema({
   onDesmarcarSistema,
   filtroSugestaoAtivo,
   onLimparFiltroSugestao,
+  avisoPorGrupo,
+  onAbrirAvisoDiferenca,
 }: ListaSistemaProps) {
   function renderLinha(item: LancamentoSistema) {
     const categoria = getCategoriaSistema(item.formaPagamentoRaw);
@@ -85,6 +89,8 @@ export function ListaSistema({
     const preLancamento = item.conciliado && item.origem === 'manual' && !(item.nf && item.nf.trim());
     const corConciliado = semNfPreConciliacao ? 'bg-[#FFF6DE]' : preLancamento ? 'bg-[#E1EEFF]' : 'bg-good-soft';
     const corLinha = item.conciliado ? corConciliado : 'bg-[var(--color-surface)]';
+    const subtipoCartao = categoria === 'CARTAO' ? getSubtipoCartaoSistema(item.formaPagamentoRaw) : null;
+    const avisoDiferenca = item.grupoId ? avisoPorGrupo.get(item.grupoId) : undefined;
     return (
       <div className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''}`}>
         {!item.conciliado && !item.desativado && item.origem !== 'taxa_automatica' && (
@@ -110,11 +116,12 @@ export function ListaSistema({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-xs text-[var(--color-text-soft)]">{item.data ? formatarDataBR(item.data) : '—'}</span>
+              <span className="text-xs text-[var(--color-text-soft)]">{item.data ? fmtDataBR(item.data) : '—'}</span>
               <span className={`num text-base font-extrabold ${item.valor < 0 ? 'text-bad' : 'text-good'}`}>— {fmtBRL.format(item.valor)}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Badge cor={CORES_FORMA_PAGAMENTO[categoria]}>{categoria}</Badge>
+              {subtipoCartao && <Badge>{subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}</Badge>}
               <Badge tom={item.tipoLancamento === 'Entrada' ? 'bom' : 'ruim'}>{item.tipoLancamento.toUpperCase()}</Badge>
             </div>
           </div>
@@ -136,6 +143,16 @@ export function ListaSistema({
                   <span className="whitespace-nowrap text-xs text-[var(--color-text-soft)]">automático</span>
                 ) : (
                   <>
+                    {avisoDiferenca && (
+                      <button
+                        type="button"
+                        onClick={() => item.grupoId && onAbrirAvisoDiferenca(item.grupoId)}
+                        className="text-[#b8860b] hover:brightness-125"
+                        title={avisoDiferenca}
+                      >
+                        <AlertTriangle size={14} />
+                      </button>
+                    )}
                     {semNfPreConciliacao && (
                       <button type="button" onClick={() => onAbrirInformarNf(item)} className="text-[#8a6d1f] hover:brightness-125" title="Informar NF (pré-conciliação)">
                         <FileText size={14} />
@@ -212,21 +229,38 @@ export function ListaSistema({
               {pendenciasCount}
             </button>
           )}
-          <select
-            value={filtroNf ?? ''}
-            onChange={(e) => onChangeFiltroNf((e.target.value || null) as 'com' | 'sem' | null)}
-            className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs font-normal text-white focus:border-[var(--color-accent)] focus:bg-white/20 focus:outline-none"
+          <div
+            className={`flex items-center gap-1 rounded-md border pl-2 pr-1 text-xs ${
+              filtroNf !== null ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20' : 'border-white/20 bg-white/10'
+            }`}
           >
-            <option value="" className="text-[var(--color-text)]">
-              Todos
-            </option>
-            <option value="com" className="text-[var(--color-text)]">
-              Com NF
-            </option>
-            <option value="sem" className="text-[var(--color-text)]">
-              Sem NF
-            </option>
-          </select>
+            <select
+              value={filtroNf ?? ''}
+              onChange={(e) => onChangeFiltroNf((e.target.value || null) as 'com' | 'sem' | 'ocultados' | null)}
+              className="bg-transparent py-1 text-xs font-normal text-white focus:outline-none"
+            >
+              <option value="" className="text-[var(--color-text)]">
+                Todos
+              </option>
+              <option value="com" className="text-[var(--color-text)]">
+                Com NF
+              </option>
+              <option value="sem" className="text-[var(--color-text)]">
+                Sem NF
+              </option>
+              <option value="ocultados" className="text-[var(--color-text)]">
+                Ocultados
+              </option>
+            </select>
+            {filtroNf !== null && (
+              <button type="button" onClick={() => onChangeFiltroNf(null)} title="Limpar filtro" className="shrink-0 rounded-full p-0.5 text-white hover:bg-white/20">
+                <RotateCcw size={12} />
+              </button>
+            )}
+          </div>
+          <span className="whitespace-nowrap text-[11px] font-normal text-white/50">
+            {itens.length} registro{itens.length === 1 ? '' : 's'}
+          </span>
         </span>
         <input
           value={busca}
@@ -267,9 +301,3 @@ export function ListaSistema({
   );
 }
 
-function formatarDataBR(iso: string): string {
-  const partes = iso.split('-');
-  if (partes.length !== 3) return iso;
-  const [y, m, d] = partes;
-  return `${d}/${m}/${y}`;
-}

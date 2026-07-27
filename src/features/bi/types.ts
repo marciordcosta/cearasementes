@@ -21,7 +21,10 @@ export interface MonthlyPriceTable {
   valorBruto: number;
   desconto: number;
   registros: number;
+  /** Códigos de cliente DE VERDADE (exclui o código-balcão do Consumidor Final) — cada um conta 1 vez, não importa quantas vendas fez. */
   clientSet: Set<string>;
+  /** Vendas com o código-balcão do Consumidor Final (venda sem cadastro) — cada venda é uma pessoa diferente na prática, então soma direto em vez de cair no clientSet (que dedup por código). */
+  avulsos: number;
 }
 
 export interface PriceTableAgg {

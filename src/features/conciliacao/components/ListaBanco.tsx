@@ -1,12 +1,12 @@
-import { Filter, FileText, X } from 'lucide-react';
+import { AlertTriangle, Filter, FileText, Pencil, RotateCcw, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { VirtualList } from '@/components/ui/VirtualList';
-import { fmtBRL } from '@/lib/format';
+import { fmtBRL, fmtDataBR } from '@/lib/format';
+import { ALTURA_LINHA, BANCO_FILTRO_OCULTADOS } from '../constants';
 import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
 import type { LancamentoBanco, LancamentoSistema } from '../types';
-
-const ALTURA_LINHA = 76;
+import { getSubtipoCartaoOfx } from '../utils';
 
 interface ListaBancoProps {
   itens: LancamentoBanco[];
@@ -46,6 +46,11 @@ interface ListaBancoProps {
   /** Total de pendências (pré-conciliados + pré-lançamentos) — bolinha vermelha ao lado do título. */
   pendenciasCount: number;
   onAbrirPendencias: () => void;
+  /** grupoId -> texto do aviso (valor/forma de pagamento diferentes) confirmado na hora da conciliação — presença na tabela decide se mostra o "!" informativo. */
+  avisoPorGrupo: Map<string, string>;
+  onAbrirAvisoDiferenca: (grupoId: string) => void;
+  /** Abre o modal de observação (informações adicionais) pra esse lançamento — disponível em qualquer registro, conciliado ou não. */
+  onAbrirObservacao: (item: LancamentoBanco) => void;
 }
 
 export function ListaBanco({
@@ -75,6 +80,9 @@ export function ListaBanco({
   onAbrirCompletarPreLancamento,
   pendenciasCount,
   onAbrirPendencias,
+  avisoPorGrupo,
+  onAbrirAvisoDiferenca,
+  onAbrirObservacao,
 }: ListaBancoProps) {
   function renderLinha(item: LancamentoBanco) {
     const infoSistema = item.conciliado && item.grupoId ? infoSistemaPorGrupo.get(item.grupoId) : undefined;
@@ -82,6 +90,8 @@ export function ListaBanco({
     const sistemaPreLancamento = item.grupoId ? sistemaPreLancamentoPorGrupo.get(item.grupoId) : undefined;
     const corConciliado = sistemaSemNf ? 'bg-[#FFF6DE]' : sistemaPreLancamento ? 'bg-[#E1EEFF]' : 'bg-good-soft';
     const corLinha = item.conciliado ? corConciliado : 'bg-[var(--color-surface)]';
+    const subtipoCartao = item.formaPagamento === 'CARTAO' ? getSubtipoCartaoOfx(item.descricao) : null;
+    const avisoDiferenca = item.grupoId ? avisoPorGrupo.get(item.grupoId) : undefined;
     return (
       <div className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''}`}>
         {!item.conciliado && !item.desativado && (
@@ -107,23 +117,33 @@ export function ListaBanco({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-xs text-[var(--color-text-soft)]">{formatarDataBR(item.data)}</span>
+              <span className="text-xs text-[var(--color-text-soft)]">{fmtDataBR(item.data)}</span>
               <span className={`num text-base font-extrabold ${item.valor < 0 ? 'text-bad' : 'text-good'}`}>— {fmtBRL.format(item.valor)}</span>
             </div>
             <div className="flex items-center gap-1.5">
               {item.bancoNome && <Badge>{item.bancoNome.toUpperCase()}</Badge>}
               <Badge cor={CORES_FORMA_PAGAMENTO[item.formaPagamento]}>{item.formaPagamento}</Badge>
+              {subtipoCartao && <Badge>{subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}</Badge>}
             </div>
           </div>
           <div className="mt-0.5 truncate text-xs font-semibold text-[var(--color-text)]" title={item.descricao ?? ''}>
             {item.descricao || '—'}
-            {item.marcado && <span className="ml-1.5 text-[10px] font-semibold text-[#c98a1e]">● marcado</span>}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]">{infoSistema}</div>
             <div className="flex shrink-0 items-center gap-2">
               {item.conciliado ? (
                 <>
+                  {avisoDiferenca && (
+                    <button
+                      type="button"
+                      onClick={() => item.grupoId && onAbrirAvisoDiferenca(item.grupoId)}
+                      className="text-[#b8860b] hover:brightness-125"
+                      title={avisoDiferenca}
+                    >
+                      <AlertTriangle size={14} />
+                    </button>
+                  )}
                   {sistemaSemNf && (
                     <button type="button" onClick={() => onAbrirInformarNf(sistemaSemNf)} className="text-[#8a6d1f] hover:brightness-125" title="Informar NF (pré-conciliação)">
                       <FileText size={14} />
@@ -147,14 +167,26 @@ export function ListaBanco({
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onToggleDesativado(item)}
-                  className="text-xs text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
-                  title={item.desativado ? 'Reativar' : 'Desativar'}
-                >
-                  {item.desativado ? '↺' : '⊘'}
-                </button>
+                <>
+                  {(selecionados.has(item.id) || item.observacao) && (
+                    <button
+                      type="button"
+                      onClick={() => onAbrirObservacao(item)}
+                      className={item.observacao ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-soft)] hover:text-[var(--color-text)]'}
+                      title={item.observacao ? `Observação: ${item.observacao}` : 'Adicionar observação'}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onToggleDesativado(item)}
+                    className="text-xs text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                    title={item.desativado ? 'Reativar' : 'Desativar'}
+                  >
+                    {item.desativado ? '↺' : '⊘'}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -194,20 +226,37 @@ export function ListaBanco({
               {pendenciasCount}
             </button>
           )}
-          <select
-            value={bancoFiltro ?? ''}
-            onChange={(e) => onChangeBancoFiltro(e.target.value || null)}
-            className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-xs font-normal text-white focus:border-[var(--color-accent)] focus:bg-white/20 focus:outline-none"
+          <div
+            className={`flex items-center gap-1 rounded-md border pl-2 pr-1 text-xs ${
+              bancoFiltro !== null ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20' : 'border-white/20 bg-white/10'
+            }`}
           >
-            <option value="" className="text-[var(--color-text)]">
-              Todos
-            </option>
-            {bancosDisponiveis.map((b) => (
-              <option key={b} value={b} className="text-[var(--color-text)]">
-                {b}
+            <select
+              value={bancoFiltro ?? ''}
+              onChange={(e) => onChangeBancoFiltro(e.target.value || null)}
+              className="bg-transparent py-1 text-xs font-normal text-white focus:outline-none"
+            >
+              <option value="" className="text-[var(--color-text)]">
+                Todos
               </option>
-            ))}
-          </select>
+              {bancosDisponiveis.map((b) => (
+                <option key={b} value={b} className="text-[var(--color-text)]">
+                  {b}
+                </option>
+              ))}
+              <option value={BANCO_FILTRO_OCULTADOS} className="text-[var(--color-text)]">
+                Ocultados
+              </option>
+            </select>
+            {bancoFiltro !== null && (
+              <button type="button" onClick={() => onChangeBancoFiltro(null)} title="Limpar filtro" className="shrink-0 rounded-full p-0.5 text-white hover:bg-white/20">
+                <RotateCcw size={12} />
+              </button>
+            )}
+          </div>
+          <span className="whitespace-nowrap text-[11px] font-normal text-white/50">
+            {itens.length} registro{itens.length === 1 ? '' : 's'}
+          </span>
         </span>
         <input
           value={busca}
@@ -248,9 +297,3 @@ export function ListaBanco({
   );
 }
 
-function formatarDataBR(iso: string): string {
-  const partes = iso.split('-');
-  if (partes.length !== 3) return iso;
-  const [y, m, d] = partes;
-  return `${d}/${m}/${y}`;
-}

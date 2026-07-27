@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { CAMPO_CLASSE as campoClasse } from '../constants';
 import { NOMES_FORMA_REGRA, type FormaRegra, type RegraConciliacao } from '../regras';
 
 interface RegrasConciliacaoModalProps {
@@ -11,8 +12,6 @@ interface RegrasConciliacaoModalProps {
 }
 
 const ORDEM: FormaRegra[] = ['PIX', 'CARTAO_DEBITO', 'CARTAO_CREDITO', 'BOLETO', 'CHEQUE'];
-
-const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
 
 export function RegrasConciliacaoModal({ open, regras, onFechar, onSalvar }: RegrasConciliacaoModalProps) {
   const [form, setForm] = useState(regras);

@@ -1,5 +1,8 @@
-/** Tipos que passam pelo fluxo de mapeamento de coluna (planilha). */
+/** Tipos de relatório reconhecidos pelo cabeçalho do arquivo. '333' fica só por compatibilidade com uploads antigos já gravados — não é mais reconhecido/importado (ver detectarTipoRelatorio). */
 export type TipoRelatorio = '124' | '396' | '333';
+
+/** Únicos que ainda passam pela tela de mapeamento de coluna — o 396 (formato matricial novo) tem parser dedicado, sem mapeamento. */
+export type TipoRelatorioMapeado = '124';
 
 /** TipoRelatorio + os tipos da Conciliação Bancária (ofx/sistema) — não passam por mapeamento, mas mesclam na mesma lista "Arquivos processados recentemente". */
 export type TipoRelatorioLog = TipoRelatorio | 'ofx' | 'sistema';

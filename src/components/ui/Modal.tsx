@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 
 interface ModalProps {
   open: boolean;
-  title: string;
+  /** Normalmente um texto simples — aceita nó React pra casos como um campo de busca ao lado do título (economiza uma linha inteira só pra isso). */
+  title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
@@ -21,7 +22,7 @@ export function Modal({ open, title, onClose, children, footer, widthClassName =
     >
       <div className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-xl bg-[var(--color-surface)] shadow-2xl ${widthClassName}`}>
         <div className="flex items-center justify-between gap-3 bg-[var(--color-navy)] px-[18px] py-3.5 text-sm font-bold text-white">
-          <span>{title}</span>
+          <div className="flex min-w-0 flex-1 items-center gap-3">{title}</div>
           <button
             type="button"
             onClick={onClose}

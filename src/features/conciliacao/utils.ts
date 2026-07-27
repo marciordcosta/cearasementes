@@ -15,6 +15,19 @@ export function valoresIguais(a: number, b: number, tolerancia = 0.01): boolean 
   return Math.abs(a - b) <= tolerancia;
 }
 
+/** Conta dias úteis estritamente entre `inicio` e `fim` (assume `inicio <= fim`), parando cedo (retorna algo > diasMax) assim que ultrapassa `diasMax` — evita percorrer intervalos longos à toa nos filtros de janela de Boleto. */
+export function diasUteisAte(inicio: Date, fim: Date, diasMax: number): number {
+  let diasUteis = 0;
+  const cur = new Date(inicio);
+  while (cur < fim) {
+    cur.setDate(cur.getDate() + 1);
+    const dia = cur.getDay();
+    if (dia !== 0 && dia !== 6) diasUteis++;
+    if (diasUteis > diasMax) return diasUteis;
+  }
+  return diasUteis;
+}
+
 /** Diferença em DIAS ÚTEIS entre duas datas ISO (YYYY-MM-DD); negativo se dataSistema vier depois de dataOfx. */
 export function diffDiasUteis(dataSistema: string, dataOfx: string): number {
   let d1 = new Date(dataSistema);

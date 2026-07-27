@@ -31,7 +31,6 @@ interface SugestoesPainelProps {
 }
 
 const ROTULOS: Record<keyof SugestoesConciliacao, string> = {
-  mesmoRemetente: 'Mesmo remetente PIX (outro lançamento do banco)',
   mesmoNome: 'Nome parecido',
   mesmoValorMesmaData: 'Mesmo valor, mesma data',
   mesmoValorOutraData: 'Mesmo valor, outra data',
@@ -78,7 +77,7 @@ export function SugestoesPainel({
   }, [itemFixo?.item.id]);
 
   const direcao = itemFixo?.direcao ?? 'banco';
-  const categorias = (Object.keys(ROTULOS) as (keyof SugestoesConciliacao)[]).filter((k) => k !== 'mesmoRemetente' && (sugestoes?.[k]?.length ?? 0) > 0);
+  const categorias = (Object.keys(ROTULOS) as (keyof SugestoesConciliacao)[]).filter((k) => (sugestoes?.[k]?.length ?? 0) > 0);
 
   if (itemFixo && minimizado) {
     return (

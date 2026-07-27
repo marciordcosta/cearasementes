@@ -1,6 +1,6 @@
 import type { FormaRegra, RegraConciliacao } from './regras';
 import type { FormaPagamento, LancamentoBanco, LancamentoSistema, SugestoesConciliacao, SugestoesConciliacaoInversa } from './types';
-import { diffDiasUteis, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, removerAcentos, valoresIguais } from './utils';
+import { diasUteisAte, diffDiasUteis, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, removerAcentos, valoresIguais } from './utils';
 
 type RegrasPorForma = Record<FormaRegra, RegraConciliacao>;
 
@@ -17,10 +17,9 @@ const REGRA_GENERICA_SEM_PARAMETRIZACAO: RegraConciliacao = {
   exigirNfAutomatica: true,
 };
 
-function regraParaFormaGenerica(tipo: Exclude<FormaPagamento, 'CARTAO'>, regras: RegrasPorForma): RegraConciliacao {
+function regraParaFormaGenerica(tipo: Exclude<FormaPagamento, 'CARTAO' | 'BOLETO'>, regras: RegrasPorForma): RegraConciliacao {
   if (tipo === 'PIX') return regras.PIX;
   if (tipo === 'CHEQUE') return regras.CHEQUE;
-  if (tipo === 'BOLETO') return regras.BOLETO;
   return REGRA_GENERICA_SEM_PARAMETRIZACAO;
 }
 
@@ -37,8 +36,14 @@ function regraParaCartao(subtipo: 'DEBITO' | 'CREDITO', regras: RegrasPorForma):
  * Todos os limites numéricos (tolerância de valor, dias úteis, faixa de
  * taxa de cartão, tamanho mínimo de nome) vêm de `regras` — parametrizável
  * no modal de Regras de Conciliação, em vez de fixos no código.
+ *
+ * `combinado` indica que `itemBanco` é a SOMA de vários lançamentos
+ * selecionados juntos (mesma grade) — nesse caso o nome já não diz nada
+ * (é a concatenação de descrições de origens diferentes), então a busca
+ * ignora "nome parecido" e vale só o valor: só sugere se a soma bater com
+ * algum valor do sistema.
  */
-export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma): SugestoesConciliacao {
+export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacao {
   const tipoOfx = itemBanco.formaPagamento;
   const valorOfxAbs = Math.abs(itemBanco.valor);
   const dataOfx = itemBanco.data || null;
@@ -60,20 +65,8 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
 
   const resp: SugestoesConciliacao = {};
 
-  // ---- PIX: mesmo remetente (descrição OFX idêntica em outro lançamento do banco) ----
-  const nomeBase = normalizarNomeClienteOfx(itemBanco.descricao);
-  if (nomeBase && tipoOfx === 'PIX') {
-    const iguais = banco.filter((b) => {
-      if (b.id === itemBanco.id) return false;
-      if (b.formaPagamento !== 'PIX') return false;
-      const nomeB = normalizarNomeClienteOfx(b.descricao);
-      return nomeB === nomeBase;
-    });
-    if (iguais.length > 0) resp.mesmoRemetente = [itemBanco, ...iguais];
-  }
-
   // ---- PIX: nome do sistema parecido (prioritário — não deve ser sobrescrito pelo match genérico de nome logo abaixo) ----
-  if (tipoOfx === 'PIX') {
+  if (tipoOfx === 'PIX' && !combinado) {
     const regraPix = regras.PIX;
     const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
     if (nomeOfx) {
@@ -95,14 +88,7 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
       if (!s.data) return false;
       const dataSys = new Date(s.data);
       if (dataSys >= dataOfxDate) return false;
-      let diasUteis = 0;
-      const cur = new Date(dataSys);
-      while (cur < dataOfxDate) {
-        cur.setDate(cur.getDate() + 1);
-        const dia = cur.getDay();
-        if (dia !== 0 && dia !== 6) diasUteis++;
-        if (diasUteis > diasMax) return false;
-      }
+      const diasUteis = diasUteisAte(dataSys, dataOfxDate, diasMax);
       return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
@@ -138,7 +124,8 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
     resp.mesmoValorOutraData = mesmoValorTodos.filter((s) => !dataOfx || s.data !== dataOfx);
 
     // PIX já calculou o próprio mesmoNome (mais preciso) acima — não sobrescreve.
-    if (tipoOfx !== 'PIX') {
+    // Combinado (soma de vários selecionados) não compara nome — ver comentário no topo da função.
+    if (tipoOfx !== 'PIX' && !combinado) {
       const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
       resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) => {
         const nomeSys = removerAcentos(s.cliente || '').toLowerCase();
@@ -281,8 +268,11 @@ export function itemSistemaCombinado(itens: LancamentoSistema[]): LancamentoSist
  * Sistema. A comparação é a mesma (tolerância de valor, janela de dias
  * úteis, faixa de taxa de cartão, nome), só invertendo quem é o lado fixo
  * e a direção de data/valor onde há assimetria (cartão, boleto).
+ *
+ * `combinado`: mesmo motivo de buscarSugestoes — quando `itemSistema` é a
+ * soma de vários selecionados juntos, ignora "nome parecido" e busca só por valor.
  */
-export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma): SugestoesConciliacaoInversa {
+export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacaoInversa {
   const tipoSistema = getCategoriaSistema(itemSistema.formaPagamentoRaw);
   const valorSisAbs = Math.abs(itemSistema.valor);
   const dataSis = itemSistema.data || null;
@@ -304,7 +294,7 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
   const nomeSis = removerAcentos(itemSistema.cliente || '').toLowerCase() || null;
 
   // ---- PIX: nome do sistema parecido com a descrição de cada OFX candidato ----
-  if (tipoSistema === 'PIX' && nomeSis) {
+  if (tipoSistema === 'PIX' && nomeSis && !combinado) {
     const regraPix = regras.PIX;
     resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
       const nomeB = normalizarNomeClienteOfx(b.descricao);
@@ -323,14 +313,7 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
     const candidatos = bancoFiltradoPorTipo.filter((b) => {
       const dataB = new Date(b.data);
       if (dataB <= dataSisDate) return false;
-      let diasUteis = 0;
-      const cur = new Date(dataSisDate);
-      while (cur < dataB) {
-        cur.setDate(cur.getDate() + 1);
-        const dia = cur.getDay();
-        if (dia !== 0 && dia !== 6) diasUteis++;
-        if (diasUteis > diasMax) return false;
-      }
+      const diasUteis = diasUteisAte(dataSisDate, dataB, diasMax);
       return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
@@ -365,7 +348,7 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
     resp.mesmoValorMesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
     resp.mesmoValorOutraData = mesmoValorTodos.filter((b) => !dataSis || b.data !== dataSis);
 
-    if (tipoSistema !== 'PIX') {
+    if (tipoSistema !== 'PIX' && !combinado) {
       resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
         const nomeB = normalizarNomeClienteOfx(b.descricao);
         if (!nomeSis || !nomeB) return false;
@@ -464,14 +447,7 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
 
         const dataSys = new Date(s.data);
         if (dataSys >= dataOfxDate) return false;
-        let diasUteis = 0;
-        const cur = new Date(dataSys);
-        while (cur < dataOfxDate) {
-          cur.setDate(cur.getDate() + 1);
-          const dia = cur.getDay();
-          if (dia !== 0 && dia !== 6) diasUteis++;
-          if (diasUteis > diasMax) return false;
-        }
+        const diasUteis = diasUteisAte(dataSys, dataOfxDate, diasMax);
         return diasUteis >= diasMin && diasUteis <= diasMax;
       });
 

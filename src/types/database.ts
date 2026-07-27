@@ -35,15 +35,61 @@ export interface Database {
           data_venda: string | null;
           arquivo_origem: string;
           upload_log_id: string | null;
-          /** Nº do documento/NF do relatório de origem — usado como chave (com tabela_preco) pra não duplicar em uploads com datas sobrepostas. Null quando o upload não mapeou essa coluna. */
+          /** Nº do documento/NF do relatório de origem (formato antigo) — histórico apenas, o formato novo usa `num_venda` (por venda, não por parcela). */
           num_doc: string | null;
+          /** Nº da venda do relatório 396 novo — chave (com tabela_preco) pra não duplicar em reenvio/upload sobreposto. Null nas linhas do formato antigo. */
+          num_venda: number | null;
+          cliente: string | null;
+          vendedor: string | null;
+          cpf_cnpj: string | null;
+          num_nf: string | null;
+          /** Hora da venda (o relatório novo traz data+hora, só a data vai em `data_venda`). */
+          hora_venda: string | null;
           criado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['vendas_tabela_preco']['Row'], 'id' | 'criado_em' | 'upload_log_id' | 'num_doc'> & {
+        Insert: Omit<Database['public']['Tables']['vendas_tabela_preco']['Row'], 'id' | 'criado_em' | 'upload_log_id' | 'num_doc' | 'num_venda' | 'cliente' | 'vendedor' | 'cpf_cnpj' | 'num_nf' | 'hora_venda'> & {
           upload_log_id?: string | null;
           num_doc?: string | null;
+          num_venda?: number | null;
+          cliente?: string | null;
+          vendedor?: string | null;
+          cpf_cnpj?: string | null;
+          num_nf?: string | null;
+          hora_venda?: string | null;
         };
         Update: Partial<Database['public']['Tables']['vendas_tabela_preco']['Insert']>;
+        Relationships: [];
+      };
+      vendas_tabela_preco_itens: {
+        Row: {
+          id: string;
+          venda_id: string;
+          cod_interno: string | null;
+          produto: string;
+          vlr_unitario: number;
+          qtd: number;
+          vlr_sem_desc: number;
+          vlr_desc: number;
+          vlr_com_desc: number;
+          custo_unitario: number;
+          criado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['vendas_tabela_preco_itens']['Row'], 'id' | 'criado_em'>;
+        Update: Partial<Database['public']['Tables']['vendas_tabela_preco_itens']['Insert']>;
+        Relationships: [];
+      };
+      vendas_tabela_preco_pagamentos: {
+        Row: {
+          id: string;
+          venda_id: string;
+          forma_pagamento: string;
+          num_doc: string | null;
+          vencimento: string | null;
+          valor: number;
+          criado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['vendas_tabela_preco_pagamentos']['Row'], 'id' | 'criado_em'>;
+        Update: Partial<Database['public']['Tables']['vendas_tabela_preco_pagamentos']['Insert']>;
         Relationships: [];
       };
       uploads_log: {
@@ -225,7 +271,7 @@ export interface Database {
       // Módulo Conciliação Bancária
       // ---------------------------------------------------------------
       conciliacao_grupos: {
-        Row: { id: string; criado_em: string };
+        Row: { id: string; criado_em: string; aviso_diferenca: string | null; aviso_dispensado: boolean };
         Insert: Partial<Database['public']['Tables']['conciliacao_grupos']['Row']>;
         Update: Partial<Database['public']['Tables']['conciliacao_grupos']['Row']>;
         Relationships: [];

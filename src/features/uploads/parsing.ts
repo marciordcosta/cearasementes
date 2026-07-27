@@ -66,6 +66,7 @@ export async function extractRowGroups(file: File): Promise<GrupoLinhas[]> {
 // ---------------------------------------------------------------------
 // Reconhecimento do tipo de relatório pelo texto do cabeçalho
 // ---------------------------------------------------------------------
+/** '333' não é mais reconhecido de propósito — o relatório foi descontinuado (ver vendas396/). Arquivo desse tipo hoje cai em "não reconhecido". */
 export function detectarTipoRelatorio(rows: unknown[][]): TipoRelatorio | null {
   const lower = rows
     .map((r) => r.join(' '))
@@ -73,7 +74,6 @@ export function detectarTipoRelatorio(rows: unknown[][]): TipoRelatorio | null {
     .toLowerCase();
   if (lower.includes('124 - supervisão de entregas') || lower.includes('124 - supervisao de entregas')) return '124';
   if (lower.includes('396 - vendas por cliente')) return '396';
-  if (lower.includes('333 - relatório de produtos vendidos') || lower.includes('333 - relatorio de produtos vendidos')) return '333';
   return null;
 }
 

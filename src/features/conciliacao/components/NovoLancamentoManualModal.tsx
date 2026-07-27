@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { CAMPO_CLASSE as campoClasse } from '../constants';
 import type { FormaPagamento, NovoLancamentoManual } from '../types';
 
 interface NovoLancamentoManualModalProps {
@@ -12,7 +13,6 @@ interface NovoLancamentoManualModalProps {
 }
 
 const vazio: NovoLancamentoManual = { data: '', valor: 0, formaPagamento: 'OUTRO', cliente: '', documento: '', nf: '' };
-const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
 
 const OPCOES_FORMA_PAGAMENTO: FormaPagamento[] = ['PIX', 'CARTAO', 'BOLETO', 'CHEQUE', 'RENDIMENTO', 'OUTRO'];
 

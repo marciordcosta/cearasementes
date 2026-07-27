@@ -50,13 +50,17 @@ export function tablePeriodStats(ctx: PeriodContext, t: PriceTableAgg, periodKey
   const months = t.monthly.filter((m) => getPeriodKeyFor(ctx, m.year, m.month) === periodKey);
   if (months.length === 0) return null;
   const clientSet = new Set<string>();
-  months.forEach((m) => m.clientSet.forEach((code) => clientSet.add(code)));
+  let avulsos = 0;
+  months.forEach((m) => {
+    m.clientSet.forEach((code) => clientSet.add(code));
+    avulsos += m.avulsos;
+  });
   return {
     valorBruto: months.reduce((s, m) => s + m.valorBruto, 0),
     desconto: months.reduce((s, m) => s + m.desconto, 0),
     valorLiquido: months.reduce((s, m) => s + m.valor, 0),
     registros: months.reduce((s, m) => s + m.registros, 0),
-    qtdCliente: clientSet.size,
+    qtdCliente: clientSet.size + avulsos,
   };
 }
 
@@ -73,6 +77,7 @@ export function getMonthAggregate(
   let pedidos = 0;
   let valorTransportado = 0;
   const clientSet = new Set<string>();
+  let avulsos = 0;
   let found = false;
 
   priceTables.forEach((t) => {
@@ -82,6 +87,7 @@ export function getMonthAggregate(
         valorLiquido += m.valor;
         registros += m.registros;
         m.clientSet.forEach((code) => clientSet.add(code));
+        avulsos += m.avulsos;
       }
     });
   });
@@ -102,7 +108,7 @@ export function getMonthAggregate(
     label: `${MESES_PT[month - 1]}/${year}`,
     valorLiquido,
     registros,
-    qtdCliente: clientSet.size,
+    qtdCliente: clientSet.size + avulsos,
     pedidos,
     valorTransportado,
   };
