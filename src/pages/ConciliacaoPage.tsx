@@ -588,8 +588,8 @@ export function ConciliacaoPage() {
   const sugestoes = useMemo(() => {
     if (!sugestaoAtiva) return null;
     const combinado = sugestaoAtiva.idsFixos.length > 1;
-    if (sugestaoAtiva.direcao === 'banco') return buscarSugestoes(sugestaoAtiva.item, banco, sistema, regras, combinado);
-    return buscarSugestoesInverso(sugestaoAtiva.item, banco, sistema, regras, combinado);
+    if (sugestaoAtiva.direcao === 'banco') return buscarSugestoes(sugestaoAtiva.item, sistema, regras, combinado);
+    return buscarSugestoesInverso(sugestaoAtiva.item, banco, regras, combinado);
   }, [sugestaoAtiva, banco, sistema, regras]);
 
   function onVerSugestoes(item: LancamentoBanco) {

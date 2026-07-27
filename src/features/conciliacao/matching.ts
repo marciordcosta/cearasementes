@@ -43,7 +43,7 @@ function regraParaCartao(subtipo: 'DEBITO' | 'CREDITO', regras: RegrasPorForma):
  * ignora "nome parecido" e vale só o valor: só sugere se a soma bater com
  * algum valor do sistema.
  */
-export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacao {
+export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacao {
   const tipoOfx = itemBanco.formaPagamento;
   const valorOfxAbs = Math.abs(itemBanco.valor);
   const dataOfx = itemBanco.data || null;
@@ -272,7 +272,7 @@ export function itemSistemaCombinado(itens: LancamentoSistema[]): LancamentoSist
  * `combinado`: mesmo motivo de buscarSugestoes — quando `itemSistema` é a
  * soma de vários selecionados juntos, ignora "nome parecido" e busca só por valor.
  */
-export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacaoInversa {
+export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], regras: RegrasPorForma, combinado = false): SugestoesConciliacaoInversa {
   const tipoSistema = getCategoriaSistema(itemSistema.formaPagamentoRaw);
   const valorSisAbs = Math.abs(itemSistema.valor);
   const dataSis = itemSistema.data || null;

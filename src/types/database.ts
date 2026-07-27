@@ -311,7 +311,17 @@ export interface Database {
           grupo_id: string | null;
           criado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['conciliacao_lancamentos_banco']['Row'], 'id' | 'criado_em' | 'fitid'> & { fitid?: string | null };
+        Insert: Omit<
+          Database['public']['Tables']['conciliacao_lancamentos_banco']['Row'],
+          'id' | 'criado_em' | 'fitid' | 'conciliado' | 'desativado' | 'marcado' | 'observacao' | 'grupo_id'
+        > & {
+          fitid?: string | null;
+          conciliado?: boolean;
+          desativado?: boolean;
+          marcado?: boolean;
+          observacao?: string | null;
+          grupo_id?: string | null;
+        };
         Update: Partial<Database['public']['Tables']['conciliacao_lancamentos_banco']['Insert']>;
         Relationships: [];
       };
@@ -339,9 +349,17 @@ export interface Database {
           lancado_erp: boolean;
           criado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'], 'id' | 'criado_em' | 'chave_dedup' | 'lancado_erp'> & {
+        Insert: Omit<
+          Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'],
+          'id' | 'criado_em' | 'chave_dedup' | 'lancado_erp' | 'conciliado' | 'desativado' | 'grupo_id' | 'taxa_valor' | 'taxa_percentual'
+        > & {
           chave_dedup?: string | null;
           lancado_erp?: boolean;
+          conciliado?: boolean;
+          desativado?: boolean;
+          grupo_id?: string | null;
+          taxa_valor?: number;
+          taxa_percentual?: number;
         };
         Update: Partial<Database['public']['Tables']['conciliacao_lancamentos_sistema']['Insert']>;
         Relationships: [];
@@ -360,7 +378,7 @@ export interface Database {
           exigir_nf_automatica: boolean;
           atualizado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['conciliacao_regras']['Row'], 'id' | 'atualizado_em'>;
+        Insert: Omit<Database['public']['Tables']['conciliacao_regras']['Row'], 'id' | 'atualizado_em'> & { atualizado_em?: string };
         Update: Partial<Database['public']['Tables']['conciliacao_regras']['Insert']>;
         Relationships: [];
       };
