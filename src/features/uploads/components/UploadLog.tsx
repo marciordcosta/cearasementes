@@ -17,11 +17,12 @@ const STATUS_COR: Record<'sucesso' | 'aviso' | 'erro', string> = {
   erro: '#d03b3b',
 };
 
-// Vendas (396) primeiro, depois CMV (333), entregas (124), e por último a
-// Conciliação Bancária (Sistema/OFX). Cada tipo sempre aparece, mesmo sem
-// nenhum upload — vira uma linha "vazia" só com o nome, pra ficar claro o
-// que ainda falta importar.
-const ORDEM_TIPOS: TipoRelatorioLog[] = ['396', '333', '124', 'sistema', 'ofx'];
+// Vendas (396) primeiro, depois entregas (124), e por último a Conciliação
+// Bancária (Sistema/OFX). Cada tipo sempre aparece, mesmo sem nenhum upload
+// — vira uma linha "vazia" só com o nome, pra ficar claro o que ainda falta
+// importar. O 333 (CMV) foi descontinuado — não entra mais nessa lista,
+// nem como linha vazia (não tem mais como importar esse relatório).
+const ORDEM_TIPOS: TipoRelatorioLog[] = ['396', '124', 'sistema', 'ofx'];
 
 // Sistema e OFX têm sub-grupos conhecidos de antemão (ao contrário do 396,
 // cujas Tabelas de Preço só existem depois do primeiro upload) — por isso
