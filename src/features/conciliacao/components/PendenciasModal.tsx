@@ -18,11 +18,7 @@ export function PendenciasModal({ open, titulo, itens, banco, onFechar, onInform
   return (
     <Modal open={open} title={titulo} onClose={onFechar} widthClassName="max-w-[640px]">
       <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-        {temPreLancamento ? (
-          <>Lançamentos criados direto de um OFX sem par no Sistema — ainda faltam cliente, documento (pedido) e NF pra virar conciliação definitiva.</>
-        ) : (
-          <>Lançamentos já travados junto com o OFX — falta só a NF pra virar conciliação definitiva.</>
-        )}
+        {temPreLancamento ? <>Pagamento recebido sem registro no sistema, fazer lançamento e NF!</> : <>Venda sem NF emitida, Emitir NF!</>}
       </p>
       {itens.length === 0 ? (
         <p className="text-sm text-[var(--color-text-soft)]">Nenhuma pendência.</p>

@@ -60,13 +60,21 @@ export interface SugestoesConciliacao {
   combinacaoCartao?: LancamentoSistema[];
 }
 
+/** Espelho de SugestoesConciliacao pro sentido invertido (Sistema → OFX) — mesmas categorias, candidatos vêm do Banco em vez do Sistema. */
+export interface SugestoesConciliacaoInversa {
+  mesmoNome?: LancamentoBanco[];
+  mesmoValorMesmaData?: LancamentoBanco[];
+  mesmoValorOutraData?: LancamentoBanco[];
+  combinacaoCartao?: LancamentoBanco[];
+}
+
 export interface FiltrosConciliacao {
   bancoNome: string | null;
   dataInicio: string | null;
   dataFim: string | null;
   formaPagamento: FormaPagamento | null;
   tipoLancamento: TipoLancamentoSistema | null;
-  conciliado: 'sim' | 'nao' | 'marcados' | null;
+  conciliado: 'sim' | 'nao' | 'preConciliados' | 'preLancamentos' | 'ocultados' | null;
   busca: string;
 }
 

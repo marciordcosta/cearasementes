@@ -17,10 +17,10 @@ const CLASSES_TOM: Record<NonNullable<BadgeProps['tom']>, string> = {
 export function Badge({ children, cor, tom = 'neutro' }: BadgeProps) {
   if (cor) {
     return (
-      <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold text-white" style={{ background: cor }}>
+      <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-semibold text-white" style={{ background: cor }}>
         {children}
       </span>
     );
   }
-  return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${CLASSES_TOM[tom]}`}>{children}</span>;
+  return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[8px] font-semibold ${CLASSES_TOM[tom]}`}>{children}</span>;
 }

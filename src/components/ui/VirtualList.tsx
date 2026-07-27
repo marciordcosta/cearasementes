@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type UIEvent } from 'react';
 
 interface VirtualListProps<T> {
   itens: T[];
@@ -10,6 +10,8 @@ interface VirtualListProps<T> {
   keyExtractor: (item: T) => string;
   vazio?: ReactNode;
   className?: string;
+  /** Ex.: paddingTop pra reservar espaço quando algo flutua por cima da lista (item fixado) — sem isso, o início da lista fica escondido atrás. */
+  style?: CSSProperties;
 }
 
 /**
@@ -18,7 +20,7 @@ interface VirtualListProps<T> {
  * lançamentos da Conciliação) recria dezenas de milhares de nós de DOM a
  * cada tecla digitada na busca ou clique num checkbox, travando a tela.
  */
-export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtractor, vazio, className }: VirtualListProps<T>) {
+export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtractor, vazio, className, style }: VirtualListProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const tickingRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
@@ -52,7 +54,7 @@ export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtra
 
   if (itens.length === 0) {
     return (
-      <div ref={containerRef} className={className}>
+      <div ref={containerRef} className={className} style={style}>
         {vazio}
       </div>
     );
@@ -64,7 +66,7 @@ export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtra
   const visiveis = itens.slice(primeiroIndice, ultimoIndice);
 
   return (
-    <div ref={containerRef} className={className} onScroll={onScroll}>
+    <div ref={containerRef} className={className} style={style} onScroll={onScroll}>
       <div style={{ height: itens.length * altura, position: 'relative' }}>
         <div style={{ position: 'absolute', top: primeiroIndice * altura, left: 0, right: 0 }}>
           {visiveis.map((item) => (

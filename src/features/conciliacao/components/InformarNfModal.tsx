@@ -51,9 +51,7 @@ export function InformarNfModal({ open, item, onFechar, onSalvar }: InformarNfMo
     >
       {item && (
         <div className="space-y-3 text-sm">
-          <p className="text-xs text-[var(--color-text-soft)]">
-            Este lançamento já está pré-conciliado com o OFX — falta só a NF pra virar conciliação definitiva.
-          </p>
+          <p className="text-xs text-[var(--color-text-soft)]">Venda sem NF emitida, Emitir NF!</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg bg-[var(--color-page)] px-3 py-2.5 text-xs">
             <span className="text-[var(--color-text-soft)]">Cliente</span>
             <span className="text-right font-semibold text-[var(--color-text)]">{item.cliente || '—'}</span>

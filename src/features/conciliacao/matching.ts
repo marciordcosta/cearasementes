@@ -1,5 +1,5 @@
 import type { FormaRegra, RegraConciliacao } from './regras';
-import type { FormaPagamento, LancamentoBanco, LancamentoSistema, SugestoesConciliacao } from './types';
+import type { FormaPagamento, LancamentoBanco, LancamentoSistema, SugestoesConciliacao, SugestoesConciliacaoInversa } from './types';
 import { diffDiasUteis, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, removerAcentos, valoresIguais } from './utils';
 
 type RegrasPorForma = Record<FormaRegra, RegraConciliacao>;
@@ -43,8 +43,13 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
   const valorOfxAbs = Math.abs(itemBanco.valor);
   const dataOfx = itemBanco.data || null;
 
+  // Propositalmente NÃO exclui `s.conciliado` aqui (diferente da conciliação
+  // automática, que nunca toca num registro já ligado): se uma regra bateria
+  // com um lançamento já conciliado (ou pré-conciliado), a sugestão mostra
+  // ele mesmo assim, mas sinalizado — pode ter sido uma conciliação errada,
+  // e o usuário precisa ver isso pra poder desfazer.
   const sistemaFiltradoPorTipo = sistema.filter((s) => {
-    if (s.conciliado || s.desativado) return false;
+    if (s.desativado) return false;
     if (getCategoriaSistema(s.formaPagamentoRaw) !== tipoOfx) return false;
     const vOfx = itemBanco.valor;
     const vSys = s.valor;
@@ -191,9 +196,9 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, banco: LancamentoBan
   return resp;
 }
 
-/** Backtracking: subconjunto de `lista` cuja soma absoluta bate com `alvo`, dentro da `tolerancia` da regra. */
-function combinacaoExata(lista: LancamentoSistema[], alvo: number, tolerancia: number): LancamentoSistema[] | null {
-  function backtrack(i: number, soma: number, usados: LancamentoSistema[]): LancamentoSistema[] | null {
+/** Backtracking: subconjunto de `lista` cuja soma absoluta bate com `alvo`, dentro da `tolerancia` da regra. Genérico (não só LancamentoSistema) pra dar pra rodar também sobre lançamentos do Banco, na busca invertida. */
+function combinacaoExata<T extends { valor: number }>(lista: T[], alvo: number, tolerancia: number): T[] | null {
+  function backtrack(i: number, soma: number, usados: T[]): T[] | null {
     if (valoresIguais(soma, alvo, tolerancia)) return usados;
     if (i >= lista.length || soma > alvo + tolerancia) return null;
     const com = backtrack(i + 1, soma + Math.abs(lista[i].valor), [...usados, lista[i]]);
@@ -204,8 +209,8 @@ function combinacaoExata(lista: LancamentoSistema[], alvo: number, tolerancia: n
 }
 
 /** Como combinacaoExata, mas aceita a soma passando do alvo desde que a diferença fique dentro da faixa de taxa de cartão. */
-function combinacaoComTaxa(lista: LancamentoSistema[], alvo: number, minPerc: number, maxPerc: number): LancamentoSistema[] | null {
-  function backtrack(i: number, soma: number, caminho: LancamentoSistema[]): LancamentoSistema[] | null {
+function combinacaoComTaxa<T extends { valor: number }>(lista: T[], alvo: number, minPerc: number, maxPerc: number): T[] | null {
+  function backtrack(i: number, soma: number, caminho: T[]): T[] | null {
     if (soma > alvo * (1 + maxPerc)) return null;
     if (i >= lista.length) return null;
 
@@ -217,6 +222,29 @@ function combinacaoComTaxa(lista: LancamentoSistema[], alvo: number, minPerc: nu
 
     const com = backtrack(i + 1, novaSoma, [...caminho, lista[i]]);
     if (com) return com;
+    return backtrack(i + 1, soma, caminho);
+  }
+  return backtrack(0, 0, []);
+}
+
+/**
+ * Espelho de combinacaoComTaxa pro sentido invertido (Sistema → OFX): aqui o
+ * valor fixo é o BRUTO (sistema, maior) e os candidatos (banco) têm que
+ * somar um valor LOGO ABAIXO dele — a diferença é a taxa descontada pela
+ * maquininha. Não dá pra genericizar junto com combinacaoComTaxa: a direção
+ * da comparação (soma > alvo vs soma < alvo) é o inverso, não só o tipo.
+ */
+function combinacaoComTaxaInversa<T extends { valor: number }>(lista: T[], alvo: number, minPerc: number, maxPerc: number): T[] | null {
+  function backtrack(i: number, soma: number, caminho: T[]): T[] | null {
+    if (i >= lista.length) return null;
+
+    const novaSoma = soma + Math.abs(lista[i].valor);
+    if (novaSoma <= alvo) {
+      const perc = (alvo - novaSoma) / alvo;
+      if (perc >= minPerc && perc <= maxPerc) return [...caminho, lista[i]];
+      const com = backtrack(i + 1, novaSoma, [...caminho, lista[i]]);
+      if (com) return com;
+    }
     return backtrack(i + 1, soma, caminho);
   }
   return backtrack(0, 0, []);
@@ -235,6 +263,162 @@ export function itemBancoCombinado(itens: LancamentoBanco[]): LancamentoBanco {
     valor: itens.reduce((soma, b) => soma + b.valor, 0),
     descricao: itens.map((b) => b.descricao).filter(Boolean).join(' + '),
   };
+}
+
+/** Espelho de itemBancoCombinado — usado quando o usuário marca vários lançamentos do Sistema de uma vez (busca invertida) e escolhe buscar pelo valor somado. */
+export function itemSistemaCombinado(itens: LancamentoSistema[]): LancamentoSistema {
+  const ultimo = itens[itens.length - 1];
+  return {
+    ...ultimo,
+    valor: itens.reduce((soma, s) => soma + s.valor, 0),
+    cliente: itens.map((s) => s.cliente).filter(Boolean).join(' + '),
+  };
+}
+
+/**
+ * Sugestões de conciliação pra UM lançamento do SISTEMA — espelho de
+ * buscarSugestoes(), mas buscando candidatos no BANCO (OFX) em vez do
+ * Sistema. A comparação é a mesma (tolerância de valor, janela de dias
+ * úteis, faixa de taxa de cartão, nome), só invertendo quem é o lado fixo
+ * e a direção de data/valor onde há assimetria (cartão, boleto).
+ */
+export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma): SugestoesConciliacaoInversa {
+  const tipoSistema = getCategoriaSistema(itemSistema.formaPagamentoRaw);
+  const valorSisAbs = Math.abs(itemSistema.valor);
+  const dataSis = itemSistema.data || null;
+
+  // Mesmo motivo de buscarSugestoes: não exclui já conciliado, só desativado
+  // — mostra sinalizado (pode ter sido uma conciliação errada) em vez de
+  // esconder.
+  const bancoFiltradoPorTipo = banco.filter((b) => {
+    if (b.desativado) return false;
+    if (b.formaPagamento !== tipoSistema) return false;
+    const vSis = itemSistema.valor;
+    const vBanco = b.valor;
+    if (vSis < 0 && vBanco >= 0) return false;
+    if (vSis > 0 && vBanco <= 0) return false;
+    return true;
+  });
+
+  const resp: SugestoesConciliacaoInversa = {};
+  const nomeSis = removerAcentos(itemSistema.cliente || '').toLowerCase() || null;
+
+  // ---- PIX: nome do sistema parecido com a descrição de cada OFX candidato ----
+  if (tipoSistema === 'PIX' && nomeSis) {
+    const regraPix = regras.PIX;
+    resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
+      const nomeB = normalizarNomeClienteOfx(b.descricao);
+      return nomeB ? nomesSemelhantesFortes(nomeB, nomeSis, regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5) : false;
+    });
+  }
+
+  // ---- BOLETO: OFX pago dentro da janela de dias úteis À FRENTE da data do título, valor exato OU soma de vários lançamentos do banco ----
+  if (tipoSistema === 'BOLETO') {
+    const regraBoleto = regras.BOLETO;
+    const diasMin = regraBoleto.diasUteisMin ?? 2;
+    const diasMax = regraBoleto.diasUteisMax ?? 3;
+    if (!dataSis) return resp;
+    const dataSisDate = new Date(dataSis);
+
+    const candidatos = bancoFiltradoPorTipo.filter((b) => {
+      const dataB = new Date(b.data);
+      if (dataB <= dataSisDate) return false;
+      let diasUteis = 0;
+      const cur = new Date(dataSisDate);
+      while (cur < dataB) {
+        cur.setDate(cur.getDate() + 1);
+        const dia = cur.getDay();
+        if (dia !== 0 && dia !== 6) diasUteis++;
+        if (diasUteis > diasMax) return false;
+      }
+      return diasUteis >= diasMin && diasUteis <= diasMax;
+    });
+
+    const valorExato = candidatos.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraBoleto.toleranciaValor));
+    if (valorExato.length > 0) {
+      resp.mesmoValorMesmaData = valorExato;
+      return resp;
+    }
+
+    const porData = new Map<string, LancamentoBanco[]>();
+    candidatos.forEach((b) => {
+      const lista = porData.get(b.data) ?? [];
+      lista.push(b);
+      porData.set(b.data, lista);
+    });
+
+    for (const lista of porData.values()) {
+      const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+      const combinacao = combinacaoExata(ordenada, valorSisAbs, regraBoleto.toleranciaValor);
+      if (combinacao && combinacao.length > 1) {
+        resp.combinacaoCartao = combinacao;
+        return resp;
+      }
+    }
+    return resp;
+  }
+
+  // ---- Demais formas (exceto cartão): mesmo valor (com tolerância da regra), e nome com 2+ palavras em comum ----
+  if (tipoSistema !== 'CARTAO') {
+    const regraForma = regraParaFormaGenerica(tipoSistema, regras);
+    const mesmoValorTodos = bancoFiltradoPorTipo.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraForma.toleranciaValor));
+    resp.mesmoValorMesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
+    resp.mesmoValorOutraData = mesmoValorTodos.filter((b) => !dataSis || b.data !== dataSis);
+
+    if (tipoSistema !== 'PIX') {
+      resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
+        const nomeB = normalizarNomeClienteOfx(b.descricao);
+        if (!nomeSis || !nomeB) return false;
+        const partesSis = nomeSis.split(' ').filter((p) => p.length >= 4);
+        if (partesSis.length < 2) return false;
+        let comuns = 0;
+        for (const p of partesSis) {
+          if (nomeB.includes(p)) comuns++;
+          if (comuns >= 2) return true;
+        }
+        return false;
+      });
+    }
+    return resp;
+  }
+
+  // ---- CARTÃO: taxa da maquininha invertida — sistema (bruto) fixo, candidato do OFX tem que ser MENOR, dentro da faixa % da regra ----
+  if (!dataSis) return resp;
+  const subtipoSistema = getSubtipoCartaoSistema(itemSistema.formaPagamentoRaw);
+  if (!subtipoSistema) return resp;
+
+  const regraCartaoAtual = regraParaCartao(subtipoSistema, regras);
+  const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
+  const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
+  const diasMax = regraCartaoAtual.diasUteisMax ?? 2;
+
+  const candidatos = bancoFiltradoPorTipo.filter((b) => {
+    if (getSubtipoCartaoOfx(b.descricao) !== subtipoSistema) return false;
+    if (b.data < dataSis) return false;
+    return diffDiasUteis(dataSis, b.data) <= diasMax;
+  });
+
+  resp.mesmoValorMesmaData = candidatos.filter((b) => b.data === dataSis);
+  if (resp.mesmoValorMesmaData.length > 0) return resp;
+
+  resp.mesmoValorOutraData = candidatos.filter((b) => b.data !== dataSis);
+
+  const porData = new Map<string, LancamentoBanco[]>();
+  candidatos.forEach((b) => {
+    const lista = porData.get(b.data) ?? [];
+    lista.push(b);
+    porData.set(b.data, lista);
+  });
+
+  for (const lista of porData.values()) {
+    const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+    const combinacao = combinacaoComTaxaInversa(ordenada, valorSisAbs, minPerc, maxPerc);
+    if (combinacao && combinacao.length > 1) {
+      resp.combinacaoCartao = combinacao;
+      return resp;
+    }
+  }
+  return resp;
 }
 
 export interface GrupoParaConciliar {
@@ -261,6 +445,67 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
     const valorOfxAbs = Math.abs(ofx.valor);
     const dataOfx = ofx.data;
     if (!dataOfx) continue;
+
+    // Boleto tem regra própria (janela de dias úteis, igual às sugestões) —
+    // trata à parte, antes do "balaio genérico" de PIX/Cheque/etc., que só
+    // considera mesma data.
+    if (tipo === 'BOLETO') {
+      const regraBoleto = regras.BOLETO;
+      const diasMin = regraBoleto.diasUteisMin ?? 2;
+      const diasMax = regraBoleto.diasUteisMax ?? 3;
+      const dataOfxDate = new Date(dataOfx);
+
+      const candidatosBoleto = sistema.filter((s) => {
+        if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+        if (!s.data) return false;
+        if (getCategoriaSistema(s.formaPagamentoRaw) !== 'BOLETO') return false;
+        if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
+        if (regraBoleto.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
+
+        const dataSys = new Date(s.data);
+        if (dataSys >= dataOfxDate) return false;
+        let diasUteis = 0;
+        const cur = new Date(dataSys);
+        while (cur < dataOfxDate) {
+          cur.setDate(cur.getDate() + 1);
+          const dia = cur.getDay();
+          if (dia !== 0 && dia !== 6) diasUteis++;
+          if (diasUteis > diasMax) return false;
+        }
+        return diasUteis >= diasMin && diasUteis <= diasMax;
+      });
+
+      const valorExato = candidatosBoleto.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraBoleto.toleranciaValor));
+      if (valorExato.length === 1) {
+        grupos.push({ bancoIds: [ofx.id], sistemaIds: [valorExato[0].id] });
+        sistemaJaUsado.add(valorExato[0].id);
+        continue;
+      }
+      if (valorExato.length > 1) continue; // ambíguo — fica pra conciliação manual
+
+      // Nenhum título sozinho bate — tenta combinação (soma de vários),
+      // mas só concilia se existir exatamente 1 combinação válida (sem
+      // ambiguidade), mesma exigência do cartão.
+      const porDataBoleto = new Map<string, LancamentoSistema[]>();
+      candidatosBoleto.forEach((s) => {
+        const lista = porDataBoleto.get(s.data!) ?? [];
+        lista.push(s);
+        porDataBoleto.set(s.data!, lista);
+      });
+
+      const combinacoesValidasBoleto: LancamentoSistema[][] = [];
+      for (const lista of porDataBoleto.values()) {
+        const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+        combinacoesTodasExatas(ordenada, valorOfxAbs, regraBoleto.toleranciaValor).forEach((c) => combinacoesValidasBoleto.push(c));
+      }
+
+      if (combinacoesValidasBoleto.length === 1) {
+        const ids = combinacoesValidasBoleto[0].map((s) => s.id);
+        grupos.push({ bancoIds: [ofx.id], sistemaIds: ids });
+        ids.forEach((id) => sistemaJaUsado.add(id));
+      }
+      continue;
+    }
 
     if (tipo !== 'CARTAO') {
       const regraForma = regraParaFormaGenerica(tipo, regras);
@@ -349,6 +594,21 @@ function combinacoesTodasComTaxa(lista: LancamentoSistema[], alvo: number, minPe
     }
 
     backtrack(i + 1, novaSoma, [...usados, lista[i]]);
+    backtrack(i + 1, soma, usados);
+  }
+
+  backtrack(0, 0, []);
+  return validas;
+}
+
+/** Todas as combinações (não só a primeira) cuja soma bate exatamente com o alvo (dentro da tolerância) — usado só na conciliação automática de Boleto, pra exigir ausência de ambiguidade. */
+function combinacoesTodasExatas(lista: LancamentoSistema[], alvo: number, tolerancia: number): LancamentoSistema[][] {
+  const validas: LancamentoSistema[][] = [];
+
+  function backtrack(i: number, soma: number, usados: LancamentoSistema[]) {
+    if (usados.length > 1 && valoresIguais(soma, alvo, tolerancia)) validas.push(usados);
+    if (i >= lista.length || soma > alvo + tolerancia) return;
+    backtrack(i + 1, soma + Math.abs(lista[i].valor), [...usados, lista[i]]);
     backtrack(i + 1, soma, usados);
   }
 

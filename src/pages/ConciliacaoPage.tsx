@@ -1,3 +1,4 @@
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
@@ -25,11 +26,10 @@ import { NovoLancamentoManualModal } from '@/features/conciliacao/components/Nov
 import { PendenciasModal } from '@/features/conciliacao/components/PendenciasModal';
 import { RegrasConciliacaoModal } from '@/features/conciliacao/components/RegrasConciliacaoModal';
 import { SugestoesPainel } from '@/features/conciliacao/components/SugestoesPainel';
-import { TotaisRodape } from '@/features/conciliacao/components/TotaisRodape';
-import { buscarSugestoes, conciliacaoAutomatica, itemBancoCombinado } from '@/features/conciliacao/matching';
+import { buscarSugestoes, buscarSugestoesInverso, conciliacaoAutomatica, itemBancoCombinado, itemSistemaCombinado } from '@/features/conciliacao/matching';
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
-import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema, SugestoesConciliacao } from '@/features/conciliacao/types';
-import { getCategoriaSistema } from '@/features/conciliacao/utils';
+import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
+import { getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 
@@ -38,6 +38,27 @@ function correspondeBusca(termo: string, campos: Array<string | number | null | 
   if (!termo) return true;
   return campos.some((c) => c != null && String(c).toLowerCase().includes(termo));
 }
+
+/** Mesma data de fmtDataBR, mas sem zero à esquerda (ex.: "2/1/2026") — cobre o jeito mais comum de digitar uma data na busca. */
+function fmtDataBRSemZero(iso: string): string {
+  const [ano, mes, dia] = iso.split('-');
+  return `${parseInt(dia, 10)}/${parseInt(mes, 10)}/${ano}`;
+}
+
+/** Datas em ISO (YYYY-MM-DD) comparam certo por string — sem data vai sempre pro fim, nas duas ordens. */
+function ordenarPorData<T extends { data: string | null }>(itens: T[], ordem: 'asc' | 'desc'): T[] {
+  return [...itens].sort((a, b) => {
+    if (!a.data && !b.data) return 0;
+    if (!a.data) return 1;
+    if (!b.data) return -1;
+    return ordem === 'asc' ? a.data.localeCompare(b.data) : b.data.localeCompare(a.data);
+  });
+}
+
+/** Qual lançamento(s) estão "fixos" na busca de sugestões aberta, e em qual direção — Banco→Sistema (padrão de sempre) ou Sistema→OFX (invertido). */
+type SugestaoAtiva =
+  | { direcao: 'banco'; item: LancamentoBanco; idsFixos: string[] }
+  | { direcao: 'sistema'; item: LancamentoSistema; idsFixos: string[] };
 
 const FILTROS_VAZIOS: FiltrosConciliacaoType = {
   bancoNome: null,
@@ -80,28 +101,58 @@ export function ConciliacaoPage() {
   const [buscaSistema, setBuscaSistema] = useState('');
   const [selecionadosBanco, setSelecionadosBanco] = useState<Set<string>>(new Set());
   const [selecionadosSistema, setSelecionadosSistema] = useState<Set<string>>(new Set());
-  const [itemSugestoes, setItemSugestoes] = useState<LancamentoBanco | null>(null);
-  const [bancoIdsSugestao, setBancoIdsSugestao] = useState<string[]>([]);
+  const [sugestaoAtiva, setSugestaoAtiva] = useState<SugestaoAtiva | null>(null);
   const [sugestaoMinimizada, setSugestaoMinimizada] = useState(false);
-  const [filtroIdsSugestao, setFiltroIdsSugestao] = useState<string[] | null>(null);
+  const [filtroIdsSugestaoBanco, setFiltroIdsSugestaoBanco] = useState<string[] | null>(null);
+  const [filtroIdsSugestaoSistema, setFiltroIdsSugestaoSistema] = useState<string[] | null>(null);
   const [filtroGrupoSistema, setFiltroGrupoSistema] = useState<string | null>(null);
   const [filtroGrupoBanco, setFiltroGrupoBanco] = useState<string | null>(null);
+  const [ordemData, setOrdemData] = useState<'asc' | 'desc'>('asc');
+  const [filtroNfSistema, setFiltroNfSistema] = useState<'com' | 'sem' | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<string | null>(null);
   const [pendenteSemNf, setPendenteSemNf] = useState<{ bancoIds: string[]; sistemaIds: string[] } | null>(null);
   const [itemInformarNf, setItemInformarNf] = useState<LancamentoSistema | null>(null);
   const [contextoLancamentoManual, setContextoLancamentoManual] = useState<{ bancoIds: string[] } | null>(null);
+  const [itemParaConciliarManual, setItemParaConciliarManual] = useState<LancamentoSistema | null>(null);
   const [itemCompletarPreLancamento, setItemCompletarPreLancamento] = useState<LancamentoSistema | null>(null);
   // Separado por grade: Banco (OFX) notifica pré-conciliados (falta NF),
   // Sistema notifica pré-lançamentos (falta cliente/documento/NF) — cada
   // bolinha abre o modal só com o tipo correspondente.
   const [modalPendenciasAberto, setModalPendenciasAberto] = useState<'preConciliados' | 'preLancamentos' | null>(null);
-  const [sugestoes, setSugestoes] = useState<SugestoesConciliacao | null>(null);
   const [modalManualAberto, setModalManualAberto] = useState(false);
   const [modalRegrasAberto, setModalRegrasAberto] = useState(false);
   const [modoSugestaoAtivo, setModoSugestaoAtivo] = useState(false);
-  const [perguntaMultipla, setPerguntaMultipla] = useState<LancamentoBanco | null>(null);
   const [processando, setProcessando] = useState(false);
+  const [processandoSugestao, setProcessandoSugestao] = useState(false);
+  const [sucessoAutomatico, setSucessoAutomatico] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Se o usuário já tem uma sugestão aberta pra um lado (ex.: Banco) e marca
+  // um registro na OUTRA grade (Sistema) — sinal de que quer conciliar esses
+  // dois manualmente, não seguir a sugestão — minimiza o painel sozinho pra
+  // não tampar a barra "Conciliar X do banco com Y do sistema" (e o aviso de
+  // diferença, se houver). Só volta clicando na bolha ou marcando outro
+  // registro do MESMO lado da sugestão (o que já reabre o painel sozinho).
+  useEffect(() => {
+    if (!sugestaoAtiva || sugestaoMinimizada) return;
+    const outroLadoSelecionado = sugestaoAtiva.direcao === 'banco' ? selecionadosSistema.size > 0 : selecionadosBanco.size > 0;
+    if (outroLadoSelecionado) setSugestaoMinimizada(true);
+  }, [sugestaoAtiva, sugestaoMinimizada, selecionadosBanco, selecionadosSistema]);
+
+  // Garantia central (independente de qualquer lógica pontual de desmarcar):
+  // enquanto sobrar QUALQUER item selecionado do lado em que a sugestão está
+  // ancorada, ela (e o balão) continuam existindo — só fecha de vez quando
+  // esse lado zera de verdade. Isso é o que decide "tem balão ou não",
+  // sempre a partir da contagem real de selecionados, nunca de um cálculo
+  // feito no momento do clique (que pode ficar defasado).
+  useEffect(() => {
+    if (!sugestaoAtiva) return;
+    const aindaTemSelecao = sugestaoAtiva.direcao === 'banco' ? selecionadosBanco.size > 0 : selecionadosSistema.size > 0;
+    if (!aindaTemSelecao) {
+      setSugestaoAtiva(null);
+      setSugestaoMinimizada(false);
+    }
+  }, [sugestaoAtiva, selecionadosBanco, selecionadosSistema]);
 
   function tratarErro(e: unknown) {
     setErro(mensagemDeErro(e, 'Falha ao falar com o Supabase.'));
@@ -144,46 +195,117 @@ export function ConciliacaoPage() {
     return mapa;
   }, [sistema]);
 
-  const bancoFiltrado = useMemo(() => {
-    if (filtroIdsSugestao) {
-      const idsSet = new Set(filtroIdsSugestao);
-      return banco.filter((b) => idsSet.has(b.id));
+  // grupoId -> lançamento do Sistema (real, importado) daquele grupo que
+  // ainda não tem NF — grades pintam esse grupo em amarelo (pré-conciliado)
+  // em vez de verde. Só origem='sistema': registros manuais têm sua própria
+  // cor/fluxo (pré-lançamento, azul — ver abaixo). Precisa vir antes de
+  // bancoFiltrado, que usa esse mapa pro filtro de Status "Pré-conciliados".
+  const sistemaSemNfPorGrupo = useMemo(() => {
+    const mapa = new Map<string, LancamentoSistema>();
+    for (const s of sistema) {
+      if (s.conciliado && s.grupoId && s.origem === 'sistema' && !(s.nf && s.nf.trim())) {
+        mapa.set(s.grupoId, s);
+      }
     }
+    return mapa;
+  }, [sistema]);
+
+  // grupoId -> lançamento manual "pré-lançamento" (azul) daquele grupo —
+  // criado direto de um OFX sem par no Sistema, ainda sem cliente/documento/NF.
+  const sistemaPreLancamentoPorGrupo = useMemo(() => {
+    const mapa = new Map<string, LancamentoSistema>();
+    for (const s of sistema) {
+      if (s.conciliado && s.grupoId && s.origem === 'manual' && !(s.nf && s.nf.trim())) {
+        mapa.set(s.grupoId, s);
+      }
+    }
+    return mapa;
+  }, [sistema]);
+
+  const bancoFiltrado = useMemo(() => {
+    // O filtro de grupo (ícone de filtro nas sugestões, pra inspecionar um
+    // lançamento já conciliado) tem prioridade sobre o filtro de "mesmo
+    // valor" do botão "Filtrar Registro OFX" — senão um clique no segundo
+    // some com o resultado do primeiro sem o usuário conseguir voltar.
     if (filtroGrupoBanco) {
-      return banco.filter((b) => b.grupoId === filtroGrupoBanco);
+      return ordenarPorData(banco.filter((b) => b.grupoId === filtroGrupoBanco), ordemData);
+    }
+    if (filtroIdsSugestaoBanco) {
+      const idsSet = new Set(filtroIdsSugestaoBanco);
+      return ordenarPorData(banco.filter((b) => idsSet.has(b.id)), ordemData);
     }
     const termo = buscaBanco.trim().toLowerCase();
-    return banco.filter((b) => {
+    const filtrado = banco.filter((b) => {
       if (filtros.bancoNome && b.bancoNome !== filtros.bancoNome) return false;
       if (filtros.dataInicio && b.data < filtros.dataInicio) return false;
       if (filtros.dataFim && b.data > filtros.dataFim) return false;
       if (filtros.formaPagamento && b.formaPagamento !== filtros.formaPagamento) return false;
+      if (filtros.tipoLancamento && (b.valor >= 0 ? 'Entrada' : 'Saída') !== filtros.tipoLancamento) return false;
       if (filtros.conciliado === 'sim' && !b.conciliado) return false;
       if (filtros.conciliado === 'nao' && b.conciliado) return false;
-      if (filtros.conciliado === 'marcados' && !b.marcado) return false;
-      const camposBanco = [b.descricao, b.bancoNome, b.data, fmtDataBR(b.data), b.valor, fmtBRL.format(b.valor), b.grupoId ? infoSistemaPorGrupo.get(b.grupoId) : null];
+      if (filtros.conciliado === 'preConciliados' && !(b.grupoId && sistemaSemNfPorGrupo.has(b.grupoId))) return false;
+      if (filtros.conciliado === 'preLancamentos' && !(b.grupoId && sistemaPreLancamentoPorGrupo.has(b.grupoId))) return false;
+      if (filtros.conciliado === 'ocultados' && !b.desativado) return false;
+      const camposBanco = [
+        b.descricao,
+        b.bancoNome,
+        b.data,
+        fmtDataBR(b.data),
+        fmtDataBRSemZero(b.data),
+        b.valor,
+        fmtBRL.format(b.valor),
+        b.grupoId ? infoSistemaPorGrupo.get(b.grupoId) : null,
+      ];
       if (filtros.busca && !correspondeBusca(filtros.busca.toLowerCase(), camposBanco)) return false;
       if (termo && !correspondeBusca(termo, camposBanco)) return false;
       return true;
     });
-  }, [banco, filtros, buscaBanco, infoSistemaPorGrupo, filtroIdsSugestao, filtroGrupoBanco]);
+    return ordenarPorData(filtrado, ordemData);
+  }, [banco, filtros, buscaBanco, infoSistemaPorGrupo, sistemaSemNfPorGrupo, sistemaPreLancamentoPorGrupo, filtroIdsSugestaoBanco, filtroGrupoBanco, ordemData]);
 
   const sistemaFiltrado = useMemo(() => {
     if (filtroGrupoSistema) {
-      return sistema.filter((s) => s.grupoId === filtroGrupoSistema);
+      return ordenarPorData(sistema.filter((s) => s.grupoId === filtroGrupoSistema), ordemData);
+    }
+    if (filtroIdsSugestaoSistema) {
+      const idsSet = new Set(filtroIdsSugestaoSistema);
+      return ordenarPorData(sistema.filter((s) => idsSet.has(s.id)), ordemData);
     }
     const termo = buscaSistema.trim().toLowerCase();
-    return sistema.filter((s) => {
+    const filtrado = sistema.filter((s) => {
       if (filtros.dataInicio && s.data && s.data < filtros.dataInicio) return false;
       if (filtros.dataFim && s.data && s.data > filtros.dataFim) return false;
+      if (filtros.formaPagamento && getCategoriaSistema(s.formaPagamentoRaw) !== filtros.formaPagamento) return false;
+      if (filtros.tipoLancamento && s.tipoLancamento !== filtros.tipoLancamento) return false;
       if (filtros.conciliado === 'sim' && !s.conciliado) return false;
       if (filtros.conciliado === 'nao' && s.conciliado) return false;
-      const camposSistema = [s.cliente, s.documento, s.nf, s.data, s.data ? fmtDataBR(s.data) : null, s.valor, fmtBRL.format(s.valor)];
+      if (filtros.conciliado === 'preConciliados' && !(s.conciliado && s.origem === 'sistema' && !(s.nf && s.nf.trim()))) return false;
+      if (filtros.conciliado === 'preLancamentos' && !(s.conciliado && s.origem === 'manual' && !(s.nf && s.nf.trim()))) return false;
+      if (filtros.conciliado === 'ocultados' && !s.desativado) return false;
+      if (filtroNfSistema === 'com' && !(s.nf && s.nf.trim())) return false;
+      if (filtroNfSistema === 'sem' && s.nf && s.nf.trim()) return false;
+      const camposSistema = [
+        s.cliente,
+        s.documento,
+        s.nf,
+        s.data,
+        s.data ? fmtDataBR(s.data) : null,
+        s.data ? fmtDataBRSemZero(s.data) : null,
+        s.valor,
+        fmtBRL.format(s.valor),
+      ];
       if (filtros.busca && !correspondeBusca(filtros.busca.toLowerCase(), camposSistema)) return false;
       if (termo && !correspondeBusca(termo, camposSistema)) return false;
       return true;
     });
-  }, [sistema, filtros, buscaSistema, filtroGrupoSistema]);
+    return ordenarPorData(filtrado, ordemData);
+  }, [sistema, filtros, buscaSistema, filtroGrupoSistema, filtroIdsSugestaoSistema, filtroNfSistema, ordemData]);
+
+  // Item(s) fixado(s) no topo da grade (checkbox marcado) — calculado a
+  // partir da lista COMPLETA (não da filtrada), pra nunca sumir da tela só
+  // porque um filtro ou busca aplicado depois deixaria ele de fora.
+  const itensFixadosBanco = useMemo(() => banco.filter((b) => selecionadosBanco.has(b.id)), [banco, selecionadosBanco]);
+  const itensFixadosSistema = useMemo(() => sistema.filter((s) => selecionadosSistema.has(s.id)), [sistema, selecionadosSistema]);
 
   // Alerta (não bloqueia) quando a seleção manual do usuário mistura valores
   // ou formas de pagamento diferentes de cada lado — ele pode confirmar
@@ -217,32 +339,6 @@ export function ConciliacaoPage() {
     return sistema.some((s) => sistemaIds.includes(s.id) && !(s.nf && s.nf.trim()));
   }
 
-  // grupoId -> lançamento do Sistema (real, importado) daquele grupo que
-  // ainda não tem NF — grades pintam esse grupo em amarelo (pré-conciliado)
-  // em vez de verde. Só origem='sistema': registros manuais têm sua própria
-  // cor/fluxo (pré-lançamento, azul — ver abaixo).
-  const sistemaSemNfPorGrupo = useMemo(() => {
-    const mapa = new Map<string, LancamentoSistema>();
-    for (const s of sistema) {
-      if (s.conciliado && s.grupoId && s.origem === 'sistema' && !(s.nf && s.nf.trim())) {
-        mapa.set(s.grupoId, s);
-      }
-    }
-    return mapa;
-  }, [sistema]);
-
-  // grupoId -> lançamento manual "pré-lançamento" (azul) daquele grupo —
-  // criado direto de um OFX sem par no Sistema, ainda sem cliente/documento/NF.
-  const sistemaPreLancamentoPorGrupo = useMemo(() => {
-    const mapa = new Map<string, LancamentoSistema>();
-    for (const s of sistema) {
-      if (s.conciliado && s.grupoId && s.origem === 'manual' && !(s.nf && s.nf.trim())) {
-        mapa.set(s.grupoId, s);
-      }
-    }
-    return mapa;
-  }, [sistema]);
-
   function onAbrirInformarNf(item: LancamentoSistema) {
     setItemInformarNf(item);
   }
@@ -272,9 +368,11 @@ export function ConciliacaoPage() {
       aplicarAtualizacaoSistema(sistemaAtualizados);
       setSelecionadosBanco(new Set());
       setSelecionadosSistema(new Set());
-      setItemSugestoes(null);
-      setBancoIdsSugestao([]);
-      setFiltroIdsSugestao(null);
+      setSugestaoAtiva(null);
+      setFiltroIdsSugestaoBanco(null);
+      setFiltroIdsSugestaoSistema(null);
+      setFiltroGrupoBanco(null);
+      setFiltroGrupoSistema(null);
     } catch (e) {
       tratarErro(e);
     }
@@ -302,9 +400,12 @@ export function ConciliacaoPage() {
   }
 
   // Abre o "Novo Lançamento Manual" a partir do botão "Registro manual" no
-  // painel de Sugestões — pré-preenche com os dados do OFX selecionado.
+  // painel de Sugestões — pré-preenche com os dados do OFX selecionado. Só
+  // existe no sentido Banco→Sistema (o SugestoesPainel esconde o botão nos
+  // outros casos), mas o guard abaixo evita qualquer id fantasma mesmo assim.
   function onAbrirRegistroManual() {
-    setContextoLancamentoManual({ bancoIds: bancoIdsSugestao });
+    if (sugestaoAtiva?.direcao !== 'banco') return;
+    setContextoLancamentoManual({ bancoIds: sugestaoAtiva.idsFixos });
     setModalManualAberto(true);
   }
 
@@ -379,91 +480,139 @@ export function ConciliacaoPage() {
       aplicarAtualizacaoSistema(sistemaAtualizados);
       setSelecionadosBanco(new Set());
       setSelecionadosSistema(new Set());
-      setItemSugestoes(null);
+      setSugestaoAtiva(null);
     } catch (e) {
       tratarErro(e);
     }
   }
 
+  // Derivado (não state manual) de propósito: assim, se o usuário desfizer
+  // uma conciliação errada direto pelo painel de sugestões (botão "x" numa
+  // sugestão já conciliada), a lista recalcula sozinha e o item some da
+  // marcação "já conciliado" sem precisar reabrir a busca.
+  const sugestoes = useMemo(() => {
+    if (!sugestaoAtiva) return null;
+    if (sugestaoAtiva.direcao === 'banco') return buscarSugestoes(sugestaoAtiva.item, banco, sistema, regras);
+    return buscarSugestoesInverso(sugestaoAtiva.item, banco, sistema, regras);
+  }, [sugestaoAtiva, banco, sistema, regras]);
+
   function onVerSugestoes(item: LancamentoBanco) {
-    setItemSugestoes(item);
-    setBancoIdsSugestao([item.id]);
-    setSugestoes(buscarSugestoes(item, banco, sistema, regras));
+    // Só bloqueia se a sugestão do OUTRO lado estiver VISÍVEL agora — assim
+    // que ela minimiza (balão), qualquer marcação seguinte (nessa grade ou
+    // na outra) já pode abrir/atualizar a sugestão livremente.
+    if (sugestaoAtiva?.direcao === 'sistema' && !sugestaoMinimizada) return;
+    setSugestaoAtiva({ direcao: 'banco', item, idsFixos: [item.id] });
     setSugestaoMinimizada(false);
-    setFiltroIdsSugestao(null);
+    setFiltroIdsSugestaoBanco(null);
   }
 
   function onVerSugestoesCombinadas(itens: LancamentoBanco[]) {
+    if (sugestaoAtiva?.direcao === 'sistema' && !sugestaoMinimizada) return;
     const combinado = itemBancoCombinado(itens);
-    setItemSugestoes(combinado);
-    setBancoIdsSugestao(itens.map((b) => b.id));
-    setSugestoes(buscarSugestoes(combinado, banco, sistema, regras));
+    setSugestaoAtiva({ direcao: 'banco', item: combinado, idsFixos: itens.map((b) => b.id) });
     setSugestaoMinimizada(false);
-    setFiltroIdsSugestao(null);
+    setFiltroIdsSugestaoBanco(null);
   }
 
-  // Marcar um 2º+ item com "Sugestão automática" ativo não decide sozinho —
-  // pergunta se é pra somar o valor de todos os selecionados (ex.: 2 PIX que
-  // juntos batem com 1 título do sistema) ou considerar só o último marcado
-  // (aí os anteriores são desmarcados, pra não ficar seleção "presa" sem uso).
-  function onPerguntarSelecaoMultipla(item: LancamentoBanco) {
-    setPerguntaMultipla(item);
+  function onVerSugestoesSistema(item: LancamentoSistema) {
+    // Mesmo motivo do onVerSugestoes: só bloqueia se a sugestão do Banco estiver visível agora.
+    if (sugestaoAtiva?.direcao === 'banco' && !sugestaoMinimizada) return;
+    setSugestaoAtiva({ direcao: 'sistema', item, idsFixos: [item.id] });
+    setSugestaoMinimizada(false);
+    setFiltroIdsSugestaoSistema(null);
   }
 
-  function onEscolherSomarSelecionados() {
-    if (!perguntaMultipla) return;
+  function onVerSugestoesSistemaCombinadas(itens: LancamentoSistema[]) {
+    if (sugestaoAtiva?.direcao === 'banco' && !sugestaoMinimizada) return;
+    const combinado = itemSistemaCombinado(itens);
+    setSugestaoAtiva({ direcao: 'sistema', item: combinado, idsFixos: itens.map((s) => s.id) });
+    setSugestaoMinimizada(false);
+    setFiltroIdsSugestaoSistema(null);
+  }
+
+  // Marcar um 2º+ item com "Sugestão automática" ativo soma direto com o(s)
+  // já selecionado(s) (ex.: 2 PIX que juntos batem com 1 título do sistema)
+  // — como o(s) selecionado(s) já ficam fixados/visíveis no topo da grade,
+  // não precisa mais perguntar, é só somar.
+  function onMarcarESomarBanco(item: LancamentoBanco) {
     const novoSet = new Set(selecionadosBanco);
-    novoSet.add(perguntaMultipla.id);
+    novoSet.add(item.id);
     setSelecionadosBanco(novoSet);
     onVerSugestoesCombinadas(banco.filter((b) => novoSet.has(b.id)));
-    setPerguntaMultipla(null);
   }
 
-  function onEscolherApenasUltimo() {
-    if (!perguntaMultipla) return;
-    const item = perguntaMultipla;
-    setSelecionadosBanco(new Set([item.id]));
-    onVerSugestoes(item);
-    setPerguntaMultipla(null);
+  function onMarcarESomarSistema(item: LancamentoSistema) {
+    const novoSet = new Set(selecionadosSistema);
+    novoSet.add(item.id);
+    setSelecionadosSistema(novoSet);
+    onVerSugestoesSistemaCombinadas(sistema.filter((s) => novoSet.has(s.id)));
   }
 
-  // Filtra a grade Banco (OFX) pra mostrar só o(s) lançamento(s) por trás da
-  // sugestão aberta — mais confiável que rolar até lá, principalmente na
-  // combinação "somar todos" (mais de um lançamento envolvido de uma vez).
-  function onVerRegistroOfx() {
-    setFiltroIdsSugestao(bancoIdsSugestao);
-  }
-
-  // Desmarcar um item que fazia parte da sugestão atual invalida o que está
-  // no painel (era baseado naquela seleção) — fecha junto, em vez de deixar
-  // uma sugestão "órfã" aberta.
-  function onDesmarcarBanco(id: string) {
-    if (bancoIdsSugestao.includes(id)) {
-      setItemSugestoes(null);
-      setBancoIdsSugestao([]);
-      setSugestaoMinimizada(false);
-      setFiltroIdsSugestao(null);
+  // Filtra a grade do MESMO lado do item fixo pra mostrar todos os
+  // lançamentos com o mesmo valor da sugestão aberta — dá mais opções de
+  // escolha quando o lançamento certo não é necessariamente o que estava
+  // selecionado (em vez de mostrar só ele, mostra os "irmãos" de mesmo valor).
+  function onVerRegistroFixo() {
+    if (!sugestaoAtiva) return;
+    const valorAlvo = sugestaoAtiva.item.valor;
+    if (sugestaoAtiva.direcao === 'banco') {
+      const ids = banco.filter((b) => Math.sign(b.valor) === Math.sign(valorAlvo) && valoresIguais(Math.abs(b.valor), Math.abs(valorAlvo))).map((b) => b.id);
+      setFiltroIdsSugestaoBanco(ids);
+    } else {
+      const ids = sistema.filter((s) => Math.sign(s.valor) === Math.sign(valorAlvo) && valoresIguais(Math.abs(s.valor), Math.abs(valorAlvo))).map((s) => s.id);
+      setFiltroIdsSugestaoSistema(ids);
     }
   }
 
-  async function onConciliarSugestao(sistemaIds: string[]) {
-    const bancoIds = bancoIdsSugestao;
+  // Desmarcar um item que fazia parte da sugestão atual, DA MESMA grade que
+  // ela: recalcula a sugestão com quem sobrou e continua aberta (nunca
+  // minimiza sozinha por desmarcar). Se não sobrar ninguém, só limpa o
+  // filtro de valor aqui — quem realmente fecha a sugestão (sem balão) é o
+  // useEffect acima, com base na contagem real de selecionados, não neste
+  // cálculo pontual do clique.
+  function onDesmarcarBanco(id: string) {
+    if (sugestaoAtiva?.direcao !== 'banco' || !sugestaoAtiva.idsFixos.includes(id)) return;
+    setFiltroIdsSugestaoBanco(null);
+    const idsRestantes = sugestaoAtiva.idsFixos.filter((fid) => fid !== id);
+    if (idsRestantes.length === 0) return;
+    onVerSugestoesCombinadas(banco.filter((b) => idsRestantes.includes(b.id)));
+  }
+
+  function onDesmarcarSistema(id: string) {
+    if (sugestaoAtiva?.direcao !== 'sistema' || !sugestaoAtiva.idsFixos.includes(id)) return;
+    setFiltroIdsSugestaoSistema(null);
+    const idsRestantes = sugestaoAtiva.idsFixos.filter((fid) => fid !== id);
+    if (idsRestantes.length === 0) return;
+    onVerSugestoesSistemaCombinadas(sistema.filter((s) => idsRestantes.includes(s.id)));
+  }
+
+  async function onConciliarSugestao(candidatoIds: string[]) {
+    if (!sugestaoAtiva) return;
+    const bancoIds = sugestaoAtiva.direcao === 'banco' ? sugestaoAtiva.idsFixos : candidatoIds;
+    const sistemaIds = sugestaoAtiva.direcao === 'banco' ? candidatoIds : sugestaoAtiva.idsFixos;
     if (algumSemNf(sistemaIds)) {
       setPendenteSemNf({ bancoIds, sistemaIds });
       return;
     }
-    setSelecionadosBanco(new Set(bancoIds));
+    if (sugestaoAtiva.direcao === 'banco') setSelecionadosBanco(new Set(bancoIds));
+    else setSelecionadosSistema(new Set(sistemaIds));
+    setProcessandoSugestao(true);
     try {
       const { bancoAtualizados, sistemaAtualizados } = await conciliar(bancoIds, sistemaIds);
       aplicarAtualizacaoBanco(bancoAtualizados);
       aplicarAtualizacaoSistema(sistemaAtualizados);
-      setItemSugestoes(null);
-      setBancoIdsSugestao([]);
+      setSugestaoAtiva(null);
       setSugestaoMinimizada(false);
-      setFiltroIdsSugestao(null);
+      setFiltroIdsSugestaoBanco(null);
+      setFiltroIdsSugestaoSistema(null);
+      setFiltroGrupoBanco(null);
+      setFiltroGrupoSistema(null);
       setSelecionadosBanco(new Set());
+      setSelecionadosSistema(new Set());
     } catch (e) {
       tratarErro(e);
+    } finally {
+      setProcessandoSugestao(false);
     }
   }
 
@@ -477,6 +626,29 @@ export function ConciliacaoPage() {
     }
   }
 
+  // "+ Registro manual" no painel de Sugestões, sentido Sistema→OFX: nenhum
+  // lançamento do banco bate, então cria um lançamento manual no Banco com
+  // os próprios dados do Sistema (já vêm todos preenchidos, diferente do
+  // sentido Banco→Sistema) e concilia na hora — reaproveita conciliarManualSistema,
+  // que já exige NF (mesma regra do botão "Conciliar sem OFX" da grade Sistema).
+  function onAbrirConciliarManualDaSugestao() {
+    if (sugestaoAtiva?.direcao !== 'sistema') return;
+    if (!sugestaoAtiva.item.nf || !sugestaoAtiva.item.nf.trim()) return;
+    setItemParaConciliarManual(sugestaoAtiva.item);
+  }
+
+  async function onConfirmarConciliarManualDaSugestao() {
+    if (!itemParaConciliarManual) return;
+    const item = itemParaConciliarManual;
+    setItemParaConciliarManual(null);
+    await onConciliarManualSistema(item);
+    setSugestaoAtiva(null);
+    setSugestaoMinimizada(false);
+    setFiltroIdsSugestaoSistema(null);
+    setFiltroGrupoBanco(null);
+    setFiltroGrupoSistema(null);
+  }
+
   // Filtro cruzado entre as grades: ao clicar no ícone de um item conciliado,
   // filtra a grade DO OUTRO LADO só com o(s) lançamento(s) do mesmo grupo —
   // clicar de novo (mesmo grupoId) desfiltra e volta a mostrar tudo.
@@ -486,6 +658,19 @@ export function ConciliacaoPage() {
 
   function onFiltrarBancoPorGrupo(grupoId: string) {
     setFiltroGrupoBanco((atual) => (atual === grupoId ? null : grupoId));
+  }
+
+  // "Limpar Filtros" precisa zerar TODOS os filtros da tela (busca de cada
+  // grade, filtro de grupo/sugestão) — não só os campos do topbar — mas sem
+  // mexer na marcação (checkbox) dos itens já selecionados.
+  function onLimparTodosOsFiltros() {
+    setBuscaBanco('');
+    setBuscaSistema('');
+    setFiltroIdsSugestaoBanco(null);
+    setFiltroIdsSugestaoSistema(null);
+    setFiltroGrupoSistema(null);
+    setFiltroGrupoBanco(null);
+    setFiltroNfSistema(null);
   }
 
   // "Desfazer conciliação" (o "x" vermelho) não age direto — abre a
@@ -533,6 +718,8 @@ export function ConciliacaoPage() {
 
   async function onConciliarAutomatico() {
     setProcessando(true);
+    setErro(null);
+    setSucessoAutomatico(null);
     try {
       const grupos = conciliacaoAutomatica(banco, sistema, regras);
       const bancoAtualizadosTotal: LancamentoBanco[] = [];
@@ -544,7 +731,13 @@ export function ConciliacaoPage() {
       }
       aplicarAtualizacaoBanco(bancoAtualizadosTotal);
       aplicarAtualizacaoSistema(sistemaAtualizadosTotal);
-      setErro(grupos.length === 0 ? 'Nenhum lançamento pôde ser conciliado automaticamente (sem ambiguidade).' : null);
+      if (grupos.length === 0) {
+        setErro('Nenhum lançamento pôde ser conciliado automaticamente (sem ambiguidade).');
+      } else {
+        setSucessoAutomatico(
+          `${grupos.length} grupo(s) conciliado(s) automaticamente — ${bancoAtualizadosTotal.length} lançamento(s) do banco e ${sistemaAtualizadosTotal.length} do sistema.`,
+        );
+      }
     } catch (e) {
       tratarErro(e);
     } finally {
@@ -570,9 +763,8 @@ export function ConciliacaoPage() {
         aplicarAtualizacaoSistema(sistemaAtualizados);
         setSelecionadosBanco(new Set());
         setSelecionadosSistema(new Set());
-        setItemSugestoes(null);
-        setBancoIdsSugestao([]);
-        setFiltroIdsSugestao(null);
+        setSugestaoAtiva(null);
+        setFiltroIdsSugestaoBanco(null);
       }
     } catch (e) {
       tratarErro(e);
@@ -594,16 +786,62 @@ export function ConciliacaoPage() {
   return (
     <AppShell
       topbarNavy
-      title={<FiltrosConciliacao filtros={filtros} onChange={setFiltros} />}
+      title={<FiltrosConciliacao filtros={filtros} onChange={setFiltros} onLimparTudo={onLimparTodosOsFiltros} />}
       mostrarParametrizacao
       onAbrirParametrizacao={() => setModalRegrasAberto(true)}
       actions={
-        <Button variant="primary" disabled={processando} onClick={onConciliarAutomatico}>
-          {processando ? 'Processando…' : 'Conciliar Automático'}
-        </Button>
+        <>
+          <button
+            type="button"
+            onClick={() => setModoSugestaoAtivo((v) => !v)}
+            title="Ao marcar um lançamento (Banco ou Sistema), já abre o painel de sugestões dele automaticamente — na direção correspondente"
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+              modoSugestaoAtivo ? 'bg-[var(--color-accent)] text-white' : 'border border-white/40 text-white hover:bg-white/12'
+            }`}
+          >
+            {modoSugestaoAtivo ? '✓ Sugestão automática' : 'Ativar sugestão'}
+          </button>
+          <Button variant="primary" disabled={processando} onClick={onConciliarAutomatico}>
+            {processando ? 'Processando…' : 'Conciliar Automático'}
+          </Button>
+        </>
       }
     >
       <div className="space-y-4">
+        <Card className="flex flex-wrap items-center gap-3 p-3">
+          <input
+            type="text"
+            value={filtros.busca}
+            onChange={(e) => setFiltros((f) => ({ ...f, busca: e.target.value }))}
+            placeholder="Pesquisar por nome, data (15/02/2026) ou valor — busca nas duas grades…"
+            className="w-full max-w-md rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-3 py-1.5 text-sm text-[var(--color-text)]"
+          />
+          <button
+            type="button"
+            onClick={() => setOrdemData((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+            title="Alternar ordem das datas"
+          >
+            {ordemData === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+            Ordenar {ordemData === 'asc' ? '(mais antigas primeiro)' : '(mais recentes primeiro)'}
+          </button>
+        </Card>
+
+        {processando && (
+          <Card className="flex items-center justify-center gap-2 border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm font-semibold text-[var(--color-accent)]">
+            Processando conciliação automática, aguarde… (pode demorar um pouco, são muitos registros)
+          </Card>
+        )}
+
+        {sucessoAutomatico && (
+          <Card className="flex items-center justify-between gap-3 border-good/40 bg-good-soft p-3 text-sm font-semibold text-good">
+            <span>{sucessoAutomatico}</span>
+            <button type="button" onClick={() => setSucessoAutomatico(null)} className="font-semibold hover:underline">
+              Fechar
+            </button>
+          </Card>
+        )}
+
         {erro && (
           <Card className="flex items-center justify-between gap-3 border-bad/40 bg-bad-soft p-3 text-sm text-[#8F2E2E]">
             <span>{erro}</span>
@@ -648,6 +886,7 @@ export function ConciliacaoPage() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <ListaBanco
             itens={bancoFiltrado}
+            itensFixados={itensFixadosBanco}
             selecionados={selecionadosBanco}
             busca={buscaBanco}
             onChangeBusca={setBuscaBanco}
@@ -659,11 +898,10 @@ export function ConciliacaoPage() {
             bancosDisponiveis={bancosDisponiveis}
             infoSistemaPorGrupo={infoSistemaPorGrupo}
             modoSugestaoAtivo={modoSugestaoAtivo}
-            onToggleModoSugestao={() => setModoSugestaoAtivo((v) => !v)}
-            onPerguntarSelecaoMultipla={onPerguntarSelecaoMultipla}
+            onMarcarESomar={onMarcarESomarBanco}
             onDesmarcarBanco={onDesmarcarBanco}
-            filtroSugestaoAtivo={filtroIdsSugestao !== null}
-            onLimparFiltroSugestao={() => setFiltroIdsSugestao(null)}
+            filtroSugestaoAtivo={filtroIdsSugestaoBanco !== null}
+            onLimparFiltroSugestao={() => setFiltroIdsSugestaoBanco(null)}
             filtroGrupoSistemaAtivo={filtroGrupoSistema}
             onFiltrarSistemaPorGrupo={onFiltrarSistemaPorGrupo}
             onPedirCancelarConciliacao={onPedirCancelarConciliacao}
@@ -676,12 +914,12 @@ export function ConciliacaoPage() {
           />
           <ListaSistema
             itens={sistemaFiltrado}
+            itensFixados={itensFixadosSistema}
             selecionados={selecionadosSistema}
             busca={buscaSistema}
             onChangeBusca={setBuscaSistema}
             onToggleSelecionado={toggleSelecionadoSistema}
             onToggleDesativado={onToggleDesativadoSistema}
-            onConciliarManual={onConciliarManualSistema}
             filtroGrupoBancoAtivo={filtroGrupoBanco}
             onFiltrarBancoPorGrupo={onFiltrarBancoPorGrupo}
             onPedirCancelarConciliacao={onPedirCancelarConciliacao}
@@ -689,50 +927,75 @@ export function ConciliacaoPage() {
             onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
             pendenciasCount={registrosPreLancamento.length}
             onAbrirPendencias={onAbrirPendenciasSistema}
+            filtroNf={filtroNfSistema}
+            onChangeFiltroNf={setFiltroNfSistema}
+            modoSugestaoAtivo={modoSugestaoAtivo}
+            onVerSugestoesSistema={onVerSugestoesSistema}
+            onMarcarESomar={onMarcarESomarSistema}
+            onDesmarcarSistema={onDesmarcarSistema}
+            filtroSugestaoAtivo={filtroIdsSugestaoSistema !== null}
+            onLimparFiltroSugestao={() => setFiltroIdsSugestaoSistema(null)}
           />
         </div>
-
-        <TotaisRodape banco={banco} sistema={sistema} />
       </div>
 
       <SugestoesPainel
-        itemBanco={itemSugestoes}
+        itemFixo={sugestaoAtiva}
         sugestoes={sugestoes}
         minimizado={sugestaoMinimizada}
         onMinimizar={() => setSugestaoMinimizada(true)}
         onRestaurar={() => setSugestaoMinimizada(false)}
         onConciliar={onConciliarSugestao}
-        onVerRegistroOfx={onVerRegistroOfx}
-        onRegistroManual={onAbrirRegistroManual}
+        processando={processandoSugestao}
+        onVerRegistroFixo={onVerRegistroFixo}
+        rotuloRegistroFixo={sugestaoAtiva?.direcao === 'sistema' ? 'Filtrar valor do Sistema' : 'Filtrar valor OFX'}
+        onRegistroManual={
+          sugestaoAtiva?.direcao === 'sistema'
+            ? sugestaoAtiva.item.nf && sugestaoAtiva.item.nf.trim()
+              ? onAbrirConciliarManualDaSugestao
+              : null
+            : onAbrirRegistroManual
+        }
+        onPedirCancelarConciliacao={onPedirCancelarConciliacao}
+        onFiltrarOutroLadoPorGrupo={sugestaoAtiva?.direcao === 'sistema' ? onFiltrarSistemaPorGrupo : onFiltrarBancoPorGrupo}
+        filtroOutroLadoAtivo={sugestaoAtiva?.direcao === 'sistema' ? filtroGrupoSistema : filtroGrupoBanco}
       />
 
       <NovoLancamentoManualModal open={modalManualAberto} valoresIniciais={valoresIniciaisManual} onFechar={onFecharModalManual} onSalvar={onSalvarLancamentoManual} />
 
-      <RegrasConciliacaoModal open={modalRegrasAberto} regras={regras} onFechar={() => setModalRegrasAberto(false)} onSalvar={onSalvarRegras} />
-
       <Modal
-        open={perguntaMultipla !== null}
-        title="Vários lançamentos selecionados"
-        onClose={() => setPerguntaMultipla(null)}
-        widthClassName="max-w-[440px]"
+        open={itemParaConciliarManual !== null}
+        title="Conciliar sem OFX correspondente"
+        onClose={() => setItemParaConciliarManual(null)}
+        widthClassName="max-w-[420px]"
         footer={
           <>
-            <Button variant="outline" onClick={() => setPerguntaMultipla(null)}>
+            <Button variant="outline" onClick={() => setItemParaConciliarManual(null)}>
               Cancelar
             </Button>
-            <Button variant="action" onClick={onEscolherApenasUltimo}>
-              Usar só o último
-            </Button>
-            <Button variant="primary" onClick={onEscolherSomarSelecionados}>
-              Somar todos
+            <Button variant="primary" onClick={onConfirmarConciliarManualDaSugestao}>
+              Salvar
             </Button>
           </>
         }
       >
-        <p className="text-sm text-[var(--color-text)]">
-          Você já tinha {selecionadosBanco.size} lançamento(s) do banco marcado(s). Quer buscar sugestões pelo <strong>valor somado</strong> de todos os selecionados, ou considerar só <strong>o último</strong> marcado (os anteriores serão desmarcados)?
-        </p>
+        <p className="mb-3 text-sm text-[var(--color-text)]">Registro com NF sem recebimento em conta PJ, informar registro?</p>
+        {itemParaConciliarManual && (
+          <div className="space-y-1 rounded-lg bg-[var(--color-page)] p-3 text-sm">
+            <div className="font-semibold text-[var(--color-text)]">{itemParaConciliarManual.cliente || '—'}</div>
+            <div className="text-[var(--color-text-soft)]">
+              {itemParaConciliarManual.data ? fmtDataBR(itemParaConciliarManual.data) : '—'} · {fmtBRL.format(itemParaConciliarManual.valor)}
+            </div>
+            <div className="text-[var(--color-text-soft)]">
+              {[itemParaConciliarManual.documento ? `Doc ${itemParaConciliarManual.documento}` : null, itemParaConciliarManual.nf ? `NF ${itemParaConciliarManual.nf}` : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+          </div>
+        )}
       </Modal>
+
+      <RegrasConciliacaoModal open={modalRegrasAberto} regras={regras} onFechar={() => setModalRegrasAberto(false)} onSalvar={onSalvarRegras} />
 
       <Modal
         open={grupoParaCancelar !== null}
@@ -769,10 +1032,7 @@ export function ConciliacaoPage() {
           </>
         }
       >
-        <p className="text-sm text-[var(--color-text)]">
-          O lançamento do Sistema selecionado ainda não tem NF emitida — a conciliação exige NF. Deseja pré-conciliar mesmo assim? Os lançamentos ficam travados em <strong>amarelo</strong> até
-          alguém informar a NF depois.
-        </p>
+        <p className="text-sm text-[var(--color-text)]">Registro sem NF emitida, é preciso emissão da NF posteriormente para concluir a conciliação.</p>
       </Modal>
 
       <InformarNfModal open={itemInformarNf !== null} item={itemInformarNf} onFechar={() => setItemInformarNf(null)} onSalvar={onSalvarNf} />

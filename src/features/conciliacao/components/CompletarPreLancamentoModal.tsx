@@ -56,7 +56,7 @@ export function CompletarPreLancamentoModal({ open, item, onFechar, onSalvar }: 
     >
       {item && (
         <div className="space-y-3 text-sm">
-          <p className="text-xs text-[var(--color-text-soft)]">Este lançamento já está travado junto com o OFX — falta completar cliente, documento (pedido) e NF.</p>
+          <p className="text-xs text-[var(--color-text-soft)]">Pagamento recebido sem registro no sistema, fazer lançamento e NF!</p>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg bg-[var(--color-page)] px-3 py-2.5 text-xs">
             <span className="text-[var(--color-text-soft)]">Data</span>
             <span className="text-right font-semibold text-[var(--color-text)]">{item.data ? fmtDataBR(item.data) : '—'}</span>

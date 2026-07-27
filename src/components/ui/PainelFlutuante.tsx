@@ -6,6 +6,18 @@ interface PainelFlutuanteProps {
   onClose: () => void;
   children: ReactNode;
   widthClassName?: string;
+  /**
+   * Lado padrão onde o painel abre — 'direita' (default) ou 'esquerda'.
+   * Reseta a posição só quando esse valor MUDA de uma abertura pra outra
+   * (ex.: busca de sugestões que troca de direção Banco→Sistema para
+   * Sistema→Banco) — arrastar manualmente continua valendo entre aberturas
+   * consecutivas do mesmo lado.
+   */
+  lado?: 'esquerda' | 'direita';
+}
+
+function posicaoInicial(lado: 'esquerda' | 'direita'): { x: number; y: number } {
+  return { x: lado === 'esquerda' ? 24 : Math.max(24, window.innerWidth - 480), y: 96 };
 }
 
 /**
@@ -13,9 +25,13 @@ interface PainelFlutuanteProps {
  * bloqueando a tela: o usuário continua podendo clicar, rolar e consultar
  * as grades por trás enquanto o painel fica aberto ao lado.
  */
-export function PainelFlutuante({ open, title, onClose, children, widthClassName = 'w-[440px]' }: PainelFlutuanteProps) {
-  const [pos, setPos] = useState(() => ({ x: Math.max(24, window.innerWidth - 480), y: 96 }));
+export function PainelFlutuante({ open, title, onClose, children, widthClassName = 'w-[440px]', lado = 'direita' }: PainelFlutuanteProps) {
+  const [pos, setPos] = useState(() => posicaoInicial(lado));
   const arrastoRef = useRef<{ dx: number; dy: number } | null>(null);
+
+  useEffect(() => {
+    setPos(posicaoInicial(lado));
+  }, [lado]);
 
   useEffect(() => {
     function onMove(e: MouseEvent) {
