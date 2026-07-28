@@ -54,21 +54,31 @@ export interface ArquivoConciliacao {
 /** Espelha `resp` do buscarSugestoes() original — cada chave é uma categoria de sugestão, já em ordem de prioridade. */
 export interface SugestoesConciliacao {
   mesmoNome?: LancamentoSistema[];
+  /** Valor exatamente igual (só diferença de ponto flutuante) — mesma data. */
   mesmoValorMesmaData?: LancamentoSistema[];
+  /** Dentro da tolerância da regra, mas NÃO exatamente igual — mesma data. Fica separado pra deixar claro que a diferença de centavos é real, não é erro de arredondamento. */
+  valorAproximadoMesmaData?: LancamentoSistema[];
   mesmoValorOutraData?: LancamentoSistema[];
+  /** Espelho de valorAproximadoMesmaData, mas com outra data. */
+  valorAproximadoOutraData?: LancamentoSistema[];
   /** Só Cartão com valor bruto conhecido: mesmo valor, mas parcela (X/Y) diferente da do lançamento do Banco — fica separado da lista principal porque é um candidato menos confiável, o usuário decide se aceita mesmo assim. */
   mesmoValorParcelaDiferente?: LancamentoSistema[];
   /** Só Boleto: nenhum título sozinho bateu, mas a SOMA de vários bate com o valor do Banco — o extrato do BB traz o boleto recebível agregado (1 linha por dia = soma de vários títulos), então isso é o caminho normal, não uma exceção. Concilia o grupo inteiro de uma vez. */
   combinacaoBoleto?: LancamentoSistema[];
+  /** Só PIX: nenhum valor exato bateu, mas a SOMA de candidatos de NOME parecido bate com o valor — nunca soma PIX de nomes diferentes, só entra aqui quem já passou pelo filtro de nome (mesmoNome). */
+  combinacaoPix?: LancamentoSistema[];
 }
 
 /** Espelho de SugestoesConciliacao pro sentido invertido (Sistema → OFX) — mesmas categorias, candidatos vêm do Banco em vez do Sistema. */
 export interface SugestoesConciliacaoInversa {
   mesmoNome?: LancamentoBanco[];
   mesmoValorMesmaData?: LancamentoBanco[];
+  valorAproximadoMesmaData?: LancamentoBanco[];
   mesmoValorOutraData?: LancamentoBanco[];
+  valorAproximadoOutraData?: LancamentoBanco[];
   mesmoValorParcelaDiferente?: LancamentoBanco[];
   combinacaoBoleto?: LancamentoBanco[];
+  combinacaoPix?: LancamentoBanco[];
 }
 
 export interface FiltrosConciliacao {

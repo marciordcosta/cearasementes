@@ -12,6 +12,8 @@ interface VirtualListProps<T> {
   className?: string;
   /** Ex.: paddingTop pra reservar espaço quando algo flutua por cima da lista (item fixado) — sem isso, o início da lista fica escondido atrás. */
   style?: CSSProperties;
+  /** Notifica o pai sempre que a posição de rolagem ou a altura visível mudar — usado pra decidir se um item selecionado saiu da área visível e precisa ficar fixado (em cima ou embaixo). */
+  onViewportChange?: (info: { scrollTop: number; alturaVisivel: number }) => void;
 }
 
 /**
@@ -20,7 +22,7 @@ interface VirtualListProps<T> {
  * lançamentos da Conciliação) recria dezenas de milhares de nós de DOM a
  * cada tecla digitada na busca ou clique num checkbox, travando a tela.
  */
-export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtractor, vazio, className, style }: VirtualListProps<T>) {
+export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtractor, vazio, className, style, onViewportChange }: VirtualListProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const tickingRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
@@ -34,6 +36,10 @@ export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtra
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    onViewportChange?.({ scrollTop, alturaVisivel });
+  }, [scrollTop, alturaVisivel, onViewportChange]);
 
   // Zera a rolagem quando a lista muda de identidade (ex.: trocou o filtro) —
   // senão o scrollTop antigo aponta pra um índice que pode nem existir mais.

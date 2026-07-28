@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
-import { apagarGrupoConciliacao } from '@/features/conciliacao/api';
+import { apagarGrupoConciliacao, contarConciliadosDoGrupo } from '@/features/conciliacao/api';
 import { fmtDataBR } from '@/lib/format';
 import { apagarGrupoUploads, listarUploadsRecentes } from '../api';
 import { NOME_RELATORIO } from '../fields';
@@ -173,6 +173,16 @@ export function UploadLog() {
     queryFn: () => listarUploadsRecentes(),
   });
 
+  // Apagar um grupo (Banco ou Sistema) não desfaz a conciliação do OUTRO
+  // lado — o lançamento que ficou lá continua marcado "conciliado", agora
+  // órfão (sem contraparte). Avisa isso ANTES de confirmar a exclusão.
+  const ehGrupoConciliacao = paraApagar ? TIPOS_CONCILIACAO.includes(paraApagar.tipoRelatorio) : false;
+  const { data: conciliadosNoGrupo } = useQuery({
+    queryKey: ['conciliacao', 'conciliados-do-grupo', paraApagar?.tipoRelatorio, paraApagar?.tabelaPreco],
+    queryFn: () => contarConciliadosDoGrupo(paraApagar!.tipoRelatorio as 'ofx' | 'sistema', paraApagar!.tabelaPreco!),
+    enabled: ehGrupoConciliacao && !!paraApagar?.tabelaPreco,
+  });
+
   const grupos = agruparUploads(uploads);
   // Cada categoria compara atraso só entre si — não faz sentido comparar a
   // data de fechamento de uma Tabela de Preço (396) com a de um sub-grupo
@@ -226,6 +236,12 @@ export function UploadLog() {
           Isso vai apagar <strong>todos os {paraApagar?.ids.length} arquivo(s)</strong> já importados de{' '}
           <strong>{paraApagar && rotuloGrupo(paraApagar)}</strong> e todas as linhas que eles gravaram nas tabelas do Supabase. Não tem como desfazer.
         </p>
+        {!!conciliadosNoGrupo && conciliadosNoGrupo > 0 && (
+          <p className="mt-3 rounded-md border border-[#e0a300]/40 bg-[#fff6de] p-2.5 text-sm font-semibold text-[#8a6d1f]">
+            ⚠ Existem <strong>{conciliadosNoGrupo} lançamento(s)</strong> desse grupo já conciliado(s). Apagar aqui não desfaz a conciliação do outro
+            lado (Banco/Sistema) — ele vai ficar marcado como conciliado sem contraparte nenhuma.
+          </p>
+        )}
       </Modal>
     </div>
   );

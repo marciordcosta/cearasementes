@@ -95,13 +95,19 @@ export function parseExtratoBB(rows: unknown[][]): RegistroBancoParseado[] {
     const detalhamento = String(row[10] ?? '').trim();
     const descricao = removerAcentos([historico, detalhamento].filter(Boolean).join(' - '));
 
+    // Rendimento (juros de aplicação automática, tipo poupança/CDB atrelado
+    // à conta) não tem contrapartida nenhuma no Sistema — nunca concilia,
+    // só fica acumulando como pendente. Descartado já na importação.
+    const formaPagamento = detectPaymentTypeFromOfx(descricao);
+    if (formaPagamento === 'RENDIMENTO') continue;
+
     registros.push({
       bancoCodigo,
       bancoNome,
       data,
       valor: sinal * valorAbs,
       descricao,
-      formaPagamento: detectPaymentTypeFromOfx(descricao),
+      formaPagamento,
       fitid: [dataBruta, numeroDocumento, row[8], row[9], codHistorico].join('|'),
       valorBrutoCartao: null,
     });

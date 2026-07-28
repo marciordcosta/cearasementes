@@ -1,5 +1,5 @@
 import { AlertTriangle, Filter, FileText, RotateCcw, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { VirtualList } from '@/components/ui/VirtualList';
@@ -199,12 +199,34 @@ export function ListaSistema({
   }
 
   const itensSelecionados = itensFixados;
+  const multiplasFixadas = itensSelecionados.length >= 2;
+  const itemUnicoFixado = itensSelecionados.length === 1 ? itensSelecionados[0] : null;
 
-  // Item fixado no topo (ver abaixo) já aparece lá — na grade normal ele
-  // vira um espaço em branco, senão apareceria duplicado enquanto rola.
-  // Volta a mostrar o conteúdo normal assim que for desmarcado.
+  const [viewport, setViewport] = useState({ scrollTop: 0, alturaVisivel: 0 });
+
+  // Com 1 único item selecionado: só fixa (em cima ou embaixo) quando a
+  // posição natural dele sai da área visível da grade — enquanto está
+  // visível, aparece no próprio lugar, sem sobreposição nenhuma. Com 2+
+  // selecionados (soma), mantém o comportamento antigo (sempre fixado em
+  // cima) — ver `multiplasFixadas` abaixo.
+  const posicaoFixacaoUnica = useMemo(() => {
+    if (!itemUnicoFixado) return null;
+    const indice = itens.findIndex((i) => i.id === itemUnicoFixado.id);
+    if (indice === -1) return 'topo'; // saiu da lista filtrada atual (ex.: busca mudou) — mantém visível como antes
+    const itemTop = indice * ALTURA_LINHA;
+    const itemBottom = itemTop + ALTURA_LINHA;
+    if (itemTop < viewport.scrollTop) return 'topo';
+    if (itemBottom > viewport.scrollTop + viewport.alturaVisivel) return 'baixo';
+    return null;
+  }, [itemUnicoFixado, itens, viewport]);
+
+  // Item fixado (ver abaixo) já aparece lá — na grade normal ele vira um
+  // espaço em branco, senão apareceria duplicado enquanto rola. Volta a
+  // mostrar o conteúdo normal assim que for desmarcado (ou, no caso de 1 só,
+  // assim que voltar a ficar visível na tela).
   function renderLinhaGrade(item: LancamentoSistema) {
-    if (selecionados.has(item.id)) {
+    const estaFixado = multiplasFixadas ? selecionados.has(item.id) : itemUnicoFixado?.id === item.id && posicaoFixacaoUnica !== null;
+    if (estaFixado) {
       return (
         <div className="flex h-full items-center border-b border-[var(--color-line)] px-4">
           <span className="text-xs italic text-[var(--color-text-soft)]">Fixado</span>
@@ -278,7 +300,7 @@ export function ListaSistema({
         </div>
       )}
       <div className="relative min-h-0 flex-1">
-        {itensSelecionados.length > 0 && (
+        {multiplasFixadas && (
           <div className="pointer-events-none absolute inset-x-0 top-0 z-[5]">
             {itensSelecionados.map((item) => (
               <div key={item.id} className="pointer-events-auto shadow-[0_8px_14px_-4px_rgba(0,0,0,0.28)]" style={{ height: ALTURA_LINHA }}>
@@ -287,14 +309,29 @@ export function ListaSistema({
             ))}
           </div>
         )}
+        {itemUnicoFixado && posicaoFixacaoUnica === 'topo' && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[5]">
+            <div className="pointer-events-auto shadow-[0_8px_14px_-4px_rgba(0,0,0,0.28)]" style={{ height: ALTURA_LINHA }}>
+              {renderLinha(itemUnicoFixado)}
+            </div>
+          </div>
+        )}
+        {itemUnicoFixado && posicaoFixacaoUnica === 'baixo' && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5]">
+            <div className="pointer-events-auto shadow-[0_-8px_14px_-4px_rgba(0,0,0,0.28)]" style={{ height: ALTURA_LINHA }}>
+              {renderLinha(itemUnicoFixado)}
+            </div>
+          </div>
+        )}
         <VirtualList
           itens={itens}
           altura={ALTURA_LINHA}
           className="h-full overflow-y-auto"
-          style={{ paddingTop: itensSelecionados.length * ALTURA_LINHA }}
+          style={{ paddingTop: multiplasFixadas ? itensSelecionados.length * ALTURA_LINHA : 0 }}
           keyExtractor={(item) => item.id}
           vazio={<p className="px-4 py-6 text-center text-sm text-[var(--color-text-soft)]">Nenhum lançamento.</p>}
           renderItem={renderLinhaGrade}
+          onViewportChange={setViewport}
         />
       </div>
     </Card>

@@ -1,6 +1,19 @@
 import type { FormaRegra, RegraConciliacao } from './regras';
 import type { FormaPagamento, LancamentoBanco, LancamentoSistema, SugestoesConciliacao, SugestoesConciliacaoInversa } from './types';
-import { diasUteisAte, diffDiasUteis, extrairParcela, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, parcelaCompativel, removerAcentos, valoresIguais } from './utils';
+import {
+  diasUteisAte,
+  diffDiasUteis,
+  extrairParcela,
+  getCategoriaSistema,
+  getSubtipoCartaoOfx,
+  getSubtipoCartaoSistema,
+  nomesSemelhantesFortes,
+  normalizarNomeClienteOfx,
+  parcelaCompativel,
+  removerAcentos,
+  valoresExatamenteIguais,
+  valoresIguais,
+} from './utils';
 
 type RegrasPorForma = Record<FormaRegra, RegraConciliacao>;
 
@@ -65,15 +78,35 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
 
   const resp: SugestoesConciliacao = {};
 
-  // ---- PIX: nome do sistema parecido (prioritário — não deve ser sobrescrito pelo match genérico de nome logo abaixo) ----
+  // ---- PIX: valor exato primeiro (como qualquer forma); se não bater,
+  // procura por nome parecido — e, só entre esses candidatos de nome
+  // parecido (nunca com PIX de outro cliente), tenta achar uma soma que bata
+  // com o valor. Restringir a combinação por nome evita o risco de somar PIX
+  // de clientes diferentes que só coincidem em valor (comum com valores
+  // "redondos", tipo 60 + 840 = 900). ----
   if (tipoOfx === 'PIX' && !combinado) {
     const regraPix = regras.PIX;
+    const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraPix.toleranciaValor));
+    const mesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx);
+    const outraData = mesmoValorTodos.filter((s) => !dataOfx || s.data !== dataOfx);
+    resp.mesmoValorMesmaData = mesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.valorAproximadoMesmaData = mesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.mesmoValorOutraData = outraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.valorAproximadoOutraData = outraData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    if (mesmoValorTodos.length > 0) return resp;
+
     const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
-    if (nomeOfx) {
-      resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) =>
-        nomesSemelhantesFortes(nomeOfx, removerAcentos(s.cliente || '').toLowerCase(), regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5),
-      );
+    if (!nomeOfx) return resp;
+    const candidatosNome = sistemaFiltradoPorTipo.filter((s) =>
+      nomesSemelhantesFortes(nomeOfx, removerAcentos(s.cliente || '').toLowerCase(), regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5),
+    );
+    resp.mesmoNome = candidatosNome;
+    if (candidatosNome.length > 1) {
+      const ordenada = [...candidatosNome].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+      const combinacao = combinacaoExata(ordenada, valorOfxAbs, regraPix.toleranciaValor);
+      if (combinacao && combinacao.length > 1) resp.combinacaoPix = combinacao;
     }
+    return resp;
   }
 
   // ---- BOLETO: título pago dentro da janela de dias úteis (regra), valor exato OU soma de vários títulos ----
@@ -96,9 +129,10 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
       return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
-    const valorExato = candidatos.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraBoleto.toleranciaValor));
-    if (valorExato.length > 0) {
-      resp.mesmoValorMesmaData = valorExato;
+    const dentroDaTolerancia = candidatos.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraBoleto.toleranciaValor));
+    if (dentroDaTolerancia.length > 0) {
+      resp.mesmoValorMesmaData = dentroDaTolerancia.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+      resp.valorAproximadoMesmaData = dentroDaTolerancia.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
       return resp;
     }
 
@@ -124,11 +158,16 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
   if (tipoOfx !== 'CARTAO') {
     const regraForma = regraParaFormaGenerica(tipoOfx, regras);
     const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor));
-    resp.mesmoValorMesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx);
-    resp.mesmoValorOutraData = mesmoValorTodos.filter((s) => !dataOfx || s.data !== dataOfx);
+    const mesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx);
+    const outraData = mesmoValorTodos.filter((s) => !dataOfx || s.data !== dataOfx);
+    resp.mesmoValorMesmaData = mesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.valorAproximadoMesmaData = mesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.mesmoValorOutraData = outraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.valorAproximadoOutraData = outraData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
 
-    // PIX já calculou o próprio mesmoNome (mais preciso) acima — não sobrescreve.
-    // Combinado (soma de vários selecionados) não compara nome — ver comentário no topo da função.
+    // PIX não-combinado já retornou no bloco próprio acima (com seu mesmoNome
+    // mais preciso) — só chega aqui combinado, e combinado não compara nome
+    // (ver comentário no topo da função).
     if (tipoOfx !== 'PIX' && !combinado) {
       const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
       resp.mesmoNome = sistemaFiltradoPorTipo.filter((s) => {
@@ -177,9 +216,13 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
     const candidatosParcelaOk = candidatosComValor.filter((s) => parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
     resp.mesmoValorParcelaDiferente = candidatosComValor.filter((s) => !parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
 
-    resp.mesmoValorMesmaData = candidatosParcelaOk.filter((s) => s.data === dataOfx);
-    if (resp.mesmoValorMesmaData.length > 0) return resp;
-    resp.mesmoValorOutraData = candidatosParcelaOk.filter((s) => s.data !== dataOfx);
+    const parcelaOkMesmaData = candidatosParcelaOk.filter((s) => s.data === dataOfx);
+    resp.mesmoValorMesmaData = parcelaOkMesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), alvo));
+    resp.valorAproximadoMesmaData = parcelaOkMesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), alvo));
+    if (parcelaOkMesmaData.length > 0) return resp;
+    const parcelaOkOutraData = candidatosParcelaOk.filter((s) => s.data !== dataOfx);
+    resp.mesmoValorOutraData = parcelaOkOutraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), alvo));
+    resp.valorAproximadoOutraData = parcelaOkOutraData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), alvo));
     return resp;
   }
 
@@ -263,13 +306,32 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
   const resp: SugestoesConciliacaoInversa = {};
   const nomeSis = removerAcentos(itemSistema.cliente || '').toLowerCase() || null;
 
-  // ---- PIX: nome do sistema parecido com a descrição de cada OFX candidato ----
-  if (tipoSistema === 'PIX' && nomeSis && !combinado) {
+  // ---- PIX: valor exato primeiro; se não bater, procura OFX com nome
+  // parecido — e, só entre esses, tenta achar uma soma que bata com o valor
+  // (mesmo motivo do sentido Banco→Sistema: nunca soma nomes diferentes). ----
+  if (tipoSistema === 'PIX' && !combinado) {
     const regraPix = regras.PIX;
-    resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
+    const mesmoValorTodos = bancoFiltradoPorTipo.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraPix.toleranciaValor));
+    const mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
+    const outraData = mesmoValorTodos.filter((b) => !dataSis || b.data !== dataSis);
+    resp.mesmoValorMesmaData = mesmaData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.valorAproximadoMesmaData = mesmaData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.mesmoValorOutraData = outraData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.valorAproximadoOutraData = outraData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    if (mesmoValorTodos.length > 0) return resp;
+
+    if (!nomeSis) return resp;
+    const candidatosNome = bancoFiltradoPorTipo.filter((b) => {
       const nomeB = normalizarNomeClienteOfx(b.descricao);
       return nomeB ? nomesSemelhantesFortes(nomeB, nomeSis, regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5) : false;
     });
+    resp.mesmoNome = candidatosNome;
+    if (candidatosNome.length > 1) {
+      const ordenada = [...candidatosNome].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+      const combinacao = combinacaoExata(ordenada, valorSisAbs, regraPix.toleranciaValor);
+      if (combinacao && combinacao.length > 1) resp.combinacaoPix = combinacao;
+    }
+    return resp;
   }
 
   // ---- BOLETO: OFX pago dentro da janela de dias úteis À FRENTE da data do título, valor exato OU soma de vários lançamentos do banco ----
@@ -287,9 +349,10 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
       return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
-    const valorExato = candidatos.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraBoleto.toleranciaValor));
-    if (valorExato.length > 0) {
-      resp.mesmoValorMesmaData = valorExato;
+    const dentroDaTolerancia = candidatos.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraBoleto.toleranciaValor));
+    if (dentroDaTolerancia.length > 0) {
+      resp.mesmoValorMesmaData = dentroDaTolerancia.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+      resp.valorAproximadoMesmaData = dentroDaTolerancia.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
       return resp;
     }
 
@@ -315,8 +378,12 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
   if (tipoSistema !== 'CARTAO') {
     const regraForma = regraParaFormaGenerica(tipoSistema, regras);
     const mesmoValorTodos = bancoFiltradoPorTipo.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraForma.toleranciaValor));
-    resp.mesmoValorMesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
-    resp.mesmoValorOutraData = mesmoValorTodos.filter((b) => !dataSis || b.data !== dataSis);
+    const mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
+    const outraData = mesmoValorTodos.filter((b) => !dataSis || b.data !== dataSis);
+    resp.mesmoValorMesmaData = mesmaData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.valorAproximadoMesmaData = mesmaData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.mesmoValorOutraData = outraData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.valorAproximadoOutraData = outraData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
 
     if (tipoSistema !== 'PIX' && !combinado) {
       resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
@@ -359,9 +426,13 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
     const candidatosParcelaOk = candidatosComValor.filter((b) => parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
     resp.mesmoValorParcelaDiferente = candidatosComValor.filter((b) => !parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
 
-    resp.mesmoValorMesmaData = candidatosParcelaOk.filter((b) => b.data === dataSis);
-    if (resp.mesmoValorMesmaData.length > 0) return resp;
-    resp.mesmoValorOutraData = candidatosParcelaOk.filter((b) => b.data !== dataSis);
+    const parcelaOkMesmaData = candidatosParcelaOk.filter((b) => b.data === dataSis);
+    resp.mesmoValorMesmaData = parcelaOkMesmaData.filter((b) => valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
+    resp.valorAproximadoMesmaData = parcelaOkMesmaData.filter((b) => !valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
+    if (parcelaOkMesmaData.length > 0) return resp;
+    const parcelaOkOutraData = candidatosParcelaOk.filter((b) => b.data !== dataSis);
+    resp.mesmoValorOutraData = parcelaOkOutraData.filter((b) => valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
+    resp.valorAproximadoOutraData = parcelaOkOutraData.filter((b) => !valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
     return resp;
   }
 
@@ -445,6 +516,56 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
 
       if (combinacoesValidasBoleto.length === 1) {
         const ids = combinacoesValidasBoleto[0].map((s) => s.id);
+        grupos.push({ bancoIds: [ofx.id], sistemaIds: ids });
+        ids.forEach((id) => sistemaJaUsado.add(id));
+      }
+      continue;
+    }
+
+    // PIX: se não bater sozinho, tenta somar — mas só entre os candidatos de
+    // NOME parecido (nunca com PIX de clientes diferentes, mesmo que a soma
+    // bata por coincidência de valor — valores "redondos" tipo 60+840=900
+    // aparecem fácil entre PIX de gente diferente).
+    if (tipo === 'PIX') {
+      const regraPix = regras.PIX;
+      const candidatosPix = sistema.filter((s) => {
+        if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+        if (!s.data) return false;
+        if (getCategoriaSistema(s.formaPagamentoRaw) !== 'PIX') return false;
+        if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
+        if (regraPix.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
+        return true;
+      });
+
+      const valorExato = candidatosPix.filter((s) => s.data === dataOfx && valoresIguais(Math.abs(s.valor), valorOfxAbs, regraPix.toleranciaValor));
+      if (valorExato.length === 1) {
+        grupos.push({ bancoIds: [ofx.id], sistemaIds: [valorExato[0].id] });
+        sistemaJaUsado.add(valorExato[0].id);
+        continue;
+      }
+      if (valorExato.length > 1) continue; // ambíguo — fica pra conciliação manual
+
+      const nomeOfx = normalizarNomeClienteOfx(ofx.descricao);
+      if (!nomeOfx) continue;
+      const candidatosNome = candidatosPix.filter((s) =>
+        nomesSemelhantesFortes(nomeOfx, removerAcentos(s.cliente || '').toLowerCase(), regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5),
+      );
+
+      const porDataPix = new Map<string, LancamentoSistema[]>();
+      candidatosNome.forEach((s) => {
+        const lista = porDataPix.get(s.data!) ?? [];
+        lista.push(s);
+        porDataPix.set(s.data!, lista);
+      });
+
+      const combinacoesValidasPix: LancamentoSistema[][] = [];
+      for (const lista of porDataPix.values()) {
+        const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+        combinacoesTodasExatas(ordenada, valorOfxAbs, regraPix.toleranciaValor).forEach((c) => combinacoesValidasPix.push(c));
+      }
+
+      if (combinacoesValidasPix.length === 1) {
+        const ids = combinacoesValidasPix[0].map((s) => s.id);
         grupos.push({ bancoIds: [ofx.id], sistemaIds: ids });
         ids.forEach((id) => sistemaJaUsado.add(id));
       }

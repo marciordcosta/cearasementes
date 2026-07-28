@@ -15,6 +15,11 @@ export function valoresIguais(a: number, b: number, tolerancia = 0.01): boolean 
   return Math.abs(a - b) <= tolerancia;
 }
 
+/** Diferença desprezível (só arredondamento de ponto flutuante, não a tolerância configurável da regra) — usado pra separar "valor exato" de "valor aproximado dentro da tolerância" nas categorias de sugestão. */
+export function valoresExatamenteIguais(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 0.001;
+}
+
 /** Conta dias úteis estritamente entre `inicio` e `fim` (assume `inicio <= fim`), parando cedo (retorna algo > diasMax) assim que ultrapassa `diasMax` — evita percorrer intervalos longos à toa nos filtros de janela de Boleto. */
 export function diasUteisAte(inicio: Date, fim: Date, diasMax: number): number {
   let diasUteis = 0;

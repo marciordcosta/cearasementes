@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +36,7 @@ import { BANCO_FILTRO_OCULTADOS } from '@/features/conciliacao/constants';
 import { buscarSugestoes, buscarSugestoesInverso, conciliacaoAutomatica, itemBancoCombinado, itemSistemaCombinado } from '@/features/conciliacao/matching';
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
 import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
-import { getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
+import { extrairParcela, getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 
@@ -117,6 +118,7 @@ export function ConciliacaoPage() {
   const [ordemData, setOrdemData] = useState<'asc' | 'desc'>('asc');
   const [filtroNfSistema, setFiltroNfSistema] = useState<'com' | 'sem' | 'ocultados' | null>(null);
   const [grupoParaCancelar, setGrupoParaCancelar] = useState<string | null>(null);
+  const [pendenteSoma, setPendenteSoma] = useState<{ direcao: 'banco'; item: LancamentoBanco } | { direcao: 'sistema'; item: LancamentoSistema } | null>(null);
   const [pendenteSemNf, setPendenteSemNf] = useState<{ bancoIds: string[]; sistemaIds: string[]; avisoDiferenca: string | null } | null>(null);
   const [grupoAvisoAberto, setGrupoAvisoAberto] = useState<string | null>(null);
   const [itemObservacao, setItemObservacao] = useState<LancamentoBanco | null>(null);
@@ -130,7 +132,9 @@ export function ConciliacaoPage() {
   const [modalPendenciasAberto, setModalPendenciasAberto] = useState<'preConciliados' | 'preLancamentos' | null>(null);
   const [modalManualAberto, setModalManualAberto] = useState(false);
   const [modalRegrasAberto, setModalRegrasAberto] = useState(false);
-  const [modoSugestaoAtivo, setModoSugestaoAtivo] = useState(false);
+  const [modoSugestaoAtivo, setModoSugestaoAtivo] = useState(true);
+  const [somaHabilitada, setSomaHabilitada] = useState(false);
+  const [modalExportarAberto, setModalExportarAberto] = useState(false);
   const [processando, setProcessando] = useState(false);
   const [processandoSugestao, setProcessandoSugestao] = useState(false);
   const [sucessoAutomatico, setSucessoAutomatico] = useState<string | null>(null);
@@ -222,6 +226,54 @@ export function ConciliacaoPage() {
     }
     return mapa;
   }, [sistema]);
+
+  // Espelho de infoSistemaPorGrupo, mas com os campos crus (não formatados
+  // em texto) — usado na exportação em XLSX, uma coluna por campo.
+  const sistemaDetalhePorGrupo = useMemo(() => {
+    const mapa = new Map<string, { clientes: string[]; documentos: string[]; nfs: string[] }>();
+    for (const s of sistema) {
+      if (!s.grupoId || s.origem === 'taxa_automatica') continue;
+      const atual = mapa.get(s.grupoId) ?? { clientes: [], documentos: [], nfs: [] };
+      if (s.cliente) atual.clientes.push(s.cliente);
+      if (s.documento) atual.documentos.push(s.documento);
+      if (s.nf) atual.nfs.push(s.nf);
+      mapa.set(s.grupoId, atual);
+    }
+    return mapa;
+  }, [sistema]);
+
+  function exportarBancoXlsx(apenasConciliados: boolean) {
+    const registros = banco.filter((b) => !apenasConciliados || b.conciliado);
+    const linhas = registros.map((b) => {
+      const detalhe = b.grupoId ? sistemaDetalhePorGrupo.get(b.grupoId) : undefined;
+      const parcela = b.formaPagamento === 'CARTAO' ? extrairParcela(b.descricao) : null;
+      return {
+        Data: b.data ? fmtDataBR(b.data) : '',
+        Valor: b.valor,
+        Parcela: parcela ? `${parcela.atual}/${parcela.total}` : '',
+        NF: detalhe?.nfs.join(' + ') ?? '',
+        Documento: detalhe?.documentos.join(' + ') ?? '',
+        Cliente: detalhe?.clientes.join(' + ') ?? '',
+        'Registro do Banco': b.descricao ?? '',
+        'Nome do Banco': b.bancoNome ?? '',
+      };
+    });
+    const planilha = XLSX.utils.json_to_sheet(linhas);
+    // Coluna "Valor" (índice 1: Data=0, Valor=1) em formato contábil — o
+    // código usa "," e "." na sintaxe padrão do Excel, mas ele exibe com o
+    // separador da configuração regional (no Windows em pt-BR, vira "127,00").
+    for (let i = 0; i < linhas.length; i++) {
+      const endereco = XLSX.utils.encode_cell({ r: i + 1, c: 1 });
+      if (planilha[endereco]) planilha[endereco].z = '#,##0.00';
+    }
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, planilha, 'Conciliação Banco');
+    const hoje = new Date();
+    // "/" não é permitido em nome de arquivo — usa "-" no lugar, mesma ordem dd-mm-aaaa.
+    const dataArquivo = `${String(hoje.getDate()).padStart(2, '0')}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${hoje.getFullYear()}`;
+    XLSX.writeFile(workbook, `conciliação_Cearasementes_${dataArquivo}.xlsx`);
+    setModalExportarAberto(false);
+  }
 
   // grupoId -> lançamento do Sistema (real, importado) daquele grupo que
   // ainda não tem NF — grades pintam esse grupo em amarelo (pré-conciliado)
@@ -625,22 +677,53 @@ export function ConciliacaoPage() {
     setFiltroIdsSugestaoSistema(null);
   }
 
-  // Marcar um 2º+ item com "Sugestão automática" ativo soma direto com o(s)
-  // já selecionado(s) (ex.: 2 PIX que juntos batem com 1 título do sistema)
-  // — como o(s) selecionado(s) já ficam fixados/visíveis no topo da grade,
-  // não precisa mais perguntar, é só somar.
+  // "Habilitar soma" (botão global, desativado por padrão) liga/desliga a
+  // soma como um todo. Desativado: marcar um 2º+ item em qualquer grade só
+  // troca a seleção, nunca pergunta nada. Ativado: Banco (OFX) só soma PIX
+  // na seleção manual — Cartão não soma (Stone já traz 1 lançamento por
+  // venda) e Boleto também não (cada linha do extrato já é o recebimento
+  // AGREGADO de vários títulos — ver combinacaoBoleto em matching.ts, que
+  // soma títulos do SISTEMA contra 1 linha do Banco; somar 2 linhas de
+  // Boleto do Banco entre si não corresponde a nada real), e só entre itens
+  // da MESMA forma. Sistema (Max Data) fica livre — soma de Cartão, soma de
+  // Cartão com PIX etc. — porque o lançamento do Sistema pode ter erro de
+  // categorização; só pergunta se quer somar, sem travar combinação nenhuma.
+  const FORMAS_COM_SOMA = new Set(['PIX']);
+
   function onMarcarESomarBanco(item: LancamentoBanco) {
-    const novoSet = new Set(selecionadosBanco);
-    novoSet.add(item.id);
-    setSelecionadosBanco(novoSet);
-    onVerSugestoesCombinadas(banco.filter((b) => novoSet.has(b.id)));
+    const jaSelecionados = banco.filter((b) => selecionadosBanco.has(b.id));
+    const mesmaFormaDosJaSelecionados = jaSelecionados.every((b) => b.formaPagamento === item.formaPagamento);
+    if (!somaHabilitada || !FORMAS_COM_SOMA.has(item.formaPagamento) || !mesmaFormaDosJaSelecionados) {
+      setSelecionadosBanco(new Set([item.id]));
+      onVerSugestoes(item);
+      return;
+    }
+    setPendenteSoma({ direcao: 'banco', item });
   }
 
   function onMarcarESomarSistema(item: LancamentoSistema) {
-    const novoSet = new Set(selecionadosSistema);
-    novoSet.add(item.id);
-    setSelecionadosSistema(novoSet);
-    onVerSugestoesSistemaCombinadas(sistema.filter((s) => novoSet.has(s.id)));
+    if (!somaHabilitada) {
+      setSelecionadosSistema(new Set([item.id]));
+      onVerSugestoesSistema(item);
+      return;
+    }
+    setPendenteSoma({ direcao: 'sistema', item });
+  }
+
+  function onConfirmarSoma() {
+    if (!pendenteSoma) return;
+    if (pendenteSoma.direcao === 'banco') {
+      const novoSet = new Set(selecionadosBanco);
+      novoSet.add(pendenteSoma.item.id);
+      setSelecionadosBanco(novoSet);
+      onVerSugestoesCombinadas(banco.filter((b) => novoSet.has(b.id)));
+    } else {
+      const novoSet = new Set(selecionadosSistema);
+      novoSet.add(pendenteSoma.item.id);
+      setSelecionadosSistema(novoSet);
+      onVerSugestoesSistemaCombinadas(sistema.filter((s) => novoSet.has(s.id)));
+    }
+    setPendenteSoma(null);
   }
 
   // Filtra a grade do MESMO lado do item fixo pra mostrar todos os
@@ -893,16 +976,9 @@ export function ConciliacaoPage() {
       onAbrirParametrizacao={() => setModalRegrasAberto(true)}
       actions={
         <>
-          <button
-            type="button"
-            onClick={() => setModoSugestaoAtivo((v) => !v)}
-            title="Ao marcar um lançamento (Banco ou Sistema), já abre o painel de sugestões dele automaticamente — na direção correspondente"
-            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-              modoSugestaoAtivo ? 'bg-[var(--color-accent)] text-white' : 'border border-white/40 text-white hover:bg-white/12'
-            }`}
-          >
-            {modoSugestaoAtivo ? '✓ Sugestão automática' : 'Ativar sugestão'}
-          </button>
+          <Button variant="navy" onClick={() => setModalExportarAberto(true)}>
+            Exportar XLSX
+          </Button>
           <Button variant="primary" disabled={processando} onClick={onConciliarAutomatico}>
             {processando ? 'Processando…' : 'Conciliar Automático'}
           </Button>
@@ -926,6 +1002,26 @@ export function ConciliacaoPage() {
           >
             {ordemData === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
             Ordenar {ordemData === 'asc' ? '(mais antigas primeiro)' : '(mais recentes primeiro)'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setModoSugestaoAtivo((v) => !v)}
+            title="Ao marcar um lançamento (Banco ou Sistema), já abre o painel de sugestões dele automaticamente — na direção correspondente"
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+              modoSugestaoAtivo ? 'bg-[var(--color-accent)] text-white' : 'border border-[var(--color-line)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {modoSugestaoAtivo ? '✓ Sugestão automática' : 'Ativar sugestão'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSomaHabilitada((v) => !v)}
+            title="Ativado: marcar um 2º+ item pergunta se quer somar (PIX no Banco, qualquer forma no Sistema). Desativado: marcar um 2º+ item só troca a seleção."
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition ${
+              somaHabilitada ? 'bg-[var(--color-accent)] text-white' : 'border border-[var(--color-line)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {somaHabilitada ? '✓ Habilitar soma' : 'Habilitar soma'}
           </button>
         </Card>
 
@@ -1105,6 +1201,27 @@ export function ConciliacaoPage() {
       <RegrasConciliacaoModal open={modalRegrasAberto} regras={regras} onFechar={() => setModalRegrasAberto(false)} onSalvar={onSalvarRegras} />
 
       <Modal
+        open={modalExportarAberto}
+        title="Exportar Banco (XLSX)"
+        onClose={() => setModalExportarAberto(false)}
+        widthClassName="max-w-[440px]"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => exportarBancoXlsx(false)}>
+              Arquivo completo
+            </Button>
+            <Button variant="primary" onClick={() => exportarBancoXlsx(true)}>
+              Apenas conciliados
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--color-text)]">
+          Deseja exportar todos os {banco.length} registros do Banco, ou só os já conciliados?
+        </p>
+      </Modal>
+
+      <Modal
         open={grupoParaCancelar !== null}
         title="Desfazer conciliação"
         onClose={() => setGrupoParaCancelar(null)}
@@ -1121,6 +1238,25 @@ export function ConciliacaoPage() {
         }
       >
         <p className="text-sm text-[var(--color-text)]">Tem certeza que deseja desfazer essa conciliação? O(s) lançamento(s) do Banco e do Sistema voltam a aparecer como não conciliados.</p>
+      </Modal>
+
+      <Modal
+        open={pendenteSoma !== null}
+        title="Somar lançamentos"
+        onClose={() => setPendenteSoma(null)}
+        widthClassName="max-w-[420px]"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPendenteSoma(null)}>
+              Não
+            </Button>
+            <Button variant="primary" onClick={onConfirmarSoma}>
+              Sim, somar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-[var(--color-text)]">Deseja continuar somando esse lançamento com o(s) já selecionado(s)?</p>
       </Modal>
 
       <Modal

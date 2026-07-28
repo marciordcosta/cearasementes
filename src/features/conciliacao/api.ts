@@ -228,6 +228,32 @@ export async function apagarGrupoConciliacao(tipo: TipoArquivo, subGrupo: string
   if (error) throw error;
 }
 
+/**
+ * Quantos lançamentos desse sub-grupo já estão conciliados — usado só pra
+ * avisar antes de apagar o grupo inteiro (Uploads). Apagar o lado Banco (ou
+ * Sistema) não desfaz a conciliação do OUTRO lado: o lançamento que ficou do
+ * outro lado continua marcado `conciliado=true`, agora sem contraparte
+ * nenhuma (órfão) — daí o aviso.
+ */
+export async function contarConciliadosDoGrupo(tipo: TipoArquivo, subGrupo: string): Promise<number> {
+  if (tipo === 'ofx') {
+    const { count, error } = await supabase
+      .from('conciliacao_lancamentos_banco')
+      .select('id', { count: 'exact', head: true })
+      .eq('banco_nome', subGrupo)
+      .eq('conciliado', true);
+    if (error) throw error;
+    return count ?? 0;
+  }
+  const { count, error } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .select('id', { count: 'exact', head: true })
+    .eq('tipo_lancamento', subGrupo as 'Entrada' | 'Saída')
+    .eq('conciliado', true);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function inserirLancamentoManualSistema(input: NovoLancamentoManual): Promise<LancamentoSistema> {
   const { data, error } = await supabase
     .from('conciliacao_lancamentos_sistema')
