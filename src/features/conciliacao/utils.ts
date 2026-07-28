@@ -10,9 +10,17 @@ export function removerAcentos(str: unknown): string {
     .replace(/[^a-zA-Z0-9\s]/g, '');
 }
 
-/** Compara dois valores com tolerância (evita erro de ponto flutuante) — `<=` pra uma regra com tolerância 0 ainda aceitar valores exatamente iguais. */
+/**
+ * Compara dois valores com tolerância — `<=` pra uma regra com tolerância 0
+ * ainda aceitar valores exatamente iguais. O `+ 1e-9` absorve erro de ponto
+ * flutuante do próprio JS: `93.34 - 93.33` não dá exatamente `0.01`, dá
+ * `0.010000000000005116` — sem essa folga, uma diferença que devia bater
+ * exatamente no limite da tolerância falhava por uma casa decimal
+ * inexistente na prática (13ª casa), escondendo sugestões que deveriam
+ * aparecer.
+ */
 export function valoresIguais(a: number, b: number, tolerancia = 0.01): boolean {
-  return Math.abs(a - b) <= tolerancia;
+  return Math.abs(a - b) <= tolerancia + 1e-9;
 }
 
 /** Diferença desprezível (só arredondamento de ponto flutuante, não a tolerância configurável da regra) — usado pra separar "valor exato" de "valor aproximado dentro da tolerância" nas categorias de sugestão. */
@@ -106,8 +114,8 @@ export function detectPaymentTypeFromOfx(desc: unknown): 'PIX' | 'CARTAO' | 'BOL
   if (t.includes('cartao') || t.includes('carto') || t.includes('credito') || t.includes('debito')) return 'CARTAO';
   if (t.includes('boleto') || t.includes('cobranca')) return 'BOLETO';
   if (t.includes('rendimento') || t.includes('rende')) return 'RENDIMENTO';
+  if (t.includes('cheque') || t.includes('chq')) return 'CHEQUE';
   if (t.includes('pix') || t.includes('dinheiro') || t.includes('transf') || t.includes('doc') || t.includes('ted')) return 'PIX';
-  if (t.includes('cheque')) return 'CHEQUE';
   return 'OUTRO';
 }
 

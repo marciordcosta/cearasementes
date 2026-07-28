@@ -44,6 +44,8 @@ interface ListaSistemaProps {
   /** grupoId -> texto do aviso (valor/forma de pagamento diferentes) confirmado na hora da conciliação — presença na tabela decide se mostra o "!" informativo. */
   avisoPorGrupo: Map<string, string>;
   onAbrirAvisoDiferenca: (grupoId: string) => void;
+  /** grupoId -> valor líquido creditado no Banco (Cartão com valor bruto conhecido) — mostrado discretamente ao lado do valor bruto do Sistema, já conciliado. */
+  liquidoPorGrupo: Map<string, number>;
 }
 
 export function ListaSistema({
@@ -71,9 +73,11 @@ export function ListaSistema({
   onLimparFiltroSugestao,
   avisoPorGrupo,
   onAbrirAvisoDiferenca,
+  liquidoPorGrupo,
 }: ListaSistemaProps) {
   function renderLinha(item: LancamentoSistema) {
     const categoria = getCategoriaSistema(item.formaPagamentoRaw);
+    const liquido = item.conciliado && item.grupoId ? liquidoPorGrupo.get(item.grupoId) : undefined;
     const partesDocNf: ReactNode[] = [];
     if (item.documento) partesDocNf.push(`Doc ${item.documento}`);
     if (item.nf) {
@@ -118,6 +122,7 @@ export function ListaSistema({
             <div className="flex items-baseline gap-1.5">
               <span className="text-xs text-[var(--color-text-soft)]">{item.data ? fmtDataBR(item.data) : '—'}</span>
               <span className={`num text-base font-extrabold ${item.valor < 0 ? 'text-bad' : 'text-good'}`}>— {fmtBRL.format(item.valor)}</span>
+              {liquido != null && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(líquido: {fmtBRL.format(liquido)})</span>}
             </div>
             <div className="flex items-center gap-1.5">
               <Badge cor={CORES_FORMA_PAGAMENTO[categoria]}>{categoria}</Badge>
@@ -219,6 +224,15 @@ export function ListaSistema({
     if (itemBottom > viewport.scrollTop + viewport.alturaVisivel) return 'baixo';
     return null;
   }, [itemUnicoFixado, itens, viewport]);
+
+  // Quando o item fixado saiu da lista filtrada (busca/filtro não bate mais
+  // com ele), o overlay "topo" sobrepõe visualmente o próprio primeiro
+  // resultado real da lista (scrollTop = 0) — sem esse respiro, esse
+  // resultado fica escondido atrás do item fixado. Já quando ele só saiu de
+  // vista por causa do scroll (ainda presente na lista), o overlay
+  // intencionalmente cobre a linha que rolou pra debaixo dele, então não
+  // precisa (e não deve) empurrar o restante da lista.
+  const itemFixadoForaDaLista = itemUnicoFixado !== null && itens.findIndex((i) => i.id === itemUnicoFixado.id) === -1;
 
   // Item fixado (ver abaixo) já aparece lá — na grade normal ele vira um
   // espaço em branco, senão apareceria duplicado enquanto rola. Volta a
@@ -327,7 +341,7 @@ export function ListaSistema({
           itens={itens}
           altura={ALTURA_LINHA}
           className="h-full overflow-y-auto"
-          style={{ paddingTop: multiplasFixadas ? itensSelecionados.length * ALTURA_LINHA : 0 }}
+          style={{ paddingTop: multiplasFixadas ? itensSelecionados.length * ALTURA_LINHA : itemFixadoForaDaLista ? ALTURA_LINHA : 0 }}
           keyExtractor={(item) => item.id}
           vazio={<p className="px-4 py-6 text-center text-sm text-[var(--color-text-soft)]">Nenhum lançamento.</p>}
           renderItem={renderLinhaGrade}

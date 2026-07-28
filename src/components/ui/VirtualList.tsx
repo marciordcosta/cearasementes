@@ -41,12 +41,23 @@ export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtra
     onViewportChange?.({ scrollTop, alturaVisivel });
   }, [scrollTop, alturaVisivel, onViewportChange]);
 
-  // Zera a rolagem quando a lista muda de identidade (ex.: trocou o filtro) —
-  // senão o scrollTop antigo aponta pra um índice que pode nem existir mais.
+  // A lista muda de identidade (novo array) toda vez que os dados por trás
+  // mudam — inclusive só por causa de uma conciliação (o item que você
+  // acabou de conciliar some/muda de posição), não só quando o usuário troca
+  // de filtro de verdade. Em vez de sempre voltar pro topo (o que atrapalha
+  // justamente o caso mais comum — conciliar um item e continuar na mesma
+  // vizinhança), só REAJUSTA (clampa) o scroll se ele ficou fora do
+  // intervalo válido pro novo tamanho da lista — o único caso em que o
+  // scrollTop antigo realmente apontaria pra um índice que não existe mais.
   useEffect(() => {
-    if (containerRef.current) containerRef.current.scrollTop = 0;
-    setScrollTop(0);
-  }, [itens]);
+    const el = containerRef.current;
+    if (!el) return;
+    const maxScroll = Math.max(0, itens.length * altura - el.clientHeight);
+    if (el.scrollTop > maxScroll) {
+      el.scrollTop = maxScroll;
+      setScrollTop(maxScroll);
+    }
+  }, [itens, altura]);
 
   function onScroll(e: UIEvent<HTMLDivElement>) {
     const top = e.currentTarget.scrollTop;

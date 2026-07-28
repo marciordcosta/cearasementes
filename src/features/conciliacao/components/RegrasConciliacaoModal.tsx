@@ -165,6 +165,15 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
 
       {forma === 'PIX' && (
         <>
+          <Campo label="Tolerância de dias">
+            <input
+              type="number"
+              min={0}
+              value={regra.toleranciaDias}
+              onChange={(e) => onAtualizar('toleranciaDias', parseInt(e.target.value, 10) || 0)}
+              className={campoClasse}
+            />
+          </Campo>
           <Campo label="Nome contido (mín. caracteres)">
             <input
               type="number"
@@ -193,6 +202,12 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
 
       {forma === 'CHEQUE' && (
         <p className="text-[11px] text-[var(--color-text-soft)]">* Hoje o Cheque só usa a tolerância de valor acima — ainda não tem regra própria de dias ou nome.</p>
+      )}
+
+      {forma === 'PIX' && (
+        <p className="text-[11px] text-[var(--color-text-soft)]">
+          * A tolerância de dias também define a janela da categoria "Mesmo valor, recebimento diferente" nas sugestões, pra qualquer forma de pagamento.
+        </p>
       )}
     </div>
   );

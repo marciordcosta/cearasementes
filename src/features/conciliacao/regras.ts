@@ -18,6 +18,8 @@ export interface RegraConciliacao {
   nomeMinSobrenome: number | null;
   /** Se false, a Conciliação Automática não exige NF preenchida nessa forma pra fechar sozinha. */
   exigirNfAutomatica: boolean;
+  /** Só PIX usa hoje: dias corridos de diferença ainda considerados "mesma data" na busca de sugestões, e janela da rede de segurança "Mesmo valor, recebimento diferente" (todas as formas). */
+  toleranciaDias: number;
 }
 
 export const NOMES_FORMA_REGRA: Record<FormaRegra, string> = {
@@ -34,11 +36,11 @@ export const NOMES_FORMA_REGRA: Record<FormaRegra, string> = {
  * pra a conciliação nunca ficar sem regra nenhuma.
  */
 export const REGRAS_PADRAO: Record<FormaRegra, RegraConciliacao> = {
-  PIX: { formaPagamento: 'PIX', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: 8, nomeMinSobrenome: 5, exigirNfAutomatica: true },
-  CARTAO_DEBITO: { formaPagamento: 'CARTAO_DEBITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 0.9, taxaMaxPercentual: 3, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true },
-  CARTAO_CREDITO: { formaPagamento: 'CARTAO_CREDITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 1.9, taxaMaxPercentual: 5, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true },
-  BOLETO: { formaPagamento: 'BOLETO', toleranciaValor: 0.01, diasUteisMin: 2, diasUteisMax: 3, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true },
-  CHEQUE: { formaPagamento: 'CHEQUE', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true },
+  PIX: { formaPagamento: 'PIX', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: 8, nomeMinSobrenome: 5, exigirNfAutomatica: true, toleranciaDias: 30 },
+  CARTAO_DEBITO: { formaPagamento: 'CARTAO_DEBITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 0.9, taxaMaxPercentual: 3, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
+  CARTAO_CREDITO: { formaPagamento: 'CARTAO_CREDITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 1.9, taxaMaxPercentual: 5, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
+  BOLETO: { formaPagamento: 'BOLETO', toleranciaValor: 0.01, diasUteisMin: 2, diasUteisMax: 3, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
+  CHEQUE: { formaPagamento: 'CHEQUE', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
 };
 
 type RegraRow = Database['public']['Tables']['conciliacao_regras']['Row'];
@@ -54,6 +56,7 @@ function regraFromRow(row: RegraRow): RegraConciliacao {
     nomeMinContido: row.nome_min_contido,
     nomeMinSobrenome: row.nome_min_sobrenome,
     exigirNfAutomatica: row.exigir_nf_automatica,
+    toleranciaDias: row.dias_tolerancia,
   };
 }
 
@@ -83,6 +86,7 @@ export async function salvarRegra(regra: RegraConciliacao): Promise<RegraConcili
         nome_min_contido: regra.nomeMinContido,
         nome_min_sobrenome: regra.nomeMinSobrenome,
         exigir_nf_automatica: regra.exigirNfAutomatica,
+        dias_tolerancia: regra.toleranciaDias,
         atualizado_em: new Date().toISOString(),
       },
       { onConflict: 'forma_pagamento' },

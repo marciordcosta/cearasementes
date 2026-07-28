@@ -52,6 +52,8 @@ interface ListaBancoProps {
   onAbrirAvisoDiferenca: (grupoId: string) => void;
   /** Abre o modal de observação (informações adicionais) pra esse lançamento — disponível em qualquer registro, conciliado ou não. */
   onAbrirObservacao: (item: LancamentoBanco) => void;
+  /** grupoId -> categoria de sugestão que bateu nessa conciliação (ex.: "Mesmo valor, outra data") — reclassificado a partir dos dados já persistidos, só informativo. */
+  criterioPorGrupo: Map<string, string>;
 }
 
 export function ListaBanco({
@@ -84,9 +86,11 @@ export function ListaBanco({
   avisoPorGrupo,
   onAbrirAvisoDiferenca,
   onAbrirObservacao,
+  criterioPorGrupo,
 }: ListaBancoProps) {
   function renderLinha(item: LancamentoBanco) {
     const infoSistema = item.conciliado && item.grupoId ? infoSistemaPorGrupo.get(item.grupoId) : undefined;
+    const criterio = item.conciliado && item.grupoId ? criterioPorGrupo.get(item.grupoId) : undefined;
     const sistemaSemNf = item.grupoId ? sistemaSemNfPorGrupo.get(item.grupoId) : undefined;
     const sistemaPreLancamento = item.grupoId ? sistemaPreLancamentoPorGrupo.get(item.grupoId) : undefined;
     const corConciliado = sistemaSemNf ? 'bg-[#FFF6DE]' : sistemaPreLancamento ? 'bg-[#E1EEFF]' : 'bg-good-soft';
@@ -137,7 +141,11 @@ export function ListaBanco({
             {item.descricao || '—'}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]">{infoSistema}</div>
+            <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]" title={criterio}>
+              {infoSistema}
+              {infoSistema && criterio && ' · '}
+              {criterio && <span className="italic">{criterio}</span>}
+            </div>
             <div className="flex shrink-0 items-center gap-2">
               {item.conciliado ? (
                 <>
@@ -223,6 +231,15 @@ export function ListaBanco({
     if (itemBottom > viewport.scrollTop + viewport.alturaVisivel) return 'baixo';
     return null;
   }, [itemUnicoFixado, itens, viewport]);
+
+  // Quando o item fixado saiu da lista filtrada (busca/filtro não bate mais
+  // com ele), o overlay "topo" sobrepõe visualmente o próprio primeiro
+  // resultado real da lista (scrollTop = 0) — sem esse respiro, esse
+  // resultado fica escondido atrás do item fixado. Já quando ele só saiu de
+  // vista por causa do scroll (ainda presente na lista), o overlay
+  // intencionalmente cobre a linha que rolou pra debaixo dele, então não
+  // precisa (e não deve) empurrar o restante da lista.
+  const itemFixadoForaDaLista = itemUnicoFixado !== null && itens.findIndex((i) => i.id === itemUnicoFixado.id) === -1;
 
   // Item fixado (ver abaixo) já aparece lá — na grade normal ele vira um
   // espaço em branco, senão apareceria duplicado enquanto rola. Volta a
@@ -330,7 +347,7 @@ export function ListaBanco({
           itens={itens}
           altura={ALTURA_LINHA}
           className="h-full overflow-y-auto"
-          style={{ paddingTop: multiplasFixadas ? itensSelecionados.length * ALTURA_LINHA : 0 }}
+          style={{ paddingTop: multiplasFixadas ? itensSelecionados.length * ALTURA_LINHA : itemFixadoForaDaLista ? ALTURA_LINHA : 0 }}
           keyExtractor={(item) => item.id}
           vazio={<p className="px-4 py-6 text-center text-sm text-[var(--color-text-soft)]">Nenhum lançamento.</p>}
           renderItem={renderLinhaGrade}

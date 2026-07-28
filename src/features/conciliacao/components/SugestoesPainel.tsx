@@ -1,8 +1,11 @@
-import { Filter, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/Badge';
 import { PainelFlutuante } from '@/components/ui/PainelFlutuante';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
-import type { LancamentoBanco, LancamentoSistema, SugestoesConciliacao, SugestoesConciliacaoInversa } from '../types';
+import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
+import { ROTULOS_CATEGORIA_SUGESTAO, type LancamentoBanco, type LancamentoSistema, type SugestoesConciliacao, type SugestoesConciliacaoInversa } from '../types';
+import { getCategoriaSistema } from '../utils';
 
 /** Qual lado está fixo (a origem da busca) — decide se os candidatos vêm do Sistema ou do Banco. */
 export type ItemFixo = { direcao: 'banco'; item: LancamentoBanco } | { direcao: 'sistema'; item: LancamentoSistema };
@@ -19,7 +22,8 @@ interface SugestoesPainelProps {
   processando: boolean;
   /** Filtra a grade do MESMO lado do item fixo pra mostrar todos os lançamentos com o mesmo valor (pode ser mais de um, na combinação "somar todos"). */
   onVerRegistroFixo: () => void;
-  rotuloRegistroFixo: string;
+  /** Se esse filtro de "mesmo valor" está ativo agora — só pra colorir o botão como "ativo" (verde), igual os outros ícones de filtro do painel. */
+  filtroRegistroFixoAtivo: boolean;
   /** Abre o "Novo Lançamento Manual" pré-preenchido com os dados do OFX selecionado — só existe no sentido Banco→Sistema (null esconde o botão). */
   onRegistroManual: (() => void) | null;
   /** Sugestão pode bater com um lançamento já conciliado (ou pré-conciliado) — mostra mesmo assim, sinalizado, com esses dois atalhos em vez de "Conciliar". */
@@ -30,16 +34,7 @@ interface SugestoesPainelProps {
   filtroOutroLadoAtivo: string | null;
 }
 
-const ROTULOS: Record<keyof SugestoesConciliacao, string> = {
-  mesmoNome: 'Nome parecido',
-  mesmoValorMesmaData: 'Mesmo valor e data',
-  valorAproximadoMesmaData: 'Valor aproximado, mesma data',
-  mesmoValorOutraData: 'Mesmo valor, outra data',
-  valorAproximadoOutraData: 'Valor aproximado, outra data',
-  mesmoValorParcelaDiferente: 'Mesmo valor, parcelas diferentes',
-  combinacaoBoleto: 'Combinação de títulos (soma bate com o valor)',
-  combinacaoPix: 'Combinação por nome parecido (soma bate com o valor)',
-};
+const ROTULOS = ROTULOS_CATEGORIA_SUGESTAO;
 
 function correspondeBusca(termo: string, campos: Array<string | number | null | undefined>): boolean {
   if (!termo) return true;
@@ -66,19 +61,30 @@ export function SugestoesPainel({
   onConciliar,
   processando,
   onVerRegistroFixo,
-  rotuloRegistroFixo,
+  filtroRegistroFixoAtivo,
   onRegistroManual,
   onPedirCancelarConciliacao,
   onFiltrarOutroLadoPorGrupo,
   filtroOutroLadoAtivo,
 }: SugestoesPainelProps) {
   const [busca, setBusca] = useState('');
+  const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<keyof SugestoesConciliacao>>(new Set());
 
   // Cada novo item (ou combinação) selecionado é uma busca nova — não faz
-  // sentido herdar o filtro de texto da sugestão anterior.
+  // sentido herdar o filtro de texto nem os "já conciliados" expandidos da sugestão anterior.
   useEffect(() => {
     setBusca('');
+    setCategoriasExpandidas(new Set());
   }, [itemFixo?.item.id]);
+
+  function alternarExpandida(cat: keyof SugestoesConciliacao) {
+    setCategoriasExpandidas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(cat)) proximo.delete(cat);
+      else proximo.add(cat);
+      return proximo;
+    });
+  }
 
   const direcao = itemFixo?.direcao ?? 'banco';
   const categorias = (Object.keys(ROTULOS) as (keyof SugestoesConciliacao)[]).filter((k) => (sugestoes?.[k]?.length ?? 0) > 0);
@@ -111,8 +117,12 @@ export function SugestoesPainel({
       <div className="space-y-4">
         {itemFixo && (
           <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={onVerRegistroFixo} className="text-xs font-semibold text-[var(--color-accent)] hover:underline">
-              {rotuloRegistroFixo}
+            <button
+              type="button"
+              onClick={onVerRegistroFixo}
+              className={`text-xs font-semibold hover:underline ${filtroRegistroFixoAtivo ? 'text-good' : 'text-[var(--color-text-soft)]'}`}
+            >
+              Filtrar mesmo valor
             </button>
             <input
               value={busca}
@@ -147,59 +157,101 @@ export function SugestoesPainel({
             // o grupo inteiro fica só pra consulta (sem botão "Conciliar"),
             // já que tocar nele exigiria desfazer a conciliação alheia antes.
             const grupoTemConciliado = (cat === 'combinacaoBoleto' || cat === 'combinacaoPix') && itens.some((i) => i.conciliado);
-            return (
-              <div key={cat} className="space-y-1.5">
-                <p className="border-b border-[var(--color-line)] pb-1 text-sm font-bold text-[var(--color-text)]">{ROTULOS[cat]}</p>
-                {itensFiltrados.map((item) => {
-                  const linha1 = direcao === 'banco' ? (item as LancamentoSistema).cliente || '—' : (item as LancamentoBanco).descricao || '—';
-                  const linha2 =
-                    direcao === 'banco'
-                      ? [(item as LancamentoSistema).documento ? `Doc ${(item as LancamentoSistema).documento}` : null, (item as LancamentoSistema).nf ? `NF ${(item as LancamentoSistema).nf}` : null]
-                          .filter(Boolean)
-                          .join(' · ')
-                      : (item as LancamentoBanco).bancoNome ?? '';
-                  const jaConciliado = item.conciliado || grupoTemConciliado;
-                  return (
-                    <div key={item.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm ${corDoStatus(item, direcao)}`}>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-semibold">{linha1}</div>
-                        <div className="truncate text-[11px] text-[var(--color-text-soft)]">
-                          {item.data ? fmtDataBR(item.data) : '—'}
-                          {linha2 && ` · ${linha2}`}
-                        </div>
-                      </div>
-                      <span className="num shrink-0 font-semibold">{fmtBRL.format(item.valor)}</span>
-                      {jaConciliado ? (
-                        <div className="flex shrink-0 items-center gap-2" title="Este lançamento já está conciliado (ou pré-conciliado) — pode ter sido um erro">
-                          <button
-                            type="button"
-                            onClick={() => item.grupoId && onFiltrarOutroLadoPorGrupo(item.grupoId)}
-                            className={
-                              item.grupoId && filtroOutroLadoAtivo === item.grupoId
-                                ? 'text-[var(--color-accent)]'
-                                : 'text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
-                            }
-                            title="Filtrar lançamento(s) ligados a este"
-                          >
-                            <Filter size={14} />
-                          </button>
-                          <button type="button" onClick={() => item.grupoId && onPedirCancelarConciliacao(item.grupoId)} className="text-bad hover:brightness-125" title="Desfazer conciliação">
-                            <X size={16} strokeWidth={2.5} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={processando}
-                          onClick={() => onConciliar(cat === 'combinacaoBoleto' || cat === 'combinacaoPix' ? itens.map((i) => i.id) : [item.id])}
-                          className="shrink-0 whitespace-nowrap rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
-                        >
-                          Conciliar
-                        </button>
+            const pendentes = itensFiltrados.filter((item) => !(item.conciliado || grupoTemConciliado));
+            const conciliados = itensFiltrados.filter((item) => item.conciliado || grupoTemConciliado);
+            const expandida = categoriasExpandidas.has(cat);
+
+            function renderLinha(item: LancamentoSistema | LancamentoBanco) {
+              const linha1 = direcao === 'banco' ? (item as LancamentoSistema).cliente || '—' : (item as LancamentoBanco).descricao || '—';
+              const linha2 =
+                direcao === 'banco'
+                  ? [(item as LancamentoSistema).documento ? `Doc ${(item as LancamentoSistema).documento}` : null, (item as LancamentoSistema).nf ? `NF ${(item as LancamentoSistema).nf}` : null]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : (item as LancamentoBanco).bancoNome ?? '';
+              const jaConciliado = item.conciliado || grupoTemConciliado;
+              // Candidato do Banco (sentido Sistema→Banco): Cartão grava sempre o
+              // valor líquido, mas mostrar o bruto aqui (quando conhecido, Stone)
+              // facilita comparar de relance com o valor bruto do Sistema, que é
+              // exatamente o que está sendo comparado na busca.
+              const candidatoBanco = direcao === 'sistema' ? (item as LancamentoBanco) : null;
+              const mostrarBruto = !!candidatoBanco && candidatoBanco.formaPagamento === 'CARTAO' && candidatoBanco.valorBrutoCartao != null && !item.conciliado;
+              const valorExibido = mostrarBruto ? candidatoBanco!.valorBrutoCartao! : item.valor;
+              // Tag de forma de pagamento do PRÓPRIO candidato — só faz sentido em
+              // "recebimento diferente" (a tag dele é justamente diferente da do
+              // item fixo); nas demais categorias a forma já é a mesma, não
+              // precisa repetir.
+              const categoriaCandidato = direcao === 'banco' ? getCategoriaSistema((item as LancamentoSistema).formaPagamentoRaw) : (item as LancamentoBanco).formaPagamento;
+              return (
+                <div key={item.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm ${corDoStatus(item, direcao)}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 truncate text-xs font-semibold">
+                      <span className="truncate">{linha1}</span>
+                      {cat === 'recebimentoDiferente' && (
+                        <span className="inline-block shrink-0 origin-left scale-75">
+                          <Badge cor={CORES_FORMA_PAGAMENTO[categoriaCandidato]}>{categoriaCandidato}</Badge>
+                        </span>
                       )}
                     </div>
-                  );
-                })}
+                    <div className="truncate text-[11px] text-[var(--color-text-soft)]">
+                      {item.data ? fmtDataBR(item.data) : '—'}
+                      {linha2 && ` · ${linha2}`}
+                    </div>
+                  </div>
+                  <span className="num shrink-0 text-right font-semibold">
+                    {fmtBRL.format(valorExibido)}
+                    {mostrarBruto && <span className="block text-[10px] font-normal text-[var(--color-text-soft)]">(bruto)</span>}
+                  </span>
+                  {jaConciliado ? (
+                    <div className="flex shrink-0 items-center gap-2" title="Este lançamento já está conciliado (ou pré-conciliado) — pode ter sido um erro">
+                      <button
+                        type="button"
+                        onClick={() => item.grupoId && onFiltrarOutroLadoPorGrupo(item.grupoId)}
+                        className={
+                          item.grupoId && filtroOutroLadoAtivo === item.grupoId
+                            ? 'text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+                        }
+                        title="Filtrar lançamento(s) ligados a este"
+                      >
+                        <Filter size={14} />
+                      </button>
+                      <button type="button" onClick={() => item.grupoId && onPedirCancelarConciliacao(item.grupoId)} className="text-bad hover:brightness-125" title="Desfazer conciliação">
+                        <X size={16} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={processando}
+                      onClick={() => onConciliar(cat === 'combinacaoBoleto' || cat === 'combinacaoPix' ? itens!.map((i) => i.id) : [item.id])}
+                      className="shrink-0 whitespace-nowrap rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
+                    >
+                      Conciliar
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div key={cat} className="space-y-1.5">
+                <div className="flex items-center gap-2 border-b border-[var(--color-line)] pb-1">
+                  <p className="text-sm font-bold text-[var(--color-text)]">{ROTULOS[cat]}</p>
+                  {conciliados.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => alternarExpandida(cat)}
+                      className="flex items-center gap-0.5 rounded-full bg-good-soft px-1.5 py-0.5 text-[10px] font-semibold text-good hover:brightness-95"
+                      title="Já conciliados nesta busca"
+                    >
+                      {expandida ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                      {conciliados.length}
+                    </button>
+                  )}
+                </div>
+                {expandida && conciliados.map(renderLinha)}
+                {pendentes.map(renderLinha)}
               </div>
             );
           })

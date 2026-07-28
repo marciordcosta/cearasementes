@@ -1,7 +1,33 @@
 import { RotateCcw } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { fmtDataBR } from '@/lib/format';
-import type { FiltrosConciliacao as FiltrosConciliacaoType } from '../types';
+import type { EscopoFiltro, FiltrosConciliacao as FiltrosConciliacaoType } from '../types';
+
+const OPCOES_ESCOPO: { value: EscopoFiltro; label: string }[] = [
+  { value: 'ambos', label: 'Ambos' },
+  { value: 'banco', label: 'Banco' },
+  { value: 'sistema', label: 'Sistema' },
+];
+
+/** Escolhe em qual grade um filtro vale — Banco, Sistema, ou as duas (padrão). Fica sempre no topo do popup do filtro, antes das opções em si. */
+function SeletorEscopo({ valor, onSelecionar }: { valor: EscopoFiltro; onSelecionar: (v: EscopoFiltro) => void }) {
+  return (
+    <div className="flex gap-1 border-b border-[var(--color-line)] p-2">
+      {OPCOES_ESCOPO.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onSelecionar(o.value)}
+          className={`flex-1 rounded-md px-2 py-1 text-xs font-semibold transition ${
+            o.value === valor ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-page)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface FiltrosConciliacaoProps {
   filtros: FiltrosConciliacaoType;
@@ -22,7 +48,20 @@ interface OpcaoFiltro {
  * nativo faria, só que com a lista de opções sob nosso controle (pra poder
  * reordenar/estilizar igual em todos os filtros do topbar).
  */
-function DropdownFiltro({ rotulo, valor, opcoes, onSelecionar }: { rotulo: string; valor: string | null; opcoes: OpcaoFiltro[]; onSelecionar: (value: string | null) => void }) {
+function DropdownFiltro({
+  rotulo,
+  valor,
+  opcoes,
+  onSelecionar,
+  extra,
+}: {
+  rotulo: string;
+  valor: string | null;
+  opcoes: OpcaoFiltro[];
+  onSelecionar: (value: string | null) => void;
+  /** Conteúdo extra no topo do popup, antes das opções — usado pro seletor de escopo (Banco/Sistema/Ambos). */
+  extra?: ReactNode;
+}) {
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -63,6 +102,7 @@ function DropdownFiltro({ rotulo, valor, opcoes, onSelecionar }: { rotulo: strin
       </div>
       {aberto && (
         <div className="absolute top-[calc(100%+6px)] left-0 z-[70] min-w-[170px] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl">
+          {extra}
           {opcoes.map((o) => (
             <button
               key={o.label}
@@ -128,6 +168,7 @@ export function FiltrosConciliacao({ filtros, onChange, onLimparTudo }: FiltrosC
         </div>
         {dataAberta && (
           <div className="absolute top-[calc(100%+6px)] left-0 z-[70] flex flex-col gap-2.5 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-xl">
+            <SeletorEscopo valor={filtros.escopoData} onSelecionar={(v) => atualizar('escopoData', v)} />
             <label className="flex items-center justify-between gap-2.5 text-xs text-[var(--color-text-soft)]">
               Início
               <input
@@ -154,13 +195,13 @@ export function FiltrosConciliacao({ filtros, onChange, onLimparTudo }: FiltrosC
         rotulo="Pagamento"
         valor={filtros.formaPagamento}
         onSelecionar={(v) => atualizar('formaPagamento', v as FiltrosConciliacaoType['formaPagamento'])}
+        extra={<SeletorEscopo valor={filtros.escopoPagamento} onSelecionar={(v) => atualizar('escopoPagamento', v)} />}
         opcoes={[
           { value: null, label: 'Todas as formas' },
           { value: 'PIX', label: 'PIX' },
           { value: 'CARTAO', label: 'Cartão' },
           { value: 'BOLETO', label: 'Boleto' },
           { value: 'CHEQUE', label: 'Cheque' },
-          { value: 'RENDIMENTO', label: 'Rendimento' },
           { value: 'OUTRO', label: 'Outro' },
         ]}
       />
@@ -194,7 +235,17 @@ export function FiltrosConciliacao({ filtros, onChange, onLimparTudo }: FiltrosC
       <button
         type="button"
         onClick={() => {
-          onChange({ bancoNome: null, dataInicio: null, dataFim: null, formaPagamento: null, tipoLancamento: null, conciliado: null, busca: '' });
+          onChange({
+            bancoNome: null,
+            dataInicio: null,
+            dataFim: null,
+            escopoData: 'ambos',
+            formaPagamento: null,
+            escopoPagamento: 'ambos',
+            tipoLancamento: null,
+            conciliado: null,
+            busca: '',
+          });
           onLimparTudo();
         }}
         className="whitespace-nowrap rounded-md border border-white/40 px-2.5 py-1.5 text-sm font-semibold text-white hover:bg-white/12"

@@ -67,6 +67,8 @@ export interface SugestoesConciliacao {
   combinacaoBoleto?: LancamentoSistema[];
   /** Só PIX: nenhum valor exato bateu, mas a SOMA de candidatos de NOME parecido bate com o valor — nunca soma PIX de nomes diferentes, só entra aqui quem já passou pelo filtro de nome (mesmoNome). */
   combinacaoPix?: LancamentoSistema[];
+  /** Rede de segurança: mesmo valor (tolerância da forma do lançamento do Banco), mas o lançamento do Sistema tem outra forma/tag — cobre o caso de erro de categorização no Sistema (ex.: venda de cartão lançada como "Outro"), que senão nunca apareceria em nenhuma categoria. Sempre a última, ordenada por data. */
+  recebimentoDiferente?: LancamentoSistema[];
 }
 
 /** Espelho de SugestoesConciliacao pro sentido invertido (Sistema → OFX) — mesmas categorias, candidatos vêm do Banco em vez do Sistema. */
@@ -79,13 +81,34 @@ export interface SugestoesConciliacaoInversa {
   mesmoValorParcelaDiferente?: LancamentoBanco[];
   combinacaoBoleto?: LancamentoBanco[];
   combinacaoPix?: LancamentoBanco[];
+  recebimentoDiferente?: LancamentoBanco[];
 }
+
+/** Rótulo de cada categoria de sugestão — fonte única usada tanto no painel de sugestões quanto na reclassificação retroativa (ver classificarCriterioConciliado em matching.ts), pra nunca ficarem com textos diferentes pra mesma categoria. */
+export const ROTULOS_CATEGORIA_SUGESTAO: Record<keyof SugestoesConciliacao, string> = {
+  mesmoNome: 'Nome parecido',
+  mesmoValorMesmaData: 'Mesmo valor e data',
+  valorAproximadoMesmaData: 'Valor aproximado, mesma data',
+  mesmoValorOutraData: 'Mesmo valor, outra data',
+  valorAproximadoOutraData: 'Valor aproximado, outra data',
+  mesmoValorParcelaDiferente: 'Mesmo valor, parcelas diferentes',
+  combinacaoBoleto: 'Combinação de títulos (soma bate com o valor)',
+  combinacaoPix: 'Combinação por nome parecido (soma bate com o valor)',
+  recebimentoDiferente: 'Mesmo valor, recebimento diferente',
+};
+
+/** Em qual(is) grade(s) um filtro se aplica — "ambos" é o padrão (comportamento de sempre). */
+export type EscopoFiltro = 'banco' | 'sistema' | 'ambos';
 
 export interface FiltrosConciliacao {
   bancoNome: string | null;
   dataInicio: string | null;
   dataFim: string | null;
+  /** Em qual grade o filtro de Data vale — só Banco, só Sistema, ou as duas. */
+  escopoData: EscopoFiltro;
   formaPagamento: FormaPagamento | null;
+  /** Em qual grade o filtro de Pagamento vale — só Banco, só Sistema, ou as duas. */
+  escopoPagamento: EscopoFiltro;
   tipoLancamento: TipoLancamentoSistema | null;
   conciliado: 'sim' | 'nao' | 'preConciliados' | 'preLancamentos' | 'divergentes' | 'editados' | null;
   busca: string;

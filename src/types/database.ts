@@ -380,6 +380,8 @@ export interface Database {
           nome_min_contido: number | null;
           nome_min_sobrenome: number | null;
           exigir_nf_automatica: boolean;
+          /** Só PIX usa hoje: dias corridos de diferença ainda considerados "mesma data" na busca, e janela da rede de segurança "recebimento diferente". */
+          dias_tolerancia: number;
           atualizado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['conciliacao_regras']['Row'], 'id' | 'atualizado_em'> & { atualizado_em?: string };

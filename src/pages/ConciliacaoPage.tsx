@@ -33,7 +33,14 @@ import { PendenciasModal } from '@/features/conciliacao/components/PendenciasMod
 import { RegrasConciliacaoModal } from '@/features/conciliacao/components/RegrasConciliacaoModal';
 import { SugestoesPainel } from '@/features/conciliacao/components/SugestoesPainel';
 import { BANCO_FILTRO_OCULTADOS } from '@/features/conciliacao/constants';
-import { buscarSugestoes, buscarSugestoesInverso, conciliacaoAutomatica, itemBancoCombinado, itemSistemaCombinado } from '@/features/conciliacao/matching';
+import {
+  buscarSugestoes,
+  buscarSugestoesInverso,
+  classificarCriterioConciliado,
+  conciliacaoAutomatica,
+  itemBancoCombinado,
+  itemSistemaCombinado,
+} from '@/features/conciliacao/matching';
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
 import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
 import { extrairParcela, getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
@@ -71,7 +78,9 @@ const FILTROS_VAZIOS: FiltrosConciliacaoType = {
   bancoNome: null,
   dataInicio: null,
   dataFim: null,
+  escopoData: 'ambos',
   formaPagamento: null,
+  escopoPagamento: 'ambos',
   tipoLancamento: null,
   conciliado: null,
   busca: '',
@@ -136,6 +145,7 @@ export function ConciliacaoPage() {
   const [somaHabilitada, setSomaHabilitada] = useState(false);
   const [modalExportarAberto, setModalExportarAberto] = useState(false);
   const [processando, setProcessando] = useState(false);
+  const [progressoAutomatico, setProgressoAutomatico] = useState<{ etapa: 'analisando' | 'salvando'; feitos: number; total: number } | null>(null);
   const [processandoSugestao, setProcessandoSugestao] = useState(false);
   const [sucessoAutomatico, setSucessoAutomatico] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -242,6 +252,41 @@ export function ConciliacaoPage() {
     return mapa;
   }, [sistema]);
 
+  // Cartão grava sempre o valor líquido no Banco — pro lado Sistema (que
+  // mostra o valor bruto da venda) conseguir exibir o líquido do grupo do
+  // lado (mais discreto), quando o lançamento já está conciliado.
+  const bancoLiquidoPorGrupo = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const b of banco) {
+      if (!b.grupoId || b.formaPagamento !== 'CARTAO' || b.valorBrutoCartao == null) continue;
+      mapa.set(b.grupoId, (mapa.get(b.grupoId) ?? 0) + b.valor);
+    }
+    return mapa;
+  }, [banco]);
+
+  // grupoId -> qual categoria de sugestão bateu nessa conciliação (reclassificado a partir dos dados já persistidos — ver classificarCriterioConciliado).
+  const criterioPorGrupo = useMemo(() => {
+    const sistemaPorGrupo = new Map<string, LancamentoSistema[]>();
+    for (const s of sistema) {
+      if (!s.grupoId || s.origem === 'taxa_automatica') continue;
+      const lista = sistemaPorGrupo.get(s.grupoId) ?? [];
+      lista.push(s);
+      sistemaPorGrupo.set(s.grupoId, lista);
+    }
+    const bancoPorGrupo = new Map<string, LancamentoBanco[]>();
+    for (const b of banco) {
+      if (!b.grupoId) continue;
+      const lista = bancoPorGrupo.get(b.grupoId) ?? [];
+      lista.push(b);
+      bancoPorGrupo.set(b.grupoId, lista);
+    }
+    const mapa = new Map<string, string>();
+    for (const [grupoId, itensBanco] of bancoPorGrupo) {
+      mapa.set(grupoId, classificarCriterioConciliado(itensBanco, sistemaPorGrupo.get(grupoId) ?? [], regras));
+    }
+    return mapa;
+  }, [banco, sistema, regras]);
+
   function exportarBancoXlsx(apenasConciliados: boolean) {
     const registros = banco.filter((b) => !apenasConciliados || b.conciliado);
     const linhas = registros.map((b) => {
@@ -324,29 +369,37 @@ export function ConciliacaoPage() {
     // O filtro de grupo (ícone de filtro nas sugestões, pra inspecionar um
     // lançamento já conciliado) tem prioridade sobre o filtro de "mesmo
     // valor" do botão "Filtrar Registro OFX" — senão um clique no segundo
-    // some com o resultado do primeiro sem o usuário conseguir voltar.
+    // some com o resultado do primeiro sem o usuário conseguir voltar. Mas a
+    // busca por texto (topbar ou da própria grade) sempre se sobrepõe a
+    // qualquer um desses dois, pra sempre dar pra refinar o que já está
+    // filtrado em vez de a busca simplesmente não fazer nada.
+    let base: typeof banco;
     if (filtroGrupoBanco) {
-      return ordenarPorData(banco.filter((b) => b.grupoId === filtroGrupoBanco), ordemData);
-    }
-    if (filtroIdsSugestaoBanco) {
+      base = banco.filter((b) => b.grupoId === filtroGrupoBanco);
+    } else if (filtroIdsSugestaoBanco) {
       const idsSet = new Set(filtroIdsSugestaoBanco);
-      return ordenarPorData(banco.filter((b) => idsSet.has(b.id)), ordemData);
+      base = banco.filter((b) => idsSet.has(b.id));
+    } else {
+      base = banco.filter((b) => {
+        if (filtros.bancoNome === BANCO_FILTRO_OCULTADOS) {
+          if (!b.desativado) return false;
+        } else if (filtros.bancoNome && b.bancoNome !== filtros.bancoNome) return false;
+        const dataValeAquiBanco = filtros.escopoData !== 'sistema';
+        if (dataValeAquiBanco && filtros.dataInicio && b.data < filtros.dataInicio) return false;
+        if (dataValeAquiBanco && filtros.dataFim && b.data > filtros.dataFim) return false;
+        if (filtros.escopoPagamento !== 'sistema' && filtros.formaPagamento && b.formaPagamento !== filtros.formaPagamento) return false;
+        if (filtros.tipoLancamento && (b.valor >= 0 ? 'Entrada' : 'Saída') !== filtros.tipoLancamento) return false;
+        if (filtros.conciliado === 'sim' && !b.conciliado) return false;
+        if (filtros.conciliado === 'nao' && b.conciliado) return false;
+        if (filtros.conciliado === 'preConciliados' && !(b.grupoId && sistemaSemNfPorGrupo.has(b.grupoId))) return false;
+        if (filtros.conciliado === 'preLancamentos' && !(b.grupoId && sistemaPreLancamentoPorGrupo.has(b.grupoId))) return false;
+        if (filtros.conciliado === 'divergentes' && !(b.grupoId && avisoPorGrupo.has(b.grupoId))) return false;
+        if (filtros.conciliado === 'editados' && !(b.observacao && b.observacao.trim())) return false;
+        return true;
+      });
     }
     const termo = buscaBanco.trim().toLowerCase();
-    const filtrado = banco.filter((b) => {
-      if (filtros.bancoNome === BANCO_FILTRO_OCULTADOS) {
-        if (!b.desativado) return false;
-      } else if (filtros.bancoNome && b.bancoNome !== filtros.bancoNome) return false;
-      if (filtros.dataInicio && b.data < filtros.dataInicio) return false;
-      if (filtros.dataFim && b.data > filtros.dataFim) return false;
-      if (filtros.formaPagamento && b.formaPagamento !== filtros.formaPagamento) return false;
-      if (filtros.tipoLancamento && (b.valor >= 0 ? 'Entrada' : 'Saída') !== filtros.tipoLancamento) return false;
-      if (filtros.conciliado === 'sim' && !b.conciliado) return false;
-      if (filtros.conciliado === 'nao' && b.conciliado) return false;
-      if (filtros.conciliado === 'preConciliados' && !(b.grupoId && sistemaSemNfPorGrupo.has(b.grupoId))) return false;
-      if (filtros.conciliado === 'preLancamentos' && !(b.grupoId && sistemaPreLancamentoPorGrupo.has(b.grupoId))) return false;
-      if (filtros.conciliado === 'divergentes' && !(b.grupoId && avisoPorGrupo.has(b.grupoId))) return false;
-      if (filtros.conciliado === 'editados' && !(b.observacao && b.observacao.trim())) return false;
+    const filtrado = base.filter((b) => {
       const camposBanco = [
         b.descricao,
         b.bancoNome,
@@ -365,28 +418,36 @@ export function ConciliacaoPage() {
   }, [banco, filtros, buscaBanco, infoSistemaPorGrupo, sistemaSemNfPorGrupo, sistemaPreLancamentoPorGrupo, avisoPorGrupo, filtroIdsSugestaoBanco, filtroGrupoBanco, ordemData]);
 
   const sistemaFiltrado = useMemo(() => {
+    // Mesma prioridade de filtroGrupo > filtroIdsSugestao > filtros
+    // estruturados do bancoFiltrado acima — mas a busca por texto sempre se
+    // sobrepõe a qualquer um desses, pra sempre dar pra refinar.
+    let base: typeof sistema;
     if (filtroGrupoSistema) {
-      return ordenarPorData(sistema.filter((s) => s.grupoId === filtroGrupoSistema), ordemData);
-    }
-    if (filtroIdsSugestaoSistema) {
+      base = sistema.filter((s) => s.grupoId === filtroGrupoSistema);
+    } else if (filtroIdsSugestaoSistema) {
       const idsSet = new Set(filtroIdsSugestaoSistema);
-      return ordenarPorData(sistema.filter((s) => idsSet.has(s.id)), ordemData);
+      base = sistema.filter((s) => idsSet.has(s.id));
+    } else {
+      base = sistema.filter((s) => {
+        const dataValeAquiSistema = filtros.escopoData !== 'banco';
+        if (dataValeAquiSistema && filtros.dataInicio && s.data && s.data < filtros.dataInicio) return false;
+        if (dataValeAquiSistema && filtros.dataFim && s.data && s.data > filtros.dataFim) return false;
+        if (filtros.escopoPagamento !== 'banco' && filtros.formaPagamento && getCategoriaSistema(s.formaPagamentoRaw) !== filtros.formaPagamento) return false;
+        if (filtros.tipoLancamento && s.tipoLancamento !== filtros.tipoLancamento) return false;
+        if (filtros.conciliado === 'sim' && !s.conciliado) return false;
+        if (filtros.conciliado === 'nao' && s.conciliado) return false;
+        if (filtros.conciliado === 'preConciliados' && !(s.conciliado && s.origem === 'sistema' && !(s.nf && s.nf.trim()))) return false;
+        if (filtros.conciliado === 'preLancamentos' && !(s.conciliado && s.origem === 'manual' && !(s.nf && s.nf.trim()))) return false;
+        if (filtros.conciliado === 'divergentes' && !(s.grupoId && avisoPorGrupo.has(s.grupoId))) return false;
+        if (filtros.conciliado === 'editados') return false;
+        if (filtroNfSistema === 'ocultados' && !s.desativado) return false;
+        if (filtroNfSistema === 'com' && !(s.nf && s.nf.trim())) return false;
+        if (filtroNfSistema === 'sem' && s.nf && s.nf.trim()) return false;
+        return true;
+      });
     }
     const termo = buscaSistema.trim().toLowerCase();
-    const filtrado = sistema.filter((s) => {
-      if (filtros.dataInicio && s.data && s.data < filtros.dataInicio) return false;
-      if (filtros.dataFim && s.data && s.data > filtros.dataFim) return false;
-      if (filtros.formaPagamento && getCategoriaSistema(s.formaPagamentoRaw) !== filtros.formaPagamento) return false;
-      if (filtros.tipoLancamento && s.tipoLancamento !== filtros.tipoLancamento) return false;
-      if (filtros.conciliado === 'sim' && !s.conciliado) return false;
-      if (filtros.conciliado === 'nao' && s.conciliado) return false;
-      if (filtros.conciliado === 'preConciliados' && !(s.conciliado && s.origem === 'sistema' && !(s.nf && s.nf.trim()))) return false;
-      if (filtros.conciliado === 'preLancamentos' && !(s.conciliado && s.origem === 'manual' && !(s.nf && s.nf.trim()))) return false;
-      if (filtros.conciliado === 'divergentes' && !(s.grupoId && avisoPorGrupo.has(s.grupoId))) return false;
-      if (filtros.conciliado === 'editados') return false;
-      if (filtroNfSistema === 'ocultados' && !s.desativado) return false;
-      if (filtroNfSistema === 'com' && !(s.nf && s.nf.trim())) return false;
-      if (filtroNfSistema === 'sem' && s.nf && s.nf.trim()) return false;
+    const filtrado = base.filter((s) => {
       const camposSistema = [
         s.cliente,
         s.documento,
@@ -905,14 +966,20 @@ export function ConciliacaoPage() {
     setProcessando(true);
     setErro(null);
     setSucessoAutomatico(null);
+    setProgressoAutomatico({ etapa: 'analisando', feitos: 0, total: banco.length });
     try {
-      const grupos = conciliacaoAutomatica(banco, sistema, regras);
+      const grupos = await conciliacaoAutomatica(banco, sistema, regras, (feitos, total) => {
+        setProgressoAutomatico({ etapa: 'analisando', feitos, total });
+      });
       const bancoAtualizadosTotal: LancamentoBanco[] = [];
       const sistemaAtualizadosTotal: LancamentoSistema[] = [];
-      for (const g of grupos) {
+      setProgressoAutomatico({ etapa: 'salvando', feitos: 0, total: grupos.length });
+      for (let i = 0; i < grupos.length; i++) {
+        const g = grupos[i];
         const { bancoAtualizados, sistemaAtualizados } = await conciliar(g.bancoIds, g.sistemaIds);
         bancoAtualizadosTotal.push(...bancoAtualizados);
         sistemaAtualizadosTotal.push(...sistemaAtualizados);
+        setProgressoAutomatico({ etapa: 'salvando', feitos: i + 1, total: grupos.length });
       }
       aplicarAtualizacaoBanco(bancoAtualizadosTotal);
       aplicarAtualizacaoSistema(sistemaAtualizadosTotal);
@@ -927,6 +994,7 @@ export function ConciliacaoPage() {
       tratarErro(e);
     } finally {
       setProcessando(false);
+      setProgressoAutomatico(null);
     }
   }
 
@@ -1026,8 +1094,20 @@ export function ConciliacaoPage() {
         </Card>
 
         {processando && (
-          <Card className="flex items-center justify-center gap-2 border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm font-semibold text-[var(--color-accent)]">
-            Processando conciliação automática, aguarde… (pode demorar um pouco, são muitos registros)
+          <Card className="space-y-2 border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3">
+            <p className="text-center text-sm font-semibold text-[var(--color-accent)]">
+              {progressoAutomatico?.etapa === 'salvando'
+                ? `Gravando conciliações… ${progressoAutomatico.feitos} de ${progressoAutomatico.total}`
+                : `Analisando lançamentos do Banco… ${progressoAutomatico?.feitos ?? 0} de ${progressoAutomatico?.total ?? 0}`}
+            </p>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-accent)]/15">
+              <div
+                className="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-150"
+                style={{
+                  width: `${progressoAutomatico && progressoAutomatico.total > 0 ? Math.min(100, Math.round((progressoAutomatico.feitos / progressoAutomatico.total) * 100)) : 0}%`,
+                }}
+              />
+            </div>
           </Card>
         )}
 
@@ -1112,6 +1192,7 @@ export function ConciliacaoPage() {
             avisoPorGrupo={avisoPorGrupo}
             onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
             onAbrirObservacao={onAbrirObservacao}
+            criterioPorGrupo={criterioPorGrupo}
           />
           <ListaSistema
             itens={sistemaFiltrado}
@@ -1138,6 +1219,7 @@ export function ConciliacaoPage() {
             onLimparFiltroSugestao={() => setFiltroIdsSugestaoSistema(null)}
             avisoPorGrupo={avisoPorGrupo}
             onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
+            liquidoPorGrupo={bancoLiquidoPorGrupo}
           />
         </div>
       </div>
@@ -1151,7 +1233,7 @@ export function ConciliacaoPage() {
         onConciliar={onConciliarSugestao}
         processando={processandoSugestao}
         onVerRegistroFixo={onVerRegistroFixo}
-        rotuloRegistroFixo={sugestaoAtiva?.direcao === 'sistema' ? 'Filtrar valor do Sistema' : 'Filtrar valor OFX'}
+        filtroRegistroFixoAtivo={sugestaoAtiva?.direcao === 'sistema' ? filtroIdsSugestaoSistema !== null : filtroIdsSugestaoBanco !== null}
         onRegistroManual={
           sugestaoAtiva?.direcao === 'sistema'
             ? sugestaoAtiva.item.nf && sugestaoAtiva.item.nf.trim()
