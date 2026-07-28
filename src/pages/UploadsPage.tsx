@@ -35,8 +35,10 @@ export function UploadsPage() {
   const [processandoTipo, setProcessandoTipo] = useState<TipoRelatorioMapeado | null>(null);
   const [processandoConciliacao, setProcessandoConciliacao] = useState(false);
   const [erroConciliacao, setErroConciliacao] = useState<string | null>(null);
+  const [sucessoConciliacao, setSucessoConciliacao] = useState<string | null>(null);
   const [processandoVendas396, setProcessandoVendas396] = useState(false);
   const [erroVendas396, setErroVendas396] = useState<string | null>(null);
+  const [sucessoVendas396, setSucessoVendas396] = useState<string | null>(null);
   const emInicializacao = useRef(new Set<TipoRelatorioMapeado>());
 
   const gruposPorTipo = useMemo(() => {
@@ -60,6 +62,7 @@ export function UploadsPage() {
   async function importarVendas396DosGrupos(grupos: GrupoLinhas[]) {
     setProcessandoVendas396(true);
     setErroVendas396(null);
+    setSucessoVendas396(null);
     try {
       for (const grupo of grupos) {
         const { tabelaPreco, periodoCabecalho, vendas, ignoradas } = parseVendas396(grupo);
@@ -88,6 +91,7 @@ export function UploadsPage() {
       }
       queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
       queryClient.invalidateQueries({ queryKey: ['pricing'] });
+      setSucessoVendas396(`${grupos.length} arquivo(s) de Vendas (396) importado(s) com sucesso.`);
     } catch (e) {
       const mensagem = mensagemDeErro(e, 'Falha ao importar Vendas (Relatório 396).');
       setErroVendas396(mensagem);
@@ -108,6 +112,7 @@ export function UploadsPage() {
     if (arquivosConciliacao.length > 0) {
       setProcessandoConciliacao(true);
       setErroConciliacao(null);
+      setSucessoConciliacao(null);
       try {
         for (const file of arquivosConciliacao) {
           const tipo = ehArquivoConciliacao(file.name);
@@ -115,6 +120,7 @@ export function UploadsPage() {
         }
         queryClient.invalidateQueries({ queryKey: ['conciliacao'] });
         queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
+        setSucessoConciliacao(`${arquivosConciliacao.length} arquivo(s) de Conciliação (OFX/Sistema) importado(s) com sucesso.`);
       } catch (e) {
         setErroConciliacao(mensagemDeErro(e, 'Falha ao importar OFX/Sistema.'));
       } finally {
@@ -200,9 +206,22 @@ export function UploadsPage() {
   return (
     <AppShell topbarNavy title="Uploads de Relatórios">
       <div className="space-y-6">
-        <Dropzone onFiles={handleFiles} />
+        <Dropzone onFiles={handleFiles} desabilitado={processandoConciliacao || processandoVendas396 || processandoTipo !== null} />
 
-        {processandoConciliacao && <p className="text-sm text-[var(--color-text-soft)]">Importando OFX/Sistema (Conciliação)…</p>}
+        {processandoConciliacao && (
+          <Card className="flex items-center justify-center gap-2 border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm font-semibold text-[var(--color-accent)]">
+            Importando OFX/Sistema (Conciliação), aguarde…
+          </Card>
+        )}
+
+        {sucessoConciliacao && (
+          <Card className="flex items-center justify-between gap-3 border-good/40 bg-good-soft p-3 text-sm font-semibold text-good">
+            <span>{sucessoConciliacao}</span>
+            <button type="button" onClick={() => setSucessoConciliacao(null)} className="font-semibold hover:underline">
+              Fechar
+            </button>
+          </Card>
+        )}
 
         {erroConciliacao && (
           <Card className="flex items-center justify-between gap-3 border-bad/40 bg-bad-soft p-3 text-sm text-[#8F2E2E]">
@@ -213,7 +232,20 @@ export function UploadsPage() {
           </Card>
         )}
 
-        {processandoVendas396 && <p className="text-sm text-[var(--color-text-soft)]">Importando Vendas (Relatório 396)…</p>}
+        {processandoVendas396 && (
+          <Card className="flex items-center justify-center gap-2 border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm font-semibold text-[var(--color-accent)]">
+            Importando Vendas (Relatório 396), aguarde…
+          </Card>
+        )}
+
+        {sucessoVendas396 && (
+          <Card className="flex items-center justify-between gap-3 border-good/40 bg-good-soft p-3 text-sm font-semibold text-good">
+            <span>{sucessoVendas396}</span>
+            <button type="button" onClick={() => setSucessoVendas396(null)} className="font-semibold hover:underline">
+              Fechar
+            </button>
+          </Card>
+        )}
 
         {erroVendas396 && (
           <Card className="flex items-center justify-between gap-3 border-bad/40 bg-bad-soft p-3 text-sm text-[#8F2E2E]">
