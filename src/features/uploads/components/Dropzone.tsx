@@ -41,12 +41,12 @@ export function Dropzone({ onFiles, desabilitado = false }: DropzoneProps) {
     >
       <p className="font-medium text-[var(--color-text)]">{desabilitado ? 'Processando o envio anterior, aguarde…' : 'Arraste e solte os arquivos aqui'}</p>
       <p className="mt-1 text-sm text-[var(--color-text-soft)]">
-        ou clique para selecionar — relatórios 124/396 (XLS/XLSX/CSV) e Conciliação Bancária (OFX/HTML), à vontade misturados
+        ou clique para selecionar — relatórios 124/396, extrato BB e recebíveis Stone (XLS/XLSX/CSV) e Sistema (HTML), à vontade misturados
       </p>
       <input
         ref={inputRef}
         type="file"
-        accept=".csv,.xls,.xlsx,.ofx,.html,.htm"
+        accept=".csv,.xls,.xlsx,.html,.htm"
         multiple
         disabled={desabilitado}
         className="hidden"

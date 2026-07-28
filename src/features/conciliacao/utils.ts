@@ -125,10 +125,29 @@ export function getSubtipoCartaoOfx(desc: unknown): 'DEBITO' | 'CREDITO' | null 
   return null;
 }
 
+/** Aceita tanto abreviações curtas ("dbi"/"crd") quanto o texto real do Max Data ("Cartao Deb"/"Cartao Cred") — "deb"/"cred" não são iguais a "dbi"/"crd" (têm um "e" a mais), então precisam de checagem própria. */
 export function getSubtipoCartaoSistema(tipo: unknown): 'DEBITO' | 'CREDITO' | null {
   if (!tipo) return null;
   const t = removerAcentos(tipo).toLowerCase();
-  if (t.includes('dbi')) return 'DEBITO';
-  if (t.includes('crd')) return 'CREDITO';
+  if (t.includes('dbi') || t.includes('deb')) return 'DEBITO';
+  if (t.includes('crd') || t.includes('cred')) return 'CREDITO';
   return null;
+}
+
+export interface Parcela {
+  atual: number;
+  total: number;
+}
+
+/** Extrai "X/Y" de um texto — descrição do Banco ("Stone Elo Credito - parcela 3/3") ou documento do Sistema ("VE40440-3/3"). Mesma notação nos dois lados, usada pra desambiguar candidatos de valor muito parecido (parcelas de valor igual de uma venda parcelada). */
+export function extrairParcela(texto: unknown): Parcela | null {
+  const m = String(texto ?? '').match(/(\d+)\s*\/\s*(\d+)/);
+  if (!m) return null;
+  return { atual: parseInt(m[1], 10), total: parseInt(m[2], 10) };
+}
+
+/** Compatível quando as duas parcelas batem OU quando um dos lados não tem informação de parcela nenhuma (venda à vista no Sistema não tem sufixo "-N/M" no documento) — só é INcompatível quando os dois lados têm parcela conhecida e ela diverge. */
+export function parcelaCompativel(a: Parcela | null, b: Parcela | null): boolean {
+  if (!a || !b) return true;
+  return a.atual === b.atual && a.total === b.total;
 }

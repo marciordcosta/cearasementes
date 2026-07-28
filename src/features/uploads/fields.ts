@@ -18,6 +18,6 @@ export const NOME_RELATORIO: Record<TipoRelatorioLog, string> = {
   '124': 'Relatório 124 — Entregas por Transportadora',
   '396': 'Relatório 396 — Vendas por Tabela de Preço (detalhado)',
   '333': 'Relatório 333 — Produtos Vendidos (CMV) — descontinuado',
-  ofx: 'Conciliação — Extrato Bancário (OFX)',
+  ofx: 'Conciliação — Extrato Bancário',
   sistema: 'Conciliação — Relatório do Sistema',
 };

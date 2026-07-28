@@ -1,8 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { CAMPO_CLASSE as campoClasse } from '../constants';
 import { NOMES_FORMA_REGRA, type FormaRegra, type RegraConciliacao } from '../regras';
+
+// Campos maiores e mais próximos entre si que o CAMPO_CLASSE padrão dos
+// outros modais — aqui as caixas ficam lado a lado com o rótulo, então dá
+// pra ganhar densidade sem perder legibilidade.
+const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1 text-base text-[var(--color-text)]';
 
 interface RegrasConciliacaoModalProps {
   open: boolean;
@@ -76,8 +80,8 @@ interface SecaoFormaProps {
 
 function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
   return (
-    <div className="space-y-3 rounded-lg border border-[var(--color-line)] p-3.5">
-      <p className="text-sm font-bold text-[var(--color-text)]">{NOMES_FORMA_REGRA[forma]}</p>
+    <div className="space-y-1.5 rounded-lg border border-[var(--color-line)] p-3.5">
+      <p className="mb-1 text-sm font-bold text-[var(--color-text)]">{NOMES_FORMA_REGRA[forma]}</p>
 
       {(forma === 'PIX' || forma === 'BOLETO' || forma === 'CHEQUE') && (
         <Campo label="Tolerância de valor (R$)">
@@ -93,7 +97,7 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
       )}
 
       {forma === 'BOLETO' && (
-        <div className="grid grid-cols-2 gap-2">
+        <>
           <Campo label="Dias úteis (mín.)">
             <input
               type="number"
@@ -112,34 +116,42 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
               className={campoClasse}
             />
           </Campo>
-        </div>
+        </>
       )}
 
       {(forma === 'CARTAO_DEBITO' || forma === 'CARTAO_CREDITO') && (
         <>
-          <div className="grid grid-cols-2 gap-2">
-            <Campo label="Taxa mínima (%)">
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                value={regra.taxaMinPercentual ?? ''}
-                onChange={(e) => onAtualizar('taxaMinPercentual', e.target.value === '' ? null : parseFloat(e.target.value))}
-                className={campoClasse}
-              />
-            </Campo>
-            <Campo label="Taxa máxima (%)">
-              <input
-                type="number"
-                step="0.1"
-                min={0}
-                value={regra.taxaMaxPercentual ?? ''}
-                onChange={(e) => onAtualizar('taxaMaxPercentual', e.target.value === '' ? null : parseFloat(e.target.value))}
-                className={campoClasse}
-              />
-            </Campo>
-          </div>
-          <Campo label="Janela de dias úteis (máx.)">
+          <Campo label="Taxa mínima (%)">
+            <input
+              type="number"
+              step="0.1"
+              min={0}
+              value={regra.taxaMinPercentual ?? ''}
+              onChange={(e) => onAtualizar('taxaMinPercentual', e.target.value === '' ? null : parseFloat(e.target.value))}
+              className={campoClasse}
+            />
+          </Campo>
+          <Campo label="Taxa máxima (%)">
+            <input
+              type="number"
+              step="0.1"
+              min={0}
+              value={regra.taxaMaxPercentual ?? ''}
+              onChange={(e) => onAtualizar('taxaMaxPercentual', e.target.value === '' ? null : parseFloat(e.target.value))}
+              className={campoClasse}
+            />
+          </Campo>
+          <Campo label="Tolerância de valor (R$)">
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              value={regra.toleranciaValor}
+              onChange={(e) => onAtualizar('toleranciaValor', parseFloat(e.target.value) || 0)}
+              className={campoClasse}
+            />
+          </Campo>
+          <Campo label="Janela de dias (úteis)">
             <input
               type="number"
               min={0}
@@ -152,7 +164,7 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
       )}
 
       {forma === 'PIX' && (
-        <div className="grid grid-cols-2 gap-2">
+        <>
           <Campo label="Nome contido (mín. caracteres)">
             <input
               type="number"
@@ -171,10 +183,10 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
               className={campoClasse}
             />
           </Campo>
-        </div>
+        </>
       )}
 
-      <label className="flex items-center gap-2 pt-1 text-xs font-semibold text-[var(--color-text-soft)]">
+      <label className="flex items-center gap-2 pt-1 text-sm font-light text-[var(--color-text-soft)]">
         <input type="checkbox" checked={regra.exigirNfAutomatica} onChange={(e) => onAtualizar('exigirNfAutomatica', e.target.checked)} className="accent-[var(--color-navy)]" />
         Exigir NF na Conciliação Automática
       </label>
@@ -188,9 +200,9 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
 
 function Campo({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">{label}</label>
-      {children}
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-sm font-light text-[var(--color-text-soft)]">{label}</label>
+      <div className="w-24 shrink-0">{children}</div>
     </div>
   );
 }

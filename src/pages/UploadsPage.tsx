@@ -2,14 +2,16 @@ import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
-import { ehArquivoConciliacao, importarArquivoConciliacao } from '@/features/conciliacao/importar';
+import { ehArquivoConciliacaoSistema, importarArquivoSistema, importarGrupoBanco } from '@/features/conciliacao/importar';
+import type { TipoBanco } from '@/features/conciliacao/importar';
+import { ehExtratoBB, ehRecebiveisStone } from '@/features/conciliacao/parsing';
 import { garantirCanaisPreco } from '@/features/pricing/api';
 import { apagarUploadsAnteriores, carregarMapeamentoSalvo, inserirEntregas124, registrarLogUpload, salvarMapeamento } from '@/features/uploads/api';
 import { Dropzone } from '@/features/uploads/components/Dropzone';
 import { MappingPanel } from '@/features/uploads/components/MappingPanel';
 import { UploadLog } from '@/features/uploads/components/UploadLog';
 import { CAMPOS_POR_RELATORIO } from '@/features/uploads/fields';
-import { classificarArquivos, detectarPeriodoFiltroCabecalho, encontrarColunaPorCabecalho, toISODate } from '@/features/uploads/parsing';
+import { detectarPeriodoFiltroCabecalho, detectarTipoRelatorio, encontrarColunaPorCabecalho, extractRowGroups, toISODate } from '@/features/uploads/parsing';
 import { construirRegistros124 } from '@/features/uploads/recordBuilder';
 import type { GrupoClassificado, GrupoLinhas, MapeamentoColunas, TipoRelatorioMapeado } from '@/features/uploads/types';
 import { importarVendas396 } from '@/features/vendas396/api';
@@ -57,7 +59,7 @@ export function UploadsPage() {
   /**
    * Vendas (Relatório 396, formato matricial novo) tem parser dedicado —
    * não passa pela tela de mapeamento de coluna, vai direto pro Supabase
-   * igual à Conciliação Bancária (OFX/Sistema).
+   * igual à Conciliação Bancária (Banco/Sistema).
    */
   async function importarVendas396DosGrupos(grupos: GrupoLinhas[]) {
     setProcessandoVendas396(true);
@@ -104,33 +106,49 @@ export function UploadsPage() {
     }
   }
 
-  /** Arquivos de Conciliação (OFX/HTML) não passam pelo mapeamento de coluna — vão direto pro import, o resto segue o fluxo normal (124) ou o import direto do 396. */
+  /**
+   * O lado Sistema (HTML) ainda é reconhecido pela extensão do arquivo, mas o
+   * lado Banco (extrato BB / recebíveis Stone) agora vem em .xlsx/.csv — os
+   * mesmos formatos dos relatórios 124/396 — então precisa ler o CONTEÚDO de
+   * cada aba/arquivo pra decidir se é Banco, 396 (import direto) ou 124
+   * (vai pra tela de mapeamento).
+   */
   async function handleFiles(files: File[]) {
-    const arquivosConciliacao = files.filter((f) => ehArquivoConciliacao(f.name) !== null);
-    const arquivosRelatorio = files.filter((f) => ehArquivoConciliacao(f.name) === null);
+    const arquivosSistema = files.filter((f) => ehArquivoConciliacaoSistema(f.name));
+    const arquivosRestantes = files.filter((f) => !ehArquivoConciliacaoSistema(f.name));
 
-    if (arquivosConciliacao.length > 0) {
+    const gruposPorArquivo = await Promise.all(arquivosRestantes.map((f) => extractRowGroups(f)));
+    const todosGrupos = gruposPorArquivo.flat();
+
+    const gruposBanco: { grupo: GrupoLinhas; tipoBanco: TipoBanco }[] = [];
+    const gruposRelatorio: GrupoLinhas[] = [];
+    for (const grupo of todosGrupos) {
+      if (ehExtratoBB(grupo.rows)) gruposBanco.push({ grupo, tipoBanco: 'bb' });
+      else if (ehRecebiveisStone(grupo.rows)) gruposBanco.push({ grupo, tipoBanco: 'stone' });
+      else gruposRelatorio.push(grupo);
+    }
+
+    if (arquivosSistema.length > 0 || gruposBanco.length > 0) {
       setProcessandoConciliacao(true);
       setErroConciliacao(null);
       setSucessoConciliacao(null);
       try {
-        for (const file of arquivosConciliacao) {
-          const tipo = ehArquivoConciliacao(file.name);
-          if (tipo) await importarArquivoConciliacao(file, tipo);
-        }
+        for (const file of arquivosSistema) await importarArquivoSistema(file);
+        for (const { grupo, tipoBanco } of gruposBanco) await importarGrupoBanco(grupo, tipoBanco);
         queryClient.invalidateQueries({ queryKey: ['conciliacao'] });
         queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
-        setSucessoConciliacao(`${arquivosConciliacao.length} arquivo(s) de Conciliação (OFX/Sistema) importado(s) com sucesso.`);
+        const total = arquivosSistema.length + gruposBanco.length;
+        setSucessoConciliacao(`${total} arquivo(s) de Conciliação (Banco/Sistema) importado(s) com sucesso.`);
       } catch (e) {
-        setErroConciliacao(mensagemDeErro(e, 'Falha ao importar OFX/Sistema.'));
+        setErroConciliacao(mensagemDeErro(e, 'Falha ao importar Conciliação Bancária.'));
       } finally {
         setProcessandoConciliacao(false);
       }
     }
 
-    if (arquivosRelatorio.length === 0) return;
+    if (gruposRelatorio.length === 0) return;
 
-    const novos = await classificarArquivos(arquivosRelatorio);
+    const novos: GrupoClassificado[] = gruposRelatorio.map((grupo) => ({ grupo, tipo: detectarTipoRelatorio(grupo.rows) }));
     const gruposVendas396 = novos.filter((c) => c.tipo === '396').map((c) => c.grupo);
     const outros = novos.filter((c) => c.tipo !== '396');
 
@@ -210,7 +228,7 @@ export function UploadsPage() {
 
         {processandoConciliacao && (
           <Card className="flex items-center justify-center gap-2 border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 p-3 text-sm font-semibold text-[var(--color-accent)]">
-            Importando OFX/Sistema (Conciliação), aguarde…
+            Importando Conciliação Bancária (Banco/Sistema), aguarde…
           </Card>
         )}
 

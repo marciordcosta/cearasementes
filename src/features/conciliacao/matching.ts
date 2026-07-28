@@ -1,6 +1,6 @@
 import type { FormaRegra, RegraConciliacao } from './regras';
 import type { FormaPagamento, LancamentoBanco, LancamentoSistema, SugestoesConciliacao, SugestoesConciliacaoInversa } from './types';
-import { diasUteisAte, diffDiasUteis, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, removerAcentos, valoresIguais } from './utils';
+import { diasUteisAte, diffDiasUteis, extrairParcela, getCategoriaSistema, getSubtipoCartaoOfx, getSubtipoCartaoSistema, nomesSemelhantesFortes, normalizarNomeClienteOfx, parcelaCompativel, removerAcentos, valoresIguais } from './utils';
 
 type RegrasPorForma = Record<FormaRegra, RegraConciliacao>;
 
@@ -77,6 +77,10 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
   }
 
   // ---- BOLETO: título pago dentro da janela de dias úteis (regra), valor exato OU soma de vários títulos ----
+  // O extrato do BB traz o boleto recebível (Cobrança) AGREGADO — 1 linha por
+  // dia somando todos os títulos liquidados naquele dia — então, diferente
+  // do Cartão (Stone já vem 1 linha por venda), aqui a combinação continua
+  // sendo o caminho normal, não uma exceção.
   if (tipoOfx === 'BOLETO') {
     const regraBoleto = regras.BOLETO;
     const diasMin = regraBoleto.diasUteisMin ?? 2;
@@ -109,7 +113,7 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
       const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
       const combinacao = combinacaoExata(ordenada, valorOfxAbs, regraBoleto.toleranciaValor);
       if (combinacao && combinacao.length > 1) {
-        resp.combinacaoCartao = combinacao;
+        resp.combinacaoBoleto = combinacao;
         return resp;
       }
     }
@@ -149,90 +153,56 @@ export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoS
   if (!subtipoOfx) return resp;
 
   const regraCartaoAtual = regraParaCartao(subtipoOfx, regras);
-  const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
-  const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
   const diasMax = regraCartaoAtual.diasUteisMax ?? 2;
 
   const candidatos = sistemaFiltradoPorTipo.filter((s) => {
     if (!s.data) return false;
     if (getSubtipoCartaoSistema(s.formaPagamentoRaw) !== subtipoOfx) return false;
-    if (s.data > dataOfx) return false;
-    return diffDiasUteis(s.data, dataOfx) <= diasMax;
+    return Math.abs(diffDiasUteis(s.data, dataOfx)) <= diasMax;
   });
+
+  // Quando o valor bruto já é conhecido com certeza (recebíveis Stone), casa
+  // direto por valor exato — não precisa mais estimar a taxa por faixa de %.
+  if (itemBanco.valorBrutoCartao != null) {
+    const alvo = itemBanco.valorBrutoCartao;
+    const tolerancia = regraCartaoAtual.toleranciaValor ?? 0.01;
+    const candidatosComValor = candidatos.filter((s) => valoresIguais(Math.abs(s.valor), alvo, tolerancia));
+
+    // Mesmo valor pode ser de VÁRIAS parcelas diferentes (parcelas iguais de
+    // vendas parceladas costumam ter o mesmo valor) — a parcela (X/Y) desempata:
+    // só entra na lista principal quem bate com a mesma parcela do Banco (ou
+    // não tem parcela informada nos dois lados pra comparar); o resto vai pra
+    // uma categoria à parte, pro usuário decidir se aceita mesmo assim.
+    const parcelaOfx = extrairParcela(itemBanco.descricao);
+    const candidatosParcelaOk = candidatosComValor.filter((s) => parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
+    resp.mesmoValorParcelaDiferente = candidatosComValor.filter((s) => !parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
+
+    resp.mesmoValorMesmaData = candidatosParcelaOk.filter((s) => s.data === dataOfx);
+    if (resp.mesmoValorMesmaData.length > 0) return resp;
+    resp.mesmoValorOutraData = candidatosParcelaOk.filter((s) => s.data !== dataOfx);
+    return resp;
+  }
 
   resp.mesmoValorMesmaData = candidatos.filter((s) => s.data === dataOfx);
   if (resp.mesmoValorMesmaData.length > 0) return resp;
 
   resp.mesmoValorOutraData = candidatos.filter((s) => s.data !== dataOfx);
-
-  const porData = new Map<string, LancamentoSistema[]>();
-  candidatos.forEach((s) => {
-    const lista = porData.get(s.data!) ?? [];
-    lista.push(s);
-    porData.set(s.data!, lista);
-  });
-
-  for (const lista of porData.values()) {
-    const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
-    const combinacao = combinacaoComTaxa(ordenada, valorOfxAbs, minPerc, maxPerc);
-    if (combinacao && combinacao.length > 1) {
-      resp.combinacaoCartao = combinacao;
-      return resp;
-    }
-  }
   return resp;
 }
 
-/** Backtracking: subconjunto de `lista` cuja soma absoluta bate com `alvo`, dentro da `tolerancia` da regra. Genérico (não só LancamentoSistema) pra dar pra rodar também sobre lançamentos do Banco, na busca invertida. */
+/** Backtracking: subconjunto de `lista` cuja soma absoluta bate com `alvo`, dentro da `tolerancia` da regra. Genérico (não só LancamentoSistema) pra dar pra rodar também sobre lançamentos do Banco, na busca invertida. Poda por soma restante (nem tudo que falta alcança o alvo) — sem isso, um dia com muitos títulos parecidos faria a busca explorar ~2^n combinações. */
 function combinacaoExata<T extends { valor: number }>(lista: T[], alvo: number, tolerancia: number): T[] | null {
+  const valoresAbs = lista.map((item) => Math.abs(item.valor));
+  const n = valoresAbs.length;
+  const somaRestante = new Array<number>(n + 1).fill(0);
+  for (let i = n - 1; i >= 0; i--) somaRestante[i] = somaRestante[i + 1] + valoresAbs[i];
+
   function backtrack(i: number, soma: number, usados: T[]): T[] | null {
     if (valoresIguais(soma, alvo, tolerancia)) return usados;
-    if (i >= lista.length || soma > alvo + tolerancia) return null;
-    const com = backtrack(i + 1, soma + Math.abs(lista[i].valor), [...usados, lista[i]]);
+    if (i >= n || soma > alvo + tolerancia || soma + somaRestante[i] < alvo - tolerancia) return null;
+    const com = backtrack(i + 1, soma + valoresAbs[i], [...usados, lista[i]]);
     if (com) return com;
     return backtrack(i + 1, soma, usados);
-  }
-  return backtrack(0, 0, []);
-}
-
-/** Como combinacaoExata, mas aceita a soma passando do alvo desde que a diferença fique dentro da faixa de taxa de cartão. */
-function combinacaoComTaxa<T extends { valor: number }>(lista: T[], alvo: number, minPerc: number, maxPerc: number): T[] | null {
-  function backtrack(i: number, soma: number, caminho: T[]): T[] | null {
-    if (soma > alvo * (1 + maxPerc)) return null;
-    if (i >= lista.length) return null;
-
-    const novaSoma = soma + Math.abs(lista[i].valor);
-    if (novaSoma > alvo) {
-      const perc = (novaSoma - alvo) / novaSoma;
-      if (perc >= minPerc && perc <= maxPerc) return [...caminho, lista[i]];
-    }
-
-    const com = backtrack(i + 1, novaSoma, [...caminho, lista[i]]);
-    if (com) return com;
-    return backtrack(i + 1, soma, caminho);
-  }
-  return backtrack(0, 0, []);
-}
-
-/**
- * Espelho de combinacaoComTaxa pro sentido invertido (Sistema → OFX): aqui o
- * valor fixo é o BRUTO (sistema, maior) e os candidatos (banco) têm que
- * somar um valor LOGO ABAIXO dele — a diferença é a taxa descontada pela
- * maquininha. Não dá pra genericizar junto com combinacaoComTaxa: a direção
- * da comparação (soma > alvo vs soma < alvo) é o inverso, não só o tipo.
- */
-function combinacaoComTaxaInversa<T extends { valor: number }>(lista: T[], alvo: number, minPerc: number, maxPerc: number): T[] | null {
-  function backtrack(i: number, soma: number, caminho: T[]): T[] | null {
-    if (i >= lista.length) return null;
-
-    const novaSoma = soma + Math.abs(lista[i].valor);
-    if (novaSoma <= alvo) {
-      const perc = (alvo - novaSoma) / alvo;
-      if (perc >= minPerc && perc <= maxPerc) return [...caminho, lista[i]];
-      const com = backtrack(i + 1, novaSoma, [...caminho, lista[i]]);
-      if (com) return com;
-    }
-    return backtrack(i + 1, soma, caminho);
   }
   return backtrack(0, 0, []);
 }
@@ -334,7 +304,7 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
       const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
       const combinacao = combinacaoExata(ordenada, valorSisAbs, regraBoleto.toleranciaValor);
       if (combinacao && combinacao.length > 1) {
-        resp.combinacaoCartao = combinacao;
+        resp.combinacaoBoleto = combinacao;
         return resp;
       }
     }
@@ -371,36 +341,34 @@ export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: La
   if (!subtipoSistema) return resp;
 
   const regraCartaoAtual = regraParaCartao(subtipoSistema, regras);
-  const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
-  const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
   const diasMax = regraCartaoAtual.diasUteisMax ?? 2;
 
   const candidatos = bancoFiltradoPorTipo.filter((b) => {
     if (getSubtipoCartaoOfx(b.descricao) !== subtipoSistema) return false;
-    if (b.data < dataSis) return false;
-    return diffDiasUteis(dataSis, b.data) <= diasMax;
+    return Math.abs(diffDiasUteis(dataSis, b.data)) <= diasMax;
   });
+
+  // Quando o próprio banco já sabe o valor bruto (recebíveis Stone), casa
+  // direto por valor exato — não precisa mais estimar a taxa por faixa de %.
+  const candidatosComBrutoConhecido = candidatos.filter((b) => b.valorBrutoCartao != null);
+  if (candidatosComBrutoConhecido.length > 0) {
+    const tolerancia = regraCartaoAtual.toleranciaValor ?? 0.01;
+    const candidatosComValor = candidatosComBrutoConhecido.filter((b) => valoresIguais(b.valorBrutoCartao!, valorSisAbs, tolerancia));
+
+    const parcelaSis = extrairParcela(itemSistema.documento);
+    const candidatosParcelaOk = candidatosComValor.filter((b) => parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
+    resp.mesmoValorParcelaDiferente = candidatosComValor.filter((b) => !parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
+
+    resp.mesmoValorMesmaData = candidatosParcelaOk.filter((b) => b.data === dataSis);
+    if (resp.mesmoValorMesmaData.length > 0) return resp;
+    resp.mesmoValorOutraData = candidatosParcelaOk.filter((b) => b.data !== dataSis);
+    return resp;
+  }
 
   resp.mesmoValorMesmaData = candidatos.filter((b) => b.data === dataSis);
   if (resp.mesmoValorMesmaData.length > 0) return resp;
 
   resp.mesmoValorOutraData = candidatos.filter((b) => b.data !== dataSis);
-
-  const porData = new Map<string, LancamentoBanco[]>();
-  candidatos.forEach((b) => {
-    const lista = porData.get(b.data) ?? [];
-    lista.push(b);
-    porData.set(b.data, lista);
-  });
-
-  for (const lista of porData.values()) {
-    const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
-    const combinacao = combinacaoComTaxaInversa(ordenada, valorSisAbs, minPerc, maxPerc);
-    if (combinacao && combinacao.length > 1) {
-      resp.combinacaoCartao = combinacao;
-      return resp;
-    }
-  }
   return resp;
 }
 
@@ -412,10 +380,10 @@ export interface GrupoParaConciliar {
 /**
  * Conciliação 100% automática — porte de conciliacaoAutomatica(). Mais
  * conservadora que buscarSugestoes(): só liga automaticamente quando existe
- * exatamente UM candidato (ou UMA combinação) sem ambiguidade, e (por
- * padrão, configurável por regra) exige que o lançamento do sistema tenha
- * NF preenchida. Casos ambíguos ficam pra conciliação manual, guiada pelas
- * sugestões de buscarSugestoes().
+ * exatamente UM candidato sem ambiguidade, e (por padrão, configurável por
+ * regra) exige que o lançamento do sistema tenha NF preenchida. Casos
+ * ambíguos ficam pra conciliação manual, guiada pelas sugestões de
+ * buscarSugestoes().
  */
 export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: LancamentoSistema[], regras: RegrasPorForma): GrupoParaConciliar[] {
   const grupos: GrupoParaConciliar[] = [];
@@ -459,9 +427,9 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
       }
       if (valorExato.length > 1) continue; // ambíguo — fica pra conciliação manual
 
-      // Nenhum título sozinho bate — tenta combinação (soma de vários),
-      // mas só concilia se existir exatamente 1 combinação válida (sem
-      // ambiguidade), mesma exigência do cartão.
+      // Nenhum título sozinho bate — tenta combinação (soma de vários), já
+      // que o BB traz o boleto recebível agregado (1 linha por dia). Só
+      // concilia se existir exatamente 1 combinação válida (sem ambiguidade).
       const porDataBoleto = new Map<string, LancamentoSistema[]>();
       candidatosBoleto.forEach((s) => {
         const lista = porDataBoleto.get(s.data!) ?? [];
@@ -503,8 +471,6 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
     const subtipoOfx = getSubtipoCartaoOfx(ofx.descricao);
     if (!subtipoOfx) continue;
     const regraCartaoAtual = regraParaCartao(subtipoOfx, regras);
-    const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
-    const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
     const diasMax = regraCartaoAtual.diasUteisMax ?? 2;
 
     const candidatosBase = sistema.filter((s) => {
@@ -516,10 +482,40 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
       return true;
     });
 
+    // Quando o valor bruto já é conhecido com certeza (recebíveis Stone),
+    // concilia por valor exato — não precisa mais estimar a taxa por faixa
+    // de %, mesma ideia do Boleto (só liga sozinho se não houver ambiguidade).
+    if (ofx.valorBrutoCartao != null) {
+      const alvo = ofx.valorBrutoCartao;
+      const parcelaOfx = extrairParcela(ofx.descricao);
+      const candidatosJanela = candidatosBase.filter((s) => {
+        if (getSubtipoCartaoSistema(s.formaPagamentoRaw) !== subtipoOfx) return false;
+        return Math.abs(diffDiasUteis(s.data!, dataOfx)) <= diasMax;
+      });
+
+      const valorExato = candidatosJanela.filter((s) => valoresIguais(Math.abs(s.valor), alvo, regraCartaoAtual.toleranciaValor));
+      // Parcelas iguais de uma venda parcelada costumam ter o mesmo valor —
+      // a automática só fecha sozinha quando a parcela (X/Y) também bate
+      // (ou não dá pra saber, de um dos dois lados), nunca só pelo valor.
+      const valorExatoMesmaParcela = valorExato.filter((s) => parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
+      if (valorExatoMesmaParcela.length === 1) {
+        grupos.push({ bancoIds: [ofx.id], sistemaIds: [valorExatoMesmaParcela[0].id] });
+        sistemaJaUsado.add(valorExatoMesmaParcela[0].id);
+      }
+      // Cartão não soma mais vários lançamentos do Sistema pra fechar sozinho
+      // — o arquivo novo (Stone) já traz 1 lançamento por venda de cartão,
+      // então cada recebimento do banco corresponde a UMA venda só, nunca a
+      // uma combinação. Se não bateu 1 pra 1 (nenhum ou mais de um candidato,
+      // ou parcela diferente), fica pra conciliação manual.
+      continue;
+    }
+
+    const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
+    const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
+
     const unicos = candidatosBase.filter((s) => {
       if (getSubtipoCartaoSistema(s.formaPagamentoRaw) !== subtipoOfx) return false;
-      if (s.data! > dataOfx) return false;
-      if (diffDiasUteis(s.data!, dataOfx) > diasMax) return false;
+      if (Math.abs(diffDiasUteis(s.data!, dataOfx)) > diasMax) return false;
       const vSys = Math.abs(s.valor);
       if (vSys < valorOfxAbs) return false;
       const perc = (vSys - valorOfxAbs) / vSys;
@@ -529,65 +525,47 @@ export function conciliacaoAutomatica(banco: LancamentoBanco[], sistema: Lancame
     if (unicos.length === 1) {
       grupos.push({ bancoIds: [ofx.id], sistemaIds: [unicos[0].id] });
       sistemaJaUsado.add(unicos[0].id);
-      continue;
-    }
-
-    const porData = new Map<string, LancamentoSistema[]>();
-    unicos.forEach((s) => {
-      const lista = porData.get(s.data!) ?? [];
-      lista.push(s);
-      porData.set(s.data!, lista);
-    });
-
-    const combinacoesValidas: LancamentoSistema[][] = [];
-    for (const lista of porData.values()) {
-      const ordenada = [...lista].sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
-      combinacoesTodasComTaxa(ordenada, valorOfxAbs, minPerc, maxPerc).forEach((c) => combinacoesValidas.push(c));
-    }
-
-    if (combinacoesValidas.length === 1) {
-      const ids = combinacoesValidas[0].map((s) => s.id);
-      grupos.push({ bancoIds: [ofx.id], sistemaIds: ids });
-      ids.forEach((id) => sistemaJaUsado.add(id));
     }
   }
 
   return grupos;
 }
 
-/** Todas as combinações (não só a primeira) dentro da faixa de taxa — usado só na conciliação automática, pra exigir ausência de ambiguidade. */
-function combinacoesTodasComTaxa(lista: LancamentoSistema[], alvo: number, minPerc: number, maxPerc: number): LancamentoSistema[][] {
-  const validas: LancamentoSistema[][] = [];
+/**
+ * Limite de segurança pro backtracking de combinações "achar todas" — sem
+ * isso, um dia com muitos títulos de boleto parecidos faz a busca explorar
+ * ~2^n combinações e trava a aba do navegador de vez (a Conciliação
+ * Automática nunca volta a liberar o botão). Se o limite for atingido,
+ * desiste e trata como "não achou combinação nenhuma" — mais seguro do que
+ * arriscar interpretar um resultado parcial como se fosse definitivo
+ * (poderia conciliar sozinho algo que na verdade era ambíguo).
+ */
+const MAX_NOS_BUSCA_COMBINACAO = 200_000;
 
-  function backtrack(i: number, soma: number, usados: LancamentoSistema[]) {
-    if (soma > alvo * (1 + maxPerc)) return;
-    if (i >= lista.length) return;
-
-    const novaSoma = soma + Math.abs(lista[i].valor);
-    if (novaSoma > alvo) {
-      const perc = (novaSoma - alvo) / novaSoma;
-      if (perc >= minPerc && perc <= maxPerc) validas.push([...usados, lista[i]]);
-    }
-
-    backtrack(i + 1, novaSoma, [...usados, lista[i]]);
-    backtrack(i + 1, soma, usados);
-  }
-
-  backtrack(0, 0, []);
-  return validas;
-}
-
-/** Todas as combinações (não só a primeira) cuja soma bate exatamente com o alvo (dentro da tolerância) — usado só na conciliação automática de Boleto, pra exigir ausência de ambiguidade. */
+/** Todas as combinações (não só a primeira) cuja soma bate exatamente com o alvo (dentro da tolerância) — usado só na conciliação automática de Boleto, pra exigir ausência de ambiguidade. Poda por soma restante e desiste assim que acha a 2ª combinação válida (só precisa saber que já é ambíguo). */
 function combinacoesTodasExatas(lista: LancamentoSistema[], alvo: number, tolerancia: number): LancamentoSistema[][] {
+  const valoresAbs = lista.map((s) => Math.abs(s.valor));
+  const n = valoresAbs.length;
+  const somaRestante = new Array<number>(n + 1).fill(0);
+  for (let i = n - 1; i >= 0; i--) somaRestante[i] = somaRestante[i + 1] + valoresAbs[i];
+
   const validas: LancamentoSistema[][] = [];
+  let nos = 0;
+  let interrompida = false;
 
   function backtrack(i: number, soma: number, usados: LancamentoSistema[]) {
+    if (validas.length > 1 || interrompida) return;
+    if (++nos > MAX_NOS_BUSCA_COMBINACAO) {
+      interrompida = true;
+      return;
+    }
     if (usados.length > 1 && valoresIguais(soma, alvo, tolerancia)) validas.push(usados);
-    if (i >= lista.length || soma > alvo + tolerancia) return;
-    backtrack(i + 1, soma + Math.abs(lista[i].valor), [...usados, lista[i]]);
+    if (validas.length > 1 || i >= n || soma > alvo + tolerancia || soma + somaRestante[i] < alvo - tolerancia) return;
+    backtrack(i + 1, soma + valoresAbs[i], [...usados, lista[i]]);
     backtrack(i + 1, soma, usados);
   }
 
   backtrack(0, 0, []);
-  return validas;
+  return interrompida ? [] : validas;
 }
+

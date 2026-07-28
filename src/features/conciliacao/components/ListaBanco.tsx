@@ -92,6 +92,11 @@ export function ListaBanco({
     const corLinha = item.conciliado ? corConciliado : 'bg-[var(--color-surface)]';
     const subtipoCartao = item.formaPagamento === 'CARTAO' ? getSubtipoCartaoOfx(item.descricao) : null;
     const avisoDiferenca = item.grupoId ? avisoPorGrupo.get(item.grupoId) : undefined;
+    // Cartão (Stone) grava sempre o valor líquido — mas antes de conciliar mostra o
+    // bruto (o que bate visualmente com a venda no Sistema), só trocando pro líquido
+    // de verdade depois que a taxa da maquininha já foi contabilizada na conciliação.
+    const mostrarBruto = item.formaPagamento === 'CARTAO' && item.valorBrutoCartao != null && !item.conciliado;
+    const valorExibido = mostrarBruto ? item.valorBrutoCartao! : item.valor;
     return (
       <div className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''}`}>
         {!item.conciliado && !item.desativado && (
@@ -118,7 +123,8 @@ export function ListaBanco({
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <div className="flex items-baseline gap-1.5">
               <span className="text-xs text-[var(--color-text-soft)]">{fmtDataBR(item.data)}</span>
-              <span className={`num text-base font-extrabold ${item.valor < 0 ? 'text-bad' : 'text-good'}`}>— {fmtBRL.format(item.valor)}</span>
+              <span className={`num text-base font-extrabold ${valorExibido < 0 ? 'text-bad' : 'text-good'}`}>— {fmtBRL.format(valorExibido)}</span>
+              {mostrarBruto && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(bruto)</span>}
             </div>
             <div className="flex items-center gap-1.5">
               {item.bancoNome && <Badge>{item.bancoNome.toUpperCase()}</Badge>}
@@ -215,7 +221,7 @@ export function ListaBanco({
     <Card className="flex max-h-[calc(100vh-180px)] flex-col overflow-hidden p-0">
       <div className="sticky top-0 z-[1] flex items-center justify-between gap-3 bg-[var(--color-navy)] px-4 py-3">
         <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
-          Banco (OFX)
+          Banco
           {pendenciasCount > 0 && (
             <button
               type="button"

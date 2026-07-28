@@ -34,7 +34,8 @@ const ROTULOS: Record<keyof SugestoesConciliacao, string> = {
   mesmoNome: 'Nome parecido',
   mesmoValorMesmaData: 'Mesmo valor, mesma data',
   mesmoValorOutraData: 'Mesmo valor, outra data',
-  combinacaoCartao: 'Combinação de títulos (soma bate com o valor)',
+  mesmoValorParcelaDiferente: 'Mesmo valor, parcelas diferentes',
+  combinacaoBoleto: 'Combinação de títulos (soma bate com o valor)',
 };
 
 function correspondeBusca(termo: string, campos: Array<string | number | null | undefined>): boolean {
@@ -142,7 +143,7 @@ export function SugestoesPainel({
             // se qualquer um dos títulos da combinação já estiver conciliado,
             // o grupo inteiro fica só pra consulta (sem botão "Conciliar"),
             // já que tocar nele exigiria desfazer a conciliação alheia antes.
-            const grupoTemConciliado = cat === 'combinacaoCartao' && itens.some((i) => i.conciliado);
+            const grupoTemConciliado = cat === 'combinacaoBoleto' && itens.some((i) => i.conciliado);
             return (
               <div key={cat} className="space-y-1.5">
                 <p className="border-b border-[var(--color-line)] pb-1 text-sm font-bold text-[var(--color-text)]">{ROTULOS[cat]}</p>
@@ -187,7 +188,7 @@ export function SugestoesPainel({
                         <button
                           type="button"
                           disabled={processando}
-                          onClick={() => onConciliar(cat === 'combinacaoCartao' ? itens.map((i) => i.id) : [item.id])}
+                          onClick={() => onConciliar(cat === 'combinacaoBoleto' ? itens.map((i) => i.id) : [item.id])}
                           className="shrink-0 whitespace-nowrap rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
                         >
                           Conciliar

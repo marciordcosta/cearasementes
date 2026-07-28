@@ -295,6 +295,7 @@ export interface Database {
         Row: {
           id: string;
           arquivo_id: string | null;
+          /** 'ofx' = veio de arquivo importado (nome histórico — hoje é extrato .xlsx do BB ou recebíveis .csv da Stone, não mais .ofx de verdade). */
           origem: 'ofx' | 'manual';
           banco_codigo: string | null;
           banco_nome: string | null;
@@ -302,8 +303,10 @@ export interface Database {
           valor: number;
           descricao: string | null;
           forma_pagamento: 'PIX' | 'CARTAO' | 'BOLETO' | 'CHEQUE' | 'RENDIMENTO' | 'OUTRO';
-          /** Identificador único da transação atribuído pelo próprio banco (tag OFX <FITID>) — usado pra upsert (reenviar extrato com dias sobrepostos não duplica). Null pra lançamentos manuais. */
+          /** Chave única da transação usada pra upsert (reenviar arquivo com dias sobrepostos não duplica) — hoje é uma chave composta a partir das colunas do próprio extrato/recebíveis (não existe mais tag <FITID>). Null pra lançamentos manuais. */
           fitid: string | null;
+          /** Valor BRUTO da venda de cartão (antes da taxa da maquininha) — só preenchido quando a fonte já traz esse dado exato (recebíveis Stone). Usado pra casar a sugestão direto com o valor do Sistema, sem precisar de faixa de %. Null pro Banco do Brasil e lançamentos manuais. */
+          valor_bruto_cartao: number | null;
           conciliado: boolean;
           desativado: boolean;
           marcado: boolean;
@@ -313,9 +316,10 @@ export interface Database {
         };
         Insert: Omit<
           Database['public']['Tables']['conciliacao_lancamentos_banco']['Row'],
-          'id' | 'criado_em' | 'fitid' | 'conciliado' | 'desativado' | 'marcado' | 'observacao' | 'grupo_id'
+          'id' | 'criado_em' | 'fitid' | 'valor_bruto_cartao' | 'conciliado' | 'desativado' | 'marcado' | 'observacao' | 'grupo_id'
         > & {
           fitid?: string | null;
+          valor_bruto_cartao?: number | null;
           conciliado?: boolean;
           desativado?: boolean;
           marcado?: boolean;

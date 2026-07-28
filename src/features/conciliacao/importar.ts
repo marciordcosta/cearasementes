@@ -1,22 +1,29 @@
 import { registrarLogUpload } from '@/features/uploads/api';
+import type { GrupoLinhas } from '@/features/uploads/types';
 import { readFileSmart } from '@/lib/readFileSmart';
-import { importarOfx, importarSistema } from './api';
-import { detectBankFromOfx, detectarPeriodoCabecalhoSistema, detectarTipoLancamento, parseMatricial, parseOFX } from './parsing';
+import { importarLancamentosBanco, importarSistema } from './api';
+import { detectarPeriodoCabecalhoSistema, detectarTipoLancamento, parseExtratoBB, parseMatricial, parseRecebiveisStone } from './parsing';
 import type { RegistroBancoParseado } from './parsing';
 
-export type TipoArquivoConciliacao = 'ofx' | 'sistema';
+export type TipoBanco = 'bb' | 'stone';
 
-/** Reconhece OFX (Banco) e HTML do Max Data (Sistema) pela extensão — usado pra desviar esses arquivos do fluxo de mapeamento de coluna (124/396/333), que eles não precisam. */
-export function ehArquivoConciliacao(nomeArquivo: string): TipoArquivoConciliacao | null {
+/**
+ * Só o lado Sistema (HTML do Max-Manager) ainda é reconhecido pela extensão
+ * — o lado Banco (extrato BB / recebíveis Stone) precisa olhar o CONTEÚDO
+ * do arquivo (ver ehExtratoBB/ehRecebiveisStone em parsing.ts), já que os
+ * dois vêm em .xlsx/.csv, os mesmos formatos usados pelos relatórios 124/396.
+ */
+export function ehArquivoConciliacaoSistema(nomeArquivo: string): boolean {
   const nome = nomeArquivo.toLowerCase();
-  if (nome.endsWith('.ofx')) return 'ofx';
-  if (nome.endsWith('.html') || nome.endsWith('.htm')) return 'sistema';
-  return null;
+  return nome.endsWith('.html') || nome.endsWith('.htm');
 }
 
-/** Menor/maior data entre os registros — usado só pro OFX, que não tem um período de cabeçalho confiável (o próprio dedup por FITID já cobre reenvio diário sem duplicar). */
+/** Menor/maior data entre os registros — nem BB nem Stone trazem um "período do filtro" confiável no cabeçalho como o relatório do Sistema. */
 function extrairIntervaloLinhas(registros: RegistroBancoParseado[]): { inicio: string; fim: string } | null {
-  const datas = registros.map((r) => r.data).filter(Boolean).sort();
+  const datas = registros
+    .map((r) => r.data)
+    .filter(Boolean)
+    .sort();
   if (datas.length === 0) return null;
   return { inicio: datas[0], fim: datas[datas.length - 1] };
 }
@@ -25,38 +32,37 @@ function isoDeData(data: Date): string {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
 }
 
+const NOME_BANCO: Record<TipoBanco, { codigo: string; nome: string }> = {
+  bb: { codigo: '001', nome: 'Banco do Brasil' },
+  stone: { codigo: '197', nome: 'Stone' },
+};
+
 /**
- * Lê, parseia e grava um arquivo de Conciliação (OFX ou Sistema) — mesma
- * lógica usada na tela de Uploads. Também grava uma linha em `uploads_log`
- * (tipo 'ofx'/'sistema', sub-grupo = banco ou tipo de lançamento) pra
- * aparecer mesclado na mesma lista "Arquivos processados recentemente" dos
- * relatórios 124/396/333, com período e aviso de atraso.
+ * Grava um arquivo do lado Banco (extrato BB ou recebíveis Stone) — `grupo`
+ * já veio extraído (extractRowGroups) e classificado (ehExtratoBB/
+ * ehRecebiveisStone) por quem chama, então aqui só falta parsear e salvar.
  */
-export async function importarArquivoConciliacao(file: File, tipo: TipoArquivoConciliacao): Promise<void> {
+export async function importarGrupoBanco(grupo: GrupoLinhas, tipoBanco: TipoBanco): Promise<void> {
+  const { codigo, nome } = NOME_BANCO[tipoBanco];
+  const registros = tipoBanco === 'bb' ? parseExtratoBB(grupo.rows) : parseRecebiveisStone(grupo.rows);
+  const linhasGravadas = await importarLancamentosBanco(grupo.label, codigo, nome, registros);
+
+  const intervalo = extrairIntervaloLinhas(registros);
+  await registrarLogUpload({
+    arquivoNome: grupo.label,
+    tipoRelatorio: 'ofx',
+    tabelaPreco: nome,
+    linhasImportadas: linhasGravadas,
+    dataMin: intervalo?.inicio ?? null,
+    dataMax: intervalo?.fim ?? null,
+    status: linhasGravadas > 0 ? 'sucesso' : 'aviso',
+    mensagem: linhasGravadas === 0 ? 'Nenhum lançamento reconhecido no arquivo.' : undefined,
+  });
+}
+
+/** Lê, parseia e grava um arquivo do Sistema (Max Data, HTML) — mesma lógica de sempre, não afetada pela troca do OFX. */
+export async function importarArquivoSistema(file: File): Promise<void> {
   const texto = await readFileSmart(file);
-
-  if (tipo === 'ofx') {
-    const banco = detectBankFromOfx(texto, file.name);
-    const registros = parseOFX(texto, file.name);
-    const linhasGravadas = await importarOfx(file.name, banco.codigo, banco.nome, registros);
-
-    // Sem período de cabeçalho confiável no OFX — usa a faixa das próprias
-    // linhas (o dedup por FITID já garante que reenviar o extrato todo dia
-    // não duplica nada, então não precisa fechar mês nem rejeitar linha).
-    const intervalo = extrairIntervaloLinhas(registros);
-    await registrarLogUpload({
-      arquivoNome: file.name,
-      tipoRelatorio: 'ofx',
-      tabelaPreco: banco.nome,
-      linhasImportadas: linhasGravadas,
-      dataMin: intervalo?.inicio ?? null,
-      dataMax: intervalo?.fim ?? null,
-      status: linhasGravadas > 0 ? 'sucesso' : 'aviso',
-      mensagem: linhasGravadas === 0 ? 'Nenhum lançamento reconhecido no OFX.' : undefined,
-    });
-    return;
-  }
-
   const tipoLancamento = detectarTipoLancamento(texto, file.name);
   const registros = parseMatricial(texto, file.name);
   const linhasGravadas = await importarSistema(file.name, tipoLancamento, registros);

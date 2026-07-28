@@ -5,7 +5,7 @@ export type FormaRegra = 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO' |
 
 export interface RegraConciliacao {
   formaPagamento: FormaRegra;
-  /** Tolerância de diferença de valor (R$) — PIX/Cheque/Boleto. Cartão não usa (a diferença ali é sempre tratada como percentual de taxa). */
+  /** Tolerância de diferença de valor (R$). PIX/Cheque/Boleto sempre usam; Cartão só quando o valor bruto exato é conhecido (Stone) — nesse caso é essa tolerância que decide o match exato, não a faixa de taxa (que fica de fallback pra quando o bruto não é conhecido). */
   toleranciaValor: number;
   /** Janela de dias úteis entre a data do sistema e a do OFX. Boleto usa os dois; Cartão só o máximo. */
   diasUteisMin: number | null;

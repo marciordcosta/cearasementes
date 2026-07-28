@@ -8,8 +8,10 @@ export interface RegistroBancoParseado {
   valor: number;
   descricao: string;
   formaPagamento: FormaPagamento;
-  /** Identificador único da transação (tag <FITID>) — usado pra upsert, evita duplicar quando dois extratos se sobrepõem. Null se o OFX não trouxer essa tag. */
+  /** Chave composta a partir das próprias colunas do arquivo — usado pra upsert, evita duplicar quando dois extratos/recebíveis se sobrepõem. */
   fitid: string | null;
+  /** Valor bruto da venda de cartão (antes da taxa da maquininha) — só a Stone traz esse dado exato. Null pro Banco do Brasil. */
+  valorBrutoCartao: number | null;
 }
 
 export interface RegistroSistemaParseado {
@@ -24,59 +26,145 @@ export interface RegistroSistemaParseado {
 }
 
 // ---------------------------------------------------------------------
-// OFX (extrato bancário) — texto semi-estruturado (OFX 1.x/SGML não fecha
-// tag), por isso regex simples é mais robusto que um parser XML de verdade.
+// Banco (extrato/recebíveis) — antes vinha de OFX; hoje cada banco exporta
+// num formato próprio (planilha/CSV), então cada um tem seu parser dedicado
+// abaixo. Ambos recebem `rows` já extraídas pelo `extractRowGroups` (xlsx
+// vira array de linhas, csv também — mesma função serve pros dois).
 // ---------------------------------------------------------------------
 
-/** Identifica o banco pelas tags reais do OFX (<ORG>/<BANKID>) ou, na falta, por palavra-chave no conteúdo/nome do arquivo. */
-export function detectBankFromOfx(text: string, filename: string): { codigo: string; nome: string } {
-  const bruto = (text || '').toUpperCase();
-  const org = bruto.match(/<ORG>([^\r\n<]*)/)?.[1]?.trim();
-  const bankId = bruto.match(/<BANKID>([^\r\n<]*)/)?.[1]?.trim();
-
-  if (bankId === '001' || org?.includes('BRASIL')) return { codigo: '001', nome: 'Banco do Brasil' };
-  if (org?.includes('STONE')) return { codigo: '197', nome: 'Stone' };
-
-  const conteudo = removerAcentos((text || '').toLowerCase());
-  const nomeArquivo = removerAcentos((filename || '').toLowerCase());
-  if (conteudo.includes('banco do brasil') || nomeArquivo.includes('bb') || nomeArquivo.includes('brasil')) return { codigo: '001', nome: 'Banco do Brasil' };
-  if (conteudo.includes('stone') || nomeArquivo.includes('stone')) return { codigo: '197', nome: 'Stone' };
-
-  return { codigo: '999', nome: 'Banco Desconhecido' };
+function parseNumeroBR(raw: unknown): number {
+  const s = String(raw ?? '')
+    .trim()
+    .replace(/\./g, '')
+    .replace(',', '.');
+  return parseFloat(s);
 }
 
-/** Alguns exports de OFX vêm com bytes nulos de preenchimento — remove sem depender de escape de regex (evita corromper o arquivo-fonte). */
-function removerBytesNulos(texto: string): string {
-  const nulo = String.fromCharCode(0);
-  return texto.split(nulo).join('');
+function parseDataBRParaISO(raw: unknown): string | null {
+  const m = String(raw ?? '')
+    .trim()
+    .match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const ano = y.length === 2 ? `20${y}` : y;
+  return `${ano}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
-/** Extrai os lançamentos (<STMTTRN>) de um arquivo OFX de extrato bancário. */
-export function parseOFX(text: string, filename: string): RegistroBancoParseado[] {
-  const banco = detectBankFromOfx(text, filename);
-  const limpo = removerBytesNulos(text).replace(/\r/g, '\n');
-  const partes = limpo.split(/<STMTTRN>/i);
+/**
+ * Extrato de conta corrente do Banco do Brasil, exportado como .xlsx —
+ * cabeçalho fixo "Data; observacao; Data balancete; Agencia Origem; Lote;
+ * Numero Documento; Cod. Historico; Historico; Valor R$; Inf.; Detalhamento
+ * Hist.". Tudo vem como texto (mesmo data e valor), sem tag nenhuma que
+ * identifique o banco no conteúdo — só o texto "Extrato Conta Corrente" no
+ * topo, que é o que usamos pra reconhecer o arquivo.
+ */
+export function ehExtratoBB(rows: unknown[][]): boolean {
+  const textoTopo = rows
+    .slice(0, 5)
+    .map((r) => r.join(' '))
+    .join(' ')
+    .toLowerCase();
+  return /extrato\s*conta\s*corrente/.test(textoTopo);
+}
+
+/** "Saldo Anterior" e "S A L D O" (com espaços entre as letras) são linhas de resumo, não lançamentos — descartadas comparando o texto sem espaço nenhum. */
+function ehLinhaDeSaldoBB(historico: string): boolean {
+  return historico.replace(/\s+/g, '').toLowerCase().includes('saldo');
+}
+
+export function parseExtratoBB(rows: unknown[][]): RegistroBancoParseado[] {
+  const bancoCodigo = '001';
+  const bancoNome = 'Banco do Brasil';
+  const idxCabecalho = rows.findIndex((r) => String(r[0] ?? '').trim() === 'Data' && String(r[7] ?? '').trim() === 'Historico');
+  const inicio = idxCabecalho >= 0 ? idxCabecalho + 1 : 0;
 
   const registros: RegistroBancoParseado[] = [];
-  for (let i = 1; i < partes.length; i++) {
-    const p = partes[i].split(/<\/STMTTRN>/i)[0];
-    const get = (tag: string): string | null => p.match(new RegExp(`<${tag}>([^<]*)`, 'i'))?.[1]?.trim() ?? null;
+  for (let i = inicio; i < rows.length; i++) {
+    const row = rows[i];
+    const dataBruta = String(row[0] ?? '').trim();
+    const historico = String(row[7] ?? '').trim();
+    if (!dataBruta || !historico || ehLinhaDeSaldoBB(historico)) continue;
 
-    const valor = parseFloat(get('TRNAMT') || '0');
-    const dataOfx = get('DTPOSTED') || '';
-    const dataMatch = dataOfx.match(/(\d{4})(\d{2})(\d{2})/);
-    if (!dataMatch) continue;
+    const data = parseDataBRParaISO(dataBruta);
+    const valorAbs = parseNumeroBR(row[8]);
+    if (!data || isNaN(valorAbs)) continue;
 
-    const descricao = removerAcentos(get('NAME') || get('MEMO') || '');
+    const sinal = String(row[9] ?? '').trim().toUpperCase() === 'D' ? -1 : 1;
+    const numeroDocumento = String(row[5] ?? '').trim();
+    const codHistorico = String(row[6] ?? '').trim();
+    const detalhamento = String(row[10] ?? '').trim();
+    const descricao = removerAcentos([historico, detalhamento].filter(Boolean).join(' - '));
 
     registros.push({
-      bancoCodigo: banco.codigo,
-      bancoNome: banco.nome,
-      data: `${dataMatch[1]}-${dataMatch[2]}-${dataMatch[3]}`,
-      valor,
+      bancoCodigo,
+      bancoNome,
+      data,
+      valor: sinal * valorAbs,
       descricao,
       formaPagamento: detectPaymentTypeFromOfx(descricao),
-      fitid: get('FITID'),
+      fitid: [dataBruta, numeroDocumento, row[8], row[9], codHistorico].join('|'),
+      valorBrutoCartao: null,
+    });
+  }
+  return registros;
+}
+
+/**
+ * Relatório de recebíveis de cartão da Stone, exportado como .csv (não é um
+ * extrato bancário — é 1 linha por venda/parcela, com o valor BRUTO e o
+ * LÍQUIDO já calculados). Reconhecido pelo cabeçalho ("STONECODE"/"STONE
+ * ID"), que é único desse relatório.
+ */
+export function ehRecebiveisStone(rows: unknown[][]): boolean {
+  const cabecalho = (rows[0] ?? []).map((c) => String(c ?? '').trim().toUpperCase());
+  return cabecalho.includes('STONECODE') && cabecalho.includes('STONE ID');
+}
+
+export function parseRecebiveisStone(rows: unknown[][]): RegistroBancoParseado[] {
+  const bancoCodigo = '197';
+  const bancoNome = 'Stone';
+  const cabecalho = (rows[0] ?? []).map((c) => String(c ?? '').trim().toUpperCase());
+  const indice = (nome: string) => cabecalho.indexOf(nome);
+
+  const iDataVencimento = indice('DATA DE VENCIMENTO');
+  const iBandeira = indice('BANDEIRA');
+  const iProduto = indice('PRODUTO');
+  const iStoneId = indice('STONE ID');
+  const iQtdParcelas = indice('QTD DE PARCELAS');
+  const iNumParcela = indice('Nº DA PARCELA');
+  const iValorBruto = indice('VALOR BRUTO');
+  const iValorLiquido = indice('VALOR LÍQUIDO');
+  const iStatus = indice('ÚLTIMO STATUS');
+
+  const registros: RegistroBancoParseado[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.length < cabecalho.length) continue;
+
+    // Só recebíveis já efetivamente pagos/liquidados entram como lançamento do Banco.
+    const status = String(row[iStatus] ?? '').trim();
+    if (status && !/pago/i.test(status)) continue;
+
+    const data = parseDataBRParaISO(row[iDataVencimento]);
+    const valorLiquido = parseNumeroBR(row[iValorLiquido]);
+    if (!data || isNaN(valorLiquido)) continue;
+
+    const valorBruto = parseNumeroBR(row[iValorBruto]);
+    const bandeira = String(row[iBandeira] ?? '').trim();
+    const produto = String(row[iProduto] ?? '').trim();
+    const numParcela = String(row[iNumParcela] ?? '').trim();
+    const qtdParcelas = String(row[iQtdParcelas] ?? '').trim();
+    const stoneId = String(row[iStoneId] ?? '').trim();
+
+    registros.push({
+      bancoCodigo,
+      bancoNome,
+      data,
+      valor: valorLiquido,
+      descricao: `${removerAcentos(`Stone ${bandeira} ${produto}`)} - parcela ${numParcela}/${qtdParcelas}`,
+      formaPagamento: 'CARTAO',
+      fitid: [stoneId, numParcela, data].join('|'),
+      valorBrutoCartao: isNaN(valorBruto) ? null : valorBruto,
     });
   }
   return registros;

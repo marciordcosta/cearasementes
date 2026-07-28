@@ -19,6 +19,8 @@ export interface LancamentoBanco {
   grupoId: string | null;
   /** Anotação livre do usuário (observações, informações adicionais) — independente de conciliado/desativado. */
   observacao: string | null;
+  /** Valor bruto da venda de cartão (antes da taxa da maquininha) — só quando a fonte já traz esse dado exato (recebíveis Stone). Null pro Banco do Brasil e manuais. */
+  valorBrutoCartao: number | null;
 }
 
 export interface LancamentoSistema {
@@ -54,7 +56,10 @@ export interface SugestoesConciliacao {
   mesmoNome?: LancamentoSistema[];
   mesmoValorMesmaData?: LancamentoSistema[];
   mesmoValorOutraData?: LancamentoSistema[];
-  combinacaoCartao?: LancamentoSistema[];
+  /** Só Cartão com valor bruto conhecido: mesmo valor, mas parcela (X/Y) diferente da do lançamento do Banco — fica separado da lista principal porque é um candidato menos confiável, o usuário decide se aceita mesmo assim. */
+  mesmoValorParcelaDiferente?: LancamentoSistema[];
+  /** Só Boleto: nenhum título sozinho bateu, mas a SOMA de vários bate com o valor do Banco — o extrato do BB traz o boleto recebível agregado (1 linha por dia = soma de vários títulos), então isso é o caminho normal, não uma exceção. Concilia o grupo inteiro de uma vez. */
+  combinacaoBoleto?: LancamentoSistema[];
 }
 
 /** Espelho de SugestoesConciliacao pro sentido invertido (Sistema → OFX) — mesmas categorias, candidatos vêm do Banco em vez do Sistema. */
@@ -62,7 +67,8 @@ export interface SugestoesConciliacaoInversa {
   mesmoNome?: LancamentoBanco[];
   mesmoValorMesmaData?: LancamentoBanco[];
   mesmoValorOutraData?: LancamentoBanco[];
-  combinacaoCartao?: LancamentoBanco[];
+  mesmoValorParcelaDiferente?: LancamentoBanco[];
+  combinacaoBoleto?: LancamentoBanco[];
 }
 
 export interface FiltrosConciliacao {

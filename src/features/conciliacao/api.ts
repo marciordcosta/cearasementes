@@ -49,6 +49,7 @@ function bancoFromRow(row: BancoRow): LancamentoBanco {
     desativado: row.desativado,
     grupoId: row.grupo_id,
     observacao: row.observacao,
+    valorBrutoCartao: row.valor_bruto_cartao,
   };
 }
 
@@ -115,16 +116,21 @@ export async function salvarObservacaoBanco(id: string, observacao: string | nul
 }
 
 /**
- * Grava o arquivo OFX + seus lançamentos já parseados (parseOFX). Upsert
- * por `fitid` (o próprio banco garante que é único por transação) — reenviar
- * um extrato com dias sobrepostos atualiza a linha existente em vez de
- * duplicar. `conciliado`/`marcado`/`observacao`/`grupo_id` ficam de fora do
- * payload de propósito: assim o upsert nunca desfaz uma conciliação já
- * feita, só atualiza os dados brutos da transação. Linha sem fitid (OFX que
- * não traz essa tag) sempre entra como nova, igual antes.
+ * Grava o arquivo do Banco (extrato BB ou recebíveis Stone) + seus
+ * lançamentos já parseados. Upsert por `fitid` (chave composta a partir das
+ * próprias colunas do arquivo — ver parsing.ts) — reenviar um arquivo com
+ * dias sobrepostos atualiza a linha existente em vez de duplicar.
+ * `conciliado`/`marcado`/`observacao`/`grupo_id` ficam de fora do payload de
+ * propósito: assim o upsert nunca desfaz uma conciliação já feita, só
+ * atualiza os dados brutos da transação.
+ *
+ * `tipo: 'ofx'` (em conciliacao_arquivos) é só o identificador interno
+ * histórico do "lado Banco" — não significa mais literalmente um arquivo
+ * .ofx, mas renomear exigiria migração pra alterar o check constraint,
+ * então mantido por simplicidade.
  */
 /** Retorna quantas linhas foram de fato gravadas (após deduplicar por fitid dentro do próprio arquivo). */
-export async function importarOfx(nomeArquivo: string, bancoCodigo: string, bancoNome: string, registros: RegistroBancoParseado[]): Promise<number> {
+export async function importarLancamentosBanco(nomeArquivo: string, bancoCodigo: string, bancoNome: string, registros: RegistroBancoParseado[]): Promise<number> {
   const { data: arquivo, error: errArquivo } = await supabase
     .from('conciliacao_arquivos')
     .insert({ nome_arquivo: nomeArquivo, tipo: 'ofx', banco_codigo: bancoCodigo, banco_nome: bancoNome })
@@ -145,6 +151,7 @@ export async function importarOfx(nomeArquivo: string, bancoCodigo: string, banc
       descricao: r.descricao,
       forma_pagamento: r.formaPagamento,
       fitid: r.fitid,
+      valor_bruto_cartao: r.valorBrutoCartao,
     })),
     { onConflict: 'fitid' },
   );
