@@ -406,9 +406,46 @@ export interface Database {
           pureza: string | null;
           germinacao: string | null;
           validade: string | null;
+          /** Peso de Mil Sementes — quando preenchido, sobrescreve (só pra esse lote) o PMS base da Parametrização de Produtos. */
+          pms: string | null;
+          /** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. */
+          teste_forma: 'sementes' | 'peso' | null;
+          teste_data: string | null;
+          teste_plantadas: number | null;
+          teste_germinadas: number | null;
+          teste_peso_plantado: number | null;
         };
         Insert: Omit<Database['public']['Tables']['arquivos_laudos']['Row'], 'id' | 'enviado_em'>;
         Update: Partial<Database['public']['Tables']['arquivos_laudos']['Insert']>;
+        Relationships: [];
+      };
+
+      /** PMS base, Densidade base e Índice de Sobrevivência por produto (nome) — parametrização usada no cálculo de kg/ha sempre que o nome do produto do laudo bater com um cadastrado aqui. */
+      arquivos_parametrizacao_produtos: {
+        Row: {
+          id: string;
+          nome_produto: string;
+          pms_base: string | null;
+          densidade_base: string | null;
+          indice_sobrevivencia: string | null;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['arquivos_parametrizacao_produtos']['Row'], 'id' | 'atualizado_em'> & { id?: string; atualizado_em?: string };
+        Update: Partial<Database['public']['Tables']['arquivos_parametrizacao_produtos']['Insert']>;
+        Relationships: [];
+      };
+
+      /** Fatores GLOBAIS (Modo de Plantio, Condição de Implantação) que corrigem o kg/ha no Guia de Plantio — 5 linhas fixas, só o fator é editável. */
+      arquivos_fatores_plantio: {
+        Row: {
+          chave: string;
+          categoria: 'modo' | 'condicao';
+          rotulo: string;
+          fator: string;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['arquivos_fatores_plantio']['Row'], 'atualizado_em'> & { atualizado_em?: string };
+        Update: Partial<Database['public']['Tables']['arquivos_fatores_plantio']['Insert']>;
         Relationships: [];
       };
     };

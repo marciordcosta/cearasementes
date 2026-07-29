@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -51,6 +51,7 @@ const CAMPO_PARA_COLUNA: Record<CampoNumericoCanal, string> = {
 };
 
 export function PricingPage() {
+  const queryClient = useQueryClient();
   const { data: canaisData } = useQuery({ queryKey: ['pricing', 'canais'], queryFn: fetchCanais });
   const { data: transportadoras = [] } = useQuery({ queryKey: ['fretes', 'transportadoras'], queryFn: fetchTransportadoras });
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
@@ -95,6 +96,15 @@ export function PricingPage() {
     acao().catch((e: unknown) => setErro(mensagemDeErro(e, 'Falha ao salvar no Supabase.')));
   }
 
+  // Essa página mantém sua própria cópia local de `produtos` (ver comentário acima) e nunca
+  // volta a ler a query — mas outras telas que também usam produtos da Tabela de Preço (ex.:
+  // Guia de Plantio, em Arquivos) leem direto da query `['pricing','produtos']` e não têm
+  // como saber que mudou aqui. Sem isso, elas ficam com o nome/peso/custo antigo até a página
+  // ser recarregada inteira.
+  function invalidarProdutosPreco() {
+    queryClient.invalidateQueries({ queryKey: ['pricing', 'produtos'] });
+  }
+
   const canaisVisiveis = canais.filter((c) => c.visivel);
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
@@ -105,22 +115,22 @@ export function PricingPage() {
   // ---------- Produtos ----------
   function onUpdateCusto(produtoId: string, custo: number) {
     setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, custo } : p)));
-    debounced(`produto-custo-${produtoId}`, () => atualizarProduto(produtoId, { custo }));
+    debounced(`produto-custo-${produtoId}`, () => atualizarProduto(produtoId, { custo }).then(invalidarProdutosPreco));
   }
 
   function onUpdatePreco(produtoId: string, canalId: string, preco: number) {
     setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { preco, manual: true } } } : p)));
-    debounced(`produto-preco-${produtoId}-${canalId}`, () => upsertProdutoPreco(produtoId, canalId, preco, true));
+    debounced(`produto-preco-${produtoId}-${canalId}`, () => upsertProdutoPreco(produtoId, canalId, preco, true).then(invalidarProdutosPreco));
   }
 
   function onResetPreco(produtoId: string, canalId: string) {
     setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { preco: null, manual: false } } } : p)));
-    salvarAgora(() => upsertProdutoPreco(produtoId, canalId, null, false));
+    salvarAgora(() => upsertProdutoPreco(produtoId, canalId, null, false).then(invalidarProdutosPreco));
   }
 
   function onRemoverProduto(produtoId: string) {
     setProdutos((prev) => prev.filter((p) => p.id !== produtoId));
-    salvarAgora(() => apagarProduto(produtoId));
+    salvarAgora(() => apagarProduto(produtoId).then(invalidarProdutosPreco));
   }
 
   async function onAdicionarProduto(input: { nome: string; categoriaId: string; peso: number; custo: number }) {
@@ -128,6 +138,7 @@ export function PricingPage() {
       const codigo = String(1000 + produtos.length + 1);
       const produto = await inserirProduto({ ...input, codigo }, canais);
       setProdutos((prev) => ordenarProdutos([...prev, produto], categorias));
+      invalidarProdutosPreco();
     } catch (e) {
       setErro(mensagemDeErro(e, 'Falha ao adicionar produto.'));
     }
@@ -153,7 +164,7 @@ export function PricingPage() {
         peso: patch.peso,
         despesa_extra_valor: patch.despesaExtraValor,
         cubagem: patch.cubagem,
-      }),
+      }).then(invalidarProdutosPreco),
     );
     setProdutoEditandoId(null);
   }
@@ -312,6 +323,7 @@ export function PricingPage() {
     try {
       await apagarTodosProdutos();
       setProdutos([]);
+      invalidarProdutosPreco();
       setModalLimparAberto(false);
     } catch (e) {
       setErro(mensagemDeErro(e, 'Falha ao limpar a tabela no Supabase.'));

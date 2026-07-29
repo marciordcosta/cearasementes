@@ -1,9 +1,11 @@
 import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
-import type { ArquivoLaudo, NovoLaudoInput } from './types';
+import type { ArquivoLaudo, FatorPlantio, NovoLaudoInput, ProdutoParametrizacao } from './types';
 
 type ArquivoRow = Database['public']['Tables']['arquivos_laudos']['Row'];
+type ProdutoParametrizacaoRow = Database['public']['Tables']['arquivos_parametrizacao_produtos']['Row'];
+type FatorPlantioRow = Database['public']['Tables']['arquivos_fatores_plantio']['Row'];
 
 const BUCKET = 'laudos';
 
@@ -21,6 +23,12 @@ function fromRow(row: ArquivoRow): ArquivoLaudo {
     pureza: row.pureza,
     germinacao: row.germinacao,
     validade: row.validade,
+    pms: row.pms,
+    testeForma: row.teste_forma,
+    testeData: row.teste_data,
+    testePlantadas: row.teste_plantadas,
+    testeGerminadas: row.teste_germinadas,
+    testePesoPlantado: row.teste_peso_plantado,
   };
 }
 
@@ -51,6 +59,12 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
       pureza: input.pureza || null,
       germinacao: input.germinacao || null,
       validade: input.validade || null,
+      pms: null,
+      teste_forma: null,
+      teste_data: null,
+      teste_plantadas: null,
+      teste_germinadas: null,
+      teste_peso_plantado: null,
     })
     .select('*')
     .single();
@@ -61,7 +75,7 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
 /** Corrige só os metadados — não mexe no arquivo já enviado. */
 export async function atualizarLaudo(
   id: string,
-  patch: { nomeProduto: string; lote: string; anoSafra: string; pureza: string; germinacao: string; validade: string },
+  patch: { nomeProduto: string; lote: string; anoSafra: string; pureza: string; germinacao: string; validade: string; pms: string },
 ): Promise<void> {
   const { error } = await supabase
     .from('arquivos_laudos')
@@ -72,6 +86,30 @@ export async function atualizarLaudo(
       pureza: patch.pureza || null,
       germinacao: patch.germinacao || null,
       validade: patch.validade || null,
+      pms: patch.pms || null,
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export interface PatchTeste {
+  testeForma: 'sementes' | 'peso' | null;
+  testeData: string | null;
+  testePlantadas: number | null;
+  testeGerminadas: number | null;
+  testePesoPlantado: number | null;
+}
+
+/** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. */
+export async function atualizarTeste(id: string, patch: PatchTeste): Promise<void> {
+  const { error } = await supabase
+    .from('arquivos_laudos')
+    .update({
+      teste_forma: patch.testeForma,
+      teste_data: patch.testeData,
+      teste_plantadas: patch.testePlantadas,
+      teste_germinadas: patch.testeGerminadas,
+      teste_peso_plantado: patch.testePesoPlantado,
     })
     .eq('id', id);
   if (error) throw error;
@@ -87,4 +125,59 @@ export async function apagarLaudo(laudo: ArquivoLaudo): Promise<void> {
   if (idx === -1) return;
   const caminho = decodeURIComponent(laudo.arquivoUrl.slice(idx + marcador.length));
   await supabase.storage.from(BUCKET).remove([caminho]);
+}
+
+function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoParametrizacao {
+  return {
+    id: row.id,
+    nomeProduto: row.nome_produto,
+    pmsBase: row.pms_base,
+    densidadeBase: row.densidade_base,
+    indiceSobrevivencia: row.indice_sobrevivencia,
+  };
+}
+
+/** Parametrização de Produtos (PMS base, Densidade base, Índice de Sobrevivência, Peso do Saco por nome) — lista curta, sem paginação. */
+export async function fetchParametrizacaoProdutos(): Promise<ProdutoParametrizacao[]> {
+  const { data, error } = await supabase.from('arquivos_parametrizacao_produtos').select('*').order('nome_produto');
+  if (error) throw error;
+  return data.map(produtoParametrizacaoFromRow);
+}
+
+export async function salvarParametrizacaoProduto(produto: {
+  id?: string;
+  nomeProduto: string;
+  pmsBase: string;
+  densidadeBase: string;
+  indiceSobrevivencia: string;
+}): Promise<void> {
+  const { error } = await supabase.from('arquivos_parametrizacao_produtos').upsert({
+    ...(produto.id ? { id: produto.id } : {}),
+    nome_produto: produto.nomeProduto,
+    pms_base: produto.pmsBase || null,
+    densidade_base: produto.densidadeBase || null,
+    indice_sobrevivencia: produto.indiceSobrevivencia || null,
+  });
+  if (error) throw error;
+}
+
+export async function apagarParametrizacaoProduto(id: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_parametrizacao_produtos').delete().eq('id', id);
+  if (error) throw error;
+}
+
+function fatorPlantioFromRow(row: FatorPlantioRow): FatorPlantio {
+  return { chave: row.chave, categoria: row.categoria, rotulo: row.rotulo, fator: row.fator };
+}
+
+/** Fatores globais (Modo de Plantio, Condição de Implantação) — 5 linhas fixas, sempre as mesmas. */
+export async function fetchFatoresPlantio(): Promise<FatorPlantio[]> {
+  const { data, error } = await supabase.from('arquivos_fatores_plantio').select('*').order('categoria').order('fator', { ascending: false });
+  if (error) throw error;
+  return data.map(fatorPlantioFromRow);
+}
+
+export async function atualizarFatorPlantio(chave: string, fator: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_fatores_plantio').update({ fator }).eq('chave', chave);
+  if (error) throw error;
 }

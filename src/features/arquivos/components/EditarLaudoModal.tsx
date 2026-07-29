@@ -10,6 +10,7 @@ export interface PatchLaudo {
   pureza: string;
   germinacao: string;
   validade: string;
+  pms: string;
 }
 
 interface EditarLaudoModalProps {
@@ -28,6 +29,7 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
   const [pureza, setPureza] = useState('');
   const [germinacao, setGerminacao] = useState('');
   const [validade, setValidade] = useState('');
+  const [pms, setPms] = useState('');
 
   useEffect(() => {
     if (!laudo) return;
@@ -37,6 +39,7 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
     setPureza(laudo.pureza ?? '');
     setGerminacao(laudo.germinacao ?? '');
     setValidade(laudo.validade ?? '');
+    setPms(laudo.pms ?? '');
   }, [laudo]);
 
   function salvar() {
@@ -48,6 +51,7 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
       pureza: pureza.trim(),
       germinacao: germinacao.trim(),
       validade: validade.trim(),
+      pms: pms.trim(),
     });
   }
 
@@ -98,6 +102,10 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
             <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Validade</label>
             <input value={validade} onChange={(e) => setValidade(e.target.value)} className={campoClasse} placeholder="Ex.: 11/2025" />
           </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">PMS (Peso de Mil Sementes)</label>
+          <input value={pms} onChange={(e) => setPms(e.target.value)} className={campoClasse} placeholder="Ex.: 3,2 (em branco usa o PMS base da Parametrização)" />
         </div>
       </div>
     </Modal>
