@@ -28,6 +28,19 @@ export function valoresExatamenteIguais(a: number, b: number): boolean {
   return Math.abs(a - b) <= 0.001;
 }
 
+/**
+ * Data ISO (YYYY-MM-DD) -> meia-noite LOCAL de verdade. `new Date(isoString)`
+ * (o construtor nativo com string) interpreta datas "só dia" como meia-noite
+ * UTC — num fuso negativo (Brasil, UTC-3) isso cai no dia ANTERIOR ao ler
+ * getDate()/getDay() (hora local): "2025-01-15" vira "14 de janeiro, 21h".
+ * Toda comparação de data ISO deste módulo passa por aqui pra nunca depender
+ * de duas datas serem parseadas do mesmo jeito pra um bug se cancelar sozinho.
+ */
+export function parseDataISO(iso: string): Date {
+  const [ano, mes, dia] = iso.split('-').map(Number);
+  return new Date(ano, mes - 1, dia);
+}
+
 /** Conta dias úteis estritamente entre `inicio` e `fim` (assume `inicio <= fim`), parando cedo (retorna algo > diasMax) assim que ultrapassa `diasMax` — evita percorrer intervalos longos à toa nos filtros de janela de Boleto. */
 export function diasUteisAte(inicio: Date, fim: Date, diasMax: number): number {
   let diasUteis = 0;
@@ -43,8 +56,8 @@ export function diasUteisAte(inicio: Date, fim: Date, diasMax: number): number {
 
 /** Diferença em DIAS ÚTEIS entre duas datas ISO (YYYY-MM-DD); negativo se dataSistema vier depois de dataOfx. */
 export function diffDiasUteis(dataSistema: string, dataOfx: string): number {
-  let d1 = new Date(dataSistema);
-  let d2 = new Date(dataOfx);
+  let d1 = parseDataISO(dataSistema);
+  let d2 = parseDataISO(dataOfx);
 
   let sinal = 1;
   if (d1 > d2) {

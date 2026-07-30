@@ -60,11 +60,22 @@ export async function importarGrupoBanco(grupo: GrupoLinhas, tipoBanco: TipoBanc
   });
 }
 
-/** Lê, parseia e grava um arquivo do Sistema (Max Data, HTML) — mesma lógica de sempre, não afetada pela troca do OFX. */
+/**
+ * Lê, parseia e grava um arquivo do Sistema (Max Data, HTML) — mesma lógica
+ * de sempre, não afetada pela troca do OFX.
+ *
+ * Se NENHUM registro reconhecido tiver NF, o relatório provavelmente não é o
+ * esperado (operador puxou o relatório errado, ou esqueceu de informar a
+ * coluna de NF na exportação) — recusa o arquivo inteiro em vez de gravar
+ * tudo sem NF, o que travaria cada lançamento como "pendente" na Conciliação.
+ */
 export async function importarArquivoSistema(file: File): Promise<void> {
   const texto = await readFileSmart(file);
   const tipoLancamento = detectarTipoLancamento(texto, file.name);
   const registros = parseMatricial(texto, file.name);
+  if (registros.length > 0 && !registros.some((r) => r.nf && r.nf.trim())) {
+    throw new Error(`Arquivo sem informação de NF: "${file.name}".`);
+  }
   const linhasGravadas = await importarSistema(file.name, tipoLancamento, registros);
 
   const periodo = detectarPeriodoCabecalhoSistema(texto);

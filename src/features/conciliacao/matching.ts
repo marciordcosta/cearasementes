@@ -10,6 +10,7 @@ import {
   nomesSemelhantesFortes,
   normalizarNomeClienteOfx,
   parcelaCompativel,
+  parseDataISO,
   removerAcentos,
   valoresExatamenteIguais,
   valoresIguais,
@@ -148,11 +149,11 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
     const diasMin = regraBoleto.diasUteisMin ?? 2;
     const diasMax = regraBoleto.diasUteisMax ?? 3;
     if (!dataOfx) return resp;
-    const dataOfxDate = new Date(dataOfx);
+    const dataOfxDate = parseDataISO(dataOfx);
 
     const candidatos = sistemaFiltradoPorTipo.filter((s) => {
       if (!s.data) return false;
-      const dataSys = new Date(s.data);
+      const dataSys = parseDataISO(s.data);
       if (dataSys >= dataOfxDate) return false;
       const diasUteis = diasUteisAte(dataSys, dataOfxDate, diasMax);
       return diasUteis >= diasMin && diasUteis <= diasMax;
@@ -320,7 +321,7 @@ function regraDaForma(forma: FormaPagamento, subtipoCartao: 'DEBITO' | 'CREDITO'
 }
 
 function diasCorridosEntre(dataA: string, dataB: string): number {
-  const ms = Math.abs(new Date(dataA).getTime() - new Date(dataB).getTime());
+  const ms = Math.abs(parseDataISO(dataA).getTime() - parseDataISO(dataB).getTime());
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
@@ -506,10 +507,10 @@ function buscarSugestoesInversoPorTag(
     const diasMin = regraBoleto.diasUteisMin ?? 2;
     const diasMax = regraBoleto.diasUteisMax ?? 3;
     if (!dataSis) return resp;
-    const dataSisDate = new Date(dataSis);
+    const dataSisDate = parseDataISO(dataSis);
 
     const candidatos = bancoFiltradoPorTipo.filter((b) => {
-      const dataB = new Date(b.data);
+      const dataB = parseDataISO(b.data);
       if (dataB <= dataSisDate) return false;
       const diasUteis = diasUteisAte(dataSisDate, dataB, diasMax);
       return diasUteis >= diasMin && diasUteis <= diasMax;
@@ -740,7 +741,7 @@ export async function conciliacaoAutomatica(
       const regraBoleto = regras.BOLETO;
       const diasMin = regraBoleto.diasUteisMin ?? 2;
       const diasMax = regraBoleto.diasUteisMax ?? 3;
-      const dataOfxDate = new Date(dataOfx);
+      const dataOfxDate = parseDataISO(dataOfx);
 
       const candidatosBoleto = (sistemaPorCategoria.get('BOLETO') ?? []).filter((s) => {
         if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
@@ -749,7 +750,7 @@ export async function conciliacaoAutomatica(
         if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
         if (regraBoleto.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
 
-        const dataSys = new Date(s.data);
+        const dataSys = parseDataISO(s.data);
         if (dataSys >= dataOfxDate) return false;
         const diasUteis = diasUteisAte(dataSys, dataOfxDate, diasMax);
         return diasUteis >= diasMin && diasUteis <= diasMax;
