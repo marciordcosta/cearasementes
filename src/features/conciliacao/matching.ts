@@ -367,6 +367,16 @@ function buscarRecebimentoDiferente(
   return [...candidatos].sort((a, b) => (a.data ?? '').localeCompare(b.data ?? ''));
 }
 
+/**
+ * Limite de segurança pro backtracking de combinações — sem isso, um dia com
+ * muitos títulos/PIX parecidos faz a busca explorar ~2^n combinações e trava
+ * a aba do navegador (percebido como "demora a marcar o checkbox", já que o
+ * useMemo de sugestões roda no meio do mesmo render). Atingir o limite conta
+ * como "não achou combinação nenhuma" — mais seguro do que arriscar
+ * interpretar um resultado parcial como definitivo.
+ */
+const MAX_NOS_BUSCA_COMBINACAO = 200_000;
+
 /** Backtracking: subconjunto de `lista` cuja soma absoluta bate com `alvo`, dentro da `tolerancia` da regra. Genérico (não só LancamentoSistema) pra dar pra rodar também sobre lançamentos do Banco, na busca invertida. Poda por soma restante (nem tudo que falta alcança o alvo) — sem isso, um dia com muitos títulos parecidos faria a busca explorar ~2^n combinações. */
 function combinacaoExata<T extends { valor: number }>(lista: T[], alvo: number, tolerancia: number): T[] | null {
   const valoresAbs = lista.map((item) => Math.abs(item.valor));
@@ -374,7 +384,9 @@ function combinacaoExata<T extends { valor: number }>(lista: T[], alvo: number, 
   const somaRestante = new Array<number>(n + 1).fill(0);
   for (let i = n - 1; i >= 0; i--) somaRestante[i] = somaRestante[i + 1] + valoresAbs[i];
 
+  let nos = 0;
   function backtrack(i: number, soma: number, usados: T[]): T[] | null {
+    if (++nos > MAX_NOS_BUSCA_COMBINACAO) return null;
     if (valoresIguais(soma, alvo, tolerancia)) return usados;
     if (i >= n || soma > alvo + tolerancia || soma + somaRestante[i] < alvo - tolerancia) return null;
     const com = backtrack(i + 1, soma + valoresAbs[i], [...usados, lista[i]]);
@@ -907,18 +919,7 @@ export async function conciliacaoAutomatica(
   return grupos;
 }
 
-/**
- * Limite de segurança pro backtracking de combinações "achar todas" — sem
- * isso, um dia com muitos títulos de boleto parecidos faz a busca explorar
- * ~2^n combinações e trava a aba do navegador de vez (a Conciliação
- * Automática nunca volta a liberar o botão). Se o limite for atingido,
- * desiste e trata como "não achou combinação nenhuma" — mais seguro do que
- * arriscar interpretar um resultado parcial como se fosse definitivo
- * (poderia conciliar sozinho algo que na verdade era ambíguo).
- */
-const MAX_NOS_BUSCA_COMBINACAO = 200_000;
-
-/** Todas as combinações (não só a primeira) cuja soma bate exatamente com o alvo (dentro da tolerância) — usado só na conciliação automática de Boleto, pra exigir ausência de ambiguidade. Poda por soma restante e desiste assim que acha a 2ª combinação válida (só precisa saber que já é ambíguo). */
+/** Todas as combinações (não só a primeira) cuja soma bate exatamente com o alvo (dentro da tolerância) — usado só na conciliação automática de Boleto, pra exigir ausência de ambiguidade. Poda por soma restante e desiste assim que acha a 2ª combinação válida (só precisa saber que já é ambíguo). Mesmo limite de segurança de nós que combinacaoExata. */
 function combinacoesTodasExatas(lista: LancamentoSistema[], alvo: number, tolerancia: number): LancamentoSistema[][] {
   const valoresAbs = lista.map((s) => Math.abs(s.valor));
   const n = valoresAbs.length;

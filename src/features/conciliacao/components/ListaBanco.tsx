@@ -115,6 +115,7 @@ export function ListaBanco({
     return (
       <div
         className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''} ${filtroSistemaAtivoNesteItem ? 'ring-[0.5px] ring-inset ring-[var(--color-accent)]' : ''}`}
+        title={criterio}
       >
         {!item.conciliado && !item.desativado && (
           <input
@@ -144,7 +145,6 @@ export function ListaBanco({
               {mostrarBruto && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(bruto)</span>}
             </div>
             <div className="flex items-center gap-1.5">
-              {criterio && <Badge apagado>{criterio}</Badge>}
               {item.bancoNome && <Badge apagado={item.conciliado}>{item.bancoNome.toUpperCase()}</Badge>}
               <Badge apagado={item.conciliado} cor={item.formaPagamento === 'CARTAO' ? undefined : CORES_FORMA_PAGAMENTO[item.formaPagamento]}>
                 {item.formaPagamento}

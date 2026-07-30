@@ -344,11 +344,18 @@ export async function salvarNfSistema(id: string, nf: string): Promise<void> {
   if (error) throw error;
 }
 
+/** "2025-01-15" -> "2025-01-01" — cada mês tem sua própria linha de taxa (uma só, acumulando o mês inteiro), em vez de tudo somado numa linha só desde sempre. */
+function primeiroDiaDoMes(data: string): string {
+  return `${data.slice(0, 7)}-01`;
+}
+
 async function garantirLinhaTaxaCartao(dataRef: string): Promise<SistemaRow> {
+  const primeiroDia = primeiroDiaDoMes(dataRef);
   const { data: existente, error: errBusca } = await supabase
     .from('conciliacao_lancamentos_sistema')
     .select('*')
     .eq('origem', 'taxa_automatica')
+    .eq('data', primeiroDia)
     .maybeSingle();
   if (errBusca) throw errBusca;
   if (existente) return existente;
@@ -365,7 +372,7 @@ async function garantirLinhaTaxaCartao(dataRef: string): Promise<SistemaRow> {
       vendedor: null,
       forma_pagamento_raw: 'Taxa Cartão',
       valor: 0,
-      data: dataRef,
+      data: primeiroDia,
       data_vencimento: null,
       conciliado: true,
       desativado: false,
@@ -415,10 +422,14 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[], avisoD
   if (errB) throw errB;
   if (errS) throw errS;
 
-  let taxaAcumulada = 0;
+  // Uma linha de taxa por MÊS (não uma só desde sempre) — soma-se aqui por
+  // mês do lançamento do Banco, cobrindo até o caso raro de uma conciliação
+  // em lote que misture datas de meses diferentes.
+  const taxaPorMes = new Map<string, number>();
   for (const b of bancoSelecionado) {
     if (b.forma_pagamento !== 'CARTAO') continue;
     const valorOfx = Math.abs(b.valor);
+    const mes = b.data.slice(0, 7);
     for (const s of sistemaSelecionado) {
       const valorSys = Math.abs(s.valor);
       if (valorSys <= 0 || valorSys < valorOfx) continue;
@@ -426,13 +437,14 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[], avisoD
       const taxaPercentual = +((taxaValor / valorSys) * 100).toFixed(2);
       const { error } = await supabase.from('conciliacao_lancamentos_sistema').update({ taxa_valor: taxaValor, taxa_percentual: taxaPercentual }).eq('id', s.id);
       if (error) throw error;
-      taxaAcumulada += taxaValor;
+      taxaPorMes.set(mes, (taxaPorMes.get(mes) ?? 0) + taxaValor);
     }
   }
 
-  let linhaTaxaAtualizada: SistemaRow | null = null;
-  if (taxaAcumulada > 0) {
-    const linhaTaxa = await garantirLinhaTaxaCartao(bancoSelecionado[0]?.data ?? new Date().toISOString().slice(0, 10));
+  const linhasTaxaAtualizadas: SistemaRow[] = [];
+  for (const [mes, taxaAcumulada] of taxaPorMes) {
+    if (taxaAcumulada <= 0) continue;
+    const linhaTaxa = await garantirLinhaTaxaCartao(`${mes}-01`);
     const { data, error } = await supabase
       .from('conciliacao_lancamentos_sistema')
       .update({ valor: +(linhaTaxa.valor - taxaAcumulada).toFixed(2) })
@@ -440,7 +452,7 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[], avisoD
       .select('*')
       .single();
     if (error) throw error;
-    linhaTaxaAtualizada = data;
+    linhasTaxaAtualizadas.push(data);
   }
 
   const { data: bancoAtualizados, error: errUpdBanco } = await supabase
@@ -457,11 +469,12 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[], avisoD
     .select('*');
   if (errUpdSistema) throw errUpdSistema;
 
-  // A linha de taxa automática não faz parte de `sistemaIds` (é sempre a
-  // mesma linha fixa, não uma selecionada pelo usuário) — some ela na mão
-  // se foi tocada, senão o card de "Administradora de Cartão" ficaria com
-  // o valor antigo até a página ser recarregada.
-  const todosSistema = linhaTaxaAtualizada && !sistemaAtualizados.some((s) => s.id === linhaTaxaAtualizada!.id) ? [...sistemaAtualizados, linhaTaxaAtualizada] : sistemaAtualizados;
+  // A(s) linha(s) de taxa automática não fazem parte de `sistemaIds` (são
+  // sempre linhas fixas por mês, não selecionadas pelo usuário) — soma-se elas
+  // na mão se foram tocadas, senão o card de "Administradora de Cartão"
+  // ficaria com o valor antigo até a página ser recarregada.
+  const idsJaAtualizados = new Set(sistemaAtualizados.map((s) => s.id));
+  const todosSistema = [...sistemaAtualizados, ...linhasTaxaAtualizadas.filter((l) => !idsJaAtualizados.has(l.id))];
 
   // Um par que acabou de ser conciliado não faz mais sentido continuar na
   // lista de "descartados" (se por acaso um dia foi descartado antes) — some
@@ -580,7 +593,13 @@ export async function cancelarConciliacao(grupoId: string): Promise<ResultadoCan
 
   let linhaTaxaAtualizada: SistemaRow | null = null;
   if (taxaParaReverter > 0) {
-    const { data: linhaTaxa } = await supabase.from('conciliacao_lancamentos_sistema').select('*').eq('origem', 'taxa_automatica').maybeSingle();
+    // Mesma linha (do MÊS certo) que recebeu essa taxa lá na conciliação — o
+    // mês vem da data do lançamento do Banco (Cartão), não do Sistema.
+    const dataRefCartao = bancoDoGrupo.find((b) => b.forma_pagamento === 'CARTAO')?.data ?? bancoDoGrupo[0]?.data;
+    const primeiroDia = dataRefCartao ? primeiroDiaDoMes(dataRefCartao) : null;
+    const { data: linhaTaxa } = primeiroDia
+      ? await supabase.from('conciliacao_lancamentos_sistema').select('*').eq('origem', 'taxa_automatica').eq('data', primeiroDia).maybeSingle()
+      : { data: null };
     if (linhaTaxa) {
       const { data, error } = await supabase
         .from('conciliacao_lancamentos_sistema')

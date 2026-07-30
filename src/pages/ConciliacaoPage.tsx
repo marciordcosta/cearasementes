@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
@@ -812,33 +812,45 @@ export function ConciliacaoPage() {
     // Se a outra grade (Sistema) já tem qualquer marcação, a sugestão fica
     // escondida — só aparece com seleção em apenas um dos lados por vez.
     if (selecionadosSistema.size > 0) return;
-    setSugestaoAtiva({ direcao: 'banco', item, idsFixos: [item.id] });
-    setSugestaoMinimizada(false);
-    setFiltroIdsSugestaoBanco(null);
+    // A busca de sugestões (useMemo de `sugestoes`, que depende de `sugestaoAtiva`)
+    // pode ser pesada com milhares de lançamentos — startTransition deixa o
+    // checkbox marcar na hora (prioridade alta) em vez de esperar a busca
+    // terminar pra só então repintar a tela, que é o "atraso" percebido.
+    startTransition(() => {
+      setSugestaoAtiva({ direcao: 'banco', item, idsFixos: [item.id] });
+      setSugestaoMinimizada(false);
+      setFiltroIdsSugestaoBanco(null);
+    });
   }
 
   function onVerSugestoesCombinadas(itens: LancamentoBanco[]) {
     if (selecionadosSistema.size > 0) return;
     const combinado = itemBancoCombinado(itens);
-    setSugestaoAtiva({ direcao: 'banco', item: combinado, idsFixos: itens.map((b) => b.id) });
-    setSugestaoMinimizada(false);
-    setFiltroIdsSugestaoBanco(null);
+    startTransition(() => {
+      setSugestaoAtiva({ direcao: 'banco', item: combinado, idsFixos: itens.map((b) => b.id) });
+      setSugestaoMinimizada(false);
+      setFiltroIdsSugestaoBanco(null);
+    });
   }
 
   function onVerSugestoesSistema(item: LancamentoSistema) {
     // Mesmo motivo do onVerSugestoes: só bloqueia se o Banco já tiver alguma marcação.
     if (selecionadosBanco.size > 0) return;
-    setSugestaoAtiva({ direcao: 'sistema', item, idsFixos: [item.id] });
-    setSugestaoMinimizada(false);
-    setFiltroIdsSugestaoSistema(null);
+    startTransition(() => {
+      setSugestaoAtiva({ direcao: 'sistema', item, idsFixos: [item.id] });
+      setSugestaoMinimizada(false);
+      setFiltroIdsSugestaoSistema(null);
+    });
   }
 
   function onVerSugestoesSistemaCombinadas(itens: LancamentoSistema[]) {
     if (selecionadosBanco.size > 0) return;
     const combinado = itemSistemaCombinado(itens);
-    setSugestaoAtiva({ direcao: 'sistema', item: combinado, idsFixos: itens.map((s) => s.id) });
-    setSugestaoMinimizada(false);
-    setFiltroIdsSugestaoSistema(null);
+    startTransition(() => {
+      setSugestaoAtiva({ direcao: 'sistema', item: combinado, idsFixos: itens.map((s) => s.id) });
+      setSugestaoMinimizada(false);
+      setFiltroIdsSugestaoSistema(null);
+    });
   }
 
   // "Habilitar soma" (botão global, desativado por padrão) liga/desliga a
