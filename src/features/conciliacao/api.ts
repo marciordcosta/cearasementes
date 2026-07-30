@@ -72,6 +72,7 @@ function sistemaFromRow(row: SistemaRow): LancamentoSistema {
     taxaValor: row.taxa_valor,
     taxaPercentual: row.taxa_percentual,
     grupoId: row.grupo_id,
+    observacao: row.observacao,
   };
 }
 
@@ -114,6 +115,13 @@ export async function salvarObservacaoBanco(id: string, observacao: string | nul
   const { data, error } = await supabase.from('conciliacao_lancamentos_banco').update({ observacao }).eq('id', id).select('*').single();
   if (error) throw error;
   return bancoFromRow(data);
+}
+
+/** Observação livre (informações adicionais) num lançamento do Sistema — mesma regra do Banco, `null` apaga a observação. */
+export async function salvarObservacaoSistema(id: string, observacao: string | null): Promise<LancamentoSistema> {
+  const { data, error } = await supabase.from('conciliacao_lancamentos_sistema').update({ observacao }).eq('id', id).select('*').single();
+  if (error) throw error;
+  return sistemaFromRow(data);
 }
 
 /**

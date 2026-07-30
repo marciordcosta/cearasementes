@@ -182,7 +182,14 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
     const regraForma = regraParaFormaGenerica(tipoOfx, regras);
     const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor));
     const mesmaData = mesmoValorTodos.filter((s) => dataOfx && dataComparavelSistema(s, tipoOfx) === dataOfx);
-    const outraData = mesmoValorTodos.filter((s) => !dataOfx || dataComparavelSistema(s, tipoOfx) !== dataOfx);
+    // "Outra data" só entra dentro da tolerância de busca da regra (pra CHEQUE, contada em torno
+    // do vencimento) — sem isso, qualquer diferença de data (mesmo anos) aparecia como sugestão.
+    const outraData = mesmoValorTodos.filter((s) => {
+      const dataComp = dataComparavelSistema(s, tipoOfx);
+      if (dataOfx && dataComp === dataOfx) return false;
+      if (!dataOfx || !dataComp) return true;
+      return diasCorridosEntre(dataComp, dataOfx) <= regraForma.toleranciaDias;
+    });
     resp.mesmoValorMesmaData = mesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
     resp.valorAproximadoMesmaData = mesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
     resp.mesmoValorOutraData = outraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
@@ -494,7 +501,12 @@ function buscarSugestoesInversoPorTag(itemSistema: LancamentoSistema, banco: Lan
     const regraForma = regraParaFormaGenerica(tipoSistema, regras);
     const mesmoValorTodos = bancoFiltradoPorTipo.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraForma.toleranciaValor));
     const mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
-    const outraData = mesmoValorTodos.filter((b) => !dataSis || b.data !== dataSis);
+    // "Outra data" só entra dentro da tolerância de busca da regra (dataSis já é o vencimento pra CHEQUE — ver definição acima).
+    const outraData = mesmoValorTodos.filter((b) => {
+      if (dataSis && b.data === dataSis) return false;
+      if (!dataSis || !b.data) return true;
+      return diasCorridosEntre(b.data, dataSis) <= regraForma.toleranciaDias;
+    });
     resp.mesmoValorMesmaData = mesmaData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
     resp.valorAproximadoMesmaData = mesmaData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
     resp.mesmoValorOutraData = outraData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));

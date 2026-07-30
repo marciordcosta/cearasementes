@@ -18,7 +18,7 @@ export interface RegraConciliacao {
   nomeMinSobrenome: number | null;
   /** Se false, a Conciliação Automática não exige NF preenchida nessa forma pra fechar sozinha. */
   exigirNfAutomatica: boolean;
-  /** Só PIX usa hoje: dias corridos de diferença ainda considerados "mesma data" na busca de sugestões, e janela da rede de segurança "Mesmo valor, recebimento diferente" (todas as formas). */
+  /** PIX e Cheque usam pra limitar a categoria "Mesmo valor, outra data" nas sugestões (pra Cheque, contada em torno do vencimento, não do recebimento) — e o PIX também define a janela da rede de segurança "Mesmo valor, recebimento diferente" (todas as formas). */
   toleranciaDias: number;
 }
 
@@ -40,7 +40,7 @@ export const REGRAS_PADRAO: Record<FormaRegra, RegraConciliacao> = {
   CARTAO_DEBITO: { formaPagamento: 'CARTAO_DEBITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 0.9, taxaMaxPercentual: 3, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
   CARTAO_CREDITO: { formaPagamento: 'CARTAO_CREDITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 1.9, taxaMaxPercentual: 5, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
   BOLETO: { formaPagamento: 'BOLETO', toleranciaValor: 0.01, diasUteisMin: 2, diasUteisMax: 3, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
-  CHEQUE: { formaPagamento: 'CHEQUE', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
+  CHEQUE: { formaPagamento: 'CHEQUE', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 30 },
 };
 
 type RegraRow = Database['public']['Tables']['conciliacao_regras']['Row'];

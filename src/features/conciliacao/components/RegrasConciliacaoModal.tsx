@@ -163,17 +163,20 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
         </>
       )}
 
+      {(forma === 'PIX' || forma === 'CHEQUE') && (
+        <Campo label="Tolerância de busca (dias)">
+          <input
+            type="number"
+            min={0}
+            value={regra.toleranciaDias}
+            onChange={(e) => onAtualizar('toleranciaDias', parseInt(e.target.value, 10) || 0)}
+            className={campoClasse}
+          />
+        </Campo>
+      )}
+
       {forma === 'PIX' && (
         <>
-          <Campo label="Tolerância de dias">
-            <input
-              type="number"
-              min={0}
-              value={regra.toleranciaDias}
-              onChange={(e) => onAtualizar('toleranciaDias', parseInt(e.target.value, 10) || 0)}
-              className={campoClasse}
-            />
-          </Campo>
           <Campo label="Nome contido (mín. caracteres)">
             <input
               type="number"
@@ -201,12 +204,15 @@ function SecaoForma({ forma, regra, onAtualizar }: SecaoFormaProps) {
       </label>
 
       {forma === 'CHEQUE' && (
-        <p className="text-[11px] text-[var(--color-text-soft)]">* Hoje o Cheque só usa a tolerância de valor acima — ainda não tem regra própria de dias ou nome.</p>
+        <p className="text-[11px] text-[var(--color-text-soft)]">
+          * O Cheque compara pelo VENCIMENTO (não pelo recebimento) — a tolerância de busca acima é a janela de dias, em torno do vencimento, onde a sugestão ainda aparece como "Mesmo valor, outra
+          data".
+        </p>
       )}
 
       {forma === 'PIX' && (
         <p className="text-[11px] text-[var(--color-text-soft)]">
-          * A tolerância de dias também define a janela da categoria "Mesmo valor, recebimento diferente" nas sugestões, pra qualquer forma de pagamento.
+          * A tolerância de busca também define a janela da categoria "Mesmo valor, recebimento diferente" nas sugestões, pra qualquer forma de pagamento.
         </p>
       )}
     </div>

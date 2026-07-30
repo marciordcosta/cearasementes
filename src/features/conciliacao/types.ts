@@ -42,6 +42,8 @@ export interface LancamentoSistema {
   taxaValor: number;
   taxaPercentual: number;
   grupoId: string | null;
+  /** Anotação livre do usuário (observações, informações adicionais) — mesma regra do Banco, independente de conciliado/desativado. */
+  observacao: string | null;
 }
 
 export interface ArquivoConciliacao {

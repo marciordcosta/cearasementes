@@ -1,4 +1,4 @@
-import { AlertTriangle, Filter, FileText, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, Filter, FileText, Pencil, RotateCcw, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -38,7 +38,7 @@ interface ListaSistemaProps {
   onMarcarESomar: (item: LancamentoSistema) => void;
   /** Ao desmarcar um item, a página fecha o painel de sugestões se ele estiver mostrando esse item. */
   onDesmarcarSistema: (id: string) => void;
-  /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) da sugestão aberta — mostra o aviso pra voltar a ver todos. */
+  /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) filtrado(s) (sugestão aberta, ou "Filtrar" do card de observação) — mostra o aviso pra voltar a ver todos. */
   filtroSugestaoAtivo: boolean;
   onLimparFiltroSugestao: () => void;
   /** grupoId -> texto do aviso (valor/forma de pagamento diferentes) confirmado na hora da conciliação — presença na tabela decide se mostra o "!" informativo. */
@@ -46,6 +46,8 @@ interface ListaSistemaProps {
   onAbrirAvisoDiferenca: (grupoId: string) => void;
   /** grupoId -> valor líquido creditado no Banco (Cartão com valor bruto conhecido) — mostrado discretamente ao lado do valor bruto do Sistema, já conciliado. */
   liquidoPorGrupo: Map<string, number>;
+  /** Abre o modal de observação (informações adicionais) pra esse lançamento — mesma regra do Banco: só disponível enquanto não conciliado. */
+  onAbrirObservacao: (item: LancamentoSistema) => void;
 }
 
 export function ListaSistema({
@@ -74,6 +76,7 @@ export function ListaSistema({
   avisoPorGrupo,
   onAbrirAvisoDiferenca,
   liquidoPorGrupo,
+  onAbrirObservacao,
 }: ListaSistemaProps) {
   function renderLinha(item: LancamentoSistema) {
     const categoria = getCategoriaSistema(item.formaPagamentoRaw);
@@ -193,14 +196,26 @@ export function ListaSistema({
                   </>
                 )
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onToggleDesativado(item)}
-                  className="text-xs text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
-                  title={item.desativado ? 'Reativar' : 'Desativar'}
-                >
-                  {item.desativado ? '↺' : '⊘'}
-                </button>
+                <>
+                  {(selecionados.has(item.id) || item.observacao) && (
+                    <button
+                      type="button"
+                      onClick={() => onAbrirObservacao(item)}
+                      className={item.observacao ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-soft)] hover:text-[var(--color-text)]'}
+                      title={item.observacao ? `Observação: ${item.observacao}` : 'Adicionar observação'}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onToggleDesativado(item)}
+                    className="text-xs text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                    title={item.desativado ? 'Reativar' : 'Desativar'}
+                  >
+                    {item.desativado ? '↺' : '⊘'}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -313,7 +328,7 @@ export function ListaSistema({
       </div>
       {filtroSugestaoAtivo && (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--color-line)] bg-[var(--color-accent)]/10 px-4 py-2 text-xs font-semibold text-[var(--color-accent)]">
-          <span>Mostrando só o(s) lançamento(s) da sugestão aberta</span>
+          <span>Mostrando só o(s) lançamento(s) filtrado(s)</span>
           <button type="button" onClick={onLimparFiltroSugestao} className="rounded-md border border-[var(--color-accent)]/40 px-2 py-0.5 hover:bg-[var(--color-accent)]/15">
             Ver todos
           </button>

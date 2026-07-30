@@ -18,6 +18,7 @@ import {
   inserirLancamentoManualSistema,
   salvarNfSistema,
   salvarObservacaoBanco,
+  salvarObservacaoSistema,
   toggleDesativadoBanco,
   toggleDesativadoSistema,
 } from '@/features/conciliacao/api';
@@ -140,6 +141,7 @@ export function ConciliacaoPage() {
   const [pendenteSemNf, setPendenteSemNf] = useState<{ bancoIds: string[]; sistemaIds: string[]; avisoDiferenca: string | null } | null>(null);
   const [grupoAvisoAberto, setGrupoAvisoAberto] = useState<string | null>(null);
   const [itemObservacao, setItemObservacao] = useState<LancamentoBanco | null>(null);
+  const [itemObservacaoSistema, setItemObservacaoSistema] = useState<LancamentoSistema | null>(null);
   const [itemInformarNf, setItemInformarNf] = useState<LancamentoSistema | null>(null);
   const [contextoLancamentoManual, setContextoLancamentoManual] = useState<{ bancoIds: string[] } | null>(null);
   const [itemParaConciliarManual, setItemParaConciliarManual] = useState<LancamentoSistema | null>(null);
@@ -459,7 +461,7 @@ export function ConciliacaoPage() {
         if (filtros.conciliado === 'preConciliados' && !(s.conciliado && s.origem === 'sistema' && !(s.nf && s.nf.trim()))) return false;
         if (filtros.conciliado === 'preLancamentos' && !(s.conciliado && s.origem === 'manual' && !(s.nf && s.nf.trim()))) return false;
         if (filtros.conciliado === 'divergentes' && !(s.grupoId && avisoPorGrupo.has(s.grupoId))) return false;
-        if (filtros.conciliado === 'editados') return false;
+        if (filtros.conciliado === 'editados' && !(s.observacao && s.observacao.trim())) return false;
         if (filtroNfSistema === 'ocultados' && !s.desativado) return false;
         if (filtroNfSistema === 'com' && !(s.nf && s.nf.trim())) return false;
         if (filtroNfSistema === 'sem' && s.nf && s.nf.trim()) return false;
@@ -578,6 +580,9 @@ export function ConciliacaoPage() {
   // — aparecem na seção "Registros com informações extras" do modal de pendências.
   const registrosObservacao = useMemo(() => banco.filter((b) => b.observacao && b.observacao.trim()), [banco]);
 
+  // Mesma regra do Banco, mas pro Sistema — aparece na notificação/modal de pendências do Sistema, não do Banco.
+  const registrosObservacaoSistema = useMemo(() => sistema.filter((s) => s.observacao && s.observacao.trim()), [sistema]);
+
   function onAbrirPendenciasBanco() {
     setModalPendenciasAberto('preConciliados');
   }
@@ -617,6 +622,42 @@ export function ConciliacaoPage() {
     } catch (e) {
       tratarErro(e);
     }
+  }
+
+  // Mesma regra do Banco (ícone de editar na grade + edição inline na seção "Informações extras" do modal de pendências do Sistema).
+  function onAbrirObservacaoSistema(item: LancamentoSistema) {
+    setItemObservacaoSistema(item);
+  }
+
+  async function onSalvarObservacaoSistema(id: string, texto: string) {
+    try {
+      const atualizado = await salvarObservacaoSistema(id, texto.trim() || null);
+      setSistema((prev) => prev.map((s) => (s.id === id ? atualizado : s)));
+      setItemObservacaoSistema(null);
+    } catch (e) {
+      tratarErro(e);
+    }
+  }
+
+  async function onExcluirObservacaoSistema(id: string) {
+    try {
+      const atualizado = await salvarObservacaoSistema(id, null);
+      setSistema((prev) => prev.map((s) => (s.id === id ? atualizado : s)));
+      setItemObservacaoSistema(null);
+    } catch (e) {
+      tratarErro(e);
+    }
+  }
+
+  // Filtra a grade correspondente por esse registro só — não fecha o modal de pendências,
+  // que continua aberto até o usuário fechar pelo próprio X (mesmo mecanismo do "Filtrar
+  // Registro" das sugestões, reaproveitado aqui).
+  function onFiltrarObservacaoBanco(id: string) {
+    setFiltroIdsSugestaoBanco([id]);
+  }
+
+  function onFiltrarObservacaoSistema(id: string) {
+    setFiltroIdsSugestaoSistema([id]);
   }
 
   // "Informar NF" a partir do modal de pendências: fecha o modal e abre o
@@ -1103,7 +1144,7 @@ export function ConciliacaoPage() {
         onPedirCancelarConciliacao={onPedirCancelarConciliacao}
         onAbrirInformarNf={onAbrirInformarNf}
         onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
-        pendenciasCount={registrosPreLancamento.length}
+        pendenciasCount={registrosPreLancamento.length + registrosObservacaoSistema.length}
         onAbrirPendencias={onAbrirPendenciasSistema}
         filtroNf={filtroNfSistema}
         onChangeFiltroNf={setFiltroNfSistema}
@@ -1116,6 +1157,7 @@ export function ConciliacaoPage() {
         avisoPorGrupo={avisoPorGrupo}
         onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
         liquidoPorGrupo={bancoLiquidoPorGrupo}
+        onAbrirObservacao={onAbrirObservacaoSistema}
       />
     </div>
   );
@@ -1407,6 +1449,10 @@ export function ConciliacaoPage() {
         onFechar={() => setModalPendenciasAberto(null)}
         onInformarNf={onInformarNfDaLista}
         onCompletarPreLancamento={onCompletarDaLista}
+        observacao={registrosObservacaoSistema}
+        onSalvarObservacao={onSalvarObservacaoSistema}
+        onExcluirObservacao={onExcluirObservacaoSistema}
+        onFiltrarObservacao={onFiltrarObservacaoSistema}
       />
 
       <PendenciasBancoModal
@@ -1421,9 +1467,17 @@ export function ConciliacaoPage() {
         observacao={registrosObservacao}
         onSalvarObservacao={onSalvarObservacaoBanco}
         onExcluirObservacao={onExcluirObservacaoBanco}
+        onFiltrarObservacao={onFiltrarObservacaoBanco}
       />
 
       <ObservacaoModal open={itemObservacao !== null} item={itemObservacao} onFechar={() => setItemObservacao(null)} onSalvar={onSalvarObservacaoBanco} onExcluir={onExcluirObservacaoBanco} />
+      <ObservacaoModal
+        open={itemObservacaoSistema !== null}
+        item={itemObservacaoSistema}
+        onFechar={() => setItemObservacaoSistema(null)}
+        onSalvar={onSalvarObservacaoSistema}
+        onExcluir={onExcluirObservacaoSistema}
+      />
     </AppShell>
   );
 }

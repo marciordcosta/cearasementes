@@ -30,7 +30,7 @@ interface ListaBancoProps {
   onMarcarESomar: (item: LancamentoBanco) => void;
   /** Ao desmarcar um item, a página fecha o painel de sugestões se ele estiver mostrando esse item. */
   onDesmarcarBanco: (id: string) => void;
-  /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) da sugestão aberta — mostra o aviso pra voltar a ver todos. */
+  /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) filtrado(s) (sugestão aberta, ou "Filtrar" do card de observação) — mostra o aviso pra voltar a ver todos. */
   filtroSugestaoAtivo: boolean;
   onLimparFiltroSugestao: () => void;
   /** grupoId cujo(s) lançamento(s) do Sistema estão filtrados na outra grade agora — usado só pra destacar o ícone do item correspondente. */
@@ -313,7 +313,7 @@ export function ListaBanco({
       </div>
       {filtroSugestaoAtivo && (
         <div className="flex items-center justify-between gap-2 border-b border-[var(--color-line)] bg-[var(--color-accent)]/10 px-4 py-2 text-xs font-semibold text-[var(--color-accent)]">
-          <span>Mostrando só o(s) lançamento(s) da sugestão aberta</span>
+          <span>Mostrando só o(s) lançamento(s) filtrado(s)</span>
           <button type="button" onClick={onLimparFiltroSugestao} className="rounded-md border border-[var(--color-accent)]/40 px-2 py-0.5 hover:bg-[var(--color-accent)]/15">
             Ver todos
           </button>

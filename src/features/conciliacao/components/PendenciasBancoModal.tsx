@@ -1,9 +1,8 @@
 import { X } from 'lucide-react';
-import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
-import { CAMPO_CLASSE as campoClasse } from '../constants';
 import type { LancamentoBanco, LancamentoSistema } from '../types';
+import { CardObservacao } from './CardObservacao';
 
 interface PendenciasBancoModalProps {
   open: boolean;
@@ -21,53 +20,14 @@ interface PendenciasBancoModalProps {
   observacao: LancamentoBanco[];
   onSalvarObservacao: (id: string, texto: string) => void;
   onExcluirObservacao: (id: string) => void;
-}
-
-/** Card de observação com edição inline (textarea + Salvar/Excluir direto no card, sem abrir outro modal) — usado só dentro da seção 3. */
-function CardObservacao({
-  item,
-  onSalvar,
-  onExcluir,
-}: {
-  item: LancamentoBanco;
-  onSalvar: (id: string, texto: string) => void;
-  onExcluir: (id: string) => void;
-}) {
-  const [texto, setTexto] = useState(item.observacao ?? '');
-
-  return (
-    <div className="rounded-lg bg-[#EFEAFB] px-3 py-2.5 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold text-[var(--color-text)]" title={item.descricao ?? ''}>
-            {item.descricao || '—'}
-          </div>
-          <div className="truncate text-xs text-[var(--color-text-soft)]">{fmtDataBR(item.data)}</div>
-        </div>
-        <span className="num shrink-0 font-semibold">{fmtBRL.format(item.valor)}</span>
-      </div>
-      <textarea
-        value={texto}
-        onChange={(e) => setTexto(e.target.value)}
-        rows={2}
-        className={`${campoClasse} mt-2 resize-none bg-white text-xs`}
-      />
-      <div className="mt-1.5 flex justify-end gap-2">
-        <button type="button" onClick={() => onExcluir(item.id)} className="rounded-md border border-bad/40 px-2.5 py-1 text-xs font-semibold text-bad hover:bg-bad-soft">
-          Excluir
-        </button>
-        <button type="button" onClick={() => onSalvar(item.id, texto)} className="rounded-md bg-[#5B3FA6] px-2.5 py-1 text-xs font-semibold text-white hover:brightness-110">
-          Salvar
-        </button>
-      </div>
-    </div>
-  );
+  /** Filtra a grade do Banco só por esse registro — não fecha o modal. */
+  onFiltrarObservacao: (id: string) => void;
 }
 
 /**
  * Pendências do Banco (OFX) — 3 seções, nessa ordem: vendas sem NF, conciliações
- * divergentes e registros com informações extras. Só o Banco tem essas 3
- * categorias (o Sistema continua com o próprio modal simples de pré-lançamentos).
+ * divergentes e registros com informações extras (o Sistema tem seção equivalente
+ * de observação no próprio PendenciasModal, além das duas primeiras que são só do Banco).
  */
 export function PendenciasBancoModal({
   open,
@@ -81,6 +41,7 @@ export function PendenciasBancoModal({
   observacao,
   onSalvarObservacao,
   onExcluirObservacao,
+  onFiltrarObservacao,
 }: PendenciasBancoModalProps) {
   const semPendencias = semNf.length === 0 && divergencia.length === 0 && observacao.length === 0;
 
@@ -155,7 +116,7 @@ export function PendenciasBancoModal({
               <p className="mb-2 text-sm font-bold text-[var(--color-text)]">Registros com informações extras</p>
               <div className="space-y-2">
                 {observacao.map((item) => (
-                  <CardObservacao key={item.id} item={item} onSalvar={onSalvarObservacao} onExcluir={onExcluirObservacao} />
+                  <CardObservacao key={item.id} item={item} onSalvar={onSalvarObservacao} onExcluir={onExcluirObservacao} onFiltrar={onFiltrarObservacao} />
                 ))}
               </div>
             </section>

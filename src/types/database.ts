@@ -353,11 +353,13 @@ export interface Database {
           chave_dedup: string | null;
           /** True depois que o usuário confirma (na "bolha" de registros manuais) que a NF foi de fato emitida e o lançamento já foi replicado no ERP. */
           lancado_erp: boolean;
+          /** Anotação livre do usuário — mesma regra do Banco, independente de conciliado/desativado. */
+          observacao: string | null;
           criado_em: string;
         };
         Insert: Omit<
           Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'],
-          'id' | 'criado_em' | 'chave_dedup' | 'lancado_erp' | 'conciliado' | 'desativado' | 'grupo_id' | 'taxa_valor' | 'taxa_percentual'
+          'id' | 'criado_em' | 'chave_dedup' | 'lancado_erp' | 'conciliado' | 'desativado' | 'grupo_id' | 'taxa_valor' | 'taxa_percentual' | 'observacao'
         > & {
           chave_dedup?: string | null;
           lancado_erp?: boolean;
@@ -366,6 +368,7 @@ export interface Database {
           grupo_id?: string | null;
           taxa_valor?: number;
           taxa_percentual?: number;
+          observacao?: string | null;
         };
         Update: Partial<Database['public']['Tables']['conciliacao_lancamentos_sistema']['Insert']>;
         Relationships: [];

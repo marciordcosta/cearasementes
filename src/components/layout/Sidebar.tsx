@@ -9,11 +9,11 @@ interface NavItem {
 }
 
 const NAV_ITEMS_PRINCIPAIS: NavItem[] = [
-  { to: '/', label: 'Painel BI', Icone: LayoutDashboard },
   { to: '/precificacao', label: 'Precificação', Icone: Tag },
   { to: '/fretes', label: 'Fretes', Icone: Truck },
-  { to: '/conciliacao', label: 'Conciliação', Icone: Landmark },
   { to: '/arquivos', label: 'Arquivos', Icone: FolderOpen },
+  { to: '/conciliacao', label: 'Conciliação', Icone: Landmark },
+  { to: '/', label: 'Painel BI', Icone: LayoutDashboard },
 ];
 
 // Fica isolado embaixo, separado dos itens principais — Uploads é uma ação
