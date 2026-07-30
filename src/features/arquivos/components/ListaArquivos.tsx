@@ -20,6 +20,8 @@ interface ListaArquivosProps {
   onAbrirTeste: (arquivo: ArquivoLaudo) => void;
   /** PMS base por produto (Parametrização) — fallback quando o lote não informa PMS. Densidade e kg/ha saíram daqui pro Guia de Plantio (dependem da forma de plantio escolhida). */
   produtos: ProdutoParametrizacao[];
+  /** Abre o Guia de Plantio já com esse laudo inserido na grade — só faz sentido com exatamente 1 selecionado. */
+  onAbrirGuiaPlantio: (arquivo: ArquivoLaudo) => void;
 }
 
 // Word/Excel/PowerPoint abrem via Google Docs Viewer (com a toolbar completa
@@ -29,7 +31,7 @@ function imprimir(arquivo: ArquivoLaudo) {
   window.open(montarUrlVisualizacao(arquivo, 'aba'), '_blank');
 }
 
-export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, produtos }: ListaArquivosProps) {
+export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, produtos, onAbrirGuiaPlantio }: ListaArquivosProps) {
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
@@ -75,15 +77,21 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
           placeholder="Buscar por nome do produto ou lote…"
           className="w-full max-w-md rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
         />
-        <Button variant="outline" onClick={alternarModoSelecao}>
-          {modoSelecao ? 'Cancelar seleção' : 'Selecionar'}
-        </Button>
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-[var(--color-text)]">
+          <input type="checkbox" checked={modoSelecao} onChange={alternarModoSelecao} className="accent-[var(--color-navy)]" />
+          Selecionar
+        </label>
         {arquivosSelecionados.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-[var(--color-text-soft)]">{arquivosSelecionados.length} selecionado{arquivosSelecionados.length === 1 ? '' : 's'}</span>
             <Button variant="danger" onClick={() => onApagar(arquivosSelecionados)}>
               🗑 Excluir
             </Button>
+            {arquivosSelecionados.length === 1 && (
+              <Button variant="action" onClick={() => onAbrirGuiaPlantio(arquivosSelecionados[0])}>
+                🌱 Guia de Plantio
+              </Button>
+            )}
           </div>
         )}
       </div>

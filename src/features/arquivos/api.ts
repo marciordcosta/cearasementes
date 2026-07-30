@@ -1,11 +1,13 @@
 import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
-import type { ArquivoLaudo, FatorPlantio, NovoLaudoInput, ProdutoParametrizacao } from './types';
+import type { ArquivoLaudo, ChecklistOpcao, ChecklistPergunta, FatorPlantio, ManualPlantio, NovoLaudoInput, ProdutoParametrizacao } from './types';
 
 type ArquivoRow = Database['public']['Tables']['arquivos_laudos']['Row'];
 type ProdutoParametrizacaoRow = Database['public']['Tables']['arquivos_parametrizacao_produtos']['Row'];
 type FatorPlantioRow = Database['public']['Tables']['arquivos_fatores_plantio']['Row'];
+type ChecklistPerguntaRow = Database['public']['Tables']['arquivos_checklist_perguntas']['Row'];
+type ChecklistOpcaoRow = Database['public']['Tables']['arquivos_checklist_opcoes']['Row'];
 
 const BUCKET = 'laudos';
 
@@ -167,7 +169,7 @@ export async function apagarParametrizacaoProduto(id: string): Promise<void> {
 }
 
 function fatorPlantioFromRow(row: FatorPlantioRow): FatorPlantio {
-  return { chave: row.chave, categoria: row.categoria, rotulo: row.rotulo, fator: row.fator };
+  return { chave: row.chave, categoria: row.categoria, rotulo: row.rotulo, fator: row.fator, resumo: row.resumo };
 }
 
 /** Fatores globais (Modo de Plantio, Condição de Implantação) — 5 linhas fixas, sempre as mesmas. */
@@ -179,5 +181,83 @@ export async function fetchFatoresPlantio(): Promise<FatorPlantio[]> {
 
 export async function atualizarFatorPlantio(chave: string, fator: string): Promise<void> {
   const { error } = await supabase.from('arquivos_fatores_plantio').update({ fator }).eq('chave', chave);
+  if (error) throw error;
+}
+
+/** Resumo técnico da condição (só faz sentido pras linhas categoria='condicao') — mostrado no Guia de Plantio. */
+export async function atualizarResumoCondicao(chave: string, resumo: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_fatores_plantio').update({ resumo }).eq('chave', chave);
+  if (error) throw error;
+}
+
+function checklistOpcaoFromRow(row: ChecklistOpcaoRow): ChecklistOpcao {
+  return { id: row.id, perguntaId: row.pergunta_id, ordem: row.ordem, texto: row.texto, condicaoChave: row.condicao_chave };
+}
+
+/** Checklist de Diagnóstico de Campo (Guia de Plantio) — perguntas já com suas opções, ordenadas. */
+export async function fetchChecklistPlantio(): Promise<ChecklistPergunta[]> {
+  const [perguntasRows, opcoesRows] = await Promise.all([
+    fetchAllRows<ChecklistPerguntaRow>((from, to) => supabase.from('arquivos_checklist_perguntas').select('*').order('ordem').range(from, to)),
+    fetchAllRows<ChecklistOpcaoRow>((from, to) => supabase.from('arquivos_checklist_opcoes').select('*').order('ordem').range(from, to)),
+  ]);
+  return perguntasRows.map((p) => ({
+    id: p.id,
+    ordem: p.ordem,
+    pergunta: p.pergunta,
+    opcoes: opcoesRows.filter((o) => o.pergunta_id === p.id).map(checklistOpcaoFromRow),
+  }));
+}
+
+export async function inserirPerguntaChecklist(pergunta: string, ordem: number): Promise<ChecklistPergunta> {
+  const { data, error } = await supabase.from('arquivos_checklist_perguntas').insert({ pergunta, ordem }).select('*').single();
+  if (error) throw error;
+  return { id: data.id, ordem: data.ordem, pergunta: data.pergunta, opcoes: [] };
+}
+
+export async function atualizarPerguntaChecklist(id: string, pergunta: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_checklist_perguntas').update({ pergunta }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function apagarPerguntaChecklist(id: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_checklist_perguntas').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function inserirOpcaoChecklist(perguntaId: string, texto: string, condicaoChave: string, ordem: number): Promise<ChecklistOpcao> {
+  const { data, error } = await supabase
+    .from('arquivos_checklist_opcoes')
+    .insert({ pergunta_id: perguntaId, texto, condicao_chave: condicaoChave, ordem })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return checklistOpcaoFromRow(data);
+}
+
+export async function atualizarOpcaoChecklist(id: string, patch: { texto?: string; condicaoChave?: string }): Promise<void> {
+  const { error } = await supabase
+    .from('arquivos_checklist_opcoes')
+    .update({
+      ...(patch.texto !== undefined ? { texto: patch.texto } : {}),
+      ...(patch.condicaoChave !== undefined ? { condicao_chave: patch.condicaoChave } : {}),
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function apagarOpcaoChecklist(id: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_checklist_opcoes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Manual de Plantio (texto opcional que acompanha o PDF do Guia de Plantio) — uma linha só, id fixo 'default'. */
+export async function fetchManualPlantio(): Promise<ManualPlantio | null> {
+  const { data, error } = await supabase.from('arquivos_manual_plantio').select('*').eq('id', 'default').maybeSingle();
+  if (error) throw error;
+  return data ? { titulo: data.titulo, corpo: data.corpo } : null;
+}
+
+export async function salvarManualPlantio(manual: ManualPlantio): Promise<void> {
+  const { error } = await supabase.from('arquivos_manual_plantio').upsert({ id: 'default', titulo: manual.titulo, corpo: manual.corpo });
   if (error) throw error;
 }

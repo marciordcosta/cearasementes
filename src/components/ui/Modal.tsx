@@ -8,9 +8,10 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   widthClassName?: string;
+  heightClassName?: string;
 }
 
-export function Modal({ open, title, onClose, children, footer, widthClassName = 'max-w-[420px]' }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, widthClassName = 'max-w-[420px]', heightClassName = 'max-h-[85vh]' }: ModalProps) {
   if (!open) return null;
 
   return (
@@ -20,7 +21,7 @@ export function Modal({ open, title, onClose, children, footer, widthClassName =
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-xl bg-[var(--color-surface)] shadow-2xl ${widthClassName}`}>
+      <div className={`flex w-full flex-col overflow-hidden rounded-xl bg-[var(--color-surface)] shadow-2xl ${widthClassName} ${heightClassName}`}>
         <div className="flex items-center justify-between gap-3 bg-[var(--color-navy)] px-[18px] py-3.5 text-sm font-bold text-white">
           <div className="flex min-w-0 flex-1 items-center gap-3">{title}</div>
           <button

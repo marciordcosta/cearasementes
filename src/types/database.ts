@@ -435,17 +435,59 @@ export interface Database {
         Relationships: [];
       };
 
-      /** Fatores GLOBAIS (Modo de Plantio, Condição de Implantação) que corrigem o kg/ha no Guia de Plantio — 5 linhas fixas, só o fator é editável. */
+      /** Fatores GLOBAIS (Modo de Plantio, Condição de Implantação) que corrigem o kg/ha no Guia de Plantio — 5 linhas fixas, só o fator (e o resumo, nas de condição) são editáveis. */
       arquivos_fatores_plantio: {
         Row: {
           chave: string;
           categoria: 'modo' | 'condicao';
           rotulo: string;
           fator: string;
+          resumo: string | null;
           atualizado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['arquivos_fatores_plantio']['Row'], 'atualizado_em'> & { atualizado_em?: string };
         Update: Partial<Database['public']['Tables']['arquivos_fatores_plantio']['Insert']>;
+        Relationships: [];
+      };
+
+      /** Perguntas do Checklist de Diagnóstico de Campo (Guia de Plantio) — cada uma com N opções em arquivos_checklist_opcoes. */
+      arquivos_checklist_perguntas: {
+        Row: {
+          id: string;
+          ordem: number;
+          pergunta: string;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['arquivos_checklist_perguntas']['Row'], 'id' | 'atualizado_em'> & { id?: string; atualizado_em?: string };
+        Update: Partial<Database['public']['Tables']['arquivos_checklist_perguntas']['Insert']>;
+        Relationships: [];
+      };
+
+      /** Opções marcáveis de cada pergunta do Checklist — cada opção aponta pra uma condição (arquivos_fatores_plantio.chave). */
+      arquivos_checklist_opcoes: {
+        Row: {
+          id: string;
+          pergunta_id: string;
+          ordem: number;
+          texto: string;
+          condicao_chave: string;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['arquivos_checklist_opcoes']['Row'], 'id' | 'atualizado_em'> & { id?: string; atualizado_em?: string };
+        Update: Partial<Database['public']['Tables']['arquivos_checklist_opcoes']['Insert']>;
+        Relationships: [];
+      };
+
+      /** Manual de Plantio (texto opcional impresso junto do PDF do Guia de Plantio) — uma linha só, id fixo 'default'. */
+      arquivos_manual_plantio: {
+        Row: {
+          id: string;
+          titulo: string;
+          corpo: string;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['arquivos_manual_plantio']['Row'], 'atualizado_em'> & { atualizado_em?: string };
+        Update: Partial<Database['public']['Tables']['arquivos_manual_plantio']['Insert']>;
         Relationships: [];
       };
     };

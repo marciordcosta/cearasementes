@@ -3,6 +3,8 @@ import { resolverDensidadeBase, resolverIndiceSobrevivencia, resolverPmsBase } f
 import { resultadoTesteNumero } from './testeGerminacao';
 import type { ArquivoLaudo, ProdutoParametrizacao } from './types';
 
+type LaudoParaSemeadura = Pick<ArquivoLaudo, 'nomeProduto' | 'pms' | 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'pureza' | 'germinacao'>;
+
 /**
  * % "de germinação usada" na conta de semeadura — na prática, a taxa geral
  * de sucesso (sementes que viram planta estabelecida):
@@ -15,10 +17,7 @@ import type { ArquivoLaudo, ProdutoParametrizacao } from './types';
  *   laboratório não capta perdas de campo (seca, praga, forma de plantio),
  *   por isso a correção só entra aqui, nunca em cima do teste de campo.
  */
-export function germinacaoParaSemeadura(
-  a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'pureza' | 'germinacao' | 'nomeProduto'>,
-  produtos: ProdutoParametrizacao[],
-): number | null {
+export function germinacaoParaSemeadura(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
   const doTeste = resultadoTesteNumero(a);
   if (doTeste !== null) return doTeste;
   const vc = calcularVCNumero(a);
@@ -34,12 +33,7 @@ export function germinacaoParaSemeadura(
  * SEMPRE entram, mesmo quando há teste de campo: o teste mede a germinação
  * real, mas não sabe qual vai ser a forma de plantio da PRÓXIMA semeadura.
  */
-export function germinacaoFinalSemeadura(
-  a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'pureza' | 'germinacao' | 'nomeProduto'>,
-  produtos: ProdutoParametrizacao[],
-  fatorModo: number,
-  fatorCondicao: number,
-): number | null {
+export function germinacaoFinalSemeadura(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicao: number): number | null {
   const base = germinacaoParaSemeadura(a, produtos);
   if (base === null) return null;
   const final = base * fatorModo * fatorCondicao;
@@ -47,27 +41,33 @@ export function germinacaoFinalSemeadura(
 }
 
 /**
- * kg/ha (número cru) = (Densidade × PMS) / (100 × Pureza × Germinação ×
- * Sobrevivência × Fator Modo × Fator Condição)
- *
- * Densidade é a população ALVO de plântulas estabelecidas (plantas/m²), não
- * a quantidade de semente lançada — é um cálculo inverso: quanto pior a taxa
- * de sucesso, mais semente precisa lançar pra chegar na mesma densidade
- * final. PMS converte sementes↔peso (sempre entra, não é uma fonte
- * alternativa de germinação). O "100" é só conversão de unidade (m²→ha,
- * g→kg) — não muda com o produto.
- *
- * Densidade vem sempre da Parametrização de Produtos (busca pelo nome do
- * produto) — não é editável por lote. PMS: se o lote tiver um valor
- * digitado (`a.pms`), ele manda (corrige aquele lote); em branco, cai pro
- * PMS base da Parametrização.
+ * Sementes por m² = Densidade desejada ÷ (Germinação final / 100) — a
+ * REFERÊNCIA de todo o cálculo de semeadura é a Densidade (plântulas
+ * estabelecidas por m² que o produtor quer no final); a Germinação final
+ * (VC% do laudo OU teste de campo, × Índice de Sobrevivência, × Fatores de
+ * Modo/Condição do Guia) diz que fração das sementes lançadas vira planta —
+ * então pra chegar na Densidade alvo, lança-se Densidade/germinação
+ * sementes por m². Não depende de PMS nem de área — é uma taxa pura.
+ */
+export function calcularSementesPorM2(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicao: number): number | null {
+  const densidade = resolverDensidadeBase(a.nomeProduto, produtos);
+  const germinacao = germinacaoFinalSemeadura(a, produtos, fatorModo, fatorCondicao);
+  if (densidade === null || germinacao === null) return null;
+  return (densidade * 100) / germinacao;
+}
+
+/**
+ * kg/ha = Sementes por m² × PMS ÷ 100 — o PMS só entra AQUI, como conversor
+ * sementes→peso (PMS = peso de 1.000 sementes, em gramas). Sem PMS
+ * cadastrado (nem no lote, nem base), não tem como saber o peso — mas
+ * Sementes por m²/cova continuam calculáveis normalmente, só o kg/ha (e
+ * tudo que depende dele: Peso total, Sacos, Valor) fica pendente.
  */
 export function calcularKgPorHectareNumero(a: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicao: number): number | null {
-  const densidade = resolverDensidadeBase(a.nomeProduto, produtos);
+  const sementesPorM2 = calcularSementesPorM2(a, produtos, fatorModo, fatorCondicao);
   const pms = paraNumero(a.pms) ?? resolverPmsBase(a.nomeProduto, produtos);
-  const germinacao = germinacaoFinalSemeadura(a, produtos, fatorModo, fatorCondicao);
-  if (densidade === null || pms === null || germinacao === null) return null;
-  return (densidade * pms) / germinacao;
+  if (sementesPorM2 === null || pms === null) return null;
+  return (sementesPorM2 * pms) / 100;
 }
 
 /** Igual calcularKgPorHectareNumero, mas já formatado (arredondado pra cima, número fechado) pra exibir. */
@@ -81,68 +81,22 @@ export function calcularKgPorHectare(a: ArquivoLaudo, produtos: ProdutoParametri
 
 /**
  * Covas por m² = 10.000 cm² (1 m²) ÷ (espaçamento entre covas na linha ×
- * espaçamento do corredor entre linhas), os dois em cm — cadastrado por
- * produto/lote no Guia de Plantio (varia de cultura pra cultura).
+ * espaçamento do corredor entre linhas), os dois em cm.
  */
 export function calcularCovasPorM2(covaCm: number | null, corredorCm: number | null): number | null {
   if (covaCm === null || covaCm <= 0 || corredorCm === null || corredorCm <= 0) return null;
   return 10000 / (covaCm * corredorCm);
 }
 
-type LaudoParaSemeadura = Pick<ArquivoLaudo, 'nomeProduto' | 'pms' | 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'pureza' | 'germinacao'>;
-
 /**
- * Sementes por m² — de preferência puxa o PMS de verdade e passa pelo peso
- * REAL que vai ser usado (já arredondado pra cima — o que realmente se
- * compra/leva a campo) pra chegar na quantidade de sementes, dividida pela
- * área:
- *
- * total de sementes = peso real (kg) × 1.000.000 / PMS (PMS em gramas por
- * 1.000 sementes — peso_kg×1000 = gramas; gramas/PMS×1000 = sementes)
- *
- * SEM PMS cadastrado (nem no lote, nem base), não tem como converter peso
- * em sementes — mas a CONTAGEM ainda dá pra calcular direto por Densidade e
- * Germinação (VC% ou teste), sem precisar de peso nenhum: Densidade × 100 ÷
- * Germinação final. Esse atalho só não informa o peso/kg — por isso
- * Taxa de semeadura, Peso total, Sacos e Valor continuam pendentes sem PMS.
+ * Sementes por cova (alvo teórico) = Sementes por m² ÷ Covas por m² — o mesmo
+ * total de sementes lançadas em 1 m² (ver calcularSementesPorM2), mas em vez
+ * de espalhado a lanço, concentrado nas covas daquele m². Só usado como
+ * referência de exibição — no modo Linha/Cova a Sementes/cova de verdade é
+ * sempre digitada manualmente (nunca calculada), e é ela quem fixa o produto
+ * Cova × Corredor; ver derivarEspacamento em GuiaPlantioModal.tsx.
  */
-export function calcularSementesPorM2(
-  a: LaudoParaSemeadura,
-  produtos: ProdutoParametrizacao[],
-  pesoRealKg: number | null,
-  areaHa: number | null,
-  fatorModo: number,
-  fatorCondicao: number,
-): number | null {
-  const pms = paraNumero(a.pms) ?? resolverPmsBase(a.nomeProduto, produtos);
-  if (pms !== null && pms > 0 && pesoRealKg !== null && areaHa !== null && areaHa > 0) {
-    const totalSementes = (pesoRealKg * 1_000_000) / pms;
-    return totalSementes / (areaHa * 10000);
-  }
-  const densidade = resolverDensidadeBase(a.nomeProduto, produtos);
-  const germinacao = germinacaoFinalSemeadura(a, produtos, fatorModo, fatorCondicao);
-  if (densidade === null || germinacao === null) return null;
-  return (densidade * 100) / germinacao;
-}
-
-/**
- * Sementes por cova = Sementes por m² ÷ Covas por m² — o mesmo total de
- * sementes lançadas em 1 m² (ver calcularSementesPorM2, com ou sem PMS), mas
- * em vez de espalhado a lanço, concentrado nas covas daquele m². `covasPorM2`
- * vem do Espaçamento (cm × cm) escolhido no Guia de Plantio: covas/m² =
- * 10.000 ÷ (espaçamento X × espaçamento Y, em cm) — não depende da
- * Densidade cadastrada (essa aqui é a distância real entre covas no campo).
- */
-export function calcularSementesPorCova(
-  a: LaudoParaSemeadura,
-  produtos: ProdutoParametrizacao[],
-  pesoRealKg: number | null,
-  areaHa: number | null,
-  covasPorM2: number | null,
-  fatorModo: number,
-  fatorCondicao: number,
-): number | null {
-  const sementesPorM2 = calcularSementesPorM2(a, produtos, pesoRealKg, areaHa, fatorModo, fatorCondicao);
+export function calcularSementesPorCova(sementesPorM2: number | null, covasPorM2: number | null): number | null {
   if (sementesPorM2 === null || covasPorM2 === null || covasPorM2 <= 0) return null;
   return sementesPorM2 / covasPorM2;
 }
