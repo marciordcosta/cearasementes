@@ -144,8 +144,14 @@ export function ListaSistema({
               {liquido != null && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(líquido: {fmtBRL.format(liquido)})</span>}
             </div>
             <div className="flex items-center gap-1.5">
-              <Badge cor={CORES_FORMA_PAGAMENTO[categoria]}>{categoria}</Badge>
-              {subtipoCartao && <Badge>{subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}</Badge>}
+              <Badge apagado={item.conciliado} cor={categoria === 'CARTAO' ? undefined : CORES_FORMA_PAGAMENTO[categoria]}>
+                {categoria}
+              </Badge>
+              {subtipoCartao && (
+                <Badge apagado={item.conciliado} cor={CORES_FORMA_PAGAMENTO.CARTAO}>
+                  {subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}
+                </Badge>
+              )}
             </div>
           </div>
           <div className="mt-0.5 truncate text-xs font-semibold text-[var(--color-text)]" title={item.cliente ?? ''}>

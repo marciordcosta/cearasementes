@@ -144,14 +144,16 @@ export function ListaBanco({
               {mostrarBruto && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(bruto)</span>}
             </div>
             <div className="flex items-center gap-1.5">
-              {criterio && (
-                <span className="truncate text-[11px] text-good" title={criterio}>
-                  {criterio}
-                </span>
+              {criterio && <Badge apagado>{criterio}</Badge>}
+              {item.bancoNome && <Badge apagado={item.conciliado}>{item.bancoNome.toUpperCase()}</Badge>}
+              <Badge apagado={item.conciliado} cor={item.formaPagamento === 'CARTAO' ? undefined : CORES_FORMA_PAGAMENTO[item.formaPagamento]}>
+                {item.formaPagamento}
+              </Badge>
+              {subtipoCartao && (
+                <Badge apagado={item.conciliado} cor={CORES_FORMA_PAGAMENTO.CARTAO}>
+                  {subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}
+                </Badge>
               )}
-              {item.bancoNome && <Badge>{item.bancoNome.toUpperCase()}</Badge>}
-              <Badge cor={CORES_FORMA_PAGAMENTO[item.formaPagamento]}>{item.formaPagamento}</Badge>
-              {subtipoCartao && <Badge>{subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}</Badge>}
             </div>
           </div>
           <div className="mt-0.5 truncate text-xs font-semibold text-[var(--color-text)]" title={item.descricao ?? ''}>
