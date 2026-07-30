@@ -35,6 +35,8 @@ export interface LancamentoSistema {
   formaPagamentoRaw: string | null;
   valor: number;
   data: string | null;
+  /** Data de vencimento impressa no relatório do Sistema — só usada na busca/conciliação de CHEQUE (o banco compensa no vencimento, não no recebimento). Null nos demais tipos e em lançamentos importados antes desse campo existir. */
+  dataVencimento: string | null;
   conciliado: boolean;
   desativado: boolean;
   taxaValor: number;

@@ -342,6 +342,8 @@ export interface Database {
           forma_pagamento_raw: string | null;
           valor: number;
           data: string | null;
+          /** Data de vencimento impressa no relatório do Sistema — só usada na busca/conciliação de CHEQUE. Null nos demais tipos e em lançamentos importados antes desse campo existir. */
+          data_vencimento: string | null;
           conciliado: boolean;
           desativado: boolean;
           taxa_valor: number;

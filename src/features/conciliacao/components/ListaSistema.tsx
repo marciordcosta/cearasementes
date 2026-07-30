@@ -120,14 +120,20 @@ export function ListaSistema({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <div className="flex items-baseline gap-1.5">
-              <span className="text-xs text-[var(--color-text-soft)]">{item.data ? fmtDataBR(item.data) : '—'}</span>
+              <span className="text-xs text-[var(--color-text-soft)]">
+                {categoria === 'CHEQUE' && item.dataVencimento ? fmtDataBR(item.dataVencimento) : item.data ? fmtDataBR(item.data) : '—'}
+              </span>
+              {categoria === 'CHEQUE' && item.dataVencimento && (
+                <span className="text-[10px] text-[var(--color-text-soft)]" title="Data de recebimento">
+                  (receb. {item.data ? fmtDataBR(item.data) : '—'})
+                </span>
+              )}
               <span className={`num text-base font-extrabold ${item.valor < 0 ? 'text-bad' : 'text-good'}`}>— {fmtBRL.format(item.valor)}</span>
               {liquido != null && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(líquido: {fmtBRL.format(liquido)})</span>}
             </div>
             <div className="flex items-center gap-1.5">
               <Badge cor={CORES_FORMA_PAGAMENTO[categoria]}>{categoria}</Badge>
               {subtipoCartao && <Badge>{subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}</Badge>}
-              <Badge tom={item.tipoLancamento === 'Entrada' ? 'bom' : 'ruim'}>{item.tipoLancamento.toUpperCase()}</Badge>
             </div>
           </div>
           <div className="mt-0.5 truncate text-xs font-semibold text-[var(--color-text)]" title={item.cliente ?? ''}>

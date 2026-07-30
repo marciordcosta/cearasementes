@@ -43,7 +43,7 @@ import {
 } from '@/features/conciliacao/matching';
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
 import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
-import { extrairParcela, getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
+import { getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 
@@ -57,6 +57,15 @@ function correspondeBusca(termo: string, campos: Array<string | number | null | 
 function fmtDataBRSemZero(iso: string): string {
   const [ano, mes, dia] = iso.split('-');
   return `${parseInt(dia, 10)}/${parseInt(mes, 10)}/${ano}`;
+}
+
+const MESES_PT_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+/** Nome da aba do export por mês — `chave` é "AAAA-MM" (ou "sem-data"). Nomes de aba do Excel não podem ter "/" nem passar de 31 caracteres. */
+function nomeAbaMes(chave: string): string {
+  if (chave === 'sem-data') return 'Sem data';
+  const [ano, mes] = chave.split('-');
+  return `${MESES_PT_ABREV[Number(mes) - 1]} ${ano}`;
 }
 
 /** Datas em ISO (YYYY-MM-DD) comparam certo por string — sem data vai sempre pro fim, nas duas ordens. */
@@ -289,30 +298,41 @@ export function ConciliacaoPage() {
 
   function exportarBancoXlsx(apenasConciliados: boolean) {
     const registros = banco.filter((b) => !apenasConciliados || b.conciliado);
-    const linhas = registros.map((b) => {
-      const detalhe = b.grupoId ? sistemaDetalhePorGrupo.get(b.grupoId) : undefined;
-      const parcela = b.formaPagamento === 'CARTAO' ? extrairParcela(b.descricao) : null;
-      return {
-        Data: b.data ? fmtDataBR(b.data) : '',
-        Valor: b.valor,
-        Parcela: parcela ? `${parcela.atual}/${parcela.total}` : '',
-        NF: detalhe?.nfs.join(' + ') ?? '',
-        Documento: detalhe?.documentos.join(' + ') ?? '',
-        Cliente: detalhe?.clientes.join(' + ') ?? '',
-        'Registro do Banco': b.descricao ?? '',
-        'Nome do Banco': b.bancoNome ?? '',
-      };
-    });
-    const planilha = XLSX.utils.json_to_sheet(linhas);
-    // Coluna "Valor" (índice 1: Data=0, Valor=1) em formato contábil — o
-    // código usa "," e "." na sintaxe padrão do Excel, mas ele exibe com o
-    // separador da configuração regional (no Windows em pt-BR, vira "127,00").
-    for (let i = 0; i < linhas.length; i++) {
-      const endereco = XLSX.utils.encode_cell({ r: i + 1, c: 1 });
-      if (planilha[endereco]) planilha[endereco].z = '#,##0.00';
+
+    // Uma aba por mês (ano-mês do campo Data) — "Sem data" agrupa o que não tiver data (não deveria acontecer, mas evita perder linha).
+    const porMes = new Map<string, LancamentoBanco[]>();
+    for (const b of registros) {
+      const chave = b.data ? b.data.slice(0, 7) : 'sem-data';
+      const lista = porMes.get(chave) ?? [];
+      lista.push(b);
+      porMes.set(chave, lista);
     }
+
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, planilha, 'Conciliação Banco');
+    for (const chave of [...porMes.keys()].sort()) {
+      const linhas = porMes.get(chave)!.map((b) => {
+        const detalhe = b.grupoId ? sistemaDetalhePorGrupo.get(b.grupoId) : undefined;
+        return {
+          Data: b.data ? fmtDataBR(b.data) : '',
+          Banco: b.bancoNome ?? '',
+          'Registro do Banco': b.descricao ?? '',
+          Valor: b.valor,
+          NF: detalhe?.nfs.join(' + ') ?? '',
+          Documento: detalhe?.documentos.join(' + ') ?? '',
+          Cliente: detalhe?.clientes.join(' + ') ?? '',
+          Observação: b.observacao ?? '',
+        };
+      });
+      const planilha = XLSX.utils.json_to_sheet(linhas);
+      // Coluna "Valor" (índice 3: Data=0, Banco=1, Registro do Banco=2, Valor=3) em formato
+      // contábil — o código usa "," e "." na sintaxe padrão do Excel, mas ele exibe com o
+      // separador da configuração regional (no Windows em pt-BR, vira "127,00").
+      for (let i = 0; i < linhas.length; i++) {
+        const endereco = XLSX.utils.encode_cell({ r: i + 1, c: 3 });
+        if (planilha[endereco]) planilha[endereco].z = '#,##0.00';
+      }
+      XLSX.utils.book_append_sheet(workbook, planilha, nomeAbaMes(chave));
+    }
     const hoje = new Date();
     // "/" não é permitido em nome de arquivo — usa "-" no lugar, mesma ordem dd-mm-aaaa.
     const dataArquivo = `${String(hoje.getDate()).padStart(2, '0')}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${hoje.getFullYear()}`;
@@ -1036,6 +1056,70 @@ export function ConciliacaoPage() {
     }
   }
 
+  const gradesJsx = (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <ListaBanco
+        itens={bancoFiltrado}
+        itensFixados={itensFixadosBanco}
+        selecionados={selecionadosBanco}
+        busca={buscaBanco}
+        onChangeBusca={setBuscaBanco}
+        onToggleSelecionado={toggleSelecionadoBanco}
+        onVerSugestoes={onVerSugestoes}
+        onToggleDesativado={onToggleDesativadoBanco}
+        bancoFiltro={filtros.bancoNome}
+        onChangeBancoFiltro={(bancoNome) => setFiltros((f) => ({ ...f, bancoNome }))}
+        bancosDisponiveis={bancosDisponiveis}
+        infoSistemaPorGrupo={infoSistemaPorGrupo}
+        modoSugestaoAtivo={modoSugestaoAtivo}
+        onMarcarESomar={onMarcarESomarBanco}
+        onDesmarcarBanco={onDesmarcarBanco}
+        filtroSugestaoAtivo={filtroIdsSugestaoBanco !== null}
+        onLimparFiltroSugestao={() => setFiltroIdsSugestaoBanco(null)}
+        filtroGrupoSistemaAtivo={filtroGrupoSistema}
+        onFiltrarSistemaPorGrupo={onFiltrarSistemaPorGrupo}
+        onPedirCancelarConciliacao={onPedirCancelarConciliacao}
+        sistemaSemNfPorGrupo={sistemaSemNfPorGrupo}
+        onAbrirInformarNf={onAbrirInformarNf}
+        sistemaPreLancamentoPorGrupo={sistemaPreLancamentoPorGrupo}
+        onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
+        pendenciasCount={registrosPreConciliados.length + registrosDivergencia.length + registrosObservacao.length}
+        onAbrirPendencias={onAbrirPendenciasBanco}
+        avisoPorGrupo={avisoPorGrupo}
+        onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
+        onAbrirObservacao={onAbrirObservacao}
+        criterioPorGrupo={criterioPorGrupo}
+      />
+      <ListaSistema
+        itens={sistemaFiltrado}
+        itensFixados={itensFixadosSistema}
+        selecionados={selecionadosSistema}
+        busca={buscaSistema}
+        onChangeBusca={setBuscaSistema}
+        onToggleSelecionado={toggleSelecionadoSistema}
+        onToggleDesativado={onToggleDesativadoSistema}
+        filtroGrupoBancoAtivo={filtroGrupoBanco}
+        onFiltrarBancoPorGrupo={onFiltrarBancoPorGrupo}
+        onPedirCancelarConciliacao={onPedirCancelarConciliacao}
+        onAbrirInformarNf={onAbrirInformarNf}
+        onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
+        pendenciasCount={registrosPreLancamento.length}
+        onAbrirPendencias={onAbrirPendenciasSistema}
+        filtroNf={filtroNfSistema}
+        onChangeFiltroNf={setFiltroNfSistema}
+        modoSugestaoAtivo={modoSugestaoAtivo}
+        onVerSugestoesSistema={onVerSugestoesSistema}
+        onMarcarESomar={onMarcarESomarSistema}
+        onDesmarcarSistema={onDesmarcarSistema}
+        filtroSugestaoAtivo={filtroIdsSugestaoSistema !== null}
+        onLimparFiltroSugestao={() => setFiltroIdsSugestaoSistema(null)}
+        avisoPorGrupo={avisoPorGrupo}
+        onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
+        liquidoPorGrupo={bancoLiquidoPorGrupo}
+      />
+    </div>
+  );
+
   return (
     <AppShell
       topbarNavy
@@ -1161,67 +1245,7 @@ export function ConciliacaoPage() {
             </button>
           ))}
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ListaBanco
-            itens={bancoFiltrado}
-            itensFixados={itensFixadosBanco}
-            selecionados={selecionadosBanco}
-            busca={buscaBanco}
-            onChangeBusca={setBuscaBanco}
-            onToggleSelecionado={toggleSelecionadoBanco}
-            onVerSugestoes={onVerSugestoes}
-            onToggleDesativado={onToggleDesativadoBanco}
-            bancoFiltro={filtros.bancoNome}
-            onChangeBancoFiltro={(bancoNome) => setFiltros((f) => ({ ...f, bancoNome }))}
-            bancosDisponiveis={bancosDisponiveis}
-            infoSistemaPorGrupo={infoSistemaPorGrupo}
-            modoSugestaoAtivo={modoSugestaoAtivo}
-            onMarcarESomar={onMarcarESomarBanco}
-            onDesmarcarBanco={onDesmarcarBanco}
-            filtroSugestaoAtivo={filtroIdsSugestaoBanco !== null}
-            onLimparFiltroSugestao={() => setFiltroIdsSugestaoBanco(null)}
-            filtroGrupoSistemaAtivo={filtroGrupoSistema}
-            onFiltrarSistemaPorGrupo={onFiltrarSistemaPorGrupo}
-            onPedirCancelarConciliacao={onPedirCancelarConciliacao}
-            sistemaSemNfPorGrupo={sistemaSemNfPorGrupo}
-            onAbrirInformarNf={onAbrirInformarNf}
-            sistemaPreLancamentoPorGrupo={sistemaPreLancamentoPorGrupo}
-            onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
-            pendenciasCount={registrosPreConciliados.length + registrosDivergencia.length + registrosObservacao.length}
-            onAbrirPendencias={onAbrirPendenciasBanco}
-            avisoPorGrupo={avisoPorGrupo}
-            onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
-            onAbrirObservacao={onAbrirObservacao}
-            criterioPorGrupo={criterioPorGrupo}
-          />
-          <ListaSistema
-            itens={sistemaFiltrado}
-            itensFixados={itensFixadosSistema}
-            selecionados={selecionadosSistema}
-            busca={buscaSistema}
-            onChangeBusca={setBuscaSistema}
-            onToggleSelecionado={toggleSelecionadoSistema}
-            onToggleDesativado={onToggleDesativadoSistema}
-            filtroGrupoBancoAtivo={filtroGrupoBanco}
-            onFiltrarBancoPorGrupo={onFiltrarBancoPorGrupo}
-            onPedirCancelarConciliacao={onPedirCancelarConciliacao}
-            onAbrirInformarNf={onAbrirInformarNf}
-            onAbrirCompletarPreLancamento={onAbrirCompletarPreLancamento}
-            pendenciasCount={registrosPreLancamento.length}
-            onAbrirPendencias={onAbrirPendenciasSistema}
-            filtroNf={filtroNfSistema}
-            onChangeFiltroNf={setFiltroNfSistema}
-            modoSugestaoAtivo={modoSugestaoAtivo}
-            onVerSugestoesSistema={onVerSugestoesSistema}
-            onMarcarESomar={onMarcarESomarSistema}
-            onDesmarcarSistema={onDesmarcarSistema}
-            filtroSugestaoAtivo={filtroIdsSugestaoSistema !== null}
-            onLimparFiltroSugestao={() => setFiltroIdsSugestaoSistema(null)}
-            avisoPorGrupo={avisoPorGrupo}
-            onAbrirAvisoDiferenca={onAbrirAvisoDiferenca}
-            liquidoPorGrupo={bancoLiquidoPorGrupo}
-          />
-        </div>
+        {gradesJsx}
       </div>
 
       <SugestoesPainel

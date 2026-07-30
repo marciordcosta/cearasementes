@@ -106,6 +106,9 @@ export function SugestoesPainel({
 
   const termo = busca.trim().toLowerCase();
   const tituloItemFixo = itemFixo ? (itemFixo.direcao === 'banco' ? itemFixo.item.descricao : itemFixo.item.cliente) : '';
+  // Item fixo é o cheque do Sistema — mostra o vencimento (é ele que entra na busca, não o recebimento).
+  const vencimentoItemFixo =
+    itemFixo && itemFixo.direcao === 'sistema' && getCategoriaSistema(itemFixo.item.formaPagamentoRaw) === 'CHEQUE' ? itemFixo.item.dataVencimento : null;
 
   return (
     <PainelFlutuante
@@ -115,6 +118,11 @@ export function SugestoesPainel({
       lado={direcao === 'sistema' ? 'esquerda' : 'direita'}
     >
       <div className="space-y-4">
+        {vencimentoItemFixo && itemFixo?.direcao === 'sistema' && (
+          <p className="text-[11px] text-[var(--color-text-soft)]">
+            Vencimento do cheque: {fmtDataBR(vencimentoItemFixo)} (receb. {itemFixo.item.data ? fmtDataBR(itemFixo.item.data) : '—'}) — é o vencimento usado na busca
+          </p>
+        )}
         {itemFixo && (
           <div className="flex items-center justify-between gap-3">
             <button
@@ -146,7 +154,17 @@ export function SugestoesPainel({
             const itensFiltrados = itens.filter((item) => {
               if (direcao === 'banco') {
                 const s = item as LancamentoSistema;
-                return correspondeBusca(termo, [s.cliente, s.valor, fmtBRL.format(s.valor), s.data, s.data ? fmtDataBR(s.data) : null, s.documento, s.nf]);
+                return correspondeBusca(termo, [
+                  s.cliente,
+                  s.valor,
+                  fmtBRL.format(s.valor),
+                  s.data,
+                  s.data ? fmtDataBR(s.data) : null,
+                  s.dataVencimento,
+                  s.dataVencimento ? fmtDataBR(s.dataVencimento) : null,
+                  s.documento,
+                  s.nf,
+                ]);
               }
               const b = item as LancamentoBanco;
               return correspondeBusca(termo, [b.descricao, b.bancoNome, b.valor, fmtBRL.format(b.valor), b.data, fmtDataBR(b.data)]);
@@ -182,6 +200,9 @@ export function SugestoesPainel({
               // item fixo); nas demais categorias a forma já é a mesma, não
               // precisa repetir.
               const categoriaCandidato = direcao === 'banco' ? getCategoriaSistema((item as LancamentoSistema).formaPagamentoRaw) : (item as LancamentoBanco).formaPagamento;
+              // Cheque compara pelo vencimento, não pelo recebimento (ver dataComparavelSistema em matching.ts) —
+              // mostra os dois na sugestão pra não parecer que a data "não bate" quando na verdade bateu pelo vencimento.
+              const vencimentoCandidato = direcao === 'banco' && categoriaCandidato === 'CHEQUE' ? (item as LancamentoSistema).dataVencimento : null;
               return (
                 <div key={item.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm ${corDoStatus(item, direcao)}`}>
                   <div className="min-w-0 flex-1">
@@ -194,9 +215,12 @@ export function SugestoesPainel({
                       )}
                     </div>
                     <div className="truncate text-[11px] text-[var(--color-text-soft)]">
-                      {item.data ? fmtDataBR(item.data) : '—'}
+                      {vencimentoCandidato ? fmtDataBR(vencimentoCandidato) : item.data ? fmtDataBR(item.data) : '—'}
                       {linha2 && ` · ${linha2}`}
                     </div>
+                    {vencimentoCandidato && (
+                      <div className="truncate text-[11px] text-[var(--color-text-soft)]">(receb. {item.data ? fmtDataBR(item.data) : '—'})</div>
+                    )}
                   </div>
                   <span className="num shrink-0 text-right font-semibold">
                     {fmtBRL.format(valorExibido)}

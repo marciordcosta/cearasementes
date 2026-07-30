@@ -20,6 +20,8 @@ export interface RegistroSistemaParseado {
   documento: string | null;
   valor: number;
   data: string | null;
+  /** Data de vencimento (só usada de verdade pra CHEQUE) — ver extrairRegistro. */
+  dataVencimento: string | null;
   nf: string | null;
   vendedor: string | null;
   formaPagamentoRaw: string | null;
@@ -89,7 +91,16 @@ export function parseExtratoBB(rows: unknown[][]): RegistroBancoParseado[] {
     const valorAbs = parseNumeroBR(row[8]);
     if (!data || isNaN(valorAbs)) continue;
 
-    const sinal = String(row[9] ?? '').trim().toUpperCase() === 'D' ? -1 : 1;
+    // "Inf." com "*" (em vez de "C"/"D") é um aviso provisório de depósito de
+    // cheque por imagem (histórico 911, "Depos CHQ Imagem 1 Dia") — não
+    // movimenta o saldo ainda. O crédito real vem em outra linha, no dia útil
+    // seguinte, com o MESMO Número de Documento e "Inf." = "C" (histórico 631,
+    // "Dep cheque caixa agencia"). Sem esse filtro, o mesmo cheque duplicava
+    // (entrava como 2 lançamentos CHEQUE separados, dobrando o valor).
+    const inf = String(row[9] ?? '').trim();
+    if (inf === '*') continue;
+
+    const sinal = inf.toUpperCase() === 'D' ? -1 : 1;
     const numeroDocumento = String(row[5] ?? '').trim();
     const codHistorico = String(row[6] ?? '').trim();
     const detalhamento = String(row[10] ?? '').trim();
@@ -320,6 +331,10 @@ function extrairRegistro(celulas: Celula[], tipoLancamento: TipoLancamentoSistem
   const cliente = celulas.find((c) => dentroDaFaixa(c.left, COL_CLIENTE))?.texto || null;
   const documento = celulas.find((c) => dentroDaFaixa(c.left, COL_DOC))?.texto.trim() || null;
   const celulaData = celulas.find((c) => dentroDaFaixa(c.left, COL_DATA_PAGTO) && REGEX_DATA_BR.test(c.texto));
+  // O relatório imprime uma 2ª data em toda linha (não só cheque) — não tem coluna
+  // própria mapeada, então pega a primeira célula com formato de data que não seja
+  // a de Data Pagto. Só usada de verdade na busca/conciliação de CHEQUE.
+  const celulaVencimento = celulas.find((c) => REGEX_DATA_BR.test(c.texto) && !dentroDaFaixa(c.left, COL_DATA_PAGTO));
   const formaPagamentoRaw = celulas.find((c) => dentroDaFaixa(c.left, COL_FORMA_PAGTO))?.texto || null;
   const vendedor = celulas.find((c) => dentroDaFaixa(c.left, COL_VENDEDOR))?.texto || null;
   const celulaNf = celulas.find((c) => dentroDaFaixa(c.left, COL_NF) && /\d/.test(c.texto));
@@ -330,6 +345,7 @@ function extrairRegistro(celulas: Celula[], tipoLancamento: TipoLancamentoSistem
     documento,
     valor,
     data: celulaData ? isoDaDataBR(celulaData.texto) : null,
+    dataVencimento: celulaVencimento ? isoDaDataBR(celulaVencimento.texto) : null,
     nf: celulaNf ? celulaNf.texto.replace(/\D/g, '') || null : null,
     vendedor: vendedor ? removerAcentos(vendedor) : null,
     formaPagamentoRaw: formaPagamentoRaw ? removerAcentos(formaPagamentoRaw) : null,

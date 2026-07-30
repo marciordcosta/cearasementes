@@ -42,6 +42,16 @@ function regraParaCartao(subtipo: 'DEBITO' | 'CREDITO', regras: RegrasPorForma):
 }
 
 /**
+ * Data usada pra comparar o lançamento do Sistema contra o Banco — pra CHEQUE
+ * é o VENCIMENTO (o banco compensa nessa data, não na de recebimento), caindo
+ * pra `data` quando o lançamento não tiver vencimento (import antigo, sem essa
+ * coluna, ou outra forma de pagamento qualquer).
+ */
+function dataComparavelSistema(s: LancamentoSistema, categoria: FormaPagamento): string | null {
+  return categoria === 'CHEQUE' ? (s.dataVencimento ?? s.data) : s.data;
+}
+
+/**
  * Sugestões de conciliação pra UM lançamento do banco — porte de
  * buscarSugestoes() do conciliacao.js. Cada categoria é checada em ordem de
  * prioridade e a função retorna assim que encontra uma correspondência boa
@@ -171,8 +181,8 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
   if (tipoOfx !== 'CARTAO') {
     const regraForma = regraParaFormaGenerica(tipoOfx, regras);
     const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor));
-    const mesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx);
-    const outraData = mesmoValorTodos.filter((s) => !dataOfx || s.data !== dataOfx);
+    const mesmaData = mesmoValorTodos.filter((s) => dataOfx && dataComparavelSistema(s, tipoOfx) === dataOfx);
+    const outraData = mesmoValorTodos.filter((s) => !dataOfx || dataComparavelSistema(s, tipoOfx) !== dataOfx);
     resp.mesmoValorMesmaData = mesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
     resp.valorAproximadoMesmaData = mesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
     resp.mesmoValorOutraData = outraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
@@ -380,7 +390,7 @@ export function itemSistemaCombinado(itens: LancamentoSistema[]): LancamentoSist
 function buscarSugestoesInversoPorTag(itemSistema: LancamentoSistema, banco: LancamentoBanco[], regras: RegrasPorForma, combinado = false): SugestoesConciliacaoInversa {
   const tipoSistema = getCategoriaSistema(itemSistema.formaPagamentoRaw);
   const valorSisAbs = Math.abs(itemSistema.valor);
-  const dataSis = itemSistema.data || null;
+  const dataSis = dataComparavelSistema(itemSistema, tipoSistema) || null;
 
   // Mesmo motivo de buscarSugestoes: não exclui já conciliado, só desativado
   // — mostra sinalizado (pode ter sido uma conciliação errada) em vez de
@@ -755,10 +765,11 @@ export async function conciliacaoAutomatica(
       const regraForma = regraParaFormaGenerica(tipo, regras);
       const candidatosValidos = (sistemaPorCategoria.get(tipo) ?? []).filter((s) => {
         if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
-        if (!s.data) return false;
+        const dataComparavel = dataComparavelSistema(s, tipo);
+        if (!dataComparavel) return false;
         if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
         if (regraForma.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
-        return s.data === dataOfx && valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor);
+        return dataComparavel === dataOfx && valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor);
       });
       if (candidatosValidos.length === 1) {
         grupos.push({ bancoIds: [ofx.id], sistemaIds: [candidatosValidos[0].id] });
@@ -889,7 +900,7 @@ export function classificarCriterioConciliado(itensBanco: LancamentoBanco[], ite
 
   const s = itensSistema[0];
   const tipo = itemBanco.formaPagamento;
-  const mesmaData = !!itemBanco.data && s.data === itemBanco.data;
+  const mesmaData = !!itemBanco.data && dataComparavelSistema(s, tipo) === itemBanco.data;
   const valorBancoAbs = Math.abs(itemBanco.valor);
   const valorSisAbs = Math.abs(s.valor);
 
