@@ -178,13 +178,15 @@ export function UploadsPage() {
 
     setProcessandoTipo(tipo);
     try {
+      // Sem nº de documento pra deduplicar — cada nova IMPORTAÇÃO (a sessão
+      // inteira, não cada grupo dela) substitui a anterior por completo em
+      // vez de acumular. Precisa rodar só uma vez ANTES do loop — dentro dele,
+      // a 2ª+ aba/arquivo apagaria os dados que a 1ª acabou de gravar.
+      await apagarUploadsAnteriores('124');
+
       for (const grupo of grupos) {
         const { registros, ignoradas } = construirRegistros124(grupo, mapeamento);
         const periodo = detectarPeriodoFiltroCabecalho(grupo.rows);
-
-        // Sem nº de documento pra deduplicar — cada novo upload substitui
-        // o anterior por completo em vez de acumular.
-        await apagarUploadsAnteriores('124');
 
         const logId = await registrarLogUpload({
           arquivoNome: grupo.label,

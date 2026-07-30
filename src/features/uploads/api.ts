@@ -55,10 +55,19 @@ export async function listarUploadsRecentes() {
   );
 }
 
-/** Apaga todos os uploads de um grupo mesclado de uma vez — cascade (upload_log_id) cuida dos dados vinculados. */
+/**
+ * Apaga todos os uploads de um grupo mesclado de uma vez — cascade
+ * (upload_log_id) cuida dos dados vinculados. Um grupo acumula o id de TODO
+ * upload já feito pra esse tipo/tabela desde sempre (sem filtro de período)
+ * — em lotes de 200 pra nunca estourar o limite de tamanho de URL do
+ * `.in()` num grupo com muito histórico (mesma causa do bug real que já
+ * travou a importação do 396).
+ */
 export async function apagarGrupoUploads(ids: string[]): Promise<void> {
-  const { error } = await supabase.from('uploads_log').delete().in('id', ids);
-  if (error) throw error;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { error } = await supabase.from('uploads_log').delete().in('id', ids.slice(i, i + 200));
+    if (error) throw error;
+  }
 }
 
 /**
