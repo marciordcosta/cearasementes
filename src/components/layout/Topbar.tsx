@@ -14,7 +14,7 @@ export function Topbar({ title, actions, navy = false }: TopbarProps) {
 
   return (
     <header
-      className={`sticky top-0 z-10 flex items-center justify-between gap-4 px-6 py-3.5 ${
+      className={`sticky top-0 z-10 flex items-center justify-between gap-4 py-3.5 pr-6 pl-[92px] ${
         navy ? 'bg-[var(--color-navy)] text-white' : 'border-b border-[var(--color-line)] bg-[var(--color-surface)]/95 text-[var(--color-text)] backdrop-blur'
       }`}
     >

@@ -18,11 +18,14 @@ interface AppShellProps {
 
 export function AppShell({ title, actions, children, topbarNavy = false, hideTopbar = false, mostrarParametrizacao, onAbrirParametrizacao }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-[var(--color-page)]">
-      <Sidebar mostrarParametrizacao={mostrarParametrizacao} onAbrirParametrizacao={onAbrirParametrizacao} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        {!hideTopbar && <Topbar title={title} actions={actions} navy={topbarNavy} />}
-        <main className="mx-auto w-full max-w-7xl flex-1 space-y-8 px-6 py-6">
+    <div className="flex h-screen flex-col bg-[var(--color-page)]">
+      {!hideTopbar && <Topbar title={title} actions={actions} navy={topbarNavy} />}
+      {/* min-h-0 é o que permite o <main> abaixo rolar sozinho (overflow-y-auto)
+          em vez de esticar a linha inteira além da altura disponível — clássica
+          pegadinha do flexbox sem isso. */}
+      <div className="flex min-h-0 flex-1">
+        <Sidebar mostrarParametrizacao={mostrarParametrizacao} onAbrirParametrizacao={onAbrirParametrizacao} />
+        <main className="min-w-0 flex-1 space-y-8 overflow-y-auto px-6 py-6">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>

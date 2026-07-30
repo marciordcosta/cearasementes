@@ -60,7 +60,7 @@ interface SidebarProps {
 // módulos entram na lista; Uploads continua fixo embaixo, separado do grupo.
 export function Sidebar({ mostrarParametrizacao, onAbrirParametrizacao }: SidebarProps) {
   return (
-    <aside className="sticky top-0 flex h-screen w-[68px] shrink-0 flex-col items-center gap-2 py-4">
+    <aside className="flex h-full w-[68px] shrink-0 flex-col items-center gap-2 py-4">
       <nav className="flex flex-1 flex-col items-center justify-center gap-2">
         {NAV_ITEMS_PRINCIPAIS.map((item) => (
           <IconNavLink key={item.to} item={item} />
