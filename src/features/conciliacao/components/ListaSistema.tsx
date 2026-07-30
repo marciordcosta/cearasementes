@@ -1,8 +1,8 @@
-import { AlertTriangle, Filter, FileText, Pencil, RotateCcw, X } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { AlertTriangle, Filter, FileText, Package, Pencil, RotateCcw, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
-import { VirtualList } from '@/components/ui/VirtualList';
+import { VirtualList, type VirtualListHandle } from '@/components/ui/VirtualList';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 import { ALTURA_LINHA } from '../constants';
 import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
@@ -41,6 +41,8 @@ interface ListaSistemaProps {
   /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) filtrado(s) (sugestão aberta, ou "Filtrar" do card de observação) — mostra o aviso pra voltar a ver todos. */
   filtroSugestaoAtivo: boolean;
   onLimparFiltroSugestao: () => void;
+  /** Igual a `filtroSugestaoAtivo`, mas também true quando ESSA grade está filtrada pelo ícone de grupo (lançamento já conciliado) — só usado pra guardar/restaurar o scroll, não mostra aviso (esse filtro já se desliga clicando no mesmo ícone de novo). */
+  filtroProprioAtivo: boolean;
   /** grupoId -> texto do aviso (valor/forma de pagamento diferentes) confirmado na hora da conciliação — presença na tabela decide se mostra o "!" informativo. */
   avisoPorGrupo: Map<string, string>;
   onAbrirAvisoDiferenca: (grupoId: string) => void;
@@ -48,6 +50,8 @@ interface ListaSistemaProps {
   liquidoPorGrupo: Map<string, number>;
   /** Abre o modal de observação (informações adicionais) pra esse lançamento — mesma regra do Banco: só disponível enquanto não conciliado. */
   onAbrirObservacao: (item: LancamentoSistema) => void;
+  /** Abre o modal com produtos/pagamento da venda (Relatório 396) por trás do documento — só some se `item.documento` for vazio. */
+  onAbrirVendaDetalhe: (item: LancamentoSistema) => void;
 }
 
 export function ListaSistema({
@@ -73,10 +77,12 @@ export function ListaSistema({
   onDesmarcarSistema,
   filtroSugestaoAtivo,
   onLimparFiltroSugestao,
+  filtroProprioAtivo,
   avisoPorGrupo,
   onAbrirAvisoDiferenca,
   liquidoPorGrupo,
   onAbrirObservacao,
+  onAbrirVendaDetalhe,
 }: ListaSistemaProps) {
   function renderLinha(item: LancamentoSistema) {
     const categoria = getCategoriaSistema(item.formaPagamentoRaw);
@@ -98,8 +104,11 @@ export function ListaSistema({
     const corLinha = item.conciliado ? corConciliado : 'bg-[var(--color-surface)]';
     const subtipoCartao = categoria === 'CARTAO' ? getSubtipoCartaoSistema(item.formaPagamentoRaw) : null;
     const avisoDiferenca = item.grupoId ? avisoPorGrupo.get(item.grupoId) : undefined;
+    const filtroBancoAtivoNesteItem = !!item.grupoId && filtroGrupoBancoAtivo === item.grupoId;
     return (
-      <div className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''}`}>
+      <div
+        className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''} ${filtroBancoAtivoNesteItem ? 'ring-[0.5px] ring-inset ring-[var(--color-accent)]' : ''}`}
+      >
         {!item.conciliado && !item.desativado && item.origem !== 'taxa_automatica' && (
           <input
             type="checkbox"
@@ -143,13 +152,25 @@ export function ListaSistema({
             {item.cliente || '—'}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]">
-              {partesDocNf.map((parte, i) => (
-                <span key={i}>
-                  {i > 0 && ' · '}
-                  {parte}
-                </span>
-              ))}
+            <div className="flex min-w-0 items-center gap-1">
+              <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]">
+                {partesDocNf.map((parte, i) => (
+                  <span key={i}>
+                    {i > 0 && ' · '}
+                    {parte}
+                  </span>
+                ))}
+              </div>
+              {item.documento && (
+                <button
+                  type="button"
+                  onClick={() => onAbrirVendaDetalhe(item)}
+                  className="shrink-0 text-[var(--color-text-soft)] opacity-50 hover:text-[var(--color-text)] hover:opacity-100"
+                  title="Ver produtos e pagamento da venda"
+                >
+                  <Package size={13} />
+                </button>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {item.conciliado ? (
@@ -229,6 +250,33 @@ export function ListaSistema({
   const itemUnicoFixado = itensSelecionados.length === 1 ? itensSelecionados[0] : null;
 
   const [viewport, setViewport] = useState({ scrollTop: 0, alturaVisivel: 0 });
+
+  // Aplicar um filtro (sugestão/observação) encolhe a lista pra 1-2 itens —
+  // o navegador força o scroll nativo pra caber, então ao tirar o filtro
+  // (lista volta ao tamanho normal) nada devolve o scroll sozinho: guarda a
+  // posição de antes de filtrar e restaura ao voltar pra "Ver todos", em vez
+  // de deixar a grade no topo.
+  const virtualListRef = useRef<VirtualListHandle>(null);
+  const scrollAntesDoFiltroRef = useRef<number | null>(null);
+  const filtroProprioAnteriorRef = useRef(filtroProprioAtivo);
+
+  // Captura o scroll durante a própria renderização (não num useEffect) —
+  // se esperasse o commit, a VirtualList já teria clampado o scroll pro
+  // tamanho novo (efeito do filho roda antes do efeito do pai), perdendo a
+  // posição original. Lendo aqui, o DOM ainda reflete o ÚLTIMO commit (antes
+  // da lista encolher nesta atualização) — mesmo padrão que o React recomenda
+  // pra "ajustar estado quando uma prop muda".
+  if (filtroProprioAnteriorRef.current !== filtroProprioAtivo) {
+    filtroProprioAnteriorRef.current = filtroProprioAtivo;
+    if (filtroProprioAtivo) scrollAntesDoFiltroRef.current = virtualListRef.current?.getScrollTop() ?? 0;
+  }
+
+  useEffect(() => {
+    if (!filtroProprioAtivo && scrollAntesDoFiltroRef.current !== null) {
+      virtualListRef.current?.scrollTo(scrollAntesDoFiltroRef.current);
+      scrollAntesDoFiltroRef.current = null;
+    }
+  }, [filtroProprioAtivo]);
 
   // Com 1 único item selecionado: só fixa (em cima ou embaixo) quando a
   // posição natural dele sai da área visível da grade — enquanto está
@@ -359,6 +407,7 @@ export function ListaSistema({
           </div>
         )}
         <VirtualList
+          ref={virtualListRef}
           itens={itens}
           altura={ALTURA_LINHA}
           className="h-full overflow-y-auto"

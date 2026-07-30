@@ -16,6 +16,12 @@ function somaCampo(itens: Venda396['itens'], campo: 'vlrSemDesc' | 'vlrDesc' | '
   return +itens.reduce((soma, it) => soma + it[campo], 0).toFixed(2);
 }
 
+function emLotes<T>(itens: T[], tamanho: number): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < itens.length; i += tamanho) lotes.push(itens.slice(i, i + tamanho));
+  return lotes;
+}
+
 /**
  * Grava as vendas (+ itens + pagamentos) desse upload. Upsert por
  * (tabela_preco, num_venda) — reenviar um arquivo com período sobreposto a
@@ -53,10 +59,12 @@ export async function importarVendas396(uploadLogId: string, tabelaPreco: string
   const idPorNumVenda = new Map(vendasSalvas.map((v) => [v.num_venda, v.id]));
   const idsAfetados = [...idPorNumVenda.values()];
 
-  if (idsAfetados.length > 0) {
-    const { error: errDelItens } = await supabase.from('vendas_tabela_preco_itens').delete().in('venda_id', idsAfetados);
+  // Em lotes: um `.in()` com milhares de ids de uma vez estoura o limite de tamanho da URL
+  // (a chamada falha com um erro de rede sem mensagem, silenciosamente interrompendo a importação).
+  for (const lote of emLotes(idsAfetados, 200)) {
+    const { error: errDelItens } = await supabase.from('vendas_tabela_preco_itens').delete().in('venda_id', lote);
     if (errDelItens) throw errDelItens;
-    const { error: errDelPag } = await supabase.from('vendas_tabela_preco_pagamentos').delete().in('venda_id', idsAfetados);
+    const { error: errDelPag } = await supabase.from('vendas_tabela_preco_pagamentos').delete().in('venda_id', lote);
     if (errDelPag) throw errDelPag;
   }
 
@@ -83,14 +91,71 @@ export async function importarVendas396(uploadLogId: string, tabelaPreco: string
     }
   }
 
-  if (itemRows.length > 0) {
-    const { error } = await supabase.from('vendas_tabela_preco_itens').insert(itemRows);
+  for (const lote of emLotes(itemRows, 500)) {
+    const { error } = await supabase.from('vendas_tabela_preco_itens').insert(lote);
     if (error) throw error;
   }
-  if (pagamentoRows.length > 0) {
-    const { error } = await supabase.from('vendas_tabela_preco_pagamentos').insert(pagamentoRows);
+  for (const lote of emLotes(pagamentoRows, 500)) {
+    const { error } = await supabase.from('vendas_tabela_preco_pagamentos').insert(lote);
     if (error) throw error;
   }
 
   return { vendas: vendaRows.length, itens: itemRows.length, pagamentos: pagamentoRows.length };
+}
+
+export interface VendaDetalhe {
+  numVenda: number | null;
+  cliente: string | null;
+  data: string | null;
+  vendedor: string | null;
+  numNf: string | null;
+  itens: { produto: string; qtd: number; vlrUnitario: number; vlrComDesc: number }[];
+  pagamentos: { formaPagamento: string; numDoc: string | null; vencimento: string | null; valor: number }[];
+}
+
+/** "VE29705-1/3" (parcela) → "VE29705" — todas as parcelas de um recebimento são a mesma venda/pedido. */
+function documentoBase(documento: string): string {
+  return documento.replace(/-\d+\/\d+$/, '').trim();
+}
+
+/**
+ * Busca os produtos e formas de pagamento da venda (Relatório 396) que gerou
+ * um dado documento de recebimento da Conciliação. `documento` pode vir com
+ * sufixo de parcela — ignorado, já que a venda de origem é sempre a mesma.
+ * Retorna `null` se não achar (venda ainda não importada, ou documento sem
+ * relação direta com uma venda do 396).
+ */
+export async function buscarVendaPorDocumento(documento: string): Promise<VendaDetalhe | null> {
+  const base = documentoBase(documento);
+  if (!base) return null;
+
+  // O num_doc gravado no 396 também pode ter sufixo de parcela (às vezes numerado
+  // diferente do lado Sistema) — casa por igualdade OU pelo prefixo "base-".
+  const { data: pag, error: errPag } = await supabase
+    .from('vendas_tabela_preco_pagamentos')
+    .select('venda_id')
+    .or(`num_doc.eq.${base},num_doc.like.${base}-*`)
+    .limit(1);
+  if (errPag) throw errPag;
+  if (!pag || pag.length === 0) return null;
+  const vendaId = pag[0].venda_id;
+
+  const [{ data: venda, error: errVenda }, { data: itens, error: errItens }, { data: pagamentos, error: errPagamentos }] = await Promise.all([
+    supabase.from('vendas_tabela_preco').select('num_venda, cliente, data_venda, vendedor, num_nf').eq('id', vendaId).single(),
+    supabase.from('vendas_tabela_preco_itens').select('produto, qtd, vlr_unitario, vlr_com_desc').eq('venda_id', vendaId).order('criado_em', { ascending: true }),
+    supabase.from('vendas_tabela_preco_pagamentos').select('forma_pagamento, num_doc, vencimento, valor').eq('venda_id', vendaId).order('criado_em', { ascending: true }),
+  ]);
+  if (errVenda) throw errVenda;
+  if (errItens) throw errItens;
+  if (errPagamentos) throw errPagamentos;
+
+  return {
+    numVenda: venda.num_venda,
+    cliente: venda.cliente,
+    data: venda.data_venda,
+    vendedor: venda.vendedor,
+    numNf: venda.num_nf,
+    itens: (itens ?? []).map((i) => ({ produto: i.produto, qtd: i.qtd, vlrUnitario: i.vlr_unitario, vlrComDesc: i.vlr_com_desc })),
+    pagamentos: (pagamentos ?? []).map((p) => ({ formaPagamento: p.forma_pagamento, numDoc: p.num_doc, vencimento: p.vencimento, valor: p.valor })),
+  };
 }

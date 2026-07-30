@@ -1,8 +1,8 @@
-import { AlertTriangle, Filter, FileText, Pencil, RotateCcw, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { AlertTriangle, Filter, FileText, Package, Pencil, RotateCcw, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
-import { VirtualList } from '@/components/ui/VirtualList';
+import { VirtualList, type VirtualListHandle } from '@/components/ui/VirtualList';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 import { ALTURA_LINHA, BANCO_FILTRO_OCULTADOS } from '../constants';
 import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
@@ -24,6 +24,9 @@ interface ListaBancoProps {
   bancosDisponiveis: string[];
   /** Texto "Doc X · NF Y" do(s) lançamento(s) do Sistema conciliado(s) neste grupo, por `grupoId`. */
   infoSistemaPorGrupo: Map<string, string>;
+  /** 1º lançamento do Sistema do grupo que tem documento — usado só pra saber se mostra o ícone de "ver produtos/pagamento da venda". */
+  sistemaComDocumentoPorGrupo: Map<string, LancamentoSistema>;
+  onAbrirVendaDetalhe: (item: LancamentoSistema) => void;
   /** Quando ativo (toggle global, no topbar), marcar o checkbox de um lançamento já abre o painel de sugestões dele automaticamente. */
   modoSugestaoAtivo: boolean;
   /** Disparado (em vez do toggle normal) ao marcar um 2º+ item com o modo automático ativo — soma direto com o(s) já selecionado(s) e busca sugestões pelo valor combinado. */
@@ -33,6 +36,8 @@ interface ListaBancoProps {
   /** Quando true, `itens` já veio recortado só com o(s) lançamento(s) filtrado(s) (sugestão aberta, ou "Filtrar" do card de observação) — mostra o aviso pra voltar a ver todos. */
   filtroSugestaoAtivo: boolean;
   onLimparFiltroSugestao: () => void;
+  /** Igual a `filtroSugestaoAtivo`, mas também true quando ESSA grade está filtrada pelo ícone de grupo (lançamento já conciliado) — só usado pra guardar/restaurar o scroll, não mostra aviso (esse filtro já se desliga clicando no mesmo ícone de novo). */
+  filtroProprioAtivo: boolean;
   /** grupoId cujo(s) lançamento(s) do Sistema estão filtrados na outra grade agora — usado só pra destacar o ícone do item correspondente. */
   filtroGrupoSistemaAtivo: string | null;
   /** Alterna (liga/desliga) o filtro da grade Sistema pra mostrar só o(s) lançamento(s) ligados a esse grupo. */
@@ -69,11 +74,14 @@ export function ListaBanco({
   onChangeBancoFiltro,
   bancosDisponiveis,
   infoSistemaPorGrupo,
+  sistemaComDocumentoPorGrupo,
+  onAbrirVendaDetalhe,
   modoSugestaoAtivo,
   onMarcarESomar,
   onDesmarcarBanco,
   filtroSugestaoAtivo,
   onLimparFiltroSugestao,
+  filtroProprioAtivo,
   filtroGrupoSistemaAtivo,
   onFiltrarSistemaPorGrupo,
   onPedirCancelarConciliacao,
@@ -97,13 +105,17 @@ export function ListaBanco({
     const corLinha = item.conciliado ? corConciliado : 'bg-[var(--color-surface)]';
     const subtipoCartao = item.formaPagamento === 'CARTAO' ? getSubtipoCartaoOfx(item.descricao) : null;
     const avisoDiferenca = item.grupoId ? avisoPorGrupo.get(item.grupoId) : undefined;
+    const sistemaVenda = item.grupoId ? sistemaComDocumentoPorGrupo.get(item.grupoId) : undefined;
     // Cartão (Stone) grava sempre o valor líquido — mas antes de conciliar mostra o
     // bruto (o que bate visualmente com a venda no Sistema), só trocando pro líquido
     // de verdade depois que a taxa da maquininha já foi contabilizada na conciliação.
     const mostrarBruto = item.formaPagamento === 'CARTAO' && item.valorBrutoCartao != null && !item.conciliado;
     const valorExibido = mostrarBruto ? item.valorBrutoCartao! : item.valor;
+    const filtroSistemaAtivoNesteItem = !!item.grupoId && filtroGrupoSistemaAtivo === item.grupoId;
     return (
-      <div className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''}`}>
+      <div
+        className={`flex h-full items-start gap-2.5 border-b border-[var(--color-line)] px-4 py-1.5 ${corLinha} ${item.desativado ? 'opacity-40 grayscale' : ''} ${filtroSistemaAtivoNesteItem ? 'ring-[0.5px] ring-inset ring-[var(--color-accent)]' : ''}`}
+      >
         {!item.conciliado && !item.desativado && (
           <input
             type="checkbox"
@@ -132,6 +144,11 @@ export function ListaBanco({
               {mostrarBruto && <span className="text-[10px] font-normal text-[var(--color-text-soft)]">(bruto)</span>}
             </div>
             <div className="flex items-center gap-1.5">
+              {criterio && (
+                <span className="truncate text-[11px] text-good" title={criterio}>
+                  {criterio}
+                </span>
+              )}
               {item.bancoNome && <Badge>{item.bancoNome.toUpperCase()}</Badge>}
               <Badge cor={CORES_FORMA_PAGAMENTO[item.formaPagamento]}>{item.formaPagamento}</Badge>
               {subtipoCartao && <Badge>{subtipoCartao === 'CREDITO' ? 'CRÉDITO' : 'DÉBITO'}</Badge>}
@@ -141,10 +158,20 @@ export function ListaBanco({
             {item.descricao || '—'}
           </div>
           <div className="mt-0.5 flex items-center justify-between gap-2">
-            <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]" title={criterio}>
-              {infoSistema}
-              {infoSistema && criterio && ' · '}
-              {criterio && <span className="italic">{criterio}</span>}
+            <div className="flex min-w-0 items-center gap-1">
+              <div className="min-w-0 truncate text-[11px] text-[var(--color-text-soft)]" title={infoSistema}>
+                {infoSistema}
+              </div>
+              {sistemaVenda && (
+                <button
+                  type="button"
+                  onClick={() => onAbrirVendaDetalhe(sistemaVenda)}
+                  className="shrink-0 text-[var(--color-text-soft)] opacity-50 hover:text-[var(--color-text)] hover:opacity-100"
+                  title="Ver produtos e pagamento da venda"
+                >
+                  <Package size={13} />
+                </button>
+              )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {item.conciliado ? (
@@ -215,6 +242,33 @@ export function ListaBanco({
   const itemUnicoFixado = itensSelecionados.length === 1 ? itensSelecionados[0] : null;
 
   const [viewport, setViewport] = useState({ scrollTop: 0, alturaVisivel: 0 });
+
+  // Aplicar um filtro (sugestão/observação) encolhe a lista pra 1-2 itens —
+  // o navegador força o scroll nativo pra caber, então ao tirar o filtro
+  // (lista volta ao tamanho normal) nada devolve o scroll sozinho: guarda a
+  // posição de antes de filtrar e restaura ao voltar pra "Ver todos", em vez
+  // de deixar a grade no topo.
+  const virtualListRef = useRef<VirtualListHandle>(null);
+  const scrollAntesDoFiltroRef = useRef<number | null>(null);
+  const filtroProprioAnteriorRef = useRef(filtroProprioAtivo);
+
+  // Captura o scroll durante a própria renderização (não num useEffect) —
+  // se esperasse o commit, a VirtualList já teria clampado o scroll pro
+  // tamanho novo (efeito do filho roda antes do efeito do pai), perdendo a
+  // posição original. Lendo aqui, o DOM ainda reflete o ÚLTIMO commit (antes
+  // da lista encolher nesta atualização) — mesmo padrão que o React recomenda
+  // pra "ajustar estado quando uma prop muda".
+  if (filtroProprioAnteriorRef.current !== filtroProprioAtivo) {
+    filtroProprioAnteriorRef.current = filtroProprioAtivo;
+    if (filtroProprioAtivo) scrollAntesDoFiltroRef.current = virtualListRef.current?.getScrollTop() ?? 0;
+  }
+
+  useEffect(() => {
+    if (!filtroProprioAtivo && scrollAntesDoFiltroRef.current !== null) {
+      virtualListRef.current?.scrollTo(scrollAntesDoFiltroRef.current);
+      scrollAntesDoFiltroRef.current = null;
+    }
+  }, [filtroProprioAtivo]);
 
   // Com 1 único item selecionado: só fixa (em cima ou embaixo) quando a
   // posição natural dele sai da área visível da grade — enquanto está
@@ -344,6 +398,7 @@ export function ListaBanco({
           </div>
         )}
         <VirtualList
+          ref={virtualListRef}
           itens={itens}
           altura={ALTURA_LINHA}
           className="h-full overflow-y-auto"

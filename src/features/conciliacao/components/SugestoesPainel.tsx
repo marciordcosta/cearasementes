@@ -18,6 +18,8 @@ interface SugestoesPainelProps {
   onMinimizar: () => void;
   onRestaurar: () => void;
   onConciliar: (candidatoIds: string[]) => void;
+  /** "x" ao lado de "Conciliar" — descarta essa sugestão só pra esse par (item fixo + candidato(s), no caso de combinação todos de uma vez). Pede confirmação antes (ver onPedirDescartarSugestao). */
+  onDescartar: (candidatoIds: string[]) => void;
   /** A conciliação em si demora um pouco (grava no Supabase) — desabilita os botões e avisa, pra não deixar clicar várias vezes achando que não funcionou. */
   processando: boolean;
   /** Filtra a grade do MESMO lado do item fixo pra mostrar todos os lançamentos com o mesmo valor (pode ser mais de um, na combinação "somar todos"). */
@@ -32,6 +34,10 @@ interface SugestoesPainelProps {
   onFiltrarOutroLadoPorGrupo: (grupoId: string) => void;
   /** Grupo atualmente filtrado do outro lado — usado só pra colorir o ícone de filtro como "ativo". */
   filtroOutroLadoAtivo: string | null;
+  /** Quantos candidatos já foram descartados (o "x") pra ESSE item fixo especificamente — badge no título, só aparece quando > 0. */
+  descartadosCount: number;
+  /** Abre o modal com a lista desses descartes (com "Restaurar" em cada). */
+  onAbrirDescartados: () => void;
 }
 
 const ROTULOS = ROTULOS_CATEGORIA_SUGESTAO;
@@ -59,6 +65,7 @@ export function SugestoesPainel({
   onMinimizar,
   onRestaurar,
   onConciliar,
+  onDescartar,
   processando,
   onVerRegistroFixo,
   filtroRegistroFixoAtivo,
@@ -66,6 +73,8 @@ export function SugestoesPainel({
   onPedirCancelarConciliacao,
   onFiltrarOutroLadoPorGrupo,
   filtroOutroLadoAtivo,
+  descartadosCount,
+  onAbrirDescartados,
 }: SugestoesPainelProps) {
   const [busca, setBusca] = useState('');
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<keyof SugestoesConciliacao>>(new Set());
@@ -113,7 +122,22 @@ export function SugestoesPainel({
   return (
     <PainelFlutuante
       open={itemFixo !== null}
-      title={`Sugestões para: ${tituloItemFixo ?? ''}`}
+      title={
+        <>
+          <span className="truncate">{`Sugestões para: ${tituloItemFixo ?? ''}`}</span>
+          {descartadosCount > 0 && (
+            <button
+              type="button"
+              onClick={onAbrirDescartados}
+              title="Sugestões descartadas pra este registro"
+              className="flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-bold text-white hover:bg-white/28"
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-bad text-[9px]">{descartadosCount}</span>
+              Descartados
+            </button>
+          )}
+        </>
+      }
       onClose={onMinimizar}
       lado={direcao === 'sistema' ? 'esquerda' : 'direita'}
     >
@@ -245,14 +269,25 @@ export function SugestoesPainel({
                       </button>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={processando}
-                      onClick={() => onConciliar(cat === 'combinacaoBoleto' || cat === 'combinacaoPix' ? itens!.map((i) => i.id) : [item.id])}
-                      className="shrink-0 whitespace-nowrap rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
-                    >
-                      Conciliar
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={processando}
+                        onClick={() => onConciliar(cat === 'combinacaoBoleto' || cat === 'combinacaoPix' ? itens!.map((i) => i.id) : [item.id])}
+                        className="whitespace-nowrap rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
+                      >
+                        Conciliar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={processando}
+                        onClick={() => onDescartar(cat === 'combinacaoBoleto' || cat === 'combinacaoPix' ? itens!.map((i) => i.id) : [item.id])}
+                        title="Descartar esta sugestão (some só pra este registro)"
+                        className="text-[var(--color-text-soft)] hover:text-bad disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
                   )}
                 </div>
               );

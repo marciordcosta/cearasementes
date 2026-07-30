@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type R
 
 interface PainelFlutuanteProps {
   open: boolean;
-  title: string;
+  title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   widthClassName?: string;
@@ -65,7 +65,7 @@ export function PainelFlutuante({ open, title, onClose, children, widthClassName
       style={{ left: pos.x, top: pos.y }}
     >
       <div onMouseDown={onMouseDownHeader} className="flex cursor-move items-center justify-between gap-3 bg-[var(--color-navy)] px-[18px] py-3 text-sm font-bold text-white select-none">
-        <span className="truncate">{title}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2">{title}</div>
         <button type="button" onClick={onClose} title="Fechar" className="shrink-0 rounded-md bg-white/15 px-2.5 py-1 text-xs hover:bg-white/28">
           ✕
         </button>

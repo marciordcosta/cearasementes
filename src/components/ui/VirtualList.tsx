@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type UIEvent } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type ForwardedRef, type ReactElement, type ReactNode, type UIEvent } from 'react';
+
+export interface VirtualListHandle {
+  /** Posição de rolagem atual (px) — usado pra guardar antes de aplicar um filtro que encolhe a lista. */
+  getScrollTop: () => number;
+  /** Restaura a posição de rolagem (px) — usado ao tirar o filtro, pra voltar pra onde estava em vez de ficar no topo. */
+  scrollTo: (top: number) => void;
+}
 
 interface VirtualListProps<T> {
   itens: T[];
@@ -22,11 +29,22 @@ interface VirtualListProps<T> {
  * lançamentos da Conciliação) recria dezenas de milhares de nós de DOM a
  * cada tecla digitada na busca ou clique num checkbox, travando a tela.
  */
-export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtractor, vazio, className, style, onViewportChange }: VirtualListProps<T>) {
+function VirtualListInner<T>(
+  { itens, altura, buffer = 8, renderItem, keyExtractor, vazio, className, style, onViewportChange }: VirtualListProps<T>,
+  ref: ForwardedRef<VirtualListHandle>,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const tickingRef = useRef(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [alturaVisivel, setAlturaVisivel] = useState(600);
+
+  useImperativeHandle(ref, () => ({
+    getScrollTop: () => containerRef.current?.scrollTop ?? 0,
+    scrollTo: (top: number) => {
+      if (containerRef.current) containerRef.current.scrollTop = top;
+      setScrollTop(top);
+    },
+  }));
 
   useEffect(() => {
     const el = containerRef.current;
@@ -96,3 +114,7 @@ export function VirtualList<T>({ itens, altura, buffer = 8, renderItem, keyExtra
     </div>
   );
 }
+
+export const VirtualList = forwardRef(VirtualListInner) as <T>(
+  props: VirtualListProps<T> & { ref?: ForwardedRef<VirtualListHandle> },
+) => ReactElement;

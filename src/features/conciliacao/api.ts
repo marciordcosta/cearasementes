@@ -124,6 +124,32 @@ export async function salvarObservacaoSistema(id: string, observacao: string | n
   return sistemaFromRow(data);
 }
 
+/** Todos os pares (Banco, Sistema) descartados de uma sugestão específica — ver `descartarSugestao`. */
+export async function fetchSugestoesDescartadas(): Promise<{ bancoId: string; sistemaId: string }[]> {
+  const rows = await fetchAllRows<Database['public']['Tables']['conciliacao_sugestoes_descartadas']['Row']>((from, to) =>
+    supabase.from('conciliacao_sugestoes_descartadas').select('*').range(from, to),
+  );
+  return rows.map((r) => ({ bancoId: r.banco_id, sistemaId: r.sistema_id }));
+}
+
+/** "x" ao lado de "Conciliar" no painel de sugestões — nunca mais sugere ESSE par específico (outros candidatos continuam normais). `onConflict` ignora se o usuário já tinha descartado o mesmo par antes. */
+export async function descartarSugestao(pares: { bancoId: string; sistemaId: string }[]): Promise<void> {
+  if (pares.length === 0) return;
+  const { error } = await supabase
+    .from('conciliacao_sugestoes_descartadas')
+    .upsert(
+      pares.map((p) => ({ banco_id: p.bancoId, sistema_id: p.sistemaId })),
+      { onConflict: 'banco_id,sistema_id', ignoreDuplicates: true },
+    );
+  if (error) throw error;
+}
+
+/** "Restaurar" no modal de descartados — volta a considerar esse par nas próximas buscas de sugestão. */
+export async function restaurarSugestaoDescartada(bancoId: string, sistemaId: string): Promise<void> {
+  const { error } = await supabase.from('conciliacao_sugestoes_descartadas').delete().eq('banco_id', bancoId).eq('sistema_id', sistemaId);
+  if (error) throw error;
+}
+
 /**
  * Grava o arquivo do Banco (extrato BB ou recebíveis Stone) + seus
  * lançamentos já parseados. Upsert por `fitid` (chave composta a partir das
@@ -436,6 +462,13 @@ export async function conciliar(bancoIds: string[], sistemaIds: string[], avisoD
   // se foi tocada, senão o card de "Administradora de Cartão" ficaria com
   // o valor antigo até a página ser recarregada.
   const todosSistema = linhaTaxaAtualizada && !sistemaAtualizados.some((s) => s.id === linhaTaxaAtualizada!.id) ? [...sistemaAtualizados, linhaTaxaAtualizada] : sistemaAtualizados;
+
+  // Um par que acabou de ser conciliado não faz mais sentido continuar na
+  // lista de "descartados" (se por acaso um dia foi descartado antes) — some
+  // sozinho, sem precisar restaurar manualmente. `.in()` duplo pega só a
+  // interseção exata (banco_id de bancoIds E sistema_id de sistemaIds), nunca
+  // apaga descarte de nenhum outro par.
+  await supabase.from('conciliacao_sugestoes_descartadas').delete().in('banco_id', bancoIds).in('sistema_id', sistemaIds);
 
   return {
     bancoAtualizados: bancoAtualizados.map(bancoFromRow),

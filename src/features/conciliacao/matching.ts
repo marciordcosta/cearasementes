@@ -51,6 +51,11 @@ function dataComparavelSistema(s: LancamentoSistema, categoria: FormaPagamento):
   return categoria === 'CHEQUE' ? (s.dataVencimento ?? s.data) : s.data;
 }
 
+/** Chave única de um par (Banco, Sistema) — usada tanto pra gravar quanto pra checar um descarte de sugestão (ver `conciliacao_sugestoes_descartadas`). */
+export function chaveParDescarte(bancoId: string, sistemaId: string): string {
+  return `${bancoId}|${sistemaId}`;
+}
+
 /**
  * Sugestões de conciliação pra UM lançamento do banco — porte de
  * buscarSugestoes() do conciliacao.js. Cada categoria é checada em ordem de
@@ -67,7 +72,7 @@ function dataComparavelSistema(s: LancamentoSistema, categoria: FormaPagamento):
  * ignora "nome parecido" e vale só o valor: só sugere se a soma bater com
  * algum valor do sistema.
  */
-function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacao {
+function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false, descartes: Set<string> = new Set()): SugestoesConciliacao {
   const tipoOfx = itemBanco.formaPagamento;
   const valorOfxAbs = Math.abs(itemBanco.valor);
   const dataOfx = itemBanco.data || null;
@@ -79,6 +84,7 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
   // e o usuário precisa ver isso pra poder desfazer.
   const sistemaFiltradoPorTipo = sistema.filter((s) => {
     if (s.desativado) return false;
+    if (descartes.has(chaveParDescarte(itemBanco.id, s.id))) return false;
     if (getCategoriaSistema(s.formaPagamentoRaw) !== tipoOfx) return false;
     const vOfx = itemBanco.valor;
     const vSys = s.valor;
@@ -291,10 +297,16 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
  * "mesmo valor, recebimento diferente" (não combinado — não faz sentido
  * comparar valor de um item que já é a soma de vários com uma tag alheia).
  */
-export function buscarSugestoes(itemBanco: LancamentoBanco, sistema: LancamentoSistema[], regras: RegrasPorForma, combinado = false): SugestoesConciliacao {
-  const resp = buscarSugestoesPorTag(itemBanco, sistema, regras, combinado);
+export function buscarSugestoes(
+  itemBanco: LancamentoBanco,
+  sistema: LancamentoSistema[],
+  regras: RegrasPorForma,
+  combinado = false,
+  descartes: Set<string> = new Set(),
+): SugestoesConciliacao {
+  const resp = buscarSugestoesPorTag(itemBanco, sistema, regras, combinado, descartes);
   if (!combinado) {
-    const recebimentoDiferente = buscarRecebimentoDiferente(itemBanco, sistema, resp, regras);
+    const recebimentoDiferente = buscarRecebimentoDiferente(itemBanco, sistema, resp, regras, descartes);
     if (recebimentoDiferente.length > 0) resp.recebimentoDiferente = recebimentoDiferente;
   }
   return resp;
@@ -321,7 +333,13 @@ function diasCorridosEntre(dataA: string, dataB: string): number {
  * ficou em nenhuma categoria anterior (evita duplicar o mesmo candidato em
  * duas listas) — sempre por último, ordenado por data.
  */
-function buscarRecebimentoDiferente(itemBanco: LancamentoBanco, sistema: LancamentoSistema[], resp: SugestoesConciliacao, regras: RegrasPorForma): LancamentoSistema[] {
+function buscarRecebimentoDiferente(
+  itemBanco: LancamentoBanco,
+  sistema: LancamentoSistema[],
+  resp: SugestoesConciliacao,
+  regras: RegrasPorForma,
+  descartes: Set<string> = new Set(),
+): LancamentoSistema[] {
   const subtipoOfx = itemBanco.formaPagamento === 'CARTAO' ? getSubtipoCartaoOfx(itemBanco.descricao) : null;
   const regraOrigem = regraDaForma(itemBanco.formaPagamento, subtipoOfx, regras);
   const alvo = itemBanco.valorBrutoCartao ?? Math.abs(itemBanco.valor);
@@ -331,6 +349,13 @@ function buscarRecebimentoDiferente(itemBanco: LancamentoBanco, sistema: Lancame
 
   const candidatos = sistema.filter((s) => {
     if (s.desativado || idsJaSugeridos.has(s.id)) return false;
+    if (descartes.has(chaveParDescarte(itemBanco.id, s.id))) return false;
+    // Mesmo "recebimento diferente" (forma errada) nunca cruza sinal — uma
+    // saída (PIX Enviado, valor negativo) nunca é candidato de uma entrada, e
+    // vice-versa, senão o valor absoluto igual (comum, ex.: dois PIX de
+    // R$600 em sentidos opostos) vira sugestão errada.
+    if (itemBanco.valor < 0 && s.valor >= 0) return false;
+    if (itemBanco.valor > 0 && s.valor <= 0) return false;
     // "Recebimento diferente" é categoria diferente de verdade (PIX, Boleto,
     // Cheque...) — Cartão com Cartão que só ficou de fora por causa da data
     // ou do subtipo (Débito/Crédito) não é isso, e não deve aparecer aqui.
@@ -394,7 +419,13 @@ export function itemSistemaCombinado(itens: LancamentoSistema[]): LancamentoSist
  * `combinado`: mesmo motivo de buscarSugestoes — quando `itemSistema` é a
  * soma de vários selecionados juntos, ignora "nome parecido" e busca só por valor.
  */
-function buscarSugestoesInversoPorTag(itemSistema: LancamentoSistema, banco: LancamentoBanco[], regras: RegrasPorForma, combinado = false): SugestoesConciliacaoInversa {
+function buscarSugestoesInversoPorTag(
+  itemSistema: LancamentoSistema,
+  banco: LancamentoBanco[],
+  regras: RegrasPorForma,
+  combinado = false,
+  descartes: Set<string> = new Set(),
+): SugestoesConciliacaoInversa {
   const tipoSistema = getCategoriaSistema(itemSistema.formaPagamentoRaw);
   const valorSisAbs = Math.abs(itemSistema.valor);
   const dataSis = dataComparavelSistema(itemSistema, tipoSistema) || null;
@@ -404,6 +435,7 @@ function buscarSugestoesInversoPorTag(itemSistema: LancamentoSistema, banco: Lan
   // esconder.
   const bancoFiltradoPorTipo = banco.filter((b) => {
     if (b.desativado) return false;
+    if (descartes.has(chaveParDescarte(b.id, itemSistema.id))) return false;
     if (b.formaPagamento !== tipoSistema) return false;
     const vSis = itemSistema.valor;
     const vBanco = b.valor;
@@ -585,7 +617,13 @@ function buscarSugestoesInversoPorTag(itemSistema: LancamentoSistema, banco: Lan
 }
 
 /** Espelho de buscarRecebimentoDiferente pro sentido invertido (Sistema fixo, candidatos vêm do Banco). */
-function buscarRecebimentoDiferenteInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], resp: SugestoesConciliacaoInversa, regras: RegrasPorForma): LancamentoBanco[] {
+function buscarRecebimentoDiferenteInverso(
+  itemSistema: LancamentoSistema,
+  banco: LancamentoBanco[],
+  resp: SugestoesConciliacaoInversa,
+  regras: RegrasPorForma,
+  descartes: Set<string> = new Set(),
+): LancamentoBanco[] {
   if (!itemSistema.data) return [];
   const dataSis = itemSistema.data;
   const categoriaSis = getCategoriaSistema(itemSistema.formaPagamentoRaw);
@@ -598,6 +636,11 @@ function buscarRecebimentoDiferenteInverso(itemSistema: LancamentoSistema, banco
 
   const candidatos = banco.filter((b) => {
     if (b.desativado || idsJaSugeridos.has(b.id)) return false;
+    if (descartes.has(chaveParDescarte(b.id, itemSistema.id))) return false;
+    // Mesmo motivo do sentido Banco→Sistema: "recebimento diferente" nunca
+    // cruza sinal (entrada nunca casa com saída, só por valor absoluto igual).
+    if (itemSistema.valor < 0 && b.valor >= 0) return false;
+    if (itemSistema.valor > 0 && b.valor <= 0) return false;
     if (b.formaPagamento === categoriaSis) return false;
     if (diasCorridosEntre(b.data, dataSis) > regras.PIX.toleranciaDias) return false;
     const valorComparavel = b.valorBrutoCartao ?? Math.abs(b.valor);
@@ -607,10 +650,16 @@ function buscarRecebimentoDiferenteInverso(itemSistema: LancamentoSistema, banco
 }
 
 /** Espelho de buscarSugestoes pro sentido invertido (Sistema → Banco). */
-export function buscarSugestoesInverso(itemSistema: LancamentoSistema, banco: LancamentoBanco[], regras: RegrasPorForma, combinado = false): SugestoesConciliacaoInversa {
-  const resp = buscarSugestoesInversoPorTag(itemSistema, banco, regras, combinado);
+export function buscarSugestoesInverso(
+  itemSistema: LancamentoSistema,
+  banco: LancamentoBanco[],
+  regras: RegrasPorForma,
+  combinado = false,
+  descartes: Set<string> = new Set(),
+): SugestoesConciliacaoInversa {
+  const resp = buscarSugestoesInversoPorTag(itemSistema, banco, regras, combinado, descartes);
   if (!combinado) {
-    const recebimentoDiferente = buscarRecebimentoDiferenteInverso(itemSistema, banco, resp, regras);
+    const recebimentoDiferente = buscarRecebimentoDiferenteInverso(itemSistema, banco, resp, regras, descartes);
     if (recebimentoDiferente.length > 0) resp.recebimentoDiferente = recebimentoDiferente;
   }
   return resp;
@@ -634,6 +683,7 @@ export async function conciliacaoAutomatica(
   sistema: LancamentoSistema[],
   regras: RegrasPorForma,
   onProgresso?: (feitos: number, total: number) => void,
+  descartes: Set<string> = new Set(),
 ): Promise<GrupoParaConciliar[]> {
   const grupos: GrupoParaConciliar[] = [];
   const sistemaJaUsado = new Set<string>();
@@ -682,6 +732,7 @@ export async function conciliacaoAutomatica(
 
       const candidatosBoleto = (sistemaPorCategoria.get('BOLETO') ?? []).filter((s) => {
         if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+        if (descartes.has(chaveParDescarte(ofx.id, s.id))) return false;
         if (!s.data) return false;
         if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
         if (regraBoleto.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
@@ -732,6 +783,7 @@ export async function conciliacaoAutomatica(
       const regraPix = regras.PIX;
       const candidatosPix = (sistemaPorCategoria.get('PIX') ?? []).filter((s) => {
         if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+        if (descartes.has(chaveParDescarte(ofx.id, s.id))) return false;
         if (!s.data) return false;
         if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
         if (regraPix.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;
@@ -777,6 +829,7 @@ export async function conciliacaoAutomatica(
       const regraForma = regraParaFormaGenerica(tipo, regras);
       const candidatosValidos = (sistemaPorCategoria.get(tipo) ?? []).filter((s) => {
         if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+        if (descartes.has(chaveParDescarte(ofx.id, s.id))) return false;
         const dataComparavel = dataComparavelSistema(s, tipo);
         if (!dataComparavel) return false;
         if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
@@ -797,6 +850,7 @@ export async function conciliacaoAutomatica(
 
     const candidatosBase = (sistemaPorCategoria.get('CARTAO') ?? []).filter((s) => {
       if (s.conciliado || s.desativado || sistemaJaUsado.has(s.id)) return false;
+      if (descartes.has(chaveParDescarte(ofx.id, s.id))) return false;
       if (!s.data) return false;
       if (Math.sign(s.valor) !== Math.sign(ofx.valor)) return false;
       if (regraCartaoAtual.exigirNfAutomatica && (!s.nf || !s.nf.trim())) return false;

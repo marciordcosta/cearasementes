@@ -276,6 +276,12 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['conciliacao_grupos']['Row']>;
         Relationships: [];
       };
+      conciliacao_sugestoes_descartadas: {
+        Row: { id: string; banco_id: string; sistema_id: string; criado_em: string };
+        Insert: Omit<Database['public']['Tables']['conciliacao_sugestoes_descartadas']['Row'], 'id' | 'criado_em'>;
+        Update: Partial<Database['public']['Tables']['conciliacao_sugestoes_descartadas']['Insert']>;
+        Relationships: [];
+      };
       conciliacao_arquivos: {
         Row: {
           id: string;
