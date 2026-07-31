@@ -45,7 +45,12 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
     });
   }
 
-  const filtrados = filtrarArquivos(arquivos, busca);
+  // Mais recentes primeiro; nome do produto como critério de desempate pra
+  // quem foi enviado no mesmo momento (import em lote).
+  const filtrados = [...filtrarArquivos(arquivos, busca)].sort((a, b) => {
+    const porData = b.enviadoEm.localeCompare(a.enviadoEm);
+    return porData !== 0 ? porData : a.nomeProduto.localeCompare(b.nomeProduto);
+  });
 
   const todosSelecionados = filtrados.length > 0 && filtrados.every((a) => selecionados.has(a.id));
 
@@ -113,6 +118,7 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
               <th className="px-4 py-1.5 font-medium" title="Calculado: (Pureza × Germinação) / 100">VC%</th>
               <th className="px-4 py-1.5 font-medium" title="Peso de Mil Sementes — vem da Parametrização de Produtos (busca pelo nome); ✎ sobrescreve só pra esse lote">PMS</th>
               <th className="px-4 py-1.5 font-medium" title="Teste de Germinação de Campo — clique no valor pra ver/editar">Último Teste</th>
+              <th className="px-4 py-1.5 font-medium">Data de Importação</th>
               <th className="px-4 py-1.5" />
             </tr>
           </thead>
@@ -137,6 +143,7 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                     {resultadoTeste(a)}
                   </button>
                 </td>
+                <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{new Date(a.enviadoEm).toLocaleDateString('pt-BR')}</td>
                 <td className="whitespace-nowrap px-4 py-1 text-right">
                   <button type="button" onClick={() => onVisualizar(a)} title="Visualizar" className="mr-2 text-[var(--color-text-soft)] hover:text-[var(--color-text)]">
                     👁
@@ -155,7 +162,7 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={modoSelecao ? 11 : 10} className="px-4 py-6 text-center text-[var(--color-text-soft)]">
+                <td colSpan={modoSelecao ? 12 : 11} className="px-4 py-6 text-center text-[var(--color-text-soft)]">
                   Nenhum laudo encontrado.
                 </td>
               </tr>

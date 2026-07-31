@@ -21,7 +21,10 @@ export interface LaudoInterpretado {
  */
 export async function interpretarLaudo(arquivo: File): Promise<LaudoInterpretado> {
   const doNome = interpretarNomeArquivo(arquivo.name);
-  const conteudo = await extrairConteudoArquivo(arquivo).catch(() => null);
+  const conteudo = await extrairConteudoArquivo(arquivo).catch((e) => {
+    console.error(`[interpretarLaudo] Falha inesperada ao extrair "${arquivo.name}":`, e);
+    return null;
+  });
   const doConteudo = conteudo ? interpretarConteudoLaudo(conteudo) : { nomeProduto: null, lote: null, anoSafra: null, extras: {} };
 
   return {

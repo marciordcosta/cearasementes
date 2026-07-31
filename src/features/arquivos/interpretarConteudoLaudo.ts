@@ -8,14 +8,20 @@ export interface CamposDoConteudo {
   extras: Record<string, string>;
 }
 
-/** Corta no fim da frase/célula — evita pegar "MARANDU Categoria: S2" quando os dois campos vêm colados na mesma linha. */
+/**
+ * Corta no fim da frase/célula — evita pegar "MARANDU Categoria: S2" quando
+ * os dois campos vêm colados na mesma linha. O PDF reconstrói a linha
+ * inteira colando "Rótulo: valor" um do lado do outro com só 1 espaço (o
+ * .docx costuma ter cada rótulo no seu próprio parágrafo, com 2+ espaços ou
+ * fim de linha sobrando) — por isso o corte não pode depender só disso: para
+ * também antes de qualquer "Outro Rótulo:" reconhecível, mesmo colado com 1
+ * espaço só.
+ */
 function valorAposRotulo(linha: string, rotulo: string): string | null {
-  const regex = new RegExp(`\\b${rotulo}\\s*:?\\s*([^:]*?)(?:\\s{2,}|$)`, 'i');
+  const regex = new RegExp(`\\b${rotulo}\\s*:?\\s*(.*?)(?:\\s{2,}|\\s+(?=[A-ZÀ-Ú][a-zà-ú]*\\s*:)|$)`, 'i');
   const m = linha.match(regex);
   if (!m) return null;
-  // se o valor capturado ainda contém um outro "Rótulo" grudado, corta antes dele
-  const valor = m[1].split(/\s+(?=[A-ZÀ-Ú][a-zà-ú]*\s*:)/)[0].trim();
-  return valor || null;
+  return m[1].trim() || null;
 }
 
 function buscarRotulo(linhas: string[], rotulos: string[]): string | null {
