@@ -8,7 +8,7 @@ import { fmtBRL } from '@/lib/format';
 import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2 } from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
-import { resolverPmsBaseTexto } from '../parametrizacaoProdutos';
+import { grupoDoNome, normalizarNome, resolverMargemTolerancia, resolverModoPlantio, resolverPmsBaseTexto } from '../parametrizacaoProdutos';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 import { ChecklistCondicaoModal } from './ChecklistCondicaoModal';
 
@@ -119,20 +119,28 @@ function SeletorCondicaoItem({ valor, ajustada, onEscolher }: { valor: Condicao;
   );
 }
 
-function normalizarBusca(texto: string): string {
-  return texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim()
-    .toLowerCase();
-}
-
 function fatorDe(fatores: FatorPlantio[], chave: string): number {
   return paraNumero(fatores.find((f) => f.chave === chave)?.fator ?? null) ?? 1;
 }
 
 function formatarCovas(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
+}
+
+/**
+ * Arredonda o total de sacos por MARGEM de tolerância (cadastrada por grupo
+ * em Parametrização, 25% se não cadastrado) em vez do arredondamento padrão
+ * (0,5): até essa % de saco faltando ainda arredonda pra baixo (compra
+ * menos), acima arredonda pra cima. Sempre no mínimo 1 saco quando há
+ * alguma demanda de verdade (senão "faltar pouco" pra completar o PRIMEIRO
+ * saco resultaria em 0 sacos, o que não faz sentido — tem que comprar pelo
+ * menos 1 pra ter semente nenhuma).
+ */
+function arredondarSacos(quociente: number, margemFracao: number): number {
+  const inteiros = Math.floor(quociente);
+  const fracao = quociente - inteiros;
+  const sacos = fracao > margemFracao ? inteiros + 1 : inteiros;
+  return quociente > 0 ? Math.max(sacos, 1) : 0;
 }
 
 /** Sementes/cova é sempre digitada manualmente — só é válida como número inteiro ≥ 1 (sem casas decimais). Enquanto inválida, os espaçamentos ficam bloqueados. */
@@ -171,10 +179,16 @@ function validadeParaOrdenacao(validade: string | null): number {
   return ano * 12 + mes;
 }
 
-/** Casa o produto do laudo com um produto da Tabela de Preço pelo nome (mesmo padrão de normalização usado em parametrizacaoProdutos.ts). */
+/**
+ * Casa o produto do laudo com um produto da Tabela de Preço pelo GRUPO (1ª +
+ * 3ª palavra, ver grupoDoNome) — mesmo critério usado em Parametrização.
+ * Necessário porque a Tabela de Preço às vezes traz o nome científico no
+ * meio ("Andropogon Gayanus Planaltina") que o laudo não tem ("Andropogon
+ * Planaltina") — comparar o nome cru, sem reduzir, nunca batia.
+ */
 function encontrarProdutoPreco(nomeProduto: string, produtosPreco: Produto[]): Produto | null {
-  const alvo = normalizarBusca(nomeProduto);
-  return produtosPreco.find((p) => normalizarBusca(p.nome) === alvo) ?? null;
+  const alvo = normalizarNome(grupoDoNome(nomeProduto));
+  return produtosPreco.find((p) => normalizarNome(grupoDoNome(p.nome)) === alvo) ?? null;
 }
 
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
@@ -183,11 +197,15 @@ function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: 
 }
 
 /**
- * Guia de Plantio — busca um produto por vez (o sistema procura o nome nos
- * laudos e lista os lotes que batem, com a validade) e empilha um resultado
- * pra cada um, cada um com sua própria área — dá pra montar o plano de
- * plantio de vários produtos diferentes na mesma sessão, um "x" no canto
- * tira um resultado da pilha sem mexer nos outros.
+ * Guia de Plantio — busca ancorada na Tabela de Preço (catálogo real, nome
+ * garantido): o operador digita uma palavra-chave, o sistema acha os
+ * produtos da Tabela de Preço que batem e, pra cada um, lista os laudos
+ * (lote + validade) cujo nome casa EXATAMENTE com o daquele produto. Produto
+ * sem nenhum laudo aparece mesmo assim, com aviso — sinaliza que o laudo
+ * está com um nome diferente do cadastrado lá, em vez de simplesmente sumir.
+ * Escolher um lote empilha um resultado, cada um com sua própria área — dá
+ * pra montar o plano de plantio de vários produtos diferentes na mesma
+ * sessão, um "x" no canto tira um resultado da pilha sem mexer nos outros.
  *
  * Referência do cálculo é sempre a Densidade (Parametrização de Produtos):
  * Sementes/m² = Densidade ÷ Germinação final (VC%/teste × Sobrevivência% ×
@@ -263,19 +281,37 @@ export function GuiaPlantioModal({
     return calcularCanal(produtoPreco, canalSelecionado, categoria, transportadoraPorId).preco;
   }
 
-  const opcoesFiltradas = useMemo(() => {
-    const termo = normalizarBusca(busca);
+  // Busca ancorada na Tabela de Preço (catálogo real, com peso e valor) — não
+  // nos laudos (nome livre, sem garantia nenhuma). Pra cada produto cujo nome
+  // bate com a palavra-chave, lista os laudos que casam com o mesmo GRUPO
+  // (1ª + 3ª palavra, ver grupoDoNome — mesmo critério da Parametrização: a
+  // Tabela de Preço às vezes traz o nome científico no meio, "Andropogon
+  // Gayanus Planaltina", que o laudo não tem, "Andropogon Planaltina");
+  // produto sem nenhum laudo aparece mesmo assim, com aviso — sinaliza que o
+  // laudo desse produto está com um nome diferente do cadastrado lá.
+  const gruposFiltrados = useMemo(() => {
+    const termo = normalizarNome(busca);
     if (!termo) return [];
-    return arquivos
-      .filter((a) => normalizarBusca(a.nomeProduto).includes(termo))
-      .sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))
-      .slice(0, 8);
-  }, [arquivos, busca]);
+    return produtosPreco
+      .filter((p) => normalizarNome(p.nome).includes(termo))
+      .map((produto) => ({
+        produto,
+        laudos: arquivos
+          .filter((a) => normalizarNome(grupoDoNome(a.nomeProduto)) === normalizarNome(grupoDoNome(produto.nome)))
+          .sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade)),
+      }))
+      .sort((a, b) => a.produto.nome.localeCompare(b.produto.nome))
+      .slice(0, 6);
+  }, [arquivos, produtosPreco, busca]);
 
   function selecionar(a: ArquivoLaudo) {
     setItens((prev) => {
       if (prev.some((it) => it.laudoId === a.id)) return prev;
-      const fatorModo = fatorDe(fatores, 'lanco');
+      // Modo padrão vem da Parametrização (Cova ou Lanço, cadastrado por
+      // grupo) — só o ponto de partida do item, o operador ainda troca à
+      // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
+      const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
+      const fatorModo = fatorDe(fatores, modoPadrao);
       const sementesPorM2Inicial = calcularSementesPorM2(a, produtos, fatorModo, fatorCondicao);
       const covasPorM2Inicial = calcularCovasPorM2(50, 50);
       const sementesCovaInicial = calcularSementesPorCova(sementesPorM2Inicial, covasPorM2Inicial);
@@ -283,8 +319,11 @@ export function GuiaPlantioModal({
         ...prev,
         {
           laudoId: a.id,
-          area: '',
-          modo: 'lanco',
+          // Começa em 1 ha (não zerado) — só pra já sair mostrando os
+          // totais calculados; o operador ajusta a área de verdade em
+          // seguida.
+          area: '1',
+          modo: modoPadrao,
           cova: '50',
           corredor: '50',
           sementesCova: sementesCovaInicial === null ? '' : String(Math.round(sementesCovaInicial)),
@@ -330,6 +369,28 @@ export function GuiaPlantioModal({
       }
     }
     atualizarItem(item.laudoId, patch);
+  }
+
+  /**
+   * Área (ha) e Total de sacos são ligados nos dois modos: kg/ha e peso do
+   * saco são fixos (Parametrização e Tabela de Preço), então dá pra ir dos
+   * sacos pra área tão bem quanto o contrário — editar Total de sacos
+   * recalcula a Área que produz exatamente essa quantidade. Área continua
+   * sendo a única fonte de verdade guardada no estado (Sacos é sempre
+   * derivado dela pra exibir, ver calcularResultado) — diferente de
+   * Cova/Corredor, não precisa de um 2º campo guardado nem de saber "qual
+   * foi editado por último".
+   */
+  function atualizarSacos(item: ItemGuia, valorTexto: string, kgPorHa: number | null, pesoSaco: number | null) {
+    const valorLimpo = valorTexto.replace(/\D/g, '');
+    if (valorLimpo === '') {
+      atualizarItem(item.laudoId, { area: '' });
+      return;
+    }
+    if (kgPorHa === null || kgPorHa <= 0 || pesoSaco === null || pesoSaco <= 0) return;
+    const sacosDigitados = parseInt(valorLimpo, 10);
+    const areaNova = (sacosDigitados * pesoSaco) / kgPorHa;
+    atualizarItem(item.laudoId, { area: areaNova > 0 ? String(Math.round(areaNova * 100) / 100) : '' });
   }
 
   /** Sementes/cova é sempre manual — nunca recalculada sozinha; só dispara o recálculo do espaçamento que já estava "de fora". Só aceita dígitos (número inteiro). */
@@ -422,12 +483,16 @@ export function GuiaPlantioModal({
     const areaNum = paraNumero(item.area);
     const pesoTotal = kgPorHa !== null && areaNum !== null && areaNum > 0 ? kgPorHa * areaNum : null;
     const pesoSaco = pesoSacoDoProduto(laudo.nomeProduto);
-    const sacos = pesoTotal !== null && pesoSaco !== null ? Math.ceil(pesoTotal / pesoSaco) : null;
+    // Arredonda por margem de tolerância (Parametrização, 25% padrão) — não
+    // por 0,5 nem sempre pra cima (Math.ceil antigo virava 1 saco a mais só
+    // por faltar 1kg, um exagero em compras maiores).
+    const margemTolerancia = resolverMargemTolerancia(laudo.nomeProduto, produtos);
+    const sacos = pesoTotal !== null && pesoSaco !== null && pesoSaco > 0 ? arredondarSacos(pesoTotal / pesoSaco, margemTolerancia / 100) : null;
     const precoSaco = precoSacoDoProduto(laudo.nomeProduto);
     const valorTotal = sacos !== null && precoSaco !== null ? sacos * precoSaco : null;
     // Custo por hectare = preço por kg (valor unit. ÷ peso do saco) × taxa de semeadura (kg/ha) — quanto custa plantar 1 ha, direto (não depende da área digitada).
     const custoPorHa = precoSaco !== null && pesoSaco !== null && pesoSaco > 0 && kgPorHa !== null ? (precoSaco / pesoSaco) * kgPorHa : null;
-    // Peso total REAL (o que efetivamente se compra/pesa) = sacos (arredondados pra cima) × peso do saco — diferente do
+    // Peso total REAL (o que efetivamente se compra/pesa) = sacos (arredondados) × peso do saco — diferente do
     // "Total previsto/necessário" (teórico, continuo) porque só dá pra comprar saco inteiro.
     const pesoTotalReal = sacos !== null && pesoSaco !== null ? sacos * pesoSaco : null;
     const covasPorM2 = item.modo === 'linha_cova' ? calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor)) : null;
@@ -479,15 +544,8 @@ export function GuiaPlantioModal({
           custoPorHa: r.custoPorHa === null ? '—' : fmtBRL.format(r.custoPorHa),
           totalSacos: r.sacos === null ? '—' : `${r.sacos} sacos`,
           valorTotal: r.valorTotal === null ? '—' : fmtBRL.format(r.valorTotal),
-          sementesOuCovasLabel: item.modo === 'linha_cova' ? 'Covas/m²' : 'Sementes/m²',
-          sementesOuCovasValor:
-            item.modo === 'linha_cova'
-              ? r.covasPorM2 === null
-                ? '—'
-                : formatarCovas(r.covasPorM2)
-              : r.sementesPorM2 === null
-                ? '—'
-                : String(Math.round(r.sementesPorM2)),
+          sementesOuCovasLabel: item.modo === 'linha_cova' ? 'Covas/m²' : null,
+          sementesOuCovasValor: item.modo === 'linha_cova' ? (r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)) : null,
           espacamento: item.modo === 'linha_cova' ? `${item.cova || '—'}×${item.corredor || '—'} cm` : null,
           sementesPorCova: item.modo === 'linha_cova' ? (r.sementesPorCova === null ? '—' : String(Math.round(r.sementesPorCova))) : null,
         },
@@ -505,19 +563,26 @@ export function GuiaPlantioModal({
     );
   }
 
-  const mostrandoSugestoes = buscaAberta && opcoesFiltradas.length > 0;
-  const mostrandoSemResultado = buscaAberta && busca.trim().length > 0 && opcoesFiltradas.length === 0;
+  const mostrandoSugestoes = buscaAberta && gruposFiltrados.length > 0;
+  const mostrandoSemResultado = buscaAberta && busca.trim().length > 0 && gruposFiltrados.length === 0;
   // O painel de sugestões é `absolute` e não entra no fluxo normal — sem essa
   // reserva, o modal (que cresce só pelo conteúdo em fluxo) fica baixo demais
   // e o `overflow-y-auto` do próprio Modal corta o painel por cima.
-  const alturaReservada = mostrandoSugestoes ? Math.min(opcoesFiltradas.length * 60, 280) + 8 : mostrandoSemResultado ? 44 : 0;
+  const alturaReservada = mostrandoSugestoes
+    ? Math.min(
+        gruposFiltrados.reduce((acc, g) => acc + 24 + Math.max(g.laudos.length, 1) * 40, 0),
+        320,
+      ) + 8
+    : mostrandoSemResultado
+      ? 44
+      : 0;
 
   return (
     <Modal
       open={open}
       title="Guia de Plantio"
       onClose={fecharTudo}
-      widthClassName="max-w-[920px]"
+      widthClassName="max-w-[640px]"
       heightClassName="max-h-[92vh]"
       footer={
         itens.length > 0 ? (
@@ -615,35 +680,43 @@ export function GuiaPlantioModal({
             }}
             onFocus={() => setBuscaAberta(true)}
             onBlur={() => setTimeout(() => setBuscaAberta(false), 120)}
-            placeholder="Buscar produto..."
+            placeholder="Buscar produto na Tabela de Preço..."
             autoComplete="off"
             className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
           />
-          {buscaAberta && opcoesFiltradas.length > 0 && (
-            <div className="absolute z-30 mt-1 max-h-[280px] w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]/95 shadow-lg backdrop-blur-sm">
-              {opcoesFiltradas.map((a) => {
-                const precoSaco = precoSacoDoProduto(a.nomeProduto);
+          {buscaAberta && gruposFiltrados.length > 0 && (
+            <div className="absolute z-30 mt-1 max-h-[320px] w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]/95 shadow-lg backdrop-blur-sm">
+              {gruposFiltrados.map((grupo) => {
+                const precoSaco = precoSacoDoProduto(grupo.produto.nome);
                 return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => selecionar(a)}
-                    className="flex w-full flex-col px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-accent)]/15"
-                  >
-                    <span>{a.nomeProduto}</span>
-                    <span className="text-xs text-[var(--color-text-soft)]">
-                      Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'}
-                      {precoSaco !== null && ` · ${fmtBRL.format(precoSaco)}/saco`}
-                    </span>
-                  </button>
+                  <div key={grupo.produto.id} className="border-b border-[var(--color-line)] py-1 last:border-b-0">
+                    <p className="truncate px-3 py-1 text-sm font-semibold text-[var(--color-text)]" title={grupo.produto.nome}>
+                      {grupo.produto.nome}
+                    </p>
+                    {grupo.laudos.length === 0 ? (
+                      <p className="px-3 pb-1.5 text-xs text-[var(--color-text-soft)]">Nenhum laudo encontrado com esse nome — confira se o nome bate com a Tabela de Preço.</p>
+                    ) : (
+                      grupo.laudos.map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => selecionar(a)}
+                          className="flex w-full flex-col px-3 py-1 pl-4 text-left text-xs text-[var(--color-text-soft)] hover:bg-[var(--color-accent)]/15 hover:text-[var(--color-text)]"
+                        >
+                          Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'}
+                          {precoSaco !== null && ` · ${fmtBRL.format(precoSaco)}/saco`}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 );
               })}
             </div>
           )}
-          {buscaAberta && busca.trim() && opcoesFiltradas.length === 0 && (
+          {buscaAberta && busca.trim() && gruposFiltrados.length === 0 && (
             <div className="absolute z-30 mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]/95 px-3 py-2 text-xs text-[var(--color-text-soft)] shadow-lg">
-              Nenhum lote encontrado com esse nome.
+              Nenhum produto encontrado na Tabela de Preço com esse nome.
             </div>
           )}
         </div>
@@ -705,19 +778,28 @@ export function GuiaPlantioModal({
                       className="w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                     />
                   </div>
-                  {item.modo === 'lanco' && (
-                    <div>
-                      <p className="text-[10px] text-[var(--color-text-soft)]">Sementes/m²</p>
-                      <p className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
-                        {r.sementesPorM2 === null ? '—' : Math.round(r.sementesPorM2)}
-                      </p>
-                    </div>
-                  )}
+                  <div>
+                    <p className="text-[10px] text-[var(--color-text-soft)]">Total de sacos</p>
+                    <input
+                      value={r.sacos === null ? '' : String(r.sacos)}
+                      onChange={(e) => atualizarSacos(item, e.target.value, r.kgPorHa, r.pesoSaco)}
+                      disabled={r.kgPorHa === null || r.pesoSaco === null}
+                      inputMode="numeric"
+                      title={
+                        r.kgPorHa === null || r.pesoSaco === null
+                          ? 'Precisa do kg/ha (Densidade/Sobrevivência) e do peso do saco (Tabela de Preço) pra ligar com a Área'
+                          : 'Ligado com Área (ha) — editar recalcula a área pra essa quantidade de sacos'
+                      }
+                      className="w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </div>
                   {item.modo === 'linha_cova' &&
                     (() => {
                       const espacamentoBloqueado = sementesCovaValida(item.sementesCova) === null;
                       return (
                         <>
+                          {/* Quebra a linha aqui de propósito — Distância/Corredor/Sementes-cova/Covas-m² sempre numa linha própria, embaixo de Área/Total de sacos, independente de largura disponível. */}
+                          <div className="basis-full" />
                           <div>
                             <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
                             <input

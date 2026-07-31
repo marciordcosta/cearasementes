@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import type { Produto } from '@/features/pricing/types';
 import { paraNumero } from '../metricas';
+import { grupoDoNome, normalizarNome } from '../parametrizacaoProdutos';
 import type { ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 
 type Aba = 'produtos' | 'checklist' | 'plantio';
@@ -15,12 +17,23 @@ const ABAS: { valor: Aba; rotulo: string; icone: string }[] = [
 interface ParametrizacaoProdutosModalProps {
   open: boolean;
   produtos: ProdutoParametrizacao[];
+  /** Catálogo da Tabela de Preço (módulo Precificação) — a lista de grupos exibida aqui é derivada automaticamente dele (ver linhasGrupo), não digitada à mão. */
+  produtosPreco: Produto[];
   fatores: FatorPlantio[];
   checklist: ChecklistPergunta[];
   manual: ManualPlantio | null;
   onFechar: () => void;
-  onSalvar: (produto: { id?: string; nomeProduto: string; pmsBase: string; densidadeBase: string; indiceSobrevivencia: string }) => void;
+  onSalvar: (produto: {
+    nomeProduto: string;
+    pmsBase: string;
+    densidadeBase: string;
+    indiceSobrevivencia: string;
+    modoPlantio: 'cova' | 'lanco' | null;
+    margemTolerancia: string;
+  }) => void;
   onApagar: (id: string) => void;
+  /** Corrige o grupo de uma linha já cadastrada — pra quando a extração automática (1ª + 3ª palavra) não pega o nome certo. */
+  onRenomear: (id: string, novoNome: string) => void;
   onSalvarFator: (chave: string, fator: string) => void;
   onSalvarResumoCondicao: (chave: string, resumo: string) => void;
   onAdicionarPerguntaChecklist: (pergunta: string) => void;
@@ -186,12 +199,14 @@ function BlocoPerguntaChecklist({
 export function ParametrizacaoProdutosModal({
   open,
   produtos,
+  produtosPreco,
   fatores,
   checklist,
   manual,
   onFechar,
   onSalvar,
   onApagar,
+  onRenomear,
   onSalvarFator,
   onSalvarResumoCondicao,
   onAdicionarPerguntaChecklist,
@@ -202,37 +217,38 @@ export function ParametrizacaoProdutosModal({
   onApagarOpcaoChecklist,
   onSalvarManual,
 }: ParametrizacaoProdutosModalProps) {
-  const [novoNome, setNovoNome] = useState('');
-  const [novoPms, setNovoPms] = useState('');
-  const [novaDensidade, setNovaDensidade] = useState('');
-  const [novaSobrevivencia, setNovaSobrevivencia] = useState('');
   const [novaPergunta, setNovaPergunta] = useState('');
   const [aba, setAba] = useState<Aba>('produtos');
+  /** id da linha (parametrização já cadastrada) cujo grupo está em edição — null quando nenhuma. */
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   const condicoes = fatores.filter((f) => f.categoria === 'condicao');
 
-  function adicionar() {
-    if (!novoNome.trim()) return;
-    onSalvar({
-      nomeProduto: novoNome.trim(),
-      pmsBase: novoPms.trim(),
-      densidadeBase: novaDensidade.trim(),
-      indiceSobrevivencia: novaSobrevivencia.trim(),
+  // Nada de cadastro manual — a lista de grupos vem AUTOMATICAMENTE da
+  // Tabela de Preço (1ª + 3ª palavra de cada produto, ver grupoDoNome): um
+  // grupo só (ex.: "Panicum Incrustado") já cobre toda variedade que reduza
+  // a ele (Mombaça, Tanzânia etc.), então aparece 1 linha só, pronta pra
+  // preencher PMS/Densidade/Sobrevivência. Junta também grupo já
+  // parametrizado que não bate com nenhum produto atual da Tabela de Preço
+  // (dado legado/órfão) — pra não sumir cadastro já feito.
+  const linhasGrupo = useMemo(() => {
+    const grupoPorChave = new Map<string, string>();
+    produtosPreco.forEach((p) => {
+      const grupo = grupoDoNome(p.nome);
+      grupoPorChave.set(normalizarNome(grupo), grupo);
     });
-    setNovoNome('');
-    setNovoPms('');
-    setNovaDensidade('');
-    setNovaSobrevivencia('');
-  }
+    produtos.forEach((p) => {
+      const grupo = grupoDoNome(p.nomeProduto);
+      const chave = normalizarNome(grupo);
+      if (!grupoPorChave.has(chave)) grupoPorChave.set(chave, grupo);
+    });
+    return [...grupoPorChave.entries()]
+      .map(([chave, grupo]) => ({ grupo, existente: produtos.find((p) => normalizarNome(grupoDoNome(p.nomeProduto)) === chave) ?? null }))
+      .sort((a, b) => a.grupo.localeCompare(b.grupo));
+  }, [produtos, produtosPreco]);
 
   return (
-    <Modal
-      open={open}
-      title="Parametrização de Produtos"
-      onClose={onFechar}
-      widthClassName="max-w-[680px]"
-      footer={<Button onClick={onFechar}>Fechar</Button>}
-    >
+    <Modal open={open} title="Parametrização de Produtos" onClose={onFechar} widthClassName="max-w-[780px]">
       <div className="space-y-4">
         <div className="flex items-center gap-1 border-b border-[var(--color-line)] pb-2">
           {ABAS.map((a) => (
@@ -253,70 +269,149 @@ export function ParametrizacaoProdutosModal({
 
         {aba === 'produtos' && (
         <div className="space-y-3">
-          <p className="text-xs text-[var(--color-text-soft)]">
-            PMS base, Densidade base (população alvo, plantas/m²) e Índice de Sobrevivência (%) por produto — usados no cálculo do Guia de Plantio sempre que o nome do produto do laudo bater com um
-            cadastrado aqui. O PMS pode ser sobrescrito por lote (se digitar lá, o valor do lote manda); os demais campos só existem aqui. O peso do saco vem direto da Tabela de Preço (módulo
-            Precificação) — não precisa cadastrar de novo.
+          <p className="px-3 text-[11px] text-[var(--color-text-soft)]">
+            Grupo calculado automaticamente da Tabela de Preço (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Margem% decide o
+            arredondamento de sacos no Guia de Plantio (até essa % de saco faltando arredonda pra baixo, acima pra cima) — 25% se em branco.
           </p>
-
-          <div className="max-h-[320px] space-y-1.5 overflow-y-auto">
+          <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
-              <span className="flex-1">Produto</span>
-              <span className="w-20 text-center">PMS</span>
-              <span className="w-20 text-center">Densidade</span>
-              <span className="w-20 text-center">Sobrev. %</span>
-              <span className="w-4" />
+              <span className="flex-1">Grupo</span>
+              <span className="w-16 shrink-0 text-center">PMS</span>
+              <span className="w-16 shrink-0 text-center">Densid.</span>
+              <span className="w-16 shrink-0 text-center">Sobrev%</span>
+              <span className="w-[74px] shrink-0 text-center">Plantio</span>
+              <span className="w-16 shrink-0 text-center">Margem%</span>
+              <span className="w-8 shrink-0" />
             </div>
-            {produtos.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
-                <span className="flex-1 truncate text-sm text-[var(--color-text)]" title={p.nomeProduto}>
-                  {p.nomeProduto}
-                </span>
+            {linhasGrupo.map(({ grupo, existente }) => (
+              <div key={grupo} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
+                {existente && editandoId === existente.id ? (
+                  <input
+                    defaultValue={grupo}
+                    autoFocus
+                    onBlur={(e) => {
+                      const valor = e.target.value.trim();
+                      if (valor && valor !== grupo) onRenomear(existente.id, valor);
+                      setEditandoId(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                      if (e.key === 'Escape') setEditandoId(null);
+                    }}
+                    className={`min-w-0 flex-1 ${campoClasse}`}
+                  />
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--color-text)]" title={grupo}>
+                    {grupo}
+                  </span>
+                )}
                 <input
-                  defaultValue={p.pmsBase ?? ''}
+                  defaultValue={existente?.pmsBase ?? ''}
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (p.pmsBase ?? ''))
-                      onSalvar({ id: p.id, nomeProduto: p.nomeProduto, pmsBase: valor, densidadeBase: p.densidadeBase ?? '', indiceSobrevivencia: p.indiceSobrevivencia ?? '' });
+                    if (valor !== (existente?.pmsBase ?? ''))
+                      onSalvar({
+                        nomeProduto: existente?.nomeProduto ?? grupo,
+                        pmsBase: valor,
+                        densidadeBase: existente?.densidadeBase ?? '',
+                        indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                        modoPlantio: existente?.modoPlantio ?? null,
+                        margemTolerancia: existente?.margemTolerancia ?? '',
+                      });
                   }}
-                  className={`w-20 ${campoClasse}`}
+                  className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <input
-                  defaultValue={p.densidadeBase ?? ''}
+                  defaultValue={existente?.densidadeBase ?? ''}
                   placeholder="por m²"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (p.densidadeBase ?? ''))
-                      onSalvar({ id: p.id, nomeProduto: p.nomeProduto, pmsBase: p.pmsBase ?? '', densidadeBase: valor, indiceSobrevivencia: p.indiceSobrevivencia ?? '' });
+                    if (valor !== (existente?.densidadeBase ?? ''))
+                      onSalvar({
+                        nomeProduto: existente?.nomeProduto ?? grupo,
+                        pmsBase: existente?.pmsBase ?? '',
+                        densidadeBase: valor,
+                        indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                        modoPlantio: existente?.modoPlantio ?? null,
+                        margemTolerancia: existente?.margemTolerancia ?? '',
+                      });
                   }}
-                  className={`w-20 ${campoClasse}`}
+                  className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <input
-                  defaultValue={p.indiceSobrevivencia ?? ''}
+                  defaultValue={existente?.indiceSobrevivencia ?? ''}
                   placeholder="ideal"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (p.indiceSobrevivencia ?? ''))
-                      onSalvar({ id: p.id, nomeProduto: p.nomeProduto, pmsBase: p.pmsBase ?? '', densidadeBase: p.densidadeBase ?? '', indiceSobrevivencia: valor });
+                    if (valor !== (existente?.indiceSobrevivencia ?? ''))
+                      onSalvar({
+                        nomeProduto: existente?.nomeProduto ?? grupo,
+                        pmsBase: existente?.pmsBase ?? '',
+                        densidadeBase: existente?.densidadeBase ?? '',
+                        indiceSobrevivencia: valor,
+                        modoPlantio: existente?.modoPlantio ?? null,
+                        margemTolerancia: existente?.margemTolerancia ?? '',
+                      });
                   }}
-                  className={`w-20 ${campoClasse}`}
+                  className={`w-16 shrink-0 ${campoClasse}`}
                 />
-                <button type="button" onClick={() => onApagar(p.id)} title="Excluir" className="text-[var(--color-text-soft)] hover:text-bad">
-                  🗑
-                </button>
+                <select
+                  value={existente?.modoPlantio ?? 'lanco'}
+                  onChange={(e) => {
+                    const modoPlantio = e.target.value as 'cova' | 'lanco';
+                    onSalvar({
+                      nomeProduto: existente?.nomeProduto ?? grupo,
+                      pmsBase: existente?.pmsBase ?? '',
+                      densidadeBase: existente?.densidadeBase ?? '',
+                      indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                      modoPlantio,
+                      margemTolerancia: existente?.margemTolerancia ?? '',
+                    });
+                  }}
+                  title="Modo de plantio padrão — só pré-seleciona ao adicionar no Guia de Plantio"
+                  className={`w-[74px] shrink-0 ${campoClasse}`}
+                >
+                  <option value="lanco">Lanço</option>
+                  <option value="cova">Cova</option>
+                </select>
+                <input
+                  defaultValue={existente?.margemTolerancia ?? ''}
+                  placeholder="25"
+                  title="Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando arredonda pra baixo, acima arredonda pra cima. 25% se em branco."
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== (existente?.margemTolerancia ?? ''))
+                      onSalvar({
+                        nomeProduto: existente?.nomeProduto ?? grupo,
+                        pmsBase: existente?.pmsBase ?? '',
+                        densidadeBase: existente?.densidadeBase ?? '',
+                        indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                        modoPlantio: existente?.modoPlantio ?? null,
+                        margemTolerancia: valor,
+                      });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                {existente ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setEditandoId(existente.id)}
+                      title="Corrigir o nome do grupo (a extração automática errou o nome)"
+                      className="text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                    >
+                      ✎
+                    </button>
+                    <button type="button" onClick={() => onApagar(existente.id)} title="Limpar parametrização deste grupo" className="text-[var(--color-text-soft)] hover:text-bad">
+                      🗑
+                    </button>
+                  </>
+                ) : (
+                  <span className="w-8 shrink-0" />
+                )}
               </div>
             ))}
-            {produtos.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum produto cadastrado ainda.</p>}
-          </div>
-
-          <div className="flex items-center gap-2 border-t border-[var(--color-line)] px-3 pt-3">
-            <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Nome do produto" className={`flex-1 ${campoClasse}`} />
-            <input value={novoPms} onChange={(e) => setNovoPms(e.target.value)} placeholder="PMS" className={`w-20 ${campoClasse}`} />
-            <input value={novaDensidade} onChange={(e) => setNovaDensidade(e.target.value)} placeholder="Densidade" className={`w-20 ${campoClasse}`} />
-            <input value={novaSobrevivencia} onChange={(e) => setNovaSobrevivencia(e.target.value)} placeholder="Sobrev. %" className={`w-20 ${campoClasse}`} />
-            <Button variant="primary" onClick={adicionar}>
-              + Adicionar
-            </Button>
+            {linhasGrupo.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum produto cadastrado na Tabela de Preço ainda.</p>}
           </div>
         </div>
         )}

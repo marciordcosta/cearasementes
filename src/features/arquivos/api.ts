@@ -136,6 +136,8 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
     pmsBase: row.pms_base,
     densidadeBase: row.densidade_base,
     indiceSobrevivencia: row.indice_sobrevivencia,
+    modoPlantio: row.modo_plantio === 'cova' || row.modo_plantio === 'lanco' ? row.modo_plantio : null,
+    margemTolerancia: row.margem_tolerancia,
   };
 }
 
@@ -146,20 +148,39 @@ export async function fetchParametrizacaoProdutos(): Promise<ProdutoParametrizac
   return data.map(produtoParametrizacaoFromRow);
 }
 
+/**
+ * `nome_produto` é a chave de conflito (não `id`) — é o "grupo" (ver
+ * grupoDoNome), único por constraint no banco (migração 0040). Isso garante
+ * 1 linha por grupo mesmo sob concorrência: editar PMS e Densidade em
+ * sequência rápida, cada um antes do outro saber que o grupo acabou de ser
+ * criado, não cria mais duas linhas — o segundo upsert bate na mesma linha
+ * que o primeiro acabou de inserir.
+ */
 export async function salvarParametrizacaoProduto(produto: {
-  id?: string;
   nomeProduto: string;
   pmsBase: string;
   densidadeBase: string;
   indiceSobrevivencia: string;
+  modoPlantio: 'cova' | 'lanco' | null;
+  margemTolerancia: string;
 }): Promise<void> {
-  const { error } = await supabase.from('arquivos_parametrizacao_produtos').upsert({
-    ...(produto.id ? { id: produto.id } : {}),
-    nome_produto: produto.nomeProduto,
-    pms_base: produto.pmsBase || null,
-    densidade_base: produto.densidadeBase || null,
-    indice_sobrevivencia: produto.indiceSobrevivencia || null,
-  });
+  const { error } = await supabase.from('arquivos_parametrizacao_produtos').upsert(
+    {
+      nome_produto: produto.nomeProduto,
+      pms_base: produto.pmsBase || null,
+      densidade_base: produto.densidadeBase || null,
+      indice_sobrevivencia: produto.indiceSobrevivencia || null,
+      modo_plantio: produto.modoPlantio,
+      margem_tolerancia: produto.margemTolerancia || null,
+    },
+    { onConflict: 'nome_produto' },
+  );
+  if (error) throw error;
+}
+
+/** Corrige o grupo (nome_produto) de uma linha já cadastrada — usado quando a extração automática (1ª + 3ª palavra) não pegou o nome certo. */
+export async function renomearParametrizacaoProduto(id: string, novoNome: string): Promise<void> {
+  const { error } = await supabase.from('arquivos_parametrizacao_produtos').update({ nome_produto: novoNome }).eq('id', id);
   if (error) throw error;
 }
 

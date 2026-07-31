@@ -12,9 +12,9 @@ export interface LinhaGuiaPlantioPdf {
   custoPorHa: string;
   totalSacos: string;
   valorTotal: string;
-  /** "Sementes/m²" ou "Covas/m²", conforme o modo. */
-  sementesOuCovasLabel: string;
-  sementesOuCovasValor: string;
+  /** "Covas/m²" — só quando o modo é Covas. A Lanço não tem equivalente exibido (peso/m² é irrelevante pro operador). */
+  sementesOuCovasLabel: string | null;
+  sementesOuCovasValor: string | null;
   /** "50×50 cm" — só quando o modo é Covas. */
   espacamento: string | null;
   /** Só quando o modo é Covas. */
@@ -59,8 +59,8 @@ function infoAdicionalHtml(l: LinhaGuiaPlantioPdf): string {
   const itens: { rotulo: string; valor: string }[] = [
     { rotulo: 'Condição', valor: l.condicaoLabel },
     { rotulo: 'Plantio', valor: l.modoLabel },
-    { rotulo: l.sementesOuCovasLabel, valor: l.sementesOuCovasValor },
   ];
+  if (l.sementesOuCovasLabel !== null && l.sementesOuCovasValor !== null) itens.push({ rotulo: l.sementesOuCovasLabel, valor: l.sementesOuCovasValor });
   if (l.espacamento !== null) itens.push({ rotulo: 'Espaçamento', valor: l.espacamento });
   if (l.sementesPorCova !== null) itens.push({ rotulo: 'Sementes/cova', valor: l.sementesPorCova });
   return `<div class="info-linha">${itens.map((i) => `<div class="info-item"><div class="info-rotulo">${i.rotulo}</div><div class="info-valor">${i.valor}</div></div>`).join('')}</div>`;

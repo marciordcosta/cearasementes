@@ -442,6 +442,8 @@ export interface Database {
           pms_base: string | null;
           densidade_base: string | null;
           indice_sobrevivencia: string | null;
+          modo_plantio: string | null;
+          margem_tolerancia: string | null;
           atualizado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['arquivos_parametrizacao_produtos']['Row'], 'id' | 'atualizado_em'> & { id?: string; atualizado_em?: string };

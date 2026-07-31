@@ -47,6 +47,10 @@ export interface ProdutoParametrizacao {
   pmsBase: string | null;
   densidadeBase: string | null;
   indiceSobrevivencia: string | null;
+  /** Modo de plantio padrão do grupo (Cova ou Lanço) — só pré-seleciona o modo ao adicionar o produto no Guia de Plantio, não entra em nenhum cálculo. Null = sem preferência cadastrada (o Guia cai no padrão dele, Lanço). */
+  modoPlantio: 'cova' | 'lanco' | null;
+  /** Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando ainda arredonda pra baixo, acima arredonda pra cima. Texto cru (ex.: "25"); null cai no padrão de 25%. */
+  margemTolerancia: string | null;
 }
 
 /**
