@@ -124,7 +124,14 @@ export function detectPaymentTypeFromOfx(desc: unknown): 'PIX' | 'CARTAO' | 'BOL
   if (!desc) return 'OUTRO';
   const t = removerAcentos(desc).toLowerCase();
 
-  if (t.includes('cartao') || t.includes('carto') || t.includes('credito') || t.includes('debito')) return 'CARTAO';
+  // Só usada no extrato do BB (parseExtratoBB) — a Stone (única origem real
+  // de cartão) já marca CARTAO direto, sem passar por aqui. Por isso o BB
+  // nunca deveria bater aqui de verdade; "carto" e "credito"/"debito" eram
+  // termos genéricos demais e pegavam nome de remetente PIX ("IPU CARTORI",
+  // um cartório) e lançamentos sem nenhuma relação com cartão (TED, tarifa de
+  // serviço de cobrança) como se fossem cartão. Mantém só "cartao" exato,
+  // como fallback inofensivo caso o BB algum dia escreva isso de verdade.
+  if (t.includes('cartao')) return 'CARTAO';
   if (t.includes('boleto') || t.includes('cobranca')) return 'BOLETO';
   if (t.includes('rendimento') || t.includes('rende')) return 'RENDIMENTO';
   if (t.includes('cheque') || t.includes('chq')) return 'CHEQUE';
