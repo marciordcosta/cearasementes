@@ -36,19 +36,6 @@ export function parseDataISO(iso: string): Date {
   return new Date(ano, mes - 1, dia);
 }
 
-/** Conta dias úteis estritamente entre `inicio` e `fim` (assume `inicio <= fim`), parando cedo (retorna algo > diasMax) assim que ultrapassa `diasMax` — evita percorrer intervalos longos à toa nos filtros de janela de Boleto. */
-export function diasUteisAte(inicio: Date, fim: Date, diasMax: number): number {
-  let diasUteis = 0;
-  const cur = new Date(inicio);
-  while (cur < fim) {
-    cur.setDate(cur.getDate() + 1);
-    const dia = cur.getDay();
-    if (dia !== 0 && dia !== 6) diasUteis++;
-    if (diasUteis > diasMax) return diasUteis;
-  }
-  return diasUteis;
-}
-
 /** Diferença em DIAS ÚTEIS entre duas datas ISO (YYYY-MM-DD); negativo se dataSistema vier depois de dataOfx. */
 export function diffDiasUteis(dataSistema: string, dataOfx: string): number {
   let d1 = parseDataISO(dataSistema);
@@ -68,6 +55,21 @@ export function diffDiasUteis(dataSistema: string, dataOfx: string): number {
     if (dia !== 0 && dia !== 6) dias++;
   }
   return dias * sinal;
+}
+
+/**
+ * Testa se duas datas ISO estão a até `diasMax` dias ÚTEIS de distância uma da
+ * outra. Pré-filtra em dias CORRIDOS (sem loop) antes de chamar `diffDiasUteis`
+ * (que conta dia a dia): dias úteis nunca passam de dias corridos, então
+ * "corridos > diasMax * 7" (folga generosa cobrindo fins de semana) já garante
+ * que não cabe na janela sem precisar percorrer o calendário inteiro entre as
+ * duas datas — importante quando o candidato pode estar meses/anos distante
+ * (buscas que não filtram por proximidade de data antes de chegar aqui).
+ */
+export function dentroDaJanelaUtil(dataA: string, dataB: string, diasMax: number): boolean {
+  const diasCorridos = Math.abs(parseDataISO(dataA).getTime() - parseDataISO(dataB).getTime()) / (1000 * 60 * 60 * 24);
+  if (diasCorridos > diasMax * 7) return false;
+  return Math.abs(diffDiasUteis(dataA, dataB)) <= diasMax;
 }
 
 /** Descrição do OFX -> nome de cliente comparável (remove termos de meio de pagamento, números, pontuação). */

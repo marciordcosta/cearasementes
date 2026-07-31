@@ -60,9 +60,9 @@ export interface ArquivoConciliacao {
 /** Espelha `resp` do buscarSugestoes() original — cada chave é uma categoria de sugestão, já em ordem de prioridade. */
 export interface SugestoesConciliacao {
   mesmoNome?: LancamentoSistema[];
-  /** Valor dentro da tolerância da regra (exato ou não — não distingue mais os dois) e mesma data. Pra Boleto/Cartão, cobre também tudo dentro da própria janela de dias úteis deles (o "casamento" já é feito por essa janela, não faz sentido separar por posterior/antecipado). */
+  /** Valor dentro da tolerância da regra (exato ou não — não distingue mais os dois) e mesma data exata. */
   mesmaData?: LancamentoSistema[];
-  /** Só PIX/Cheque/Rendimento/Outro: valor dentro da tolerância, mas o Banco recebeu DEPOIS da data do Sistema (pagamento atrasado) — dentro da tolerância de dias da regra da forma. Boleto e Cartão não usam esta categoria (já têm janela de dias úteis própria). */
+  /** Valor dentro da tolerância, mas o Banco recebeu DEPOIS da data do Sistema (pagamento atrasado) — dentro da tolerância de dias (corridos pra PIX/Cheque/Rendimento/Outro, dias úteis pra Boleto/Cartão) da regra da forma. */
   pagoPosteriormente?: LancamentoSistema[];
   /** Espelho de pagoPosteriormente: o Banco recebeu ANTES da data do Sistema (pagamento antecipado). */
   pagoAntecipado?: LancamentoSistema[];
@@ -88,42 +88,87 @@ export interface SugestoesConciliacaoInversa {
   recebimentoDiferente?: LancamentoBanco[];
 }
 
+/** Ordem de prioridade das categorias — usada pra iterar (não pro rótulo, ver rotuloCategoria). */
+export const ORDEM_CATEGORIAS_SUGESTAO: (keyof SugestoesConciliacao)[] = [
+  'mesmoNome',
+  'mesmaData',
+  'pagoPosteriormente',
+  'pagoAntecipado',
+  'parcelaDivergente',
+  'combinacaoBoleto',
+  'combinacaoPix',
+  'recebimentoDiferente',
+];
+
 /**
- * Rótulo de cada categoria de sugestão — fonte única usada tanto no painel de
- * sugestões quanto na reclassificação retroativa (ver classificarCriterioConciliado
- * em matching.ts), pra nunca ficarem com textos diferentes pra mesma categoria.
- * `pagoPosteriormente`/`pagoAntecipado` aqui são só o texto genérico (usado
- * como está na reclassificação retroativa, sempre da perspectiva Banco→Sistema)
- * — no painel de sugestões ao vivo, o rótulo exibido vem de `rotuloCategoria`
- * abaixo, que muda o texto conforme a direção da busca.
+ * Chave de cada texto de categoria editável em Parametrização — a maioria
+ * bate 1:1 com uma chave de SugestoesConciliacao, mas `pagoPosteriormente`/
+ * `pagoAntecipado` viram DUAS chaves cada (uma por direção da busca: o
+ * CANDIDATO exibido é diferente — Banco→Sistema mostra um registro do
+ * Sistema, Sistema→Banco mostra um pagamento — dizer "pagamento" quando o
+ * candidato é na verdade o registro do Sistema, e vice-versa, confunde mais
+ * do que ajuda).
  */
-export const ROTULOS_CATEGORIA_SUGESTAO: Record<keyof SugestoesConciliacao, string> = {
+export type ChaveRotuloCategoria =
+  | 'mesmoNome'
+  | 'mesmaData'
+  | 'parcelaDivergente'
+  | 'combinacaoBoleto'
+  | 'combinacaoPix'
+  | 'recebimentoDiferente'
+  | 'pagoPosteriormenteBanco'
+  | 'pagoAntecipadoBanco'
+  | 'pagoPosteriormenteSistema'
+  | 'pagoAntecipadoSistema';
+
+/** Rótulo de cada categoria de sugestão, ANTES de qualquer customização salva pelo usuário (ver fetchRotulosCategoria/salvarRotuloCategoria em api.ts) — nomes editáveis em Parametrização, sem mexer nas regras de conciliação. */
+export const ROTULOS_CATEGORIA_PADRAO: Record<ChaveRotuloCategoria, string> = {
   mesmoNome: 'Nome parecido',
   mesmaData: 'Mesma data',
-  pagoPosteriormente: 'Registro anterior ao pagamento',
-  pagoAntecipado: 'Registro posterior ao pagamento',
+  pagoPosteriormenteBanco: 'Registro anterior ao pagamento',
+  pagoAntecipadoBanco: 'Registro posterior ao pagamento',
+  pagoPosteriormenteSistema: 'Pagamento posterior ao registro',
+  pagoAntecipadoSistema: 'Pagamento anterior ao registro',
   parcelaDivergente: 'Parcela divergente',
   combinacaoBoleto: 'Combinação de títulos (soma bate com o valor)',
   combinacaoPix: 'Combinação por nome parecido (soma bate com o valor)',
   recebimentoDiferente: 'Forma de recebimento divergente',
 };
 
+/** Nomes exibidos em Parametrização pra cada chave editável (rótulo do rótulo, por assim dizer) — só pra dar contexto de qual categoria é qual na tela de edição. */
+export const DESCRICAO_CHAVE_ROTULO: Record<ChaveRotuloCategoria, string> = {
+  mesmoNome: 'Nome parecido',
+  mesmaData: 'Mesma data',
+  pagoPosteriormenteBanco: 'Pago depois (buscando a partir de um item do Banco)',
+  pagoAntecipadoBanco: 'Pago antes (buscando a partir de um item do Banco)',
+  pagoPosteriormenteSistema: 'Pago depois (buscando a partir de um item do Sistema)',
+  pagoAntecipadoSistema: 'Pago antes (buscando a partir de um item do Sistema)',
+  parcelaDivergente: 'Parcela divergente (Cartão)',
+  combinacaoBoleto: 'Combinação de títulos (Boleto)',
+  combinacaoPix: 'Combinação por nome (PIX)',
+  recebimentoDiferente: 'Forma de recebimento divergente',
+};
+
 /**
- * Rótulo de uma categoria pra exibir no painel de sugestões — igual pra
- * quase todas, mas `pagoPosteriormente`/`pagoAntecipado` mudam de texto
- * conforme a direção da busca, porque o CANDIDATO exibido é diferente:
- * Banco→Sistema mostra um registro do Sistema (candidato = Sistema — nem
- * sempre é uma venda, muitas vezes é um recebimento), Sistema→Banco mostra
- * um pagamento (candidato = Banco) — dizer "pagamento" quando o candidato é
- * na verdade o registro do Sistema (e vice-versa) confunde mais do que ajuda.
+ * Rótulo de uma categoria pra exibir no painel de sugestões — usa o mapa de
+ * customizações (`rotulos`, vindo de fetchRotulosCategoria) quando existir
+ * uma entrada pra essa chave, senão cai pro texto padrão.
  */
-export function rotuloCategoria(cat: keyof SugestoesConciliacao, direcao: 'banco' | 'sistema'): string {
-  if (cat === 'pagoPosteriormente') return direcao === 'banco' ? 'Registro anterior ao pagamento' : 'Pagamento posterior ao registro';
-  if (cat === 'pagoAntecipado') return direcao === 'banco' ? 'Registro posterior ao pagamento' : 'Pagamento anterior ao registro';
-  return ROTULOS_CATEGORIA_SUGESTAO[cat];
+export function rotuloCategoria(cat: keyof SugestoesConciliacao, direcao: 'banco' | 'sistema', rotulos: Partial<Record<ChaveRotuloCategoria, string>> = {}): string {
+  const chave: ChaveRotuloCategoria =
+    cat === 'pagoPosteriormente'
+      ? direcao === 'banco'
+        ? 'pagoPosteriormenteBanco'
+        : 'pagoPosteriormenteSistema'
+      : cat === 'pagoAntecipado'
+        ? direcao === 'banco'
+          ? 'pagoAntecipadoBanco'
+          : 'pagoAntecipadoSistema'
+        : (cat as ChaveRotuloCategoria);
+  return rotulos[chave] ?? ROTULOS_CATEGORIA_PADRAO[chave];
 }
 
-/** Explicação curta (tooltip) de uma categoria, em bom português direto — mesma explicação nas duas direções (só o rótulo principal muda, ver rotuloCategoria). `undefined` = sem tooltip (rótulo já é autoexplicativo). */
+/** Explicação curta (tooltip) de uma categoria, em bom português direto — mesma explicação nas duas direções (só o rótulo principal muda, ver rotuloCategoria). Não é customizável (só os nomes principais, por enquanto). `undefined` = sem tooltip (rótulo já é autoexplicativo). */
 export function descricaoCategoria(cat: keyof SugestoesConciliacao): string | undefined {
   if (cat === 'mesmaData') return 'Pago no dia';
   if (cat === 'pagoPosteriormente') return 'Pagamento atrasado';

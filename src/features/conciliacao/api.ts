@@ -2,7 +2,7 @@ import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import type { RegistroBancoParseado, RegistroSistemaParseado } from './parsing';
-import type { ArquivoConciliacao, LancamentoBanco, LancamentoSistema, NovoLancamentoManual, TipoArquivo } from './types';
+import type { ArquivoConciliacao, ChaveRotuloCategoria, LancamentoBanco, LancamentoSistema, NovoLancamentoManual, TipoArquivo } from './types';
 
 /** Um registro do arquivo novo que bate (por fitid) com um lançamento já CONCILIADO, mas com dado diferente do que já está gravado — mostrado antes de importar, pro usuário escolher se atualiza ou mantém o antigo. */
 export interface ConflitoRegistroBanco {
@@ -154,6 +154,25 @@ export async function descartarSugestao(pares: { bancoId: string; sistemaId: str
 /** "Restaurar" no modal de descartados — volta a considerar esse par nas próximas buscas de sugestão. */
 export async function restaurarSugestaoDescartada(bancoId: string, sistemaId: string): Promise<void> {
   const { error } = await supabase.from('conciliacao_sugestoes_descartadas').delete().eq('banco_id', bancoId).eq('sistema_id', sistemaId);
+  if (error) throw error;
+}
+
+/** Nomes customizados das categorias de sugestão (Parametrização) — chave sem linha aqui usa o texto padrão (ver ROTULOS_CATEGORIA_PADRAO em types.ts). Separado das regras de propósito: só o texto muda, nunca a lógica de casamento. */
+export async function fetchRotulosCategoria(): Promise<Partial<Record<ChaveRotuloCategoria, string>>> {
+  const { data, error } = await supabase.from('conciliacao_rotulos_categoria').select('*');
+  if (error) throw error;
+  return Object.fromEntries(data.map((r) => [r.chave, r.rotulo])) as Partial<Record<ChaveRotuloCategoria, string>>;
+}
+
+/** Salva (ou apaga, se `rotulo` vier vazio/null — volta pro padrão) o nome customizado de uma categoria. */
+export async function salvarRotuloCategoria(chave: ChaveRotuloCategoria, rotulo: string | null): Promise<void> {
+  const texto = rotulo?.trim();
+  if (!texto) {
+    const { error } = await supabase.from('conciliacao_rotulos_categoria').delete().eq('chave', chave);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from('conciliacao_rotulos_categoria').upsert({ chave, rotulo: texto }, { onConflict: 'chave' });
   if (error) throw error;
 }
 

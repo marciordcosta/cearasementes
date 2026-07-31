@@ -16,12 +16,14 @@ import {
   fetchGruposComAviso,
   fetchLancamentosBanco,
   fetchLancamentosSistema,
+  fetchRotulosCategoria,
   fetchSugestoesDescartadas,
   inserirLancamentoManualSistema,
   restaurarSugestaoDescartada,
   salvarNfSistema,
   salvarObservacaoBanco,
   salvarObservacaoSistema,
+  salvarRotuloCategoria,
   toggleDesativadoBanco,
   toggleDesativadoSistema,
 } from '@/features/conciliacao/api';
@@ -37,6 +39,7 @@ import { VendaDetalheModal } from '@/features/conciliacao/components/VendaDetalh
 import { PendenciasBancoModal } from '@/features/conciliacao/components/PendenciasBancoModal';
 import { PendenciasModal } from '@/features/conciliacao/components/PendenciasModal';
 import { RegrasConciliacaoModal } from '@/features/conciliacao/components/RegrasConciliacaoModal';
+import { RotulosCategoriaModal } from '@/features/conciliacao/components/RotulosCategoriaModal';
 import { SugestoesPainel } from '@/features/conciliacao/components/SugestoesPainel';
 import { BANCO_FILTRO_OCULTADOS } from '@/features/conciliacao/constants';
 import {
@@ -49,7 +52,7 @@ import {
   itemSistemaCombinado,
 } from '@/features/conciliacao/matching';
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
-import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
+import type { ChaveRotuloCategoria, FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
 import { getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
 import { buscarTodosNomesPorDocumento, documentoBase } from '@/features/vendas396/api';
 import { mensagemDeErro } from '@/lib/errors';
@@ -115,6 +118,7 @@ export function ConciliacaoPage() {
   const { data: descartesData } = useQuery({ queryKey: ['conciliacao', 'descartes'], queryFn: fetchSugestoesDescartadas });
   /** Base do documento -> nome completo do cliente no pedido (Relatório 396) — usado pra trocar o nome truncado do HTML matricial do Sistema pelo nome de verdade, e pra saber se existe uma venda de verdade por trás do documento (ver LancamentoSistema.temVenda396). */
   const { data: nomesVenda396Data } = useQuery({ queryKey: ['vendas396', 'nomes-por-documento'], queryFn: buscarTodosNomesPorDocumento });
+  const { data: rotulosCategoriaData } = useQuery({ queryKey: ['conciliacao', 'rotulos-categoria'], queryFn: fetchRotulosCategoria });
 
   const [banco, setBanco] = useState<LancamentoBanco[]>([]);
   const [sistema, setSistema] = useState<LancamentoSistema[]>([]);
@@ -174,6 +178,7 @@ export function ConciliacaoPage() {
   const [modalPendenciasAberto, setModalPendenciasAberto] = useState<'preConciliados' | 'preLancamentos' | null>(null);
   const [modalManualAberto, setModalManualAberto] = useState(false);
   const [modalRegrasAberto, setModalRegrasAberto] = useState(false);
+  const [modalRotulosAberto, setModalRotulosAberto] = useState(false);
   const [modoSugestaoAtivo, setModoSugestaoAtivo] = useState(true);
   const [somaHabilitada, setSomaHabilitada] = useState(false);
   const [modalExportarAberto, setModalExportarAberto] = useState(false);
@@ -326,12 +331,13 @@ export function ConciliacaoPage() {
       lista.push(b);
       bancoPorGrupo.set(b.grupoId, lista);
     }
+    const rotulos = rotulosCategoriaData ?? {};
     const mapa = new Map<string, string>();
     for (const [grupoId, itensBanco] of bancoPorGrupo) {
-      mapa.set(grupoId, classificarCriterioConciliado(itensBanco, sistemaPorGrupo.get(grupoId) ?? [], regras));
+      mapa.set(grupoId, classificarCriterioConciliado(itensBanco, sistemaPorGrupo.get(grupoId) ?? [], regras, rotulos));
     }
     return mapa;
-  }, [banco, sistema, regras]);
+  }, [banco, sistema, regras, rotulosCategoriaData]);
 
   function exportarBancoXlsx(apenasConciliados: boolean) {
     const registros = banco.filter((b) => !apenasConciliados || b.conciliado);
@@ -1212,6 +1218,15 @@ export function ConciliacaoPage() {
     }
   }
 
+  async function onSalvarRotuloCategoria(chave: ChaveRotuloCategoria, rotulo: string | null) {
+    try {
+      await salvarRotuloCategoria(chave, rotulo);
+      queryClient.invalidateQueries({ queryKey: ['conciliacao', 'rotulos-categoria'] });
+    } catch (e) {
+      tratarErro(e);
+    }
+  }
+
   const gradesJsx = (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <ListaBanco
@@ -1434,6 +1449,7 @@ export function ConciliacaoPage() {
         descartadosCount={paresDoItemFixo.length}
         onAbrirDescartados={() => setDescartadosModalAberto(true)}
         onAbrirVendaDetalhe={onAbrirVendaDetalhe}
+        rotulos={rotulosCategoriaData ?? {}}
       />
 
       <NovoLancamentoManualModal open={modalManualAberto} valoresIniciais={valoresIniciaisManual} onFechar={onFecharModalManual} onSalvar={onSalvarLancamentoManual} />
@@ -1470,7 +1486,22 @@ export function ConciliacaoPage() {
         )}
       </Modal>
 
-      <RegrasConciliacaoModal open={modalRegrasAberto} regras={regras} onFechar={() => setModalRegrasAberto(false)} onSalvar={onSalvarRegras} />
+      <RegrasConciliacaoModal
+        open={modalRegrasAberto}
+        regras={regras}
+        onFechar={() => setModalRegrasAberto(false)}
+        onSalvar={onSalvarRegras}
+        onAbrirRotulos={() => {
+          setModalRegrasAberto(false);
+          setModalRotulosAberto(true);
+        }}
+      />
+      <RotulosCategoriaModal
+        open={modalRotulosAberto}
+        rotulos={rotulosCategoriaData ?? {}}
+        onFechar={() => setModalRotulosAberto(false)}
+        onSalvar={onSalvarRotuloCategoria}
+      />
 
       <Modal
         open={modalExportarAberto}

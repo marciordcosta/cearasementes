@@ -1,33 +1,32 @@
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 
-export type FormaRegra = 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO' | 'CHEQUE';
+/**
+ * 3 cards (não mais 5): GENERICA cobre PIX/Cheque/Rendimento/Outro — todos
+ * com o mesmo mecanismo (valor + data, tolerância de dias corridos, nome
+ * parecido), sem diferença real que justificasse cards separados. Cartão
+ * Débito/Crédito viraram 1 card só (a distinção entre os dois só importa
+ * pra saber QUEM é candidato de quem, não pros limiares). Boleto continua
+ * sozinho "por via das dúvidas", mesmo podendo em tese compartilhar com Cartão.
+ */
+export type FormaRegra = 'GENERICA' | 'CARTAO' | 'BOLETO';
 
 export interface RegraConciliacao {
   formaPagamento: FormaRegra;
-  /** Tolerância de diferença de valor (R$). PIX/Cheque/Boleto sempre usam; Cartão só quando o valor bruto exato é conhecido (Stone) — nesse caso é essa tolerância que decide o match exato, não a faixa de taxa (que fica de fallback pra quando o bruto não é conhecido). */
   toleranciaValor: number;
-  /** Janela de dias úteis entre a data do sistema e a do OFX. Boleto usa os dois; Cartão só o máximo. */
-  diasUteisMin: number | null;
+  /** Só GENERICA: dias CORRIDOS de diferença ainda considerados dentro da janela de sugestão ("mesma data" é sempre exata; isso decide até quando "outra data" ainda aparece) — e também a janela da rede de segurança "recebimento diferente" (usada por todas as formas). */
+  toleranciaDias: number;
+  /** Só CARTÃO/BOLETO: dias ÚTEIS entre a venda e o recebimento — sem mínimo (aceita do dia 0 até esse máximo). Boleto antes exigia um mínimo também; removido por simplicidade (Stone hoje só foge 0/1 dia — mais que isso é erro de lançamento, cai pro manual mesmo). */
   diasUteisMax: number | null;
-  /** Faixa de taxa aceitável da maquininha, em percentual (1.9 = 1,9%) — só Cartão Débito/Crédito. */
-  taxaMinPercentual: number | null;
-  taxaMaxPercentual: number | null;
-  /** Comparação de nome (só PIX). */
+  /** Só GENERICA: comparação de nome parecido (usada de verdade no PIX, que não tem outro jeito de casar; Cheque/Rendimento/Outro reaproveitam o mesmo mecanismo). */
   nomeMinContido: number | null;
   nomeMinSobrenome: number | null;
-  /** Se false, a Conciliação Automática não exige NF preenchida nessa forma pra fechar sozinha. */
-  exigirNfAutomatica: boolean;
-  /** PIX e Cheque usam pra limitar a categoria "Mesmo valor, outra data" nas sugestões (pra Cheque, contada em torno do vencimento, não do recebimento) — e o PIX também define a janela da rede de segurança "Mesmo valor, recebimento diferente" (todas as formas). */
-  toleranciaDias: number;
 }
 
 export const NOMES_FORMA_REGRA: Record<FormaRegra, string> = {
-  PIX: 'PIX',
-  CARTAO_DEBITO: 'Cartão Débito',
-  CARTAO_CREDITO: 'Cartão Crédito',
+  GENERICA: 'PIX, Cheque e Outros',
+  CARTAO: 'Cartão',
   BOLETO: 'Boleto',
-  CHEQUE: 'Cheque',
 };
 
 /**
@@ -36,11 +35,9 @@ export const NOMES_FORMA_REGRA: Record<FormaRegra, string> = {
  * pra a conciliação nunca ficar sem regra nenhuma.
  */
 export const REGRAS_PADRAO: Record<FormaRegra, RegraConciliacao> = {
-  PIX: { formaPagamento: 'PIX', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: 8, nomeMinSobrenome: 5, exigirNfAutomatica: true, toleranciaDias: 30 },
-  CARTAO_DEBITO: { formaPagamento: 'CARTAO_DEBITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 0.9, taxaMaxPercentual: 3, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
-  CARTAO_CREDITO: { formaPagamento: 'CARTAO_CREDITO', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: 2, taxaMinPercentual: 1.9, taxaMaxPercentual: 5, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
-  BOLETO: { formaPagamento: 'BOLETO', toleranciaValor: 0.01, diasUteisMin: 2, diasUteisMax: 3, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 0 },
-  CHEQUE: { formaPagamento: 'CHEQUE', toleranciaValor: 0.01, diasUteisMin: null, diasUteisMax: null, taxaMinPercentual: null, taxaMaxPercentual: null, nomeMinContido: null, nomeMinSobrenome: null, exigirNfAutomatica: true, toleranciaDias: 30 },
+  GENERICA: { formaPagamento: 'GENERICA', toleranciaValor: 0.01, toleranciaDias: 30, diasUteisMax: null, nomeMinContido: 8, nomeMinSobrenome: 5 },
+  CARTAO: { formaPagamento: 'CARTAO', toleranciaValor: 0.01, toleranciaDias: 0, diasUteisMax: 1, nomeMinContido: null, nomeMinSobrenome: null },
+  BOLETO: { formaPagamento: 'BOLETO', toleranciaValor: 0.01, toleranciaDias: 0, diasUteisMax: 3, nomeMinContido: null, nomeMinSobrenome: null },
 };
 
 type RegraRow = Database['public']['Tables']['conciliacao_regras']['Row'];
@@ -49,18 +46,14 @@ function regraFromRow(row: RegraRow): RegraConciliacao {
   return {
     formaPagamento: row.forma_pagamento,
     toleranciaValor: row.tolerancia_valor,
-    diasUteisMin: row.dias_uteis_min,
+    toleranciaDias: row.dias_tolerancia,
     diasUteisMax: row.dias_uteis_max,
-    taxaMinPercentual: row.taxa_min_percentual,
-    taxaMaxPercentual: row.taxa_max_percentual,
     nomeMinContido: row.nome_min_contido,
     nomeMinSobrenome: row.nome_min_sobrenome,
-    exigirNfAutomatica: row.exigir_nf_automatica,
-    toleranciaDias: row.dias_tolerancia,
   };
 }
 
-/** Busca as 5 regras — completa com REGRAS_PADRAO qualquer forma que ainda não tenha linha na tabela (migração não rodada, ou linha apagada). */
+/** Busca as 3 regras — completa com REGRAS_PADRAO qualquer forma que ainda não tenha linha na tabela (migração não rodada, ou linha apagada). */
 export async function fetchRegras(): Promise<Record<FormaRegra, RegraConciliacao>> {
   const { data, error } = await supabase.from('conciliacao_regras').select('*');
   if (error) throw error;
@@ -79,14 +72,10 @@ export async function salvarRegra(regra: RegraConciliacao): Promise<RegraConcili
       {
         forma_pagamento: regra.formaPagamento,
         tolerancia_valor: regra.toleranciaValor,
-        dias_uteis_min: regra.diasUteisMin,
+        dias_tolerancia: regra.toleranciaDias,
         dias_uteis_max: regra.diasUteisMax,
-        taxa_min_percentual: regra.taxaMinPercentual,
-        taxa_max_percentual: regra.taxaMaxPercentual,
         nome_min_contido: regra.nomeMinContido,
         nome_min_sobrenome: regra.nomeMinSobrenome,
-        exigir_nf_automatica: regra.exigirNfAutomatica,
-        dias_tolerancia: regra.toleranciaDias,
         atualizado_em: new Date().toISOString(),
       },
       { onConflict: 'forma_pagamento' },

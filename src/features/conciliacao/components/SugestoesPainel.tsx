@@ -4,7 +4,16 @@ import { Badge } from '@/components/ui/Badge';
 import { PainelFlutuante } from '@/components/ui/PainelFlutuante';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
-import { descricaoCategoria, ROTULOS_CATEGORIA_SUGESTAO, rotuloCategoria, type LancamentoBanco, type LancamentoSistema, type SugestoesConciliacao, type SugestoesConciliacaoInversa } from '../types';
+import {
+  descricaoCategoria,
+  ORDEM_CATEGORIAS_SUGESTAO,
+  rotuloCategoria,
+  type ChaveRotuloCategoria,
+  type LancamentoBanco,
+  type LancamentoSistema,
+  type SugestoesConciliacao,
+  type SugestoesConciliacaoInversa,
+} from '../types';
 import { getCategoriaSistema } from '../utils';
 
 /** Qual lado está fixo (a origem da busca) — decide se os candidatos vêm do Sistema ou do Banco. */
@@ -40,9 +49,9 @@ interface SugestoesPainelProps {
   onAbrirDescartados: () => void;
   /** Abre o modal com produtos/pagamento da venda (Relatório 396) por trás do documento — só aparece em candidato do Sistema (direção Banco→Sistema) com `documento` preenchido. */
   onAbrirVendaDetalhe: (item: LancamentoSistema) => void;
+  /** Nomes customizados das categorias (Parametrização) — cai pro padrão quando uma chave não tem customização salva. */
+  rotulos: Partial<Record<ChaveRotuloCategoria, string>>;
 }
-
-const ROTULOS = ROTULOS_CATEGORIA_SUGESTAO;
 
 function correspondeBusca(termo: string, campos: Array<string | number | null | undefined>): boolean {
   if (!termo) return true;
@@ -78,6 +87,7 @@ export function SugestoesPainel({
   descartadosCount,
   onAbrirDescartados,
   onAbrirVendaDetalhe,
+  rotulos,
 }: SugestoesPainelProps) {
   const [busca, setBusca] = useState('');
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<keyof SugestoesConciliacao>>(new Set());
@@ -99,7 +109,7 @@ export function SugestoesPainel({
   }
 
   const direcao = itemFixo?.direcao ?? 'banco';
-  const categorias = (Object.keys(ROTULOS) as (keyof SugestoesConciliacao)[]).filter((k) => (sugestoes?.[k]?.length ?? 0) > 0);
+  const categorias = ORDEM_CATEGORIAS_SUGESTAO.filter((k) => (sugestoes?.[k]?.length ?? 0) > 0);
 
   if (itemFixo && minimizado) {
     return (
@@ -316,7 +326,7 @@ export function SugestoesPainel({
               <div key={cat} className="space-y-1.5">
                 <div className="flex items-center gap-2 border-b border-[var(--color-line)] pb-1">
                   <p className="text-sm font-bold text-[var(--color-text)]" title={descricaoCategoria(cat)}>
-                    {rotuloCategoria(cat, direcao)}
+                    {rotuloCategoria(cat, direcao, rotulos)}
                   </p>
                   {conciliados.length > 0 && (
                     <button

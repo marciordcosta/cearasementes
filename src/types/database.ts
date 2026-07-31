@@ -282,6 +282,12 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['conciliacao_sugestoes_descartadas']['Insert']>;
         Relationships: [];
       };
+      conciliacao_rotulos_categoria: {
+        Row: { chave: string; rotulo: string };
+        Insert: Database['public']['Tables']['conciliacao_rotulos_categoria']['Row'];
+        Update: Partial<Database['public']['Tables']['conciliacao_rotulos_categoria']['Insert']>;
+        Relationships: [];
+      };
       conciliacao_arquivos: {
         Row: {
           id: string;
@@ -382,16 +388,13 @@ export interface Database {
       conciliacao_regras: {
         Row: {
           id: string;
-          forma_pagamento: 'PIX' | 'CARTAO_DEBITO' | 'CARTAO_CREDITO' | 'BOLETO' | 'CHEQUE';
+          forma_pagamento: 'GENERICA' | 'CARTAO' | 'BOLETO';
           tolerancia_valor: number;
-          dias_uteis_min: number | null;
+          /** Só Cartão/Boleto: dias ÚTEIS entre a venda e o recebimento, sem mínimo (aceita do dia 0 até esse máximo). */
           dias_uteis_max: number | null;
-          taxa_min_percentual: number | null;
-          taxa_max_percentual: number | null;
           nome_min_contido: number | null;
           nome_min_sobrenome: number | null;
-          exigir_nf_automatica: boolean;
-          /** Só PIX usa hoje: dias corridos de diferença ainda considerados "mesma data" na busca, e janela da rede de segurança "recebimento diferente". */
+          /** Só GENERICA (PIX/Cheque/Rendimento/Outro): dias corridos de diferença ainda considerados dentro da janela de sugestão, e janela da rede de segurança "recebimento diferente" (todas as formas). */
           dias_tolerancia: number;
           atualizado_em: string;
         };
