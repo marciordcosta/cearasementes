@@ -58,15 +58,14 @@ export interface ArquivoConciliacao {
 /** Espelha `resp` do buscarSugestoes() original — cada chave é uma categoria de sugestão, já em ordem de prioridade. */
 export interface SugestoesConciliacao {
   mesmoNome?: LancamentoSistema[];
-  /** Valor exatamente igual (só diferença de ponto flutuante) — mesma data. */
-  mesmoValorMesmaData?: LancamentoSistema[];
-  /** Dentro da tolerância da regra, mas NÃO exatamente igual — mesma data. Fica separado pra deixar claro que a diferença de centavos é real, não é erro de arredondamento. */
-  valorAproximadoMesmaData?: LancamentoSistema[];
-  mesmoValorOutraData?: LancamentoSistema[];
-  /** Espelho de valorAproximadoMesmaData, mas com outra data. */
-  valorAproximadoOutraData?: LancamentoSistema[];
+  /** Valor dentro da tolerância da regra (exato ou não — não distingue mais os dois) e mesma data. Pra Boleto/Cartão, cobre também tudo dentro da própria janela de dias úteis deles (o "casamento" já é feito por essa janela, não faz sentido separar por posterior/antecipado). */
+  mesmaData?: LancamentoSistema[];
+  /** Só PIX/Cheque/Rendimento/Outro: valor dentro da tolerância, mas o Banco recebeu DEPOIS da data do Sistema (pagamento atrasado) — dentro da tolerância de dias da regra da forma. Boleto e Cartão não usam esta categoria (já têm janela de dias úteis própria). */
+  pagoPosteriormente?: LancamentoSistema[];
+  /** Espelho de pagoPosteriormente: o Banco recebeu ANTES da data do Sistema (pagamento antecipado). */
+  pagoAntecipado?: LancamentoSistema[];
   /** Só Cartão com valor bruto conhecido: mesmo valor, mas parcela (X/Y) diferente da do lançamento do Banco — fica separado da lista principal porque é um candidato menos confiável, o usuário decide se aceita mesmo assim. */
-  mesmoValorParcelaDiferente?: LancamentoSistema[];
+  parcelaDivergente?: LancamentoSistema[];
   /** Só Boleto: nenhum título sozinho bateu, mas a SOMA de vários bate com o valor do Banco — o extrato do BB traz o boleto recebível agregado (1 linha por dia = soma de vários títulos), então isso é o caminho normal, não uma exceção. Concilia o grupo inteiro de uma vez. */
   combinacaoBoleto?: LancamentoSistema[];
   /** Só PIX: nenhum valor exato bateu, mas a SOMA de candidatos de NOME parecido bate com o valor — nunca soma PIX de nomes diferentes, só entra aqui quem já passou pelo filtro de nome (mesmoNome). */
@@ -78,28 +77,56 @@ export interface SugestoesConciliacao {
 /** Espelho de SugestoesConciliacao pro sentido invertido (Sistema → OFX) — mesmas categorias, candidatos vêm do Banco em vez do Sistema. */
 export interface SugestoesConciliacaoInversa {
   mesmoNome?: LancamentoBanco[];
-  mesmoValorMesmaData?: LancamentoBanco[];
-  valorAproximadoMesmaData?: LancamentoBanco[];
-  mesmoValorOutraData?: LancamentoBanco[];
-  valorAproximadoOutraData?: LancamentoBanco[];
-  mesmoValorParcelaDiferente?: LancamentoBanco[];
+  mesmaData?: LancamentoBanco[];
+  pagoPosteriormente?: LancamentoBanco[];
+  pagoAntecipado?: LancamentoBanco[];
+  parcelaDivergente?: LancamentoBanco[];
   combinacaoBoleto?: LancamentoBanco[];
   combinacaoPix?: LancamentoBanco[];
   recebimentoDiferente?: LancamentoBanco[];
 }
 
-/** Rótulo de cada categoria de sugestão — fonte única usada tanto no painel de sugestões quanto na reclassificação retroativa (ver classificarCriterioConciliado em matching.ts), pra nunca ficarem com textos diferentes pra mesma categoria. */
+/**
+ * Rótulo de cada categoria de sugestão — fonte única usada tanto no painel de
+ * sugestões quanto na reclassificação retroativa (ver classificarCriterioConciliado
+ * em matching.ts), pra nunca ficarem com textos diferentes pra mesma categoria.
+ * `pagoPosteriormente`/`pagoAntecipado` aqui são só o texto genérico (usado
+ * como está na reclassificação retroativa, sempre da perspectiva Banco→Sistema)
+ * — no painel de sugestões ao vivo, o rótulo exibido vem de `rotuloCategoria`
+ * abaixo, que muda o texto conforme a direção da busca.
+ */
 export const ROTULOS_CATEGORIA_SUGESTAO: Record<keyof SugestoesConciliacao, string> = {
   mesmoNome: 'Nome parecido',
-  mesmoValorMesmaData: 'Mesmo valor e data',
-  valorAproximadoMesmaData: 'Valor aproximado, mesma data',
-  mesmoValorOutraData: 'Mesmo valor, outra data',
-  valorAproximadoOutraData: 'Valor aproximado, outra data',
-  mesmoValorParcelaDiferente: 'Mesmo valor, parcelas diferentes',
+  mesmaData: 'Mesma data',
+  pagoPosteriormente: 'Venda anterior ao pagamento',
+  pagoAntecipado: 'Venda posterior ao pagamento',
+  parcelaDivergente: 'Parcela divergente',
   combinacaoBoleto: 'Combinação de títulos (soma bate com o valor)',
   combinacaoPix: 'Combinação por nome parecido (soma bate com o valor)',
-  recebimentoDiferente: 'Mesmo valor, recebimento diferente',
+  recebimentoDiferente: 'Forma de recebimento divergente',
 };
+
+/**
+ * Rótulo de uma categoria pra exibir no painel de sugestões — igual pra
+ * quase todas, mas `pagoPosteriormente`/`pagoAntecipado` mudam de texto
+ * conforme a direção da busca, porque o CANDIDATO exibido é diferente:
+ * Banco→Sistema mostra uma venda (candidato = Sistema), Sistema→Banco mostra
+ * um pagamento (candidato = Banco) — dizer "pagamento" quando o candidato é
+ * na verdade uma venda (e vice-versa) confunde mais do que ajuda.
+ */
+export function rotuloCategoria(cat: keyof SugestoesConciliacao, direcao: 'banco' | 'sistema'): string {
+  if (cat === 'pagoPosteriormente') return direcao === 'banco' ? 'Venda anterior ao pagamento' : 'Pagamento posterior à venda';
+  if (cat === 'pagoAntecipado') return direcao === 'banco' ? 'Venda posterior ao pagamento' : 'Pagamento anterior à venda';
+  return ROTULOS_CATEGORIA_SUGESTAO[cat];
+}
+
+/** Explicação curta (tooltip) de uma categoria, em bom português direto — mesma explicação nas duas direções (só o rótulo principal muda, ver rotuloCategoria). `undefined` = sem tooltip (rótulo já é autoexplicativo). */
+export function descricaoCategoria(cat: keyof SugestoesConciliacao): string | undefined {
+  if (cat === 'mesmaData') return 'Pago no dia';
+  if (cat === 'pagoPosteriormente') return 'Pagamento atrasado';
+  if (cat === 'pagoAntecipado') return 'Pagamento antecipado';
+  return undefined;
+}
 
 /** Em qual(is) grade(s) um filtro se aplica — "ambos" é o padrão (comportamento de sempre). */
 export type EscopoFiltro = 'banco' | 'sistema' | 'ambos';

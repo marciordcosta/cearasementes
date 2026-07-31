@@ -23,11 +23,6 @@ export function valoresIguais(a: number, b: number, tolerancia = 0.01): boolean 
   return Math.abs(a - b) <= tolerancia + 1e-9;
 }
 
-/** Diferença desprezível (só arredondamento de ponto flutuante, não a tolerância configurável da regra) — usado pra separar "valor exato" de "valor aproximado dentro da tolerância" nas categorias de sugestão. */
-export function valoresExatamenteIguais(a: number, b: number): boolean {
-  return Math.abs(a - b) <= 0.001;
-}
-
 /**
  * Data ISO (YYYY-MM-DD) -> meia-noite LOCAL de verdade. `new Date(isoString)`
  * (o construtor nativo com string) interpreta datas "só dia" como meia-noite

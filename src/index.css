@@ -39,6 +39,36 @@
   --color-highlight-row-subtle: #17293d;
 }
 
+/*
+  Grades com produtos/registros editáveis (por enquanto: Banco/Sistema na
+  Conciliação e o painel de Sugestões) ainda não têm dark mode "de verdade"
+  — ficam sempre com as cores do modo claro, aplicada só nesses componentes
+  específicos (não na página inteira: barra de ferramentas, filtros e
+  cabeçalhos continuam seguindo o tema normal). Só aplicar num elemento com
+  fundo opaco próprio (ex.: o <Card> inteiro) — numa `<tr>` sem bg própria
+  (transparente por padrão) o texto vira claro mas o fundo continua escuro
+  por trás, ilegível.
+  `color` (a propriedade, não só a custom property) precisa ser redeclarada
+  aqui: sem isso, um texto sem cor própria (a maioria) herda o valor de
+  `color` já RESOLVIDO lá no <body> (que segue :root.dark) em vez de reler
+  var(--color-text) a partir daqui — foi isso que deixou nomes de candidato
+  ilegíveis (cinza claro sobre fundo claro) no painel de Sugestões.
+*/
+.tema-claro-fixo {
+  color-scheme: light;
+  color: var(--color-text);
+  --color-navy: #10233f;
+  --color-navy-2: #16304f;
+  --color-page: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-line: #e2e6ed;
+  --color-text: #1a2233;
+  --color-text-soft: #67718a;
+  --color-accent: #0e9d74;
+  --color-highlight-row: #fdf1be;
+  --color-highlight-row-subtle: #fffae0;
+}
+
 html,
 body {
   margin: 0;

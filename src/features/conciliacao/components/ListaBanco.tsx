@@ -314,7 +314,7 @@ export function ListaBanco({
   }
 
   return (
-    <Card className="flex max-h-[calc(100vh-180px)] flex-col overflow-hidden p-0">
+    <Card className="tema-claro-fixo flex max-h-[calc(100vh-180px)] flex-col overflow-hidden p-0">
       <div className="sticky top-0 z-[1] flex items-center justify-between gap-3 bg-[var(--color-navy)] px-4 py-3">
         <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
           Banco

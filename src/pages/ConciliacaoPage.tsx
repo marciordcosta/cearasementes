@@ -98,7 +98,10 @@ const FILTROS_VAZIOS: FiltrosConciliacaoType = {
   formaPagamento: null,
   escopoPagamento: 'ambos',
   tipoLancamento: null,
-  conciliado: null,
+  // Padrão "Não conciliados": é o que o operador quer ver na esmagadora
+  // maioria das vezes (o trabalho do dia a dia é fechar pendências) — "Todos"
+  // vira só mais uma opção no fim da lista, pra quando precisar conferir tudo.
+  conciliado: 'nao',
   busca: '',
 };
 
@@ -957,8 +960,19 @@ export function ConciliacaoPage() {
       aplicarAtualizacaoSistema(sistemaAtualizados);
       setSugestaoAtiva(null);
       setSugestaoMinimizada(false);
-      setFiltroIdsSugestaoBanco(null);
-      setFiltroIdsSugestaoSistema(null);
+      // "Filtrar mesmo valor" (filtroIdsSugestaoBanco/Sistema) NÃO é limpo
+      // de cara — às vezes o usuário quer conciliar todos os registros de um
+      // grupo de mesmo valor um a um, sem o filtro sumir (e a grade voltar
+      // pra lista inteira) a cada conciliação. Só limpa sozinho quando não
+      // sobra mais NENHUM pendente no grupo filtrado (todo mundo já foi
+      // conciliado, contando o que acabou de ser feito agora) — aí sim volta
+      // pra tela de onde o usuário estava.
+      if (filtroIdsSugestaoBanco && !filtroIdsSugestaoBanco.some((id) => !bancoIds.includes(id) && !banco.find((b) => b.id === id)?.conciliado)) {
+        setFiltroIdsSugestaoBanco(null);
+      }
+      if (filtroIdsSugestaoSistema && !filtroIdsSugestaoSistema.some((id) => !sistemaIds.includes(id) && !sistema.find((s) => s.id === id)?.conciliado)) {
+        setFiltroIdsSugestaoSistema(null);
+      }
       setFiltroGrupoBanco(null);
       setFiltroGrupoSistema(null);
       setSelecionadosBanco(new Set());

@@ -61,7 +61,7 @@ export function PainelFlutuante({ open, title, onClose, children, widthClassName
 
   return (
     <div
-      className={`fixed z-[200] flex max-h-[80vh] flex-col overflow-hidden rounded-xl bg-[var(--color-surface)] shadow-2xl ${widthClassName}`}
+      className={`tema-claro-fixo fixed z-[200] flex max-h-[80vh] flex-col overflow-hidden rounded-xl bg-[var(--color-surface)] shadow-2xl ${widthClassName}`}
       style={{ left: pos.x, top: pos.y }}
     >
       <div onMouseDown={onMouseDownHeader} className="flex cursor-move items-center justify-between gap-3 bg-[var(--color-navy)] px-[18px] py-3 text-sm font-bold text-white select-none">

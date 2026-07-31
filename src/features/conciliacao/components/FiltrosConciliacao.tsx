@@ -54,6 +54,7 @@ function DropdownFiltro({
   opcoes,
   onSelecionar,
   extra,
+  valorPadrao = null,
 }: {
   rotulo: string;
   valor: string | null;
@@ -61,6 +62,8 @@ function DropdownFiltro({
   onSelecionar: (value: string | null) => void;
   /** Conteúdo extra no topo do popup, antes das opções — usado pro seletor de escopo (Banco/Sistema/Ambos). */
   extra?: ReactNode;
+  /** Valor considerado "de base" (padrão null = sem filtro nenhum) — só o filtro de Status usa outro (`'nao'`, o estado principal do dia a dia): nesse estado não faz sentido oferecer "restaurar", e restaurar dos demais volta pra ele, não pra "Todos". */
+  valorPadrao?: string | null;
 }) {
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -80,17 +83,17 @@ function DropdownFiltro({
     <div ref={ref} className="relative">
       <div
         className={`flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-sm ${
-          valor !== null ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20 text-white' : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/15'
+          valor !== valorPadrao ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/20 text-white' : 'border-white/20 bg-white/10 text-white/70 hover:bg-white/15'
         }`}
       >
         <button type="button" onClick={() => setAberto((v) => !v)} className="flex-1 text-left">
           {textoBotao} ▾
         </button>
-        {valor !== null && (
+        {valor !== valorPadrao && (
           <button
             type="button"
             onClick={() => {
-              onSelecionar(null);
+              onSelecionar(valorPadrao);
               setAberto(false);
             }}
             title={`Limpar filtro de ${rotulo}`}
@@ -221,14 +224,15 @@ export function FiltrosConciliacao({ filtros, onChange, onLimparTudo }: FiltrosC
         rotulo="Status"
         valor={filtros.conciliado}
         onSelecionar={(v) => atualizar('conciliado', v as FiltrosConciliacaoType['conciliado'])}
+        valorPadrao="nao"
         opcoes={[
-          { value: null, label: 'Todos' },
-          { value: 'sim', label: 'Conciliados' },
           { value: 'nao', label: 'Não conciliados' },
+          { value: 'sim', label: 'Conciliados' },
           { value: 'preConciliados', label: 'Pré-conciliados' },
           { value: 'preLancamentos', label: 'Pré-lançamentos' },
           { value: 'divergentes', label: 'Divergentes' },
           { value: 'editados', label: 'Editados' },
+          { value: null, label: 'Todos' },
         ]}
       />
 
@@ -243,7 +247,7 @@ export function FiltrosConciliacao({ filtros, onChange, onLimparTudo }: FiltrosC
             formaPagamento: null,
             escopoPagamento: 'ambos',
             tipoLancamento: null,
-            conciliado: null,
+            conciliado: 'nao',
             busca: '',
           });
           onLimparTudo();

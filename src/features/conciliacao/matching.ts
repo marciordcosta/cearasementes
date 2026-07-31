@@ -12,7 +12,6 @@ import {
   parcelaCompativel,
   parseDataISO,
   removerAcentos,
-  valoresExatamenteIguais,
   valoresIguais,
 } from './utils';
 
@@ -114,18 +113,19 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
 
     const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraPix.toleranciaValor));
     // "Mesma data" é cravado (data idêntica) — a tolerância de dias só decide
-    // até quando um candidato de OUTRA data ainda aparece na busca (em vez de
-    // ficar de fora por completo), nunca "empresta" pra mesma data.
-    const mesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx);
+    // até quando um candidato de data DIFERENTE ainda aparece na busca (em vez
+    // de ficar de fora por completo), nunca "empresta" pra mesma data.
+    resp.mesmaData = mesmoValorTodos.filter((s) => dataOfx && s.data === dataOfx).sort(porNomeParecido);
     const outraData = mesmoValorTodos.filter((s) => {
       if (dataOfx && s.data === dataOfx) return false;
       if (!dataOfx || !s.data) return true;
       return diasCorridosEntre(s.data, dataOfx) <= regraPix.toleranciaDias;
     });
-    resp.mesmoValorMesmaData = mesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs)).sort(porNomeParecido);
-    resp.valorAproximadoMesmaData = mesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs)).sort(porNomeParecido);
-    resp.mesmoValorOutraData = outraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs)).sort(porNomeParecido);
-    resp.valorAproximadoOutraData = outraData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs)).sort(porNomeParecido);
+    // Direção: banco depois do sistema = pago posteriormente (atrasado); banco
+    // antes do sistema = pago antecipado. Sem data de um dos lados pra saber a
+    // direção, cai no bucket "posteriormente" por padrão (só pra não sumir).
+    resp.pagoPosteriormente = outraData.filter((s) => !dataOfx || !s.data || diasComSinalBancoMenosSistema(dataOfx, s.data) > 0).sort(porNomeParecido);
+    resp.pagoAntecipado = outraData.filter((s) => dataOfx && s.data && diasComSinalBancoMenosSistema(dataOfx, s.data) < 0).sort(porNomeParecido);
     if (mesmoValorTodos.length > 0) return resp;
 
     if (!nomeOfx) return resp;
@@ -159,10 +159,13 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
       return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
+    // Boleto já é "casado" pela própria janela de dias úteis (sempre nesse
+    // sentido: sistema antes do banco) — tudo que passa nela conta como
+    // "Mesma data", sem distinguir posterior/antecipado (não existe título
+    // pago antes de existir).
     const dentroDaTolerancia = candidatos.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraBoleto.toleranciaValor));
     if (dentroDaTolerancia.length > 0) {
-      resp.mesmoValorMesmaData = dentroDaTolerancia.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
-      resp.valorAproximadoMesmaData = dentroDaTolerancia.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+      resp.mesmaData = dentroDaTolerancia;
       return resp;
     }
 
@@ -188,19 +191,25 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
   if (tipoOfx !== 'CARTAO') {
     const regraForma = regraParaFormaGenerica(tipoOfx, regras);
     const mesmoValorTodos = sistemaFiltradoPorTipo.filter((s) => valoresIguais(Math.abs(s.valor), valorOfxAbs, regraForma.toleranciaValor));
-    const mesmaData = mesmoValorTodos.filter((s) => dataOfx && dataComparavelSistema(s, tipoOfx) === dataOfx);
-    // "Outra data" só entra dentro da tolerância de busca da regra (pra CHEQUE, contada em torno
-    // do vencimento) — sem isso, qualquer diferença de data (mesmo anos) aparecia como sugestão.
+    resp.mesmaData = mesmoValorTodos.filter((s) => dataOfx && dataComparavelSistema(s, tipoOfx) === dataOfx);
+    // Fora da mesma data só entra dentro da tolerância de dias da regra (pra
+    // CHEQUE, contada em torno do vencimento) — sem isso, qualquer diferença de
+    // data (mesmo anos) aparecia como sugestão. Direção: banco depois do
+    // sistema = pago posteriormente (atrasado); antes = pago antecipado.
     const outraData = mesmoValorTodos.filter((s) => {
       const dataComp = dataComparavelSistema(s, tipoOfx);
       if (dataOfx && dataComp === dataOfx) return false;
       if (!dataOfx || !dataComp) return true;
       return diasCorridosEntre(dataComp, dataOfx) <= regraForma.toleranciaDias;
     });
-    resp.mesmoValorMesmaData = mesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
-    resp.valorAproximadoMesmaData = mesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
-    resp.mesmoValorOutraData = outraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
-    resp.valorAproximadoOutraData = outraData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), valorOfxAbs));
+    resp.pagoPosteriormente = outraData.filter((s) => {
+      const dataComp = dataComparavelSistema(s, tipoOfx);
+      return !dataOfx || !dataComp || diasComSinalBancoMenosSistema(dataOfx, dataComp) > 0;
+    });
+    resp.pagoAntecipado = outraData.filter((s) => {
+      const dataComp = dataComparavelSistema(s, tipoOfx);
+      return dataOfx && dataComp && diasComSinalBancoMenosSistema(dataOfx, dataComp) < 0;
+    });
 
     // PIX não-combinado já retornou no bloco próprio acima (com seu mesmoNome
     // mais preciso) — só chega aqui combinado, e combinado não compara nome
@@ -250,24 +259,11 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
     // não tem parcela informada nos dois lados pra comparar); o resto vai pra
     // uma categoria à parte, pro usuário decidir se aceita mesmo assim.
     const parcelaOfx = extrairParcela(itemBanco.descricao);
-    const candidatosParcelaOk = candidatosComValor.filter((s) => parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
-    resp.mesmoValorParcelaDiferente = candidatosComValor.filter((s) => !parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
-
-    // Calcula mesma data E outra data sempre, sem retornar cedo — se houver
-    // candidato compatível nas duas, mostra os dois juntos (em vez de
-    // esconder o de "outra data" só porque achou um na mesma data). Foi
-    // exatamente isso que escondia um caso real de ambiguidade: duas vendas
-    // diferentes, mesmo valor e mesma posição de parcela (ex.: "1/2"), uma no
-    // dia do Banco e outra no dia seguinte — a automática corretamente recusa
-    // fechar sozinha (não dá pra saber qual delas é a certa só pelo valor e
-    // pela parcela), mas o painel manual só mostrava a da mesma data,
-    // escondendo a concorrente e fazendo parecer um caso óbvio.
-    const parcelaOkMesmaData = candidatosParcelaOk.filter((s) => s.data === dataOfx);
-    const parcelaOkOutraData = candidatosParcelaOk.filter((s) => s.data !== dataOfx);
-    resp.mesmoValorMesmaData = parcelaOkMesmaData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), alvo));
-    resp.valorAproximadoMesmaData = parcelaOkMesmaData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), alvo));
-    resp.mesmoValorOutraData = parcelaOkOutraData.filter((s) => valoresExatamenteIguais(Math.abs(s.valor), alvo));
-    resp.valorAproximadoOutraData = parcelaOkOutraData.filter((s) => !valoresExatamenteIguais(Math.abs(s.valor), alvo));
+    // Cartão já é "casado" pela própria janela de dias úteis (diasMax acima) —
+    // tudo que passa nela (e na parcela) conta como "Mesma data", sem
+    // distinguir posterior/antecipado.
+    resp.parcelaDivergente = candidatosComValor.filter((s) => !parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
+    resp.mesmaData = candidatosComValor.filter((s) => parcelaCompativel(parcelaOfx, extrairParcela(s.documento)));
     return resp;
   }
 
@@ -285,10 +281,7 @@ function buscarSugestoesPorTag(itemBanco: LancamentoBanco, sistema: LancamentoSi
     return perc >= minPerc && perc <= maxPerc;
   });
 
-  resp.mesmoValorMesmaData = candidatosComTaxa.filter((s) => s.data === dataOfx);
-  if (resp.mesmoValorMesmaData.length > 0) return resp;
-
-  resp.mesmoValorOutraData = candidatosComTaxa.filter((s) => s.data !== dataOfx);
+  resp.mesmaData = candidatosComTaxa;
   return resp;
 }
 
@@ -322,6 +315,20 @@ function regraDaForma(forma: FormaPagamento, subtipoCartao: 'DEBITO' | 'CREDITO'
 
 function diasCorridosEntre(dataA: string, dataB: string): number {
   const ms = Math.abs(parseDataISO(dataA).getTime() - parseDataISO(dataB).getTime());
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Dias corridos entre duas datas, COM sinal: positivo quando `dataBanco` é
+ * depois de `dataSistema` (pagamento posterior/atrasado), negativo quando é
+ * antes (pagamento antecipado). Usado pra decidir a direção das categorias
+ * `pagoPosteriormente`/`pagoAntecipado` (rótulo exibido varia por direção da
+ * busca, ver `rotuloCategoria` em types.ts) — a regra de sinal é sempre a
+ * mesma (banco depois do sistema = posterior), não importa qual dos dois
+ * lados é o item fixo da busca.
+ */
+function diasComSinalBancoMenosSistema(dataBanco: string, dataSistema: string): number {
+  const ms = parseDataISO(dataBanco).getTime() - parseDataISO(dataSistema).getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
@@ -476,18 +483,18 @@ function buscarSugestoesInversoPorTag(
 
     const mesmoValorTodos = bancoFiltradoPorTipo.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraPix.toleranciaValor));
     // "Mesma data" é cravado (data idêntica) — a tolerância de dias só decide
-    // até quando um candidato de OUTRA data ainda aparece na busca (em vez de
-    // ficar de fora por completo), nunca "empresta" pra mesma data.
-    const mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
+    // até quando um candidato de data DIFERENTE ainda aparece na busca (em vez
+    // de ficar de fora por completo), nunca "empresta" pra mesma data.
+    resp.mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis).sort(porNomeParecido);
     const outraData = mesmoValorTodos.filter((b) => {
       if (dataSis && b.data === dataSis) return false;
       if (!dataSis || !b.data) return true;
       return diasCorridosEntre(b.data, dataSis) <= regraPix.toleranciaDias;
     });
-    resp.mesmoValorMesmaData = mesmaData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs)).sort(porNomeParecido);
-    resp.valorAproximadoMesmaData = mesmaData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs)).sort(porNomeParecido);
-    resp.mesmoValorOutraData = outraData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs)).sort(porNomeParecido);
-    resp.valorAproximadoOutraData = outraData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs)).sort(porNomeParecido);
+    // Direção sempre a mesma, não importa qual lado é o fixo: banco depois do
+    // sistema = pago posteriormente; banco antes do sistema = pago antecipado.
+    resp.pagoPosteriormente = outraData.filter((b) => !dataSis || !b.data || diasComSinalBancoMenosSistema(b.data, dataSis) > 0).sort(porNomeParecido);
+    resp.pagoAntecipado = outraData.filter((b) => dataSis && b.data && diasComSinalBancoMenosSistema(b.data, dataSis) < 0).sort(porNomeParecido);
     if (mesmoValorTodos.length > 0) return resp;
 
     if (!nomeSis) return resp;
@@ -516,10 +523,11 @@ function buscarSugestoesInversoPorTag(
       return diasUteis >= diasMin && diasUteis <= diasMax;
     });
 
+    // Boleto já é "casado" pela própria janela de dias úteis — tudo que passa
+    // nela conta como "Mesma data", sem distinguir posterior/antecipado.
     const dentroDaTolerancia = candidatos.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraBoleto.toleranciaValor));
     if (dentroDaTolerancia.length > 0) {
-      resp.mesmoValorMesmaData = dentroDaTolerancia.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
-      resp.valorAproximadoMesmaData = dentroDaTolerancia.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+      resp.mesmaData = dentroDaTolerancia;
       return resp;
     }
 
@@ -545,17 +553,17 @@ function buscarSugestoesInversoPorTag(
   if (tipoSistema !== 'CARTAO') {
     const regraForma = regraParaFormaGenerica(tipoSistema, regras);
     const mesmoValorTodos = bancoFiltradoPorTipo.filter((b) => valoresIguais(Math.abs(b.valor), valorSisAbs, regraForma.toleranciaValor));
-    const mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
-    // "Outra data" só entra dentro da tolerância de busca da regra (dataSis já é o vencimento pra CHEQUE — ver definição acima).
+    resp.mesmaData = mesmoValorTodos.filter((b) => dataSis && b.data === dataSis);
+    // "Outra data" só entra dentro da tolerância de busca da regra (dataSis já
+    // é o vencimento pra CHEQUE — ver definição acima). Mesma direção sempre:
+    // banco depois do sistema = pago posteriormente; antes = pago antecipado.
     const outraData = mesmoValorTodos.filter((b) => {
       if (dataSis && b.data === dataSis) return false;
       if (!dataSis || !b.data) return true;
       return diasCorridosEntre(b.data, dataSis) <= regraForma.toleranciaDias;
     });
-    resp.mesmoValorMesmaData = mesmaData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
-    resp.valorAproximadoMesmaData = mesmaData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
-    resp.mesmoValorOutraData = outraData.filter((b) => valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
-    resp.valorAproximadoOutraData = outraData.filter((b) => !valoresExatamenteIguais(Math.abs(b.valor), valorSisAbs));
+    resp.pagoPosteriormente = outraData.filter((b) => !dataSis || !b.data || diasComSinalBancoMenosSistema(b.data, dataSis) > 0);
+    resp.pagoAntecipado = outraData.filter((b) => dataSis && b.data && diasComSinalBancoMenosSistema(b.data, dataSis) < 0);
 
     if (tipoSistema !== 'PIX' && !combinado) {
       resp.mesmoNome = bancoFiltradoPorTipo.filter((b) => {
@@ -595,18 +603,10 @@ function buscarSugestoesInversoPorTag(
     const candidatosComValor = candidatosComBrutoConhecido.filter((b) => valoresIguais(b.valorBrutoCartao!, valorSisAbs, tolerancia));
 
     const parcelaSis = extrairParcela(itemSistema.documento);
-    const candidatosParcelaOk = candidatosComValor.filter((b) => parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
-    resp.mesmoValorParcelaDiferente = candidatosComValor.filter((b) => !parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
-
-    // Mesmo motivo do sentido Banco→Sistema: calcula mesma data e outra data
-    // sempre, sem retornar cedo, pra não esconder um candidato concorrente
-    // (mesmo valor, mesma parcela) que só difere na data.
-    const parcelaOkMesmaData = candidatosParcelaOk.filter((b) => b.data === dataSis);
-    const parcelaOkOutraData = candidatosParcelaOk.filter((b) => b.data !== dataSis);
-    resp.mesmoValorMesmaData = parcelaOkMesmaData.filter((b) => valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
-    resp.valorAproximadoMesmaData = parcelaOkMesmaData.filter((b) => !valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
-    resp.mesmoValorOutraData = parcelaOkOutraData.filter((b) => valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
-    resp.valorAproximadoOutraData = parcelaOkOutraData.filter((b) => !valoresExatamenteIguais(b.valorBrutoCartao!, valorSisAbs));
+    // Cartão já é "casado" pela própria janela de dias úteis (diasMax acima) —
+    // tudo que passa nela (e na parcela) conta como "Mesma data".
+    resp.parcelaDivergente = candidatosComValor.filter((b) => !parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
+    resp.mesmaData = candidatosComValor.filter((b) => parcelaCompativel(parcelaSis, extrairParcela(b.descricao)));
     return resp;
   }
 
@@ -622,10 +622,7 @@ function buscarSugestoesInversoPorTag(
     return perc >= minPerc && perc <= maxPerc;
   });
 
-  resp.mesmoValorMesmaData = candidatosComTaxa.filter((b) => b.data === dataSis);
-  if (resp.mesmoValorMesmaData.length > 0) return resp;
-
-  resp.mesmoValorOutraData = candidatosComTaxa.filter((b) => b.data !== dataSis);
+  resp.mesmaData = candidatosComTaxa;
   return resp;
 }
 
@@ -898,22 +895,13 @@ export async function conciliacaoAutomatica(
       continue;
     }
 
-    const minPerc = (regraCartaoAtual.taxaMinPercentual ?? 0) / 100;
-    const maxPerc = (regraCartaoAtual.taxaMaxPercentual ?? 100) / 100;
-
-    const unicos = candidatosBase.filter((s) => {
-      if (getSubtipoCartaoSistema(s.formaPagamentoRaw) !== subtipoOfx) return false;
-      if (Math.abs(diffDiasUteis(s.data!, dataOfx)) > diasMax) return false;
-      const vSys = Math.abs(s.valor);
-      if (vSys < valorOfxAbs) return false;
-      const perc = (vSys - valorOfxAbs) / vSys;
-      return perc >= minPerc && perc <= maxPerc;
-    });
-
-    if (unicos.length === 1) {
-      grupos.push({ bancoIds: [ofx.id], sistemaIds: [unicos[0].id] });
-      sistemaJaUsado.add(unicos[0].id);
-    }
+    // Sem valor bruto conhecido (Cartão vindo do extrato do BB, não da Stone),
+    // a única forma de tentar bater automaticamente seria estimar a taxa por
+    // faixa de percentual — desativado por enquanto (não usamos mais esse
+    // reconhecimento automático hoje). As regras de taxaMinPercentual/
+    // taxaMaxPercentual continuam salvas em regras.ts pra um uso futuro, só
+    // não são mais consultadas aqui. Fica sempre pra conciliação manual.
+    continue;
   }
 
   onProgresso?.(ofxPendentes.length, ofxPendentes.length);
@@ -968,28 +956,37 @@ export function classificarCriterioConciliado(itensBanco: LancamentoBanco[], ite
 
   const s = itensSistema[0];
   const tipo = itemBanco.formaPagamento;
-  const mesmaData = !!itemBanco.data && dataComparavelSistema(s, tipo) === itemBanco.data;
+  const dataComp = dataComparavelSistema(s, tipo);
+  const mesmaData = !!itemBanco.data && dataComp === itemBanco.data;
   const valorBancoAbs = Math.abs(itemBanco.valor);
   const valorSisAbs = Math.abs(s.valor);
 
-  const rotuloPorExatidao = (exato: boolean) => {
-    if (exato) return mesmaData ? ROTULOS_CATEGORIA_SUGESTAO.mesmoValorMesmaData : ROTULOS_CATEGORIA_SUGESTAO.mesmoValorOutraData;
-    return mesmaData ? ROTULOS_CATEGORIA_SUGESTAO.valorAproximadoMesmaData : ROTULOS_CATEGORIA_SUGESTAO.valorAproximadoOutraData;
-  };
-
+  // Boleto e Cartão já são "casados" pela própria janela de dias úteis —
+  // tudo que bate cai em "Mesma data", nunca posterior/antecipado (ver mesma
+  // regra em buscarSugestoesPorTag).
   if (tipo === 'CARTAO') {
     if (itemBanco.valorBrutoCartao == null) return 'Taxa de cartão estimada (faixa de %)';
     const parcelaOfx = extrairParcela(itemBanco.descricao);
     const parcelaSis = extrairParcela(s.documento);
-    if (!parcelaCompativel(parcelaOfx, parcelaSis)) return ROTULOS_CATEGORIA_SUGESTAO.mesmoValorParcelaDiferente;
-    return rotuloPorExatidao(valoresExatamenteIguais(valorSisAbs, itemBanco.valorBrutoCartao));
+    if (!parcelaCompativel(parcelaOfx, parcelaSis)) return ROTULOS_CATEGORIA_SUGESTAO.parcelaDivergente;
+    return ROTULOS_CATEGORIA_SUGESTAO.mesmaData;
   }
+
+  if (tipo === 'BOLETO') {
+    if (valoresIguais(valorSisAbs, valorBancoAbs, regras.BOLETO.toleranciaValor)) return ROTULOS_CATEGORIA_SUGESTAO.mesmaData;
+    return 'Conciliado manualmente';
+  }
+
+  // Direção sempre a mesma: banco depois do sistema = pago posteriormente; antes = pago antecipado.
+  const rotuloPorData = () => {
+    if (mesmaData) return ROTULOS_CATEGORIA_SUGESTAO.mesmaData;
+    if (!itemBanco.data || !dataComp) return ROTULOS_CATEGORIA_SUGESTAO.mesmaData;
+    return itemBanco.data > dataComp ? ROTULOS_CATEGORIA_SUGESTAO.pagoPosteriormente : ROTULOS_CATEGORIA_SUGESTAO.pagoAntecipado;
+  };
 
   if (tipo === 'PIX') {
     const regraPix = regras.PIX;
-    if (valoresIguais(valorSisAbs, valorBancoAbs, regraPix.toleranciaValor)) {
-      return rotuloPorExatidao(valoresExatamenteIguais(valorSisAbs, valorBancoAbs));
-    }
+    if (valoresIguais(valorSisAbs, valorBancoAbs, regraPix.toleranciaValor)) return rotuloPorData();
     const nomeOfx = normalizarNomeClienteOfx(itemBanco.descricao);
     if (nomeOfx && nomesSemelhantesFortes(nomeOfx, removerAcentos(s.cliente || '').toLowerCase(), regraPix.nomeMinContido ?? 8, regraPix.nomeMinSobrenome ?? 5)) {
       return ROTULOS_CATEGORIA_SUGESTAO.mesmoNome;
@@ -997,10 +994,8 @@ export function classificarCriterioConciliado(itensBanco: LancamentoBanco[], ite
     return 'Conciliado manualmente';
   }
 
-  const regraForma = tipo === 'BOLETO' ? regras.BOLETO : regraParaFormaGenerica(tipo, regras);
-  if (valoresIguais(valorSisAbs, valorBancoAbs, regraForma.toleranciaValor)) {
-    return rotuloPorExatidao(valoresExatamenteIguais(valorSisAbs, valorBancoAbs));
-  }
+  const regraForma = regraParaFormaGenerica(tipo, regras);
+  if (valoresIguais(valorSisAbs, valorBancoAbs, regraForma.toleranciaValor)) return rotuloPorData();
   return 'Conciliado manualmente';
 }
 

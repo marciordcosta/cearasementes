@@ -1,10 +1,10 @@
-import { ChevronDown, ChevronRight, Filter, Package, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Link2, Package, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { PainelFlutuante } from '@/components/ui/PainelFlutuante';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 import { CORES_FORMA_PAGAMENTO } from '../coresFormaPagamento';
-import { ROTULOS_CATEGORIA_SUGESTAO, type LancamentoBanco, type LancamentoSistema, type SugestoesConciliacao, type SugestoesConciliacaoInversa } from '../types';
+import { descricaoCategoria, ROTULOS_CATEGORIA_SUGESTAO, rotuloCategoria, type LancamentoBanco, type LancamentoSistema, type SugestoesConciliacao, type SugestoesConciliacaoInversa } from '../types';
 import { getCategoriaSistema } from '../utils';
 
 /** Qual lado está fixo (a origem da busca) — decide se os candidatos vêm do Sistema ou do Banco. */
@@ -292,9 +292,10 @@ export function SugestoesPainel({
                         type="button"
                         disabled={processando}
                         onClick={() => onConciliar(cat === 'combinacaoBoleto' || cat === 'combinacaoPix' ? itens!.map((i) => i.id) : [item.id])}
-                        className="whitespace-nowrap rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-[11px] font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
+                        title="Conciliar"
+                        className="flex shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] p-1 text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100"
                       >
-                        Conciliar
+                        <Link2 size={13} strokeWidth={2.5} />
                       </button>
                       <button
                         type="button"
@@ -314,7 +315,9 @@ export function SugestoesPainel({
             return (
               <div key={cat} className="space-y-1.5">
                 <div className="flex items-center gap-2 border-b border-[var(--color-line)] pb-1">
-                  <p className="text-sm font-bold text-[var(--color-text)]">{ROTULOS[cat]}</p>
+                  <p className="text-sm font-bold text-[var(--color-text)]" title={descricaoCategoria(cat)}>
+                    {rotuloCategoria(cat, direcao)}
+                  </p>
                   {conciliados.length > 0 && (
                     <button
                       type="button"
