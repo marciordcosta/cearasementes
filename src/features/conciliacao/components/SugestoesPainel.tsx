@@ -241,8 +241,8 @@ export function SugestoesPainel({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 truncate text-[11px] text-[var(--color-text-soft)]">
-                      <span className="truncate">
+                    <div className="flex items-center gap-1 text-[11px] text-[var(--color-text-soft)]">
+                      <span className="min-w-0 truncate">
                         {vencimentoCandidato ? fmtDataBR(vencimentoCandidato) : item.data ? fmtDataBR(item.data) : '—'}
                         {linha2 && ` · ${linha2}`}
                       </span>
