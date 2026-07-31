@@ -66,11 +66,11 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
     });
   }
 
-  // Validade mais recente primeiro; nome do produto como critério de
-  // desempate (ou quando não há validade reconhecida em nenhum dos dois).
+  // Nome do produto (alfabética) primeiro; validade mais recente como
+  // critério de desempate entre laudos do mesmo produto.
   const filtrados = [...filtrarArquivos(arquivos, busca)].sort((a, b) => {
-    const porValidade = chaveOrdenacaoValidade(b.validade).localeCompare(chaveOrdenacaoValidade(a.validade));
-    return porValidade !== 0 ? porValidade : a.nomeProduto.localeCompare(b.nomeProduto);
+    const porNome = a.nomeProduto.localeCompare(b.nomeProduto);
+    return porNome !== 0 ? porNome : chaveOrdenacaoValidade(b.validade).localeCompare(chaveOrdenacaoValidade(a.validade));
   });
 
   const todosSelecionados = filtrados.length > 0 && filtrados.every((a) => selecionados.has(a.id));
