@@ -124,6 +124,14 @@ export function detectPaymentTypeFromOfx(desc: unknown): 'PIX' | 'CARTAO' | 'BOL
   if (!desc) return 'OUTRO';
   const t = removerAcentos(desc).toLowerCase();
 
+  // Tarifa bancária (manutenção de conta, DOC/TED eletrônico, cheque
+  // compensado etc.) — no extrato do BB sempre no formato "Tar.../Tarifa...
+  // Cobranca referente..." ou "Debito Servico Cobranca...". Tem que vir
+  // ANTES dos checks de BOLETO porque a palavra "cobranca" (usada pra achar
+  // boleto de verdade, "Pagamento de Boleto X") também aparece nessas
+  // tarifas — sem essa exclusão, tarifa bancária virava "boleto".
+  if (/^tar/.test(t) || t.includes('debito servico cobranca')) return 'OUTRO';
+
   // Só usada no extrato do BB (parseExtratoBB) — a Stone (única origem real
   // de cartão) já marca CARTAO direto, sem passar por aqui. Por isso o BB
   // nunca deveria bater aqui de verdade; "carto" e "credito"/"debito" eram
