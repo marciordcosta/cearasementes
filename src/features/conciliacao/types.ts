@@ -98,8 +98,8 @@ export interface SugestoesConciliacaoInversa {
 export const ROTULOS_CATEGORIA_SUGESTAO: Record<keyof SugestoesConciliacao, string> = {
   mesmoNome: 'Nome parecido',
   mesmaData: 'Mesma data',
-  pagoPosteriormente: 'Venda anterior ao pagamento',
-  pagoAntecipado: 'Venda posterior ao pagamento',
+  pagoPosteriormente: 'Registro anterior ao pagamento',
+  pagoAntecipado: 'Registro posterior ao pagamento',
   parcelaDivergente: 'Parcela divergente',
   combinacaoBoleto: 'Combinação de títulos (soma bate com o valor)',
   combinacaoPix: 'Combinação por nome parecido (soma bate com o valor)',
@@ -110,13 +110,14 @@ export const ROTULOS_CATEGORIA_SUGESTAO: Record<keyof SugestoesConciliacao, stri
  * Rótulo de uma categoria pra exibir no painel de sugestões — igual pra
  * quase todas, mas `pagoPosteriormente`/`pagoAntecipado` mudam de texto
  * conforme a direção da busca, porque o CANDIDATO exibido é diferente:
- * Banco→Sistema mostra uma venda (candidato = Sistema), Sistema→Banco mostra
+ * Banco→Sistema mostra um registro do Sistema (candidato = Sistema — nem
+ * sempre é uma venda, muitas vezes é um recebimento), Sistema→Banco mostra
  * um pagamento (candidato = Banco) — dizer "pagamento" quando o candidato é
- * na verdade uma venda (e vice-versa) confunde mais do que ajuda.
+ * na verdade o registro do Sistema (e vice-versa) confunde mais do que ajuda.
  */
 export function rotuloCategoria(cat: keyof SugestoesConciliacao, direcao: 'banco' | 'sistema'): string {
-  if (cat === 'pagoPosteriormente') return direcao === 'banco' ? 'Venda anterior ao pagamento' : 'Pagamento posterior à venda';
-  if (cat === 'pagoAntecipado') return direcao === 'banco' ? 'Venda posterior ao pagamento' : 'Pagamento anterior à venda';
+  if (cat === 'pagoPosteriormente') return direcao === 'banco' ? 'Registro anterior ao pagamento' : 'Pagamento posterior ao registro';
+  if (cat === 'pagoAntecipado') return direcao === 'banco' ? 'Registro posterior ao pagamento' : 'Pagamento anterior ao registro';
   return ROTULOS_CATEGORIA_SUGESTAO[cat];
 }
 
