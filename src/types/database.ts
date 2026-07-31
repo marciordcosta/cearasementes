@@ -102,7 +102,7 @@ export interface Database {
           mensagem: string | null;
           /** Nome do sub-grupo pra agrupar numa linha só: Tabela de Preço (396), banco (ofx, ex. "Banco do Brasil") ou tipo de lançamento (sistema, "Entrada"/"Saída"). */
           tabela_preco: string | null;
-          /** Menor/maior data BRUTA (sem filtro de período fechado) das linhas do arquivo — alimenta o recálculo da janela fechada. Null pro 333 (sem coluna de data). */
+          /** Menor/maior data das linhas do arquivo, exatamente como vieram (sem nenhum arredondamento) — usado pra mostrar o período coberto na tela de Uploads. Null pro 333 (sem coluna de data). */
           data_min: string | null;
           data_max: string | null;
           criado_em: string;

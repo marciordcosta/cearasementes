@@ -3,7 +3,7 @@ import type { GrupoLinhas } from '@/features/uploads/types';
 import { readFileSmart } from '@/lib/readFileSmart';
 import { importarLancamentosBanco, importarSistema } from './api';
 import { detectarPeriodoCabecalhoSistema, detectarTipoLancamento, parseExtratoBB, parseMatricial, parseRecebiveisStone } from './parsing';
-import type { RegistroBancoParseado } from './parsing';
+import type { RegistroBancoParseado, RegistroSistemaParseado } from './parsing';
 
 export type TipoBanco = 'bb' | 'stone';
 
@@ -37,15 +37,22 @@ const NOME_BANCO: Record<TipoBanco, { codigo: string; nome: string }> = {
   stone: { codigo: '197', nome: 'Stone' },
 };
 
+/** Só parseia (não grava) um arquivo do lado Banco — usado pra detectar conflitos com registros já conciliados ANTES de gravar (ver detectarConflitosConciliados em api.ts). */
+export function parseGrupoBanco(grupo: GrupoLinhas, tipoBanco: TipoBanco): RegistroBancoParseado[] {
+  return tipoBanco === 'bb' ? parseExtratoBB(grupo.rows) : parseRecebiveisStone(grupo.rows);
+}
+
 /**
  * Grava um arquivo do lado Banco (extrato BB ou recebíveis Stone) — `grupo`
  * já veio extraído (extractRowGroups) e classificado (ehExtratoBB/
  * ehRecebiveisStone) por quem chama, então aqui só falta parsear e salvar.
+ * `fitidsParaManter`: registros que o usuário escolheu manter como estavam
+ * (conflito com um lançamento já conciliado) — ver detectarConflitosConciliados.
  */
-export async function importarGrupoBanco(grupo: GrupoLinhas, tipoBanco: TipoBanco): Promise<void> {
+export async function importarGrupoBanco(grupo: GrupoLinhas, tipoBanco: TipoBanco, fitidsParaManter: Set<string> = new Set()): Promise<void> {
   const { codigo, nome } = NOME_BANCO[tipoBanco];
-  const registros = tipoBanco === 'bb' ? parseExtratoBB(grupo.rows) : parseRecebiveisStone(grupo.rows);
-  const linhasGravadas = await importarLancamentosBanco(grupo.label, codigo, nome, registros);
+  const registros = parseGrupoBanco(grupo, tipoBanco);
+  const linhasGravadas = await importarLancamentosBanco(grupo.label, codigo, nome, registros, fitidsParaManter);
 
   const intervalo = extrairIntervaloLinhas(registros);
   await registrarLogUpload({
@@ -60,25 +67,44 @@ export async function importarGrupoBanco(grupo: GrupoLinhas, tipoBanco: TipoBanc
   });
 }
 
+export interface ArquivoSistemaParseado {
+  tipoLancamento: 'Entrada' | 'Saída';
+  registros: RegistroSistemaParseado[];
+  periodo: { inicio: Date; fim: Date } | null;
+}
+
 /**
- * Lê, parseia e grava um arquivo do Sistema (Max Data, HTML) — mesma lógica
- * de sempre, não afetada pela troca do OFX.
+ * Só lê e parseia (não grava) um arquivo do Sistema — usado pra detectar
+ * conflitos com registros já conciliados ANTES de gravar (ver
+ * detectarConflitosConciliadosSistema em api.ts).
  *
  * Se NENHUM registro reconhecido tiver NF, o relatório provavelmente não é o
  * esperado (operador puxou o relatório errado, ou esqueceu de informar a
  * coluna de NF na exportação) — recusa o arquivo inteiro em vez de gravar
  * tudo sem NF, o que travaria cada lançamento como "pendente" na Conciliação.
  */
-export async function importarArquivoSistema(file: File): Promise<void> {
+export async function parseArquivoSistema(file: File): Promise<ArquivoSistemaParseado> {
   const texto = await readFileSmart(file);
   const tipoLancamento = detectarTipoLancamento(texto, file.name);
   const registros = parseMatricial(texto, file.name);
   if (registros.length > 0 && !registros.some((r) => r.nf && r.nf.trim())) {
     throw new Error(`Arquivo sem informação de NF: "${file.name}".`);
   }
-  const linhasGravadas = await importarSistema(file.name, tipoLancamento, registros);
+  return { tipoLancamento, registros, periodo: detectarPeriodoCabecalhoSistema(texto) };
+}
 
-  const periodo = detectarPeriodoCabecalhoSistema(texto);
+/**
+ * Lê, parseia e grava um arquivo do Sistema (Max Data, HTML) — mesma lógica
+ * de sempre, não afetada pela troca do OFX.
+ * `chavesParaExcluir`: registros que o usuário escolheu manter/atualizar
+ * manualmente num conflito com um lançamento já conciliado — ver
+ * detectarConflitosConciliadosSistema (ficam de fora do upsert normal pra
+ * não criar uma linha nova duplicada).
+ */
+export async function importarArquivoSistema(file: File, chavesParaExcluir: Set<string> = new Set()): Promise<void> {
+  const { tipoLancamento, registros, periodo } = await parseArquivoSistema(file);
+  const linhasGravadas = await importarSistema(file.name, tipoLancamento, registros, chavesParaExcluir);
+
   await registrarLogUpload({
     arquivoNome: file.name,
     tipoRelatorio: 'sistema',

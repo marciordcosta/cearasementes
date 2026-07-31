@@ -8,7 +8,7 @@ import { fmtDataBR } from '@/lib/format';
 import { apagarGrupoUploads, listarUploadsRecentes } from '../api';
 import { NOME_RELATORIO } from '../fields';
 import { toISODate } from '../parsing';
-import { agruparUploads, calcularAvisosAtraso, chaveGrupo, type AvisoAtraso, type ResumoGrupo } from '../periodos';
+import { agruparUploads, chaveGrupo, type ResumoGrupo } from '../periodos';
 import type { TipoRelatorioLog } from '../types';
 
 const STATUS_COR: Record<'sucesso' | 'aviso' | 'erro', string> = {
@@ -85,11 +85,10 @@ function corGrupo(grupo: ResumoGrupo): string {
 
 interface LinhaItemProps {
   linha: ResumoGrupo | LinhaVazia;
-  aviso: AvisoAtraso | undefined;
   onApagar: (grupo: ResumoGrupo) => void;
 }
 
-function LinhaItem({ linha, aviso, onApagar }: LinhaItemProps) {
+function LinhaItem({ linha, onApagar }: LinhaItemProps) {
   if (ehVazia(linha)) {
     return (
       <li className="flex items-center gap-2 opacity-40">
@@ -100,31 +99,23 @@ function LinhaItem({ linha, aviso, onApagar }: LinhaItemProps) {
   }
 
   const grupo = linha;
+  // "Relatório X" só entra quando o nome em negrito (rotuloGrupo) sozinho não
+  // diz de onde veio — pra Conciliação (ofx/sistema) o nome já é auto-
+  // explicativo (Banco do Brasil, Stone, Entrada, Saída), dentro do card
+  // "Conciliação Bancária"; repetir o código interno ("Relatório ofx") não
+  // ajuda ninguém.
+  const segmentos: string[] = [];
+  if (grupo.tipoRelatorio !== 'ofx' && grupo.tipoRelatorio !== 'sistema') segmentos.push(`Relatório ${grupo.tipoRelatorio}`);
+  if (grupo.temDados) segmentos.push(`${fmtDataBR(toISODate(grupo.dataMin!))} a ${fmtDataBR(toISODate(grupo.dataMax!))}`);
+  segmentos.push(`${grupo.totalLinhas} linha(s) importada(s)`);
+  segmentos.push(`Carregado em ${grupo.carregadoEm.toLocaleDateString('pt-BR')}`);
+
   return (
     <li className="flex items-start justify-between gap-2">
       <span className="flex items-start gap-2">
         <span style={{ color: corGrupo(grupo) }}>●</span>
         <span className="text-[var(--color-text-soft)]">
-          <strong className="text-[var(--color-text)]">{rotuloGrupo(grupo)}</strong> — Relatório {grupo.tipoRelatorio}, {grupo.totalLinhas} linha(s) importada(s)
-          {grupo.temDados &&
-            (grupo.janela
-              ? ` — Período fechado: ${fmtDataBR(toISODate(grupo.janela.inicio))} a ${fmtDataBR(toISODate(grupo.janela.fim))}`
-              : ' — aguardando fechamento de mês')}
-          {aviso && (
-            <span className="mt-0.5 flex items-center gap-1 text-xs text-[#8A5B10]">
-              <span>⚠️</span>
-              {isNaN(aviso.diasAtraso) ? (
-                <span>
-                  Ainda não fechou nenhum mês — <strong>{rotuloGrupo(aviso.referencia)}</strong> já fechou até {fmtDataBR(toISODate(aviso.faltaFim))}.
-                </span>
-              ) : (
-                <span>
-                  {aviso.diasAtraso} dia(s) atrás de <strong>{rotuloGrupo(aviso.referencia)}</strong> — faltam dados de{' '}
-                  {fmtDataBR(toISODate(aviso.faltaInicio!))} a {fmtDataBR(toISODate(aviso.faltaFim))}.
-                </span>
-              )}
-            </span>
-          )}
+          <strong className="text-[var(--color-text)]">{rotuloGrupo(grupo)}</strong> — {segmentos.join(' · ')}
         </span>
       </span>
       <button
@@ -142,22 +133,16 @@ function LinhaItem({ linha, aviso, onApagar }: LinhaItemProps) {
 interface ListaLinhasProps {
   titulo: string;
   linhas: (ResumoGrupo | LinhaVazia)[];
-  avisos: Map<string, AvisoAtraso>;
   onApagar: (grupo: ResumoGrupo) => void;
 }
 
-function ListaLinhas({ titulo, linhas, avisos, onApagar }: ListaLinhasProps) {
+function ListaLinhas({ titulo, linhas, onApagar }: ListaLinhasProps) {
   return (
     <Card className="p-5">
       <h3 className="mb-3 text-sm font-semibold text-[var(--color-text)]">{titulo}</h3>
       <ul className="space-y-1.5 text-sm">
         {linhas.map((linha) => (
-          <LinhaItem
-            key={ehVazia(linha) ? `${linha.tipoRelatorio}-${linha.rotulo ?? ''}` : chaveGrupo(linha)}
-            linha={linha}
-            aviso={ehVazia(linha) ? undefined : avisos.get(chaveGrupo(linha))}
-            onApagar={onApagar}
-          />
+          <LinhaItem key={ehVazia(linha) ? `${linha.tipoRelatorio}-${linha.rotulo ?? ''}` : chaveGrupo(linha)} linha={linha} onApagar={onApagar} />
         ))}
       </ul>
     </Card>
@@ -184,12 +169,6 @@ export function UploadLog() {
   });
 
   const grupos = agruparUploads(uploads);
-  // Cada categoria compara atraso só entre si — não faz sentido comparar a
-  // data de fechamento de uma Tabela de Preço (396) com a de um sub-grupo
-  // da Conciliação Bancária (Entrada/Saída/banco), são coisas diferentes.
-  const gruposRelatorios = grupos.filter((g) => !TIPOS_CONCILIACAO.includes(g.tipoRelatorio));
-  const gruposConciliacao = grupos.filter((g) => TIPOS_CONCILIACAO.includes(g.tipoRelatorio));
-  const avisos = new Map([...calcularAvisosAtraso(gruposRelatorios), ...calcularAvisosAtraso(gruposConciliacao)]);
   const linhas = montarLinhas(grupos);
   const linhasRelatorios = linhas.filter((l) => !ehConciliacao(l));
   const linhasConciliacao = linhas.filter(ehConciliacao);
@@ -214,8 +193,8 @@ export function UploadLog() {
 
   return (
     <div className="space-y-4">
-      <ListaLinhas titulo="Arquivos processados recentemente" linhas={linhasRelatorios} avisos={avisos} onApagar={setParaApagar} />
-      <ListaLinhas titulo="Conciliação Bancária" linhas={linhasConciliacao} avisos={avisos} onApagar={setParaApagar} />
+      <ListaLinhas titulo="Arquivos processados recentemente" linhas={linhasRelatorios} onApagar={setParaApagar} />
+      <ListaLinhas titulo="Conciliação Bancária" linhas={linhasConciliacao} onApagar={setParaApagar} />
 
       <Modal
         open={paraApagar !== null}

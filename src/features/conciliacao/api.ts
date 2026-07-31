@@ -4,6 +4,13 @@ import type { Database } from '@/types/database';
 import type { RegistroBancoParseado, RegistroSistemaParseado } from './parsing';
 import type { ArquivoConciliacao, LancamentoBanco, LancamentoSistema, NovoLancamentoManual, TipoArquivo } from './types';
 
+/** Um registro do arquivo novo que bate (por fitid) com um lançamento já CONCILIADO, mas com dado diferente do que já está gravado — mostrado antes de importar, pro usuário escolher se atualiza ou mantém o antigo. */
+export interface ConflitoRegistroBanco {
+  fitid: string;
+  antigo: { data: string; valor: number; descricao: string | null };
+  novo: RegistroBancoParseado;
+}
+
 type ArquivoRow = Database['public']['Tables']['conciliacao_arquivos']['Row'];
 type BancoRow = Database['public']['Tables']['conciliacao_lancamentos_banco']['Row'];
 type SistemaRow = Database['public']['Tables']['conciliacao_lancamentos_sistema']['Row'];
@@ -151,6 +158,37 @@ export async function restaurarSugestaoDescartada(bancoId: string, sistemaId: st
 }
 
 /**
+ * Detecta, ANTES de gravar, quais registros do arquivo novo já existem (por
+ * `fitid`), já estão CONCILIADOS, e têm valor/data/descrição diferentes do
+ * que já está no banco — casos em que o upsert normal reescreveria o dado
+ * bruto de um lançamento já conciliado sem avisar ninguém. Registros
+ * idênticos ou não conciliados não entram aqui (não tem nada pra decidir).
+ */
+export async function detectarConflitosConciliados(registros: RegistroBancoParseado[]): Promise<ConflitoRegistroBanco[]> {
+  const fitids = registros.map((r) => r.fitid).filter((f): f is string => f !== null);
+  if (fitids.length === 0) return [];
+
+  const { data: existentes, error } = await supabase
+    .from('conciliacao_lancamentos_banco')
+    .select('fitid, data, valor, descricao')
+    .in('fitid', fitids)
+    .eq('conciliado', true);
+  if (error) throw error;
+  if (!existentes || existentes.length === 0) return [];
+
+  const existentePorFitid = new Map(existentes.map((e) => [e.fitid as string, e]));
+  const conflitos: ConflitoRegistroBanco[] = [];
+  for (const novo of registros) {
+    if (!novo.fitid) continue;
+    const antigo = existentePorFitid.get(novo.fitid);
+    if (!antigo) continue;
+    if (antigo.data === novo.data && Math.abs(antigo.valor - novo.valor) < 0.005 && (antigo.descricao ?? '') === novo.descricao) continue;
+    conflitos.push({ fitid: novo.fitid, antigo: { data: antigo.data, valor: antigo.valor, descricao: antigo.descricao }, novo });
+  }
+  return conflitos;
+}
+
+/**
  * Grava o arquivo do Banco (extrato BB ou recebíveis Stone) + seus
  * lançamentos já parseados. Upsert por `fitid` (chave composta a partir das
  * próprias colunas do arquivo — ver parsing.ts) — reenviar um arquivo com
@@ -163,9 +201,19 @@ export async function restaurarSugestaoDescartada(bancoId: string, sistemaId: st
  * histórico do "lado Banco" — não significa mais literalmente um arquivo
  * .ofx, mas renomear exigiria migração pra alterar o check constraint,
  * então mantido por simplicidade.
+ *
+ * `fitidsParaManter`: fitids que o usuário escolheu MANTER como estavam (ver
+ * detectarConflitosConciliados) — ficam de fora do upsert inteiro, não só do
+ * conflito, preservando o registro antigo intacto.
  */
-/** Retorna quantas linhas foram de fato gravadas (após deduplicar por fitid dentro do próprio arquivo). */
-export async function importarLancamentosBanco(nomeArquivo: string, bancoCodigo: string, bancoNome: string, registros: RegistroBancoParseado[]): Promise<number> {
+/** Retorna quantas linhas foram de fato gravadas (após deduplicar por fitid dentro do próprio arquivo e descontar as mantidas). */
+export async function importarLancamentosBanco(
+  nomeArquivo: string,
+  bancoCodigo: string,
+  bancoNome: string,
+  registros: RegistroBancoParseado[],
+  fitidsParaManter: Set<string> = new Set(),
+): Promise<number> {
   const { data: arquivo, error: errArquivo } = await supabase
     .from('conciliacao_arquivos')
     .insert({ nome_arquivo: nomeArquivo, tipo: 'ofx', banco_codigo: bancoCodigo, banco_nome: bancoNome })
@@ -174,7 +222,8 @@ export async function importarLancamentosBanco(nomeArquivo: string, bancoCodigo:
   if (errArquivo) throw errArquivo;
   if (registros.length === 0) return 0;
 
-  const registrosUnicos = dedupPorChave(registros, (r) => r.fitid);
+  const registrosUnicos = dedupPorChave(registros, (r) => r.fitid).filter((r) => !r.fitid || !fitidsParaManter.has(r.fitid));
+  if (registrosUnicos.length === 0) return 0;
   const { error } = await supabase.from('conciliacao_lancamentos_banco').upsert(
     registrosUnicos.map((r) => ({
       arquivo_id: arquivo.id,
@@ -195,11 +244,10 @@ export async function importarLancamentosBanco(nomeArquivo: string, bancoCodigo:
 }
 
 /**
- * Mais da metade das linhas do relatório do Sistema não tem `documento`
- * (ex.: depósito em dinheiro no banco não gera nº de documento) — sem uma
- * chave só de `documento`, essas linhas nunca deduplicavam e cada reenvio
- * as duplicava de novo (confirmado nos dados reais: 506 de ~795 linhas
- * sem documento, dobrando a cada reimportação). Cai pro conjunto de campos
+ * O MaxData gera número de documento pra toda venda normal — só recebimento
+ * em dinheiro fica sem (confirmado nos dados reais de produção: 179 de
+ * 11.881 linhas sem documento, todas com forma de pagamento "Dinheiro"; um
+ * recorte bem pequeno, não a maioria). Pra essas, cai pro conjunto de campos
  * disponível mais específico (cliente + vendedor + forma de pagamento) —
  * não é infalível (duas linhas idênticas nesses campos, mesmo dia, mesmo
  * valor, ainda colidiriam), mas cobre o caso real.
@@ -210,15 +258,89 @@ function chaveDedupSistema(r: RegistroSistemaParseado): string | null {
   return `${r.cliente}|${r.vendedor ?? ''}|${r.formaPagamentoRaw ?? ''}`;
 }
 
+/** Um registro do arquivo novo cuja chave (`chaveDedupSistema`) bate com um lançamento já CONCILIADO, mas com valor/data diferentes do que já está gravado — ver detectarConflitosConciliadosSistema. */
+export interface ConflitoRegistroSistema {
+  chave: string;
+  antigoId: string;
+  antigo: { data: string | null; valor: number };
+  novo: RegistroSistemaParseado;
+}
+
+/**
+ * Detecta, ANTES de gravar, conflitos com lançamentos do Sistema já
+ * CONCILIADOS. Diferente do lado Banco (upsert por `fitid` sozinho), aqui o
+ * conflito de upsert é por (`chave_dedup`, `data`, `valor`) — os TRÊS juntos
+ * fazem parte da chave. Isso significa que, se o valor ou a data mudar pra
+ * uma linha que logicamente é "a mesma" (mesmo `chave_dedup`), o upsert
+ * normal NÃO atualiza a linha existente — ele insere uma linha NOVA (pendente,
+ * ao lado da antiga ainda conciliada), porque a chave de conflito não bate
+ * mais. Por isso a "atualização" aqui precisa ser um UPDATE explícito por id
+ * (ver atualizarLancamentoSistemaConciliado), não um upsert.
+ */
+export async function detectarConflitosConciliadosSistema(registros: RegistroSistemaParseado[]): Promise<ConflitoRegistroSistema[]> {
+  const porChave = new Map<string, RegistroSistemaParseado>();
+  for (const r of registros) {
+    const chave = chaveDedupSistema(r);
+    if (chave) porChave.set(chave, r);
+  }
+  const chaves = [...porChave.keys()];
+  if (chaves.length === 0) return [];
+
+  const { data: existentes, error } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .select('id, chave_dedup, data, valor')
+    .in('chave_dedup', chaves)
+    .eq('conciliado', true);
+  if (error) throw error;
+  if (!existentes || existentes.length === 0) return [];
+
+  const conflitos: ConflitoRegistroSistema[] = [];
+  for (const existente of existentes) {
+    if (!existente.chave_dedup) continue;
+    const novo = porChave.get(existente.chave_dedup);
+    if (!novo) continue;
+    if (existente.data === novo.data && Math.abs(existente.valor - novo.valor) < 0.005) continue;
+    conflitos.push({ chave: existente.chave_dedup, antigoId: existente.id, antigo: { data: existente.data, valor: existente.valor }, novo });
+  }
+  return conflitos;
+}
+
+/** Aplica o dado novo num lançamento do Sistema já conciliado (escolha "Atualizar" num conflito) — UPDATE explícito por id, nunca toca `conciliado`/`grupo_id`/`taxa_*`. */
+export async function atualizarLancamentoSistemaConciliado(id: string, novo: RegistroSistemaParseado): Promise<void> {
+  const { error } = await supabase
+    .from('conciliacao_lancamentos_sistema')
+    .update({
+      cliente: novo.cliente,
+      documento: novo.documento,
+      nf: novo.nf,
+      vendedor: novo.vendedor,
+      forma_pagamento_raw: novo.formaPagamentoRaw,
+      valor: novo.valor,
+      data: novo.data,
+      data_vencimento: novo.dataVencimento,
+    })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 /**
  * Grava o relatório do sistema (Max Data) + seus lançamentos já parseados
- * (parseMatricial). Upsert por (`chave_dedup`, `data`, `valor`) — reenviar
- * o mesmo relatório atualiza a linha existente em vez de duplicar.
+ * (parseMatricial). Upsert por (`chave_dedup`, `data`, `valor`) — reenviar o
+ * mesmo relatório sem mudar nada atualiza a linha existente em vez de
+ * duplicar; se valor/data mudarem pra uma linha já conciliada, ver
+ * detectarConflitosConciliadosSistema (o upsert sozinho criaria uma linha
+ * nova em vez de atualizar, já que data/valor fazem parte da chave).
  * `conciliado`/`taxa_*`/`grupo_id` ficam de fora do payload de propósito:
  * um reenvio nunca desfaz conciliação já feita. Retorna quantas linhas
- * foram de fato gravadas (após deduplicar dentro do próprio arquivo).
+ * foram de fato gravadas (após deduplicar dentro do próprio arquivo e
+ * descontar as excluídas por `chavesParaExcluir`).
  */
-export async function importarSistema(nomeArquivo: string, tipoLancamento: 'Entrada' | 'Saída', registros: RegistroSistemaParseado[]): Promise<number> {
+export async function importarSistema(
+  nomeArquivo: string,
+  tipoLancamento: 'Entrada' | 'Saída',
+  registros: RegistroSistemaParseado[],
+  chavesParaExcluir: Set<string> = new Set(),
+): Promise<number> {
   const { data: arquivo, error: errArquivo } = await supabase
     .from('conciliacao_arquivos')
     .insert({ nome_arquivo: nomeArquivo, tipo: 'sistema', banco_codigo: null, banco_nome: null, sub_grupo: tipoLancamento })
@@ -230,7 +352,11 @@ export async function importarSistema(nomeArquivo: string, tipoLancamento: 'Entr
   const registrosUnicos = dedupPorChave(registros, (r) => {
     const chave = chaveDedupSistema(r);
     return chave ? `${chave}|${r.data}|${r.valor}` : null;
+  }).filter((r) => {
+    const chave = chaveDedupSistema(r);
+    return !chave || !chavesParaExcluir.has(chave);
   });
+  if (registrosUnicos.length === 0) return 0;
   const { error } = await supabase.from('conciliacao_lancamentos_sistema').upsert(
     registrosUnicos.map((r) => ({
       arquivo_id: arquivo.id,

@@ -2,9 +2,13 @@ import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card } from '@/components/ui/Card';
-import { ehArquivoConciliacaoSistema, importarArquivoSistema, importarGrupoBanco } from '@/features/conciliacao/importar';
+import { Modal } from '@/components/ui/Modal';
+import { atualizarLancamentoSistemaConciliado, detectarConflitosConciliados, detectarConflitosConciliadosSistema } from '@/features/conciliacao/api';
+import type { ConflitoRegistroBanco, ConflitoRegistroSistema } from '@/features/conciliacao/api';
+import { ehArquivoConciliacaoSistema, importarArquivoSistema, importarGrupoBanco, parseArquivoSistema, parseGrupoBanco } from '@/features/conciliacao/importar';
 import type { TipoBanco } from '@/features/conciliacao/importar';
 import { ehExtratoBB, ehRecebiveisStone } from '@/features/conciliacao/parsing';
+import { fmtDataBR } from '@/lib/format';
 import { garantirCanaisPreco } from '@/features/pricing/api';
 import { apagarUploadsAnteriores, carregarMapeamentoSalvo, inserirEntregas124, registrarLogUpload, salvarMapeamento } from '@/features/uploads/api';
 import { Dropzone } from '@/features/uploads/components/Dropzone';
@@ -17,6 +21,22 @@ import type { GrupoClassificado, GrupoLinhas, MapeamentoColunas, TipoRelatorioMa
 import { importarVendas396 } from '@/features/vendas396/api';
 import { parseVendas396 } from '@/features/vendas396/parsing';
 import { mensagemDeErro } from '@/lib/errors';
+
+/** Um conflito unificado (Banco ou Sistema) pra exibir na lista de confirmação — ver detectarConflitosConciliados/detectarConflitosConciliadosSistema em api.ts. */
+interface ConflitoExibicao {
+  chaveDecisao: string;
+  origem: 'banco' | 'sistema';
+  label: string;
+  antigo: { data: string | null; valor: number };
+  novo: { data: string | null; valor: number };
+  /** Só sistema: precisa do id da linha antiga e do registro novo completo pra aplicar o UPDATE explícito se a decisão for "atualizar" (ver comentário em detectarConflitosConciliadosSistema — o upsert normal não serve aqui). */
+  sistemaAntigoId?: string;
+  sistemaNovo?: ConflitoRegistroSistema['novo'];
+  /** Só banco: fitid, usado só se a decisão for "manter" (excluído do upsert; "atualizar" não precisa de nada especial, o upsert por fitid já sobrescreve sozinho). */
+  bancoFitid?: string;
+}
+
+type DecisaoConflito = 'atualizar' | 'manter';
 
 async function inicializarMapeamento(tipo: TipoRelatorioMapeado, grupoReferencia: GrupoLinhas): Promise<MapeamentoColunas> {
   const salvo = await carregarMapeamentoSalvo(tipo);
@@ -41,6 +61,16 @@ export function UploadsPage() {
   const [processandoVendas396, setProcessandoVendas396] = useState(false);
   const [erroVendas396, setErroVendas396] = useState<string | null>(null);
   const [sucessoVendas396, setSucessoVendas396] = useState<string | null>(null);
+  // Conflito = mesmo registro (fitid/chave_dedup) já CONCILIADO, mas com
+  // valor/data diferentes no arquivo novo — fica pendente até o usuário
+  // escolher, registro por registro, "Atualizar" ou "Manter" antes de gravar
+  // qualquer coisa (ver detectarConflitosConciliados/...Sistema em api.ts).
+  const [pendenteConciliacao, setPendenteConciliacao] = useState<{
+    arquivosSistema: File[];
+    gruposBanco: { grupo: GrupoLinhas; tipoBanco: TipoBanco }[];
+    conflitos: ConflitoExibicao[];
+  } | null>(null);
+  const [decisoesConflito, setDecisoesConflito] = useState<Map<string, DecisaoConflito>>(new Map());
   const emInicializacao = useRef(new Set<TipoRelatorioMapeado>());
 
   const gruposPorTipo = useMemo(() => {
@@ -106,6 +136,95 @@ export function UploadsPage() {
     }
   }
 
+/** Junta os dois lados (Banco e Sistema) — cada um com seu próprio mecanismo de detecção — numa lista só, pra mostrar antes de gravar qualquer coisa. */
+  async function detectarTodosConflitos(arquivosSistema: File[], gruposBanco: { grupo: GrupoLinhas; tipoBanco: TipoBanco }[]): Promise<ConflitoExibicao[]> {
+    const conflitos: ConflitoExibicao[] = [];
+
+    const registrosBanco = gruposBanco.flatMap(({ grupo, tipoBanco }) => parseGrupoBanco(grupo, tipoBanco));
+    if (registrosBanco.length > 0) {
+      const conflitosBanco = await detectarConflitosConciliados(registrosBanco);
+      conflitos.push(
+        ...conflitosBanco.map(
+          (c: ConflitoRegistroBanco): ConflitoExibicao => ({
+            chaveDecisao: `banco|${c.fitid}`,
+            origem: 'banco',
+            label: c.novo.descricao || c.fitid,
+            antigo: { data: c.antigo.data, valor: c.antigo.valor },
+            novo: { data: c.novo.data, valor: c.novo.valor },
+            bancoFitid: c.fitid,
+          }),
+        ),
+      );
+    }
+
+    for (const file of arquivosSistema) {
+      const { registros } = await parseArquivoSistema(file);
+      const conflitosSistema = await detectarConflitosConciliadosSistema(registros);
+      conflitos.push(
+        ...conflitosSistema.map(
+          (c: ConflitoRegistroSistema): ConflitoExibicao => ({
+            chaveDecisao: `sistema|${c.chave}`,
+            origem: 'sistema',
+            label: c.novo.cliente || c.novo.documento || c.chave,
+            antigo: { data: c.antigo.data, valor: c.antigo.valor },
+            novo: { data: c.novo.data, valor: c.novo.valor },
+            sistemaAntigoId: c.antigoId,
+            sistemaNovo: c.novo,
+          }),
+        ),
+      );
+    }
+
+    return conflitos;
+  }
+
+  /**
+   * Grava de fato — chamado direto (sem conflito nenhum) ou pelo botão
+   * "Confirmar e importar" do modal (com `decisoes` escolhidas registro a
+   * registro). No Sistema, "atualizar" precisa de um UPDATE explícito (o
+   * upsert normal criaria uma linha nova, já que valor/data mudados não
+   * batem mais na chave de conflito) — no Banco não precisa de nada
+   * especial, o upsert por fitid sozinho já sobrescreve.
+   */
+  async function executarGravacaoConciliacao(
+    arquivosSistema: File[],
+    gruposBanco: { grupo: GrupoLinhas; tipoBanco: TipoBanco }[],
+    conflitos: ConflitoExibicao[],
+    decisoes: Map<string, DecisaoConflito>,
+  ) {
+    setProcessandoConciliacao(true);
+    setErroConciliacao(null);
+    setSucessoConciliacao(null);
+    try {
+      const fitidsManterBanco = new Set<string>();
+      const chavesExcluirSistema = new Set<string>();
+      for (const c of conflitos) {
+        const decisao = decisoes.get(c.chaveDecisao) ?? 'manter';
+        if (c.origem === 'banco' && c.bancoFitid) {
+          if (decisao === 'manter') fitidsManterBanco.add(c.bancoFitid);
+        } else if (c.origem === 'sistema' && c.sistemaAntigoId && c.sistemaNovo) {
+          const chave = c.chaveDecisao.slice('sistema|'.length);
+          chavesExcluirSistema.add(chave);
+          if (decisao === 'atualizar') await atualizarLancamentoSistemaConciliado(c.sistemaAntigoId, c.sistemaNovo);
+        }
+      }
+
+      for (const file of arquivosSistema) await importarArquivoSistema(file, chavesExcluirSistema);
+      for (const { grupo, tipoBanco } of gruposBanco) await importarGrupoBanco(grupo, tipoBanco, fitidsManterBanco);
+
+      queryClient.invalidateQueries({ queryKey: ['conciliacao'] });
+      queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
+      const total = arquivosSistema.length + gruposBanco.length;
+      setSucessoConciliacao(`${total} arquivo(s) de Conciliação (Banco/Sistema) importado(s) com sucesso.`);
+    } catch (e) {
+      setErroConciliacao(mensagemDeErro(e, 'Falha ao importar Conciliação Bancária.'));
+    } finally {
+      setProcessandoConciliacao(false);
+      setPendenteConciliacao(null);
+      setDecisoesConflito(new Map());
+    }
+  }
+
   /**
    * O lado Sistema (HTML) ainda é reconhecido pela extensão do arquivo, mas o
    * lado Banco (extrato BB / recebíveis Stone) agora vem em .xlsx/.csv — os
@@ -133,15 +252,18 @@ export function UploadsPage() {
       setErroConciliacao(null);
       setSucessoConciliacao(null);
       try {
-        for (const file of arquivosSistema) await importarArquivoSistema(file);
-        for (const { grupo, tipoBanco } of gruposBanco) await importarGrupoBanco(grupo, tipoBanco);
-        queryClient.invalidateQueries({ queryKey: ['conciliacao'] });
-        queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
-        const total = arquivosSistema.length + gruposBanco.length;
-        setSucessoConciliacao(`${total} arquivo(s) de Conciliação (Banco/Sistema) importado(s) com sucesso.`);
+        const conflitos = await detectarTodosConflitos(arquivosSistema, gruposBanco);
+        if (conflitos.length > 0) {
+          // Nada é gravado ainda — fica esperando o usuário decidir cada
+          // registro em conflito no modal (padrão "manter" = mais seguro).
+          setPendenteConciliacao({ arquivosSistema, gruposBanco, conflitos });
+          setDecisoesConflito(new Map(conflitos.map((c) => [c.chaveDecisao, 'manter' as DecisaoConflito])));
+          setProcessandoConciliacao(false);
+        } else {
+          await executarGravacaoConciliacao(arquivosSistema, gruposBanco, [], new Map());
+        }
       } catch (e) {
         setErroConciliacao(mensagemDeErro(e, 'Falha ao importar Conciliação Bancária.'));
-      } finally {
         setProcessandoConciliacao(false);
       }
     }
@@ -306,6 +428,81 @@ export function UploadsPage() {
 
         <UploadLog />
       </div>
+
+      <Modal
+        open={pendenteConciliacao !== null}
+        title="Registros já conciliados com dado diferente no arquivo novo"
+        onClose={() => {
+          setPendenteConciliacao(null);
+          setDecisoesConflito(new Map());
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setPendenteConciliacao(null);
+                setDecisoesConflito(new Map());
+              }}
+              className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+            >
+              Cancelar (não importa nada deste lote)
+            </button>
+            <button
+              type="button"
+              disabled={processandoConciliacao}
+              onClick={() =>
+                pendenteConciliacao &&
+                executarGravacaoConciliacao(pendenteConciliacao.arquivosSistema, pendenteConciliacao.gruposBanco, pendenteConciliacao.conflitos, decisoesConflito)
+              }
+              className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-sm font-semibold text-white hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {processandoConciliacao ? 'Importando…' : 'Confirmar e importar'}
+            </button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-[var(--color-text-soft)]">
+          {pendenteConciliacao?.conflitos.length} registro(s) já conciliado(s) mudaram de valor e/ou data no arquivo novo. Escolha, pra cada um: <strong>Atualizar</strong>{' '}
+          (usa o dado novo) ou <strong>Manter</strong> (ignora o dado novo, preserva o que já está gravado).
+        </p>
+        <ul className="max-h-[50vh] space-y-2 overflow-y-auto text-sm">
+          {pendenteConciliacao?.conflitos.map((c) => {
+            const decisao = decisoesConflito.get(c.chaveDecisao) ?? 'manter';
+            return (
+              <li key={c.chaveDecisao} className="rounded-md border border-[var(--color-line)] p-2.5">
+                <div className="font-semibold text-[var(--color-text)]">
+                  {c.origem === 'banco' ? 'Banco' : 'Sistema'} — {c.label}
+                </div>
+                <div className="mt-0.5 text-xs text-[var(--color-text-soft)]">
+                  Antigo: {c.antigo.data ? fmtDataBR(c.antigo.data) : '—'} · R$ {c.antigo.valor.toFixed(2)} &nbsp;→&nbsp; Novo:{' '}
+                  {c.novo.data ? fmtDataBR(c.novo.data) : '—'} · R$ {c.novo.valor.toFixed(2)}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDecisoesConflito((prev) => new Map(prev).set(c.chaveDecisao, 'atualizar'))}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      decisao === 'atualizar' ? 'bg-[var(--color-accent)] text-white' : 'border border-[var(--color-line)] text-[var(--color-text-soft)]'
+                    }`}
+                  >
+                    Atualizar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDecisoesConflito((prev) => new Map(prev).set(c.chaveDecisao, 'manter'))}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                      decisao === 'manter' ? 'bg-[var(--color-accent)] text-white' : 'border border-[var(--color-line)] text-[var(--color-text-soft)]'
+                    }`}
+                  >
+                    Manter
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </Modal>
     </AppShell>
   );
 }
