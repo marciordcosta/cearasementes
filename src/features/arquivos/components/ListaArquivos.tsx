@@ -24,6 +24,27 @@ interface ListaArquivosProps {
   onAbrirGuiaPlantio: (arquivo: ArquivoLaudo) => void;
 }
 
+/**
+ * "Validade" é texto livre lido do laudo (ou digitado à mão) — vem em
+ * formatos diferentes conforme o modelo do documento ("MM/AAAA" no boletim
+ * de análise, "DD/MM/AAAA" quando tem dia certo). Converte pra uma chave
+ * ISO comparável; sem isso, ordenar como string colocaria "07/2026" antes
+ * de "12/2025" (compara caractere a caractere, "0" < "1"). Sem validade
+ * nenhuma reconhecida, cai pro fim da lista (string vazia).
+ */
+function chaveOrdenacaoValidade(validade: string | null): string {
+  if (!validade) return '';
+  const texto = validade.trim();
+  const mesAno = texto.match(/^(\d{1,2})\/(\d{4})$/);
+  if (mesAno) return `${mesAno[2]}-${mesAno[1].padStart(2, '0')}-01`;
+  const diaMesAno = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (diaMesAno) {
+    const ano = diaMesAno[3].length === 2 ? `20${diaMesAno[3]}` : diaMesAno[3];
+    return `${ano}-${diaMesAno[2].padStart(2, '0')}-${diaMesAno[1].padStart(2, '0')}`;
+  }
+  return texto;
+}
+
 // Word/Excel/PowerPoint abrem via Google Docs Viewer (com a toolbar completa
 // dele, que tem botão de imprimir) — abrir a URL crua desses formatos faz o
 // navegador simplesmente baixar o arquivo em vez de mostrar algo pra imprimir.
@@ -45,11 +66,11 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
     });
   }
 
-  // Mais recentes primeiro; nome do produto como critério de desempate pra
-  // quem foi enviado no mesmo momento (import em lote).
+  // Validade mais recente primeiro; nome do produto como critério de
+  // desempate (ou quando não há validade reconhecida em nenhum dos dois).
   const filtrados = [...filtrarArquivos(arquivos, busca)].sort((a, b) => {
-    const porData = b.enviadoEm.localeCompare(a.enviadoEm);
-    return porData !== 0 ? porData : a.nomeProduto.localeCompare(b.nomeProduto);
+    const porValidade = chaveOrdenacaoValidade(b.validade).localeCompare(chaveOrdenacaoValidade(a.validade));
+    return porValidade !== 0 ? porValidade : a.nomeProduto.localeCompare(b.nomeProduto);
   });
 
   const todosSelecionados = filtrados.length > 0 && filtrados.every((a) => selecionados.has(a.id));
