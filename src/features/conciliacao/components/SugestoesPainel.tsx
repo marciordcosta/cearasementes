@@ -246,7 +246,7 @@ export function SugestoesPainel({
                         {vencimentoCandidato ? fmtDataBR(vencimentoCandidato) : item.data ? fmtDataBR(item.data) : '—'}
                         {linha2 && ` · ${linha2}`}
                       </span>
-                      {direcao === 'banco' && (item as LancamentoSistema).documento && (
+                      {direcao === 'banco' && (item as LancamentoSistema).temVenda396 && (
                         <button
                           type="button"
                           onClick={(e) => {

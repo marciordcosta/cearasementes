@@ -51,6 +51,7 @@ import {
 import { fetchRegras, REGRAS_PADRAO, salvarRegra, type FormaRegra, type RegraConciliacao } from '@/features/conciliacao/regras';
 import type { FiltrosConciliacao as FiltrosConciliacaoType, LancamentoBanco, LancamentoSistema } from '@/features/conciliacao/types';
 import { getCategoriaSistema, valoresIguais } from '@/features/conciliacao/utils';
+import { buscarTodosNomesPorDocumento, documentoBase } from '@/features/vendas396/api';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtDataBR } from '@/lib/format';
 
@@ -112,6 +113,8 @@ export function ConciliacaoPage() {
   const { data: regrasData } = useQuery({ queryKey: ['conciliacao', 'regras'], queryFn: fetchRegras });
   const { data: gruposAvisoData } = useQuery({ queryKey: ['conciliacao', 'grupos-aviso'], queryFn: fetchGruposComAviso });
   const { data: descartesData } = useQuery({ queryKey: ['conciliacao', 'descartes'], queryFn: fetchSugestoesDescartadas });
+  /** Base do documento -> nome completo do cliente no pedido (Relatório 396) — usado pra trocar o nome truncado do HTML matricial do Sistema pelo nome de verdade, e pra saber se existe uma venda de verdade por trás do documento (ver LancamentoSistema.temVenda396). */
+  const { data: nomesVenda396Data } = useQuery({ queryKey: ['vendas396', 'nomes-por-documento'], queryFn: buscarTodosNomesPorDocumento });
 
   const [banco, setBanco] = useState<LancamentoBanco[]>([]);
   const [sistema, setSistema] = useState<LancamentoSistema[]>([]);
@@ -126,8 +129,14 @@ export function ConciliacaoPage() {
   useEffect(() => {
     if (!bancoData || !sistemaData) return;
     setBanco(bancoData);
-    setSistema(sistemaData);
-  }, [bancoData, sistemaData]);
+    const nomesVenda396 = nomesVenda396Data ?? new Map<string, string>();
+    setSistema(
+      sistemaData.map((s) => {
+        const cliente396 = s.documento ? nomesVenda396.get(documentoBase(s.documento)) : undefined;
+        return cliente396 ? { ...s, cliente: cliente396, temVenda396: true } : { ...s, temVenda396: false };
+      }),
+    );
+  }, [bancoData, sistemaData, nomesVenda396Data]);
 
   useEffect(() => {
     if (regrasData) setRegras(regrasData);
@@ -276,13 +285,14 @@ export function ConciliacaoPage() {
     return mapa;
   }, [sistema]);
 
-  // grupoId -> 1º lançamento do Sistema daquele grupo que tem documento — usado pro
-  // ícone de "ver produtos/pagamento da venda" também no lado Banco (só existe
-  // indiretamente ali, via o grupo conciliado; o Banco não tem documento próprio).
+  // grupoId -> 1º lançamento do Sistema daquele grupo que tem uma venda de
+  // verdade encontrada (temVenda396) — usado pro ícone de "ver produtos/
+  // pagamento da venda" também no lado Banco (só existe indiretamente ali,
+  // via o grupo conciliado; o Banco não tem documento próprio).
   const sistemaComDocumentoPorGrupo = useMemo(() => {
     const mapa = new Map<string, LancamentoSistema>();
     for (const s of sistema) {
-      if (!s.grupoId || !s.documento || mapa.has(s.grupoId)) continue;
+      if (!s.grupoId || !s.temVenda396 || mapa.has(s.grupoId)) continue;
       mapa.set(s.grupoId, s);
     }
     return mapa;

@@ -167,7 +167,7 @@ export function ListaSistema({
                   </span>
                 ))}
               </div>
-              {item.documento && (
+              {item.temVenda396 && (
                 <button
                   type="button"
                   onClick={() => onAbrirVendaDetalhe(item)}

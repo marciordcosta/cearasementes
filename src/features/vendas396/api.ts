@@ -1,3 +1,4 @@
+import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import type { Venda396 } from './types';
@@ -114,8 +115,39 @@ export interface VendaDetalhe {
 }
 
 /** "VE29705-1/3" (parcela) → "VE29705" — todas as parcelas de um recebimento são a mesma venda/pedido. */
-function documentoBase(documento: string): string {
+export function documentoBase(documento: string): string {
   return documento.replace(/-\d+\/\d+$/, '').trim();
+}
+
+/**
+ * Mapa BASE do documento (sem sufixo de parcela) → nome do cliente que
+ * consta no pedido (Relatório 396) — usado pra: (1) mostrar o nome completo
+ * no lugar do truncado que vem do HTML matricial do Sistema (que corta em
+ * largura fixa de coluna), e (2) saber se existe uma venda correspondente de
+ * verdade (documento sem entrada aqui = não achou, não é só "sem nome").
+ *
+ * Busca tudo de uma vez (não é 1 lookup por lançamento) — a grade do Sistema
+ * pode ter milhares de linhas, então em vez de N buscas por documento, traz
+ * as duas tabelas inteiras (poucas colunas cada) e casa em memória. `num_doc`
+ * do 396 pode ter seu PRÓPRIO sufixo de parcela (às vezes numerado diferente
+ * do lado Sistema) — por isso também passa pela mesma normalização.
+ */
+export async function buscarTodosNomesPorDocumento(): Promise<Map<string, string>> {
+  const [pagamentos, vendas] = await Promise.all([
+    fetchAllRows<{ num_doc: string | null; venda_id: string }>((from, to) => supabase.from('vendas_tabela_preco_pagamentos').select('num_doc, venda_id').range(from, to)),
+    fetchAllRows<{ id: string; cliente: string | null }>((from, to) => supabase.from('vendas_tabela_preco').select('id, cliente').range(from, to)),
+  ]);
+
+  const clientePorVendaId = new Map(vendas.map((v) => [v.id, v.cliente]));
+  const resultado = new Map<string, string>();
+  for (const p of pagamentos) {
+    if (!p.num_doc) continue;
+    const base = documentoBase(p.num_doc);
+    if (!base || resultado.has(base)) continue;
+    const cliente = clientePorVendaId.get(p.venda_id);
+    if (cliente) resultado.set(base, cliente);
+  }
+  return resultado;
 }
 
 /**

@@ -44,6 +44,8 @@ export interface LancamentoSistema {
   grupoId: string | null;
   /** Anotação livre do usuário (observações, informações adicionais) — mesma regra do Banco, independente de conciliado/desativado. */
   observacao: string | null;
+  /** true quando `cliente` foi trocado pelo nome completo que vem no pedido (Relatório 396, achado pelo documento) — o HTML matricial do Sistema trunca o nome na largura fixa da coluna. Também decide se o ícone de produtos aparece (só quando achou uma venda de verdade, não só por ter `documento` preenchido). Calculado na hora de montar a lista (ConciliacaoPage), não vem do banco — ausente (undefined) em lançamentos sintéticos (combinação, manual). */
+  temVenda396?: boolean;
 }
 
 export interface ArquivoConciliacao {
