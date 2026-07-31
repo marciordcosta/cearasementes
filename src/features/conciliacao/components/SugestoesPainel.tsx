@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Filter, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Package, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { PainelFlutuante } from '@/components/ui/PainelFlutuante';
@@ -38,6 +38,8 @@ interface SugestoesPainelProps {
   descartadosCount: number;
   /** Abre o modal com a lista desses descartes (com "Restaurar" em cada). */
   onAbrirDescartados: () => void;
+  /** Abre o modal com produtos/pagamento da venda (Relatório 396) por trás do documento — só aparece em candidato do Sistema (direção Banco→Sistema) com `documento` preenchido. */
+  onAbrirVendaDetalhe: (item: LancamentoSistema) => void;
 }
 
 const ROTULOS = ROTULOS_CATEGORIA_SUGESTAO;
@@ -75,6 +77,7 @@ export function SugestoesPainel({
   filtroOutroLadoAtivo,
   descartadosCount,
   onAbrirDescartados,
+  onAbrirVendaDetalhe,
 }: SugestoesPainelProps) {
   const [busca, setBusca] = useState('');
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<keyof SugestoesConciliacao>>(new Set());
@@ -238,9 +241,24 @@ export function SugestoesPainel({
                         </span>
                       )}
                     </div>
-                    <div className="truncate text-[11px] text-[var(--color-text-soft)]">
-                      {vencimentoCandidato ? fmtDataBR(vencimentoCandidato) : item.data ? fmtDataBR(item.data) : '—'}
-                      {linha2 && ` · ${linha2}`}
+                    <div className="flex items-center gap-1 truncate text-[11px] text-[var(--color-text-soft)]">
+                      <span className="truncate">
+                        {vencimentoCandidato ? fmtDataBR(vencimentoCandidato) : item.data ? fmtDataBR(item.data) : '—'}
+                        {linha2 && ` · ${linha2}`}
+                      </span>
+                      {direcao === 'banco' && (item as LancamentoSistema).documento && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAbrirVendaDetalhe(item as LancamentoSistema);
+                          }}
+                          className="shrink-0 text-[var(--color-text-soft)] opacity-50 hover:text-[var(--color-text)] hover:opacity-100"
+                          title="Ver produtos e pagamento da venda"
+                        >
+                          <Package size={12} />
+                        </button>
+                      )}
                     </div>
                     {vencimentoCandidato && (
                       <div className="truncate text-[11px] text-[var(--color-text-soft)]">(receb. {item.data ? fmtDataBR(item.data) : '—'})</div>

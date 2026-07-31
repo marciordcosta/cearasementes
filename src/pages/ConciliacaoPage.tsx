@@ -1409,6 +1409,7 @@ export function ConciliacaoPage() {
         filtroOutroLadoAtivo={sugestaoAtiva?.direcao === 'sistema' ? filtroGrupoSistema : filtroGrupoBanco}
         descartadosCount={paresDoItemFixo.length}
         onAbrirDescartados={() => setDescartadosModalAberto(true)}
+        onAbrirVendaDetalhe={onAbrirVendaDetalhe}
       />
 
       <NovoLancamentoManualModal open={modalManualAberto} valoresIniciais={valoresIniciaisManual} onFechar={onFecharModalManual} onSalvar={onSalvarLancamentoManual} />
