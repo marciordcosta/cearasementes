@@ -9,9 +9,7 @@ export interface LinhaGuiaPlantioPdf {
   area: string;
   taxaSemeadura: string;
   totalPrevisto: string;
-  custoPorHa: string;
   totalSacos: string;
-  valorTotal: string;
   /** "Covas/m²" — só quando o modo é Covas. A Lanço não tem equivalente exibido (peso/m² é irrelevante pro operador). */
   sementesOuCovasLabel: string | null;
   sementesOuCovasValor: string | null;
@@ -24,7 +22,12 @@ export interface LinhaGuiaPlantioPdf {
 export interface ResumoGuiaPlantioPdf {
   totalSacos: string;
   totalPeso: string;
-  totalValor: string;
+}
+
+/** Condição de plantio selecionada (global, a mesma pra todos os produtos do Guia) — rótulo + texto técnico cadastrado na Parametrização de Produtos. */
+export interface CondicaoGuiaPlantioPdf {
+  label: string;
+  resumo: string | null;
 }
 
 function escapeHtml(texto: string): string {
@@ -76,7 +79,6 @@ function blocoProduto(l: LinhaGuiaPlantioPdf): string {
         </div>
         <div class="produto-totais">
           <span>Total de sacos: <strong>${l.totalSacos}</strong></span>
-          <span>Valor total: <strong>${l.valorTotal}</strong></span>
         </div>
       </div>
       <table class="tabela-resultado">
@@ -84,14 +86,12 @@ function blocoProduto(l: LinhaGuiaPlantioPdf): string {
           <tr>
             <td class="rotulo">Área</td>
             <td class="valor">${l.area}</td>
-            <td class="rotulo">Total previsto (kg)</td>
-            <td class="valor">${l.totalPrevisto}</td>
-          </tr>
-          <tr>
             <td class="rotulo">Taxa de semeadura</td>
             <td class="valor">${l.taxaSemeadura}</td>
-            <td class="rotulo">Custo por ha (R$)</td>
-            <td class="valor">${l.custoPorHa}</td>
+          </tr>
+          <tr>
+            <td class="rotulo">Total previsto (kg)</td>
+            <td class="valor" colspan="3">${l.totalPrevisto}</td>
           </tr>
         </tbody>
       </table>
@@ -103,23 +103,37 @@ function blocoProduto(l: LinhaGuiaPlantioPdf): string {
 /**
  * Guia de Plantio impresso (via janela de impressão do navegador, mesmo padrão de
  * gerarGuiaTestePdf/gerarCatalogoPDF) — os resultados calculados por produto
- * (modo, área, taxa, custo, sacos, peso, valor e sementes/covas) e,
- * opcionalmente (o operador escolhe na hora de imprimir), o Manual de
- * Plantio (editável na Parametrização de Produtos).
+ * (modo, área, taxa, sacos, peso e sementes/covas — sem valor, que não faz
+ * parte do Guia) e, opcionalmente (o operador escolhe na hora de imprimir),
+ * o Manual de Plantio (editável na Parametrização de Produtos).
  */
-export function gerarGuiaPlantioPdf(linhas: LinhaGuiaPlantioPdf[], resumo: ResumoGuiaPlantioPdf | null, manual: ManualPlantio | null, incluirManual: boolean): void {
+export function gerarGuiaPlantioPdf(
+  linhas: LinhaGuiaPlantioPdf[],
+  resumo: ResumoGuiaPlantioPdf | null,
+  condicaoAtual: CondicaoGuiaPlantioPdf | null,
+  manual: ManualPlantio | null,
+  incluirManual: boolean,
+): void {
   const corpoHtml =
     linhas.length === 0
       ? `<p class="vazio">Nenhum produto no Guia de Plantio.</p>`
       : `
         ${linhas.map(blocoProduto).join('')}
         ${
+          condicaoAtual
+            ? `
+        <div class="condicao-resumo">
+          <strong>Condição de plantio: ${escapeHtml(condicaoAtual.label)}</strong>
+          ${condicaoAtual.resumo ? `<p>${escapeHtml(condicaoAtual.resumo)}</p>` : ''}
+        </div>`
+            : ''
+        }
+        ${
           resumo && linhas.length > 1
             ? `
         <div class="resumo-geral">
           <span><strong>Total de Sacos:</strong> ${resumo.totalSacos}</span>
           <span><strong>Peso Total:</strong> ${resumo.totalPeso}</span>
-          <span><strong>Valor Total:</strong> ${resumo.totalValor}</span>
         </div>`
             : ''
         }
@@ -171,6 +185,12 @@ export function gerarGuiaPlantioPdf(linhas: LinhaGuiaPlantioPdf[], resumo: Resum
         .info-item:last-child{ border-right:none; }
         .info-rotulo{ font-size:9.5px; font-weight:700; text-transform:uppercase; color:#333333; }
         .info-valor{ font-size:12px; font-weight:700; }
+
+        .condicao-resumo{
+          background:#F0F0F0; border-radius:6px; padding:10px 14px; margin-top:16px; font-size:12.5px;
+        }
+        .condicao-resumo strong{ font-size:13px; }
+        .condicao-resumo p{ margin:4px 0 0; color:#333333; }
 
         .resumo-geral{
           display:flex; gap:24px; font-size:13px; border-top:2px solid #000000;

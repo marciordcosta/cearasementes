@@ -37,8 +37,7 @@ import { VisualizarArquivoModal } from '@/features/arquivos/components/Visualiza
 import { filtrarArquivos } from '@/features/arquivos/filtrarArquivos';
 import { gerarGuiaTestePdf } from '@/features/arquivos/guiaTestePdf';
 import type { ArquivoLaudo, ManualPlantio, NovoLaudoInput } from '@/features/arquivos/types';
-import { fetchTransportadoras } from '@/features/fretes/api';
-import { fetchCanais, fetchCategorias, fetchProdutos } from '@/features/pricing/api';
+import { fetchProdutos } from '@/features/pricing/api';
 import { mensagemDeErro } from '@/lib/errors';
 
 export function ArquivosPage() {
@@ -48,10 +47,7 @@ export function ArquivosPage() {
   const { data: fatores = [] } = useQuery({ queryKey: ['arquivos_fatores_plantio'], queryFn: fetchFatoresPlantio });
   const { data: checklist = [] } = useQuery({ queryKey: ['arquivos_checklist_plantio'], queryFn: fetchChecklistPlantio });
   const { data: manual = null } = useQuery({ queryKey: ['arquivos_manual_plantio'], queryFn: fetchManualPlantio });
-  const { data: canaisPreco = [] } = useQuery({ queryKey: ['pricing', 'canais'], queryFn: fetchCanais });
-  const { data: categoriasPreco = [] } = useQuery({ queryKey: ['pricing', 'categorias'], queryFn: fetchCategorias });
   const { data: produtosPreco = [] } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
-  const { data: transportadoras = [] } = useQuery({ queryKey: ['fretes', 'transportadoras'], queryFn: fetchTransportadoras });
 
   const [busca, setBusca] = useState('');
   const [uploadAberto, setUploadAberto] = useState(false);
@@ -346,7 +342,7 @@ export function ArquivosPage() {
       <ParametrizacaoProdutosModal
         open={parametrizacaoAberta}
         produtos={produtos}
-        produtosPreco={produtosPreco}
+        arquivos={arquivos}
         fatores={fatores}
         checklist={checklist}
         manual={manual}
@@ -372,10 +368,7 @@ export function ArquivosPage() {
         checklist={checklist}
         manual={manual}
         laudoInicial={laudoGuiaPlantio}
-        canaisPreco={canaisPreco}
-        categoriasPreco={categoriasPreco}
         produtosPreco={produtosPreco}
-        transportadoras={transportadoras}
         onFechar={() => {
           setGuiaPlantioAberto(false);
           setLaudoGuiaPlantio(null);

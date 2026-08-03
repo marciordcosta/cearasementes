@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal } from '@/features/pricing/calculations';
-import type { Canal, Categoria, Produto } from '@/features/pricing/types';
-import { fmtBRL } from '@/lib/format';
+import type { Produto } from '@/features/pricing/types';
 import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2 } from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
-import { grupoDoNome, normalizarNome, resolverMargemTolerancia, resolverModoPlantio, resolverPmsBaseTexto } from '../parametrizacaoProdutos';
+import { normalizarNome, resolverMargemTolerancia, resolverModoPlantio, resolverPmsBaseTexto } from '../parametrizacaoProdutos';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 import { ChecklistCondicaoModal } from './ChecklistCondicaoModal';
 
@@ -21,10 +18,7 @@ interface GuiaPlantioModalProps {
   manual: ManualPlantio | null;
   /** Laudo já vindo selecionado da grade de Arquivos — entra sozinho na pilha ao abrir. */
   laudoInicial: ArquivoLaudo | null;
-  canaisPreco: Canal[];
-  categoriasPreco: Categoria[];
   produtosPreco: Produto[];
-  transportadoras: Transportadora[];
   onFechar: () => void;
 }
 
@@ -47,8 +41,6 @@ interface ItemGuia {
   sementesCova: string;
   /** Qual dos 2 espaçamentos foi editado por último — o outro é recalculado. */
   ultimoCampoEspacamento: CampoEspacamento;
-  /** null = segue a condição global do cabeçalho; setado = o card foi ajustado à parte e não acompanha mais o cabeçalho. */
-  condicaoOverride: Condicao | null;
 }
 
 const OPCOES_MODO: { valor: Modo; rotulo: string }[] = [
@@ -61,63 +53,6 @@ const OPCOES_CONDICAO: { valor: Condicao; rotulo: string }[] = [
   { valor: 'media', rotulo: 'Média' },
   { valor: 'ideal', rotulo: 'Ideal' },
 ];
-
-/**
- * Pill de condição por card — um botão (não um <select> nativo) pra ficar com a
- * MESMA cara dos pills de A Lanço/Covas (altura, fonte e centralização idênticas,
- * sem as inconsistências de padding/centralização que um <select> nativo tem entre
- * navegadores). Azul quando o card tem a condição ajustada à parte do cabeçalho.
- */
-function SeletorCondicaoItem({ valor, ajustada, onEscolher }: { valor: Condicao; ajustada: boolean; onEscolher: (v: Condicao) => void }) {
-  const [aberto, setAberto] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!aberto) return;
-    function fechar(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false);
-    }
-    document.addEventListener('click', fechar);
-    return () => document.removeEventListener('click', fechar);
-  }, [aberto]);
-
-  const rotulo = OPCOES_CONDICAO.find((o) => o.valor === valor)?.rotulo ?? '';
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setAberto((v) => !v)}
-        title={ajustada ? 'Condição ajustada só para este produto' : 'Condição de plantio — segue o cabeçalho, ajuste aqui pra fixar só neste produto'}
-        className={`inline-flex h-5 items-center gap-0.5 rounded-full border px-1.5 text-[10px] font-medium ${
-          ajustada ? 'border-blue-600 bg-blue-600 text-white' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
-        }`}
-      >
-        {rotulo}
-        <span className="text-[8px]">▾</span>
-      </button>
-      {aberto && (
-        <div className="absolute top-[calc(100%+4px)] right-0 z-[70] min-w-[76px] overflow-hidden rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl">
-          {OPCOES_CONDICAO.map((o) => (
-            <button
-              key={o.valor}
-              type="button"
-              onClick={() => {
-                setAberto(false);
-                onEscolher(o.valor);
-              }}
-              className={`block w-full px-2.5 py-1.5 text-left text-xs hover:bg-[var(--color-page)] ${
-                o.valor === valor ? 'font-semibold text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'
-              }`}
-            >
-              {o.rotulo}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function fatorDe(fatores: FatorPlantio[], chave: string): number {
   return paraNumero(fatores.find((f) => f.chave === chave)?.fator ?? null) ?? 1;
@@ -179,16 +114,37 @@ function validadeParaOrdenacao(validade: string | null): number {
   return ano * 12 + mes;
 }
 
+/** Duas palavras "iguais pra fins de nome" — idênticas, ou diferindo só na última letra (gênero: "incrustada" x "incrustado"). Exige pelo menos 4 caracteres pra não deixar palavra curta demais (ex.: "de", "do") crescer um falso positivo. */
+function palavrasParecidas(a: string, b: string): boolean {
+  if (a === b) return true;
+  const minLen = Math.min(a.length, b.length);
+  return minLen >= 4 && a.slice(0, minLen - 1) === b.slice(0, minLen - 1);
+}
+
 /**
- * Casa o produto do laudo com um produto da Tabela de Preço pelo GRUPO (1ª +
- * 3ª palavra, ver grupoDoNome) — mesmo critério usado em Parametrização.
- * Necessário porque a Tabela de Preço às vezes traz o nome científico no
- * meio ("Andropogon Gayanus Planaltina") que o laudo não tem ("Andropogon
- * Planaltina") — comparar o nome cru, sem reduzir, nunca batia.
+ * Casa o nome de um laudo com o nome de um produto da Tabela de Preço: toda
+ * palavra de conteúdo do laudo (ignora números soltos, tipo número de lote)
+ * precisa aparecer, em algum lugar, no nome da Tabela de Preço — não depende
+ * de posição nem de reduzir os dois nomes do mesmo jeito. Necessário porque
+ * a Tabela de Preço segue um padrão BEM diferente do laudo: tem gênero
+ * científico na frente e peso do pacote no fim ("Panicum Tanzania
+ * Tradicional 15kg"), enquanto o laudo só traz a variedade e o tratamento
+ * ("Tanzania 1 Tradicional", o "1" é o número do lote) — comparar por
+ * posição de palavra (1ª/3ª) não reconcilia os dois formatos ao mesmo
+ * tempo; comparar se as palavras do laudo aparecem soltas no nome da Tabela
+ * de Preço funciona nos dois formatos, sem precisar saber qual é o gênero.
  */
+function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: string): boolean {
+  const termosLaudo = normalizarNome(nomeLaudo)
+    .split(' ')
+    .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
+  if (termosLaudo.length === 0) return false;
+  const palavrasPreco = normalizarNome(nomeProdutoPreco).split(' ');
+  return termosLaudo.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
+}
+
 function encontrarProdutoPreco(nomeProduto: string, produtosPreco: Produto[]): Produto | null {
-  const alvo = normalizarNome(grupoDoNome(nomeProduto));
-  return produtosPreco.find((p) => normalizarNome(grupoDoNome(p.nome)) === alvo) ?? null;
+  return produtosPreco.find((p) => laudoCasaComNomePreco(nomeProduto, p.nome)) ?? null;
 }
 
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
@@ -197,24 +153,23 @@ function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: 
 }
 
 /**
- * Guia de Plantio — busca ancorada na Tabela de Preço (catálogo real, nome
- * garantido): o operador digita uma palavra-chave, o sistema acha os
- * produtos da Tabela de Preço que batem e, pra cada um, lista os laudos
- * (lote + validade) cujo nome casa EXATAMENTE com o daquele produto. Produto
- * sem nenhum laudo aparece mesmo assim, com aviso — sinaliza que o laudo
- * está com um nome diferente do cadastrado lá, em vez de simplesmente sumir.
- * Escolher um lote empilha um resultado, cada um com sua própria área — dá
- * pra montar o plano de plantio de vários produtos diferentes na mesma
- * sessão, um "x" no canto tira um resultado da pilha sem mexer nos outros.
+ * Guia de Plantio — busca ancorada direto nos laudos (não mais na Tabela de
+ * Preço): o operador digita uma palavra-chave, o sistema filtra os laudos
+ * cujo nome bate e agrupa por nome de produto. Escolher um lote empilha um
+ * resultado, cada um com sua própria área — dá pra montar o plano de plantio
+ * de vários produtos diferentes na mesma sessão, um "x" no canto tira um
+ * resultado da pilha sem mexer nos outros.
  *
  * Referência do cálculo é sempre a Densidade (Parametrização de Produtos):
  * Sementes/m² = Densidade ÷ Germinação final (VC%/teste × Sobrevivência% ×
  * Fatores de Modo/Condição) — não depende de PMS nem de área. PMS só entra
- * DEPOIS, pra converter Sementes/m² em kg/ha (peso). Sem PMS, kg/ha, Peso,
- * Sacos e Valor ficam pendentes, mas Sementes/m²/cova continuam saindo.
+ * DEPOIS, pra converter Sementes/m² em kg/ha (peso). Sem PMS, kg/ha, Peso e
+ * Sacos ficam pendentes, mas Sementes/m²/cova continuam saindo.
  *
- * Peso do saco e Valor vêm os dois da Tabela de Preço (módulo Precificação),
- * casando o produto do laudo pelo nome com um produto cadastrado lá.
+ * Peso do saco vem da Tabela de Preço (módulo Precificação), casando o
+ * produto do laudo pelo nome com um produto cadastrado lá — só usado por
+ * baixo dos panos pra converter kg em sacos, não aparece na busca nem exibe
+ * valor algum (preços podem não condizer com o sistema).
  */
 export function GuiaPlantioModal({
   open,
@@ -224,85 +179,43 @@ export function GuiaPlantioModal({
   checklist,
   manual,
   laudoInicial,
-  canaisPreco,
-  categoriasPreco,
   produtosPreco,
-  transportadoras,
   onFechar,
 }: GuiaPlantioModalProps) {
   const [condicao, setCondicao] = useState<Condicao>('media');
   const [condicaoOrigem, setCondicaoOrigem] = useState<'manual' | 'checklist'>('manual');
   const [checklistAberto, setChecklistAberto] = useState(false);
-  const [canalId, setCanalId] = useState('');
   const [busca, setBusca] = useState('');
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [itens, setItens] = useState<ItemGuia[]>([]);
   const [confirmarImpressaoAberto, setConfirmarImpressaoAberto] = useState(false);
-  const [setaResumoOffset, setSetaResumoOffset] = useState<number | null>(null);
-  const resumoContainerRef = useRef<HTMLDivElement>(null);
-  const condicaoBotaoRefs = useRef<Partial<Record<Condicao, HTMLButtonElement>>>({});
 
   const fatorCondicao = fatorDe(fatores, condicao);
-  const resumoCondicao = fatores.find((f) => f.chave === condicao)?.resumo ?? null;
 
-  // Reposiciona a setinha do resumo por cima do pill da condição selecionada (Baixa/Média/Ideal) —
-  // recalcula ao trocar a condição, ao reabrir o modal ou quando o resumo aparece/some.
-  useEffect(() => {
-    const botao = condicaoBotaoRefs.current[condicao];
-    const container = resumoContainerRef.current;
-    if (!botao || !container) {
-      setSetaResumoOffset(null);
-      return;
-    }
-    const botaoRect = botao.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    setSetaResumoOffset(botaoRect.left - containerRect.left + botaoRect.width / 2);
-  }, [condicao, resumoCondicao, open]);
-
-  /** Condição efetiva do card: o override dele, se tiver ajustado; senão, segue a condição global do cabeçalho. */
-  function condicaoDoItem(item: Pick<ItemGuia, 'condicaoOverride'>): Condicao {
-    return item.condicaoOverride ?? condicao;
-  }
-  const canalSelecionado = canaisPreco.find((c) => c.id === canalId) ?? null;
-  const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
-
-  /** Peso do pacote (kg) já cadastrado na Tabela de Preço — não depende de Tabela/canal escolhido, só de achar o produto pelo nome. */
+  /** Peso do pacote (kg) já cadastrado na Tabela de Preço — usado só pra converter kg em sacos, nunca exibido como valor. */
   function pesoSacoDoProduto(nomeProduto: string): number | null {
     const produtoPreco = encontrarProdutoPreco(nomeProduto, produtosPreco);
     return produtoPreco && produtoPreco.peso > 0 ? produtoPreco.peso : null;
   }
 
-  function precoSacoDoProduto(nomeProduto: string): number | null {
-    if (!canalSelecionado) return null;
-    const produtoPreco = encontrarProdutoPreco(nomeProduto, produtosPreco);
-    if (!produtoPreco) return null;
-    const categoria = categoriasPreco.find((c) => c.id === produtoPreco.categoriaId) ?? categoriasPreco[0];
-    if (!categoria) return null;
-    return calcularCanal(produtoPreco, canalSelecionado, categoria, transportadoraPorId).preco;
-  }
-
-  // Busca ancorada na Tabela de Preço (catálogo real, com peso e valor) — não
-  // nos laudos (nome livre, sem garantia nenhuma). Pra cada produto cujo nome
-  // bate com a palavra-chave, lista os laudos que casam com o mesmo GRUPO
-  // (1ª + 3ª palavra, ver grupoDoNome — mesmo critério da Parametrização: a
-  // Tabela de Preço às vezes traz o nome científico no meio, "Andropogon
-  // Gayanus Planaltina", que o laudo não tem, "Andropogon Planaltina");
-  // produto sem nenhum laudo aparece mesmo assim, com aviso — sinaliza que o
-  // laudo desse produto está com um nome diferente do cadastrado lá.
+  // Busca ancorada direto no laudo (nome livre, sem depender da Tabela de
+  // Preço) — filtra os laudos cujo nome bate com a palavra-chave e agrupa
+  // por nome de produto, só pra exibir os lotes juntos.
   const gruposFiltrados = useMemo(() => {
     const termo = normalizarNome(busca);
     if (!termo) return [];
-    return produtosPreco
-      .filter((p) => normalizarNome(p.nome).includes(termo))
-      .map((produto) => ({
-        produto,
-        laudos: arquivos
-          .filter((a) => normalizarNome(grupoDoNome(a.nomeProduto)) === normalizarNome(grupoDoNome(produto.nome)))
-          .sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade)),
-      }))
-      .sort((a, b) => a.produto.nome.localeCompare(b.produto.nome))
+    const porNome = new Map<string, { nome: string; laudos: ArquivoLaudo[] }>();
+    for (const a of arquivos) {
+      if (!normalizarNome(a.nomeProduto).includes(termo)) continue;
+      const chave = normalizarNome(a.nomeProduto);
+      if (!porNome.has(chave)) porNome.set(chave, { nome: a.nomeProduto, laudos: [] });
+      porNome.get(chave)!.laudos.push(a);
+    }
+    return [...porNome.values()]
+      .map((grupo) => ({ ...grupo, laudos: grupo.laudos.sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade)) }))
+      .sort((a, b) => a.nome.localeCompare(b.nome))
       .slice(0, 6);
-  }, [arquivos, produtosPreco, busca]);
+  }, [arquivos, busca]);
 
   function selecionar(a: ArquivoLaudo) {
     setItens((prev) => {
@@ -328,7 +241,6 @@ export function GuiaPlantioModal({
           corredor: '50',
           sementesCova: sementesCovaInicial === null ? '' : String(Math.round(sementesCovaInicial)),
           ultimoCampoEspacamento: 'corredor',
-          condicaoOverride: null,
         },
       ];
     });
@@ -360,7 +272,7 @@ export function GuiaPlantioModal({
     const sementesCova = sementesCovaValida(item.sementesCova);
     if (sementesCova !== null) {
       const fatorModo = fatorDe(fatores, item.modo);
-      const fatorCondicaoItem = fatorDe(fatores, condicaoDoItem(item));
+      const fatorCondicaoItem = fatorCondicao;
       const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
       if (sementesPorM2 !== null && sementesPorM2 > 0) {
         const itemAtualizado = { ...item, [campo]: valorTexto, ultimoCampoEspacamento: campo };
@@ -400,7 +312,7 @@ export function GuiaPlantioModal({
     const sementesCova = sementesCovaValida(valorLimpo);
     if (sementesCova !== null) {
       const fatorModo = fatorDe(fatores, item.modo);
-      const fatorCondicaoItem = fatorDe(fatores, condicaoDoItem(item));
+      const fatorCondicaoItem = fatorCondicao;
       const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
       if (sementesPorM2 !== null && sementesPorM2 > 0) {
         const derivadoPatch = derivarEspacamento(sementesPorM2, sementesCova, item);
@@ -416,7 +328,7 @@ export function GuiaPlantioModal({
     const sementesCova = sementesCovaValida(item.sementesCova);
     if (modo === 'linha_cova' && sementesCova !== null) {
       const fatorModo = fatorDe(fatores, modo);
-      const fatorCondicaoItem = fatorDe(fatores, condicaoDoItem(item));
+      const fatorCondicaoItem = fatorCondicao;
       const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
       if (sementesPorM2 !== null && sementesPorM2 > 0) {
         const derivadoPatch = derivarEspacamento(sementesPorM2, sementesCova, item);
@@ -426,31 +338,14 @@ export function GuiaPlantioModal({
     atualizarItem(item.laudoId, patch);
   }
 
-  /** O operador ajustou a condição só desse card (menu de escolha) — passa a ignorar o cabeçalho global e recalcula na hora. */
-  function mudarCondicaoItem(laudo: ArquivoLaudo, item: ItemGuia, condicaoNova: Condicao) {
-    const patch: Partial<ItemGuia> = { condicaoOverride: condicaoNova };
-    const sementesCova = sementesCovaValida(item.sementesCova);
-    if (item.modo === 'linha_cova' && sementesCova !== null) {
-      const fatorModo = fatorDe(fatores, item.modo);
-      const fatorCondicaoNovo = fatorDe(fatores, condicaoNova);
-      const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoNovo);
-      if (sementesPorM2 !== null && sementesPorM2 > 0) {
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesCova, item);
-        if (derivadoPatch) Object.assign(patch, derivadoPatch);
-      }
-    }
-    atualizarItem(item.laudoId, patch);
-  }
-
-  // A condição de plantio muda o fator de perda e, com ele, o alvo de Sementes/m² —
-  // sem isso, o espaçamento derivado ficaria com o valor antigo até o operador tocar
-  // nele de novo. Só afeta cards que ainda seguem o cabeçalho — os que têm
-  // condicaoOverride setado ficam de fora (já foram ajustados à parte).
+  // A condição de plantio (agora só global, no cabeçalho) muda o fator de
+  // perda e, com ele, o alvo de Sementes/m² — sem isso, o espaçamento
+  // derivado ficaria com o valor antigo até o operador tocar nele de novo.
   useEffect(() => {
     setItens((prev) => {
       let mudou = false;
       const proximos = prev.map((item) => {
-        if (item.modo !== 'linha_cova' || item.condicaoOverride !== null) return item;
+        if (item.modo !== 'linha_cova') return item;
         const sementesCova = sementesCovaValida(item.sementesCova);
         if (sementesCova === null) return item;
         const laudo = arquivos.find((a) => a.id === item.laudoId);
@@ -477,40 +372,39 @@ export function GuiaPlantioModal({
 
   function calcularResultado(laudo: ArquivoLaudo, item: ItemGuia) {
     const fatorModo = fatorDe(fatores, item.modo);
-    const fatorCondicaoItem = fatorDe(fatores, condicaoDoItem(item));
+    const fatorCondicaoItem = fatorCondicao;
     const kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
     const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
     const areaNum = paraNumero(item.area);
-    const pesoTotal = kgPorHa !== null && areaNum !== null && areaNum > 0 ? kgPorHa * areaNum : null;
+    // Total necessário parte do kg/ha já arredondado pra cima (o mesmo número
+    // exibido em Taxa de Semeadura), não do valor cru — os cálculos de
+    // Densidade/Germinação já carregam alguma imprecisão de campo, então é
+    // melhor ter essa folga (compra um pouco a mais) do que fechar exato.
+    const pesoTotal = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
     const pesoSaco = pesoSacoDoProduto(laudo.nomeProduto);
     // Arredonda por margem de tolerância (Parametrização, 25% padrão) — não
     // por 0,5 nem sempre pra cima (Math.ceil antigo virava 1 saco a mais só
     // por faltar 1kg, um exagero em compras maiores).
     const margemTolerancia = resolverMargemTolerancia(laudo.nomeProduto, produtos);
     const sacos = pesoTotal !== null && pesoSaco !== null && pesoSaco > 0 ? arredondarSacos(pesoTotal / pesoSaco, margemTolerancia / 100) : null;
-    const precoSaco = precoSacoDoProduto(laudo.nomeProduto);
-    const valorTotal = sacos !== null && precoSaco !== null ? sacos * precoSaco : null;
-    // Custo por hectare = preço por kg (valor unit. ÷ peso do saco) × taxa de semeadura (kg/ha) — quanto custa plantar 1 ha, direto (não depende da área digitada).
-    const custoPorHa = precoSaco !== null && pesoSaco !== null && pesoSaco > 0 && kgPorHa !== null ? (precoSaco / pesoSaco) * kgPorHa : null;
     // Peso total REAL (o que efetivamente se compra/pesa) = sacos (arredondados) × peso do saco — diferente do
     // "Total previsto/necessário" (teórico, continuo) porque só dá pra comprar saco inteiro.
     const pesoTotalReal = sacos !== null && pesoSaco !== null ? sacos * pesoSaco : null;
     const covasPorM2 = item.modo === 'linha_cova' ? calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor)) : null;
     const sementesPorCova = calcularSementesPorCova(sementesPorM2, covasPorM2);
-    return { kgPorHa, pesoTotal, pesoTotalReal, pesoSaco, sacos, valorTotal, custoPorHa, sementesPorCova, sementesPorM2, precoSaco, covasPorM2 };
+    return { kgPorHa, pesoTotal, pesoTotalReal, pesoSaco, sacos, sementesPorCova, sementesPorM2, covasPorM2 };
   }
 
-  function motivoSemSacos(pesoSaco: number | null): string {
-    return pesoSaco === null ? 'Produto não encontrado na Tabela de Preço, ou sem peso cadastrado lá' : '';
+  /** Taxa de Semeadura (kg/ha) nas outras 2 condições (não a selecionada agora) — só informativo, pra comparar sem precisar trocar a condição global. */
+  function kgPorHaOutrasCondicoes(laudo: ArquivoLaudo, item: ItemGuia): { rotulo: string; kgPorHa: number | null }[] {
+    const fatorModo = fatorDe(fatores, item.modo);
+    return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => ({
+      rotulo: o.rotulo,
+      kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorDe(fatores, o.valor)),
+    }));
   }
 
-  function motivoSemValor(sacos: number | null): string {
-    if (!canalId) return 'Escolha uma Tabela de Preço pra calcular o valor';
-    if (sacos === null) return 'Produto sem peso cadastrado na Tabela de Preço';
-    return 'Produto não encontrado na Tabela de Preço (confira se o nome bate)';
-  }
-
-  // Soma dos cards empilhados — só entra na soma o que deu pra calcular (sacos/peso/valor nulos são ignorados, não zerados).
+  // Soma dos cards empilhados — só entra na soma o que deu pra calcular (sacos/peso nulos são ignorados, não zerados).
   const resumoGeral = itens.reduce(
     (acc, item) => {
       const laudo = arquivos.find((a) => a.id === item.laudoId);
@@ -519,19 +413,20 @@ export function GuiaPlantioModal({
       return {
         totalSacos: acc.totalSacos + (r.sacos ?? 0),
         totalPeso: acc.totalPeso + (r.pesoTotalReal ?? 0),
-        totalValor: acc.totalValor + (r.valorTotal ?? 0),
       };
     },
-    { totalSacos: 0, totalPeso: 0, totalValor: 0 },
+    { totalSacos: 0, totalPeso: 0 },
   );
 
   function imprimir(comManual: boolean) {
+    const condicaoLabelAtual = OPCOES_CONDICAO.find((o) => o.valor === condicao)?.rotulo ?? '';
+    const condicaoResumoAtual = fatores.find((f) => f.categoria === 'condicao' && f.chave === condicao)?.resumo ?? null;
     const linhas = itens.flatMap((item) => {
       const laudo = arquivos.find((a) => a.id === item.laudoId);
       if (!laudo) return [];
       const r = calcularResultado(laudo, item);
       const modoLabel = OPCOES_MODO.find((o) => o.valor === item.modo)?.rotulo ?? '';
-      const condicaoLabel = OPCOES_CONDICAO.find((o) => o.valor === condicaoDoItem(item))?.rotulo ?? '';
+      const condicaoLabel = condicaoLabelAtual;
       return [
         {
           nomeProduto: laudo.nomeProduto,
@@ -541,9 +436,7 @@ export function GuiaPlantioModal({
           area: item.area ? `${item.area} ha` : '—',
           taxaSemeadura: r.kgPorHa === null ? '—' : `${Math.ceil(r.kgPorHa)} kg/ha`,
           totalPrevisto: r.pesoTotal === null ? '—' : `${Math.ceil(r.pesoTotal)} kg`,
-          custoPorHa: r.custoPorHa === null ? '—' : fmtBRL.format(r.custoPorHa),
           totalSacos: r.sacos === null ? '—' : `${r.sacos} sacos`,
-          valorTotal: r.valorTotal === null ? '—' : fmtBRL.format(r.valorTotal),
           sementesOuCovasLabel: item.modo === 'linha_cova' ? 'Covas/m²' : null,
           sementesOuCovasValor: item.modo === 'linha_cova' ? (r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)) : null,
           espacamento: item.modo === 'linha_cova' ? `${item.cova || '—'}×${item.corredor || '—'} cm` : null,
@@ -556,122 +449,88 @@ export function GuiaPlantioModal({
       {
         totalSacos: `${resumoGeral.totalSacos} sacos`,
         totalPeso: `${Math.ceil(resumoGeral.totalPeso)} kg`,
-        totalValor: fmtBRL.format(resumoGeral.totalValor),
       },
+      { label: condicaoLabelAtual, resumo: condicaoResumoAtual },
       manual,
       comManual,
     );
   }
 
-  const mostrandoSugestoes = buscaAberta && gruposFiltrados.length > 0;
-  const mostrandoSemResultado = buscaAberta && busca.trim().length > 0 && gruposFiltrados.length === 0;
-  // O painel de sugestões é `absolute` e não entra no fluxo normal — sem essa
-  // reserva, o modal (que cresce só pelo conteúdo em fluxo) fica baixo demais
-  // e o `overflow-y-auto` do próprio Modal corta o painel por cima.
-  const alturaReservada = mostrandoSugestoes
-    ? Math.min(
-        gruposFiltrados.reduce((acc, g) => acc + 24 + Math.max(g.laudos.length, 1) * 40, 0),
-        320,
-      ) + 8
-    : mostrandoSemResultado
-      ? 44
-      : 0;
-
   return (
     <Modal
       open={open}
-      title="Guia de Plantio"
+      title={
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <span className="whitespace-nowrap">Guia de Plantio</span>
+            {itens.length > 0 && (
+              <span className="whitespace-nowrap text-xs font-normal text-slate-300">
+                <span className="font-semibold text-white">{resumoGeral.totalSacos}</span> sacos ·{' '}
+                <span className="font-semibold text-white">{Math.ceil(resumoGeral.totalPeso)} kg</span>
+              </span>
+            )}
+            {itens.length > 0 && (
+              <button
+                type="button"
+                onClick={() => (manual ? setConfirmarImpressaoAberto(true) : imprimir(false))}
+                title="Imprimir"
+                className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/15 text-white/90 transition hover:bg-white/28"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9" />
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                  <rect x="6" y="14" width="12" height="8" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+      }
       onClose={fecharTudo}
       widthClassName="max-w-[640px]"
       heightClassName="max-h-[92vh]"
-      footer={
-        itens.length > 0 ? (
-          <div className="flex w-full items-center justify-between gap-3">
-            <p className="text-xs text-[var(--color-text-soft)]">
-              <span className="font-semibold text-[var(--color-text)]">{resumoGeral.totalSacos}</span> sacos ·{' '}
-              <span className="font-semibold text-[var(--color-text)]">{Math.ceil(resumoGeral.totalPeso)} kg</span> ·{' '}
-              <span className="font-semibold text-[var(--color-text)]">{fmtBRL.format(resumoGeral.totalValor)}</span>
-            </p>
-            <Button variant="outline" onClick={() => (manual ? setConfirmarImpressaoAberto(true) : imprimir(false))}>
-              Imprimir
-            </Button>
-          </div>
-        ) : undefined
-      }
     >
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-[var(--color-text-soft)]">Condição do plantio:</span>
-            {OPCOES_CONDICAO.map((o) => {
-              const selecionada = condicao === o.valor;
-              const viaChecklist = selecionada && condicaoOrigem === 'checklist';
-              return (
-                <button
-                  key={o.valor}
-                  ref={(el) => {
-                    condicaoBotaoRefs.current[o.valor] = el ?? undefined;
-                  }}
-                  type="button"
-                  onClick={() => {
-                    setCondicao(o.valor);
-                    setCondicaoOrigem('manual');
-                  }}
-                  title={viaChecklist ? 'Definida pelo checklist' : undefined}
-                  className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                    viaChecklist
-                      ? 'bg-blue-600 text-white'
-                      : selecionada
-                        ? 'bg-[var(--color-accent)] text-white'
-                        : 'bg-[var(--color-page)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
-                  }`}
-                >
-                  {o.rotulo}
-                </button>
-              );
-            })}
+      <div className="min-h-[540px] space-y-3">
+        <div className="sticky -top-[18px] z-20 -mx-[18px] -mt-[18px] space-y-1.5 bg-[var(--color-surface)] px-[18px] pb-2 pt-2 text-sm">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-[var(--color-text-soft)]">Condição do plantio:</span>
+              {OPCOES_CONDICAO.map((o) => {
+                const selecionada = condicao === o.valor;
+                const viaChecklist = selecionada && condicaoOrigem === 'checklist';
+                return (
+                  <button
+                    key={o.valor}
+                    type="button"
+                    onClick={() => {
+                      setCondicao(o.valor);
+                      setCondicaoOrigem('manual');
+                    }}
+                    title={viaChecklist ? 'Definida pelo checklist' : undefined}
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                      viaChecklist
+                        ? 'bg-blue-600 text-white'
+                        : selecionada
+                          ? 'bg-[var(--color-accent)] text-white'
+                          : 'bg-[var(--color-page)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+                    }`}
+                  >
+                    {o.rotulo}
+                  </button>
+                );
+              })}
+            </div>
             <button
               type="button"
               onClick={() => setChecklistAberto(true)}
               title="Checklist de diagnóstico de campo"
-              className="rounded-full border border-[var(--color-line)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+              className="ml-auto rounded-full border border-[var(--color-line)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
             >
               ☑ Checklist
             </button>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-[var(--color-text-soft)]">Tabela:</span>
-            <select
-              value={canalId}
-              onChange={(e) => setCanalId(e.target.value)}
-              className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
-            >
-              <option value="" className="text-[var(--color-text)]">
-                — sem valor —
-              </option>
-              {canaisPreco.map((c) => (
-                <option key={c.id} value={c.id} className="text-[var(--color-text)]">
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        {resumoCondicao && (
-          <div ref={resumoContainerRef} className="relative mt-1.5 rounded-md bg-[var(--color-page)] p-2">
-            {setaResumoOffset !== null && (
-              <span
-                aria-hidden
-                style={{ left: setaResumoOffset }}
-                className="absolute -top-1.5 h-3 w-3 -translate-x-1/2 rotate-45 bg-[var(--color-page)]"
-              />
-            )}
-            <p className="relative text-xs text-[var(--color-text-soft)]">{resumoCondicao}</p>
-          </div>
-        )}
-
-        <div className="relative">
+          <div className="relative">
           <input
             value={busca}
             onChange={(e) => {
@@ -680,209 +539,196 @@ export function GuiaPlantioModal({
             }}
             onFocus={() => setBuscaAberta(true)}
             onBlur={() => setTimeout(() => setBuscaAberta(false), 120)}
-            placeholder="Buscar produto na Tabela de Preço..."
+            placeholder="Buscar produto no laudo..."
             autoComplete="off"
             className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]"
           />
           {buscaAberta && gruposFiltrados.length > 0 && (
-            <div className="absolute z-30 mt-1 max-h-[320px] w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]/95 shadow-lg backdrop-blur-sm">
-              {gruposFiltrados.map((grupo) => {
-                const precoSaco = precoSacoDoProduto(grupo.produto.nome);
-                return (
-                  <div key={grupo.produto.id} className="border-b border-[var(--color-line)] py-1 last:border-b-0">
-                    <p className="truncate px-3 py-1 text-sm font-semibold text-[var(--color-text)]" title={grupo.produto.nome}>
-                      {grupo.produto.nome}
-                    </p>
-                    {grupo.laudos.length === 0 ? (
-                      <p className="px-3 pb-1.5 text-xs text-[var(--color-text-soft)]">Nenhum laudo encontrado com esse nome — confira se o nome bate com a Tabela de Preço.</p>
-                    ) : (
-                      grupo.laudos.map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => selecionar(a)}
-                          className="flex w-full flex-col px-3 py-1 pl-4 text-left text-xs text-[var(--color-text-soft)] hover:bg-[var(--color-accent)]/15 hover:text-[var(--color-text)]"
-                        >
-                          Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'}
-                          {precoSaco !== null && ` · ${fmtBRL.format(precoSaco)}/saco`}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                );
-              })}
+            <div className="absolute z-30 mt-1 max-h-[320px] w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] shadow-lg">
+              {gruposFiltrados.map((grupo) => (
+                <div key={grupo.nome} className="border-b border-[var(--color-line)] py-1 last:border-b-0">
+                  <p className="truncate px-3 py-1 text-sm font-semibold text-[var(--color-text)]" title={grupo.nome}>
+                    {grupo.nome}
+                  </p>
+                  {grupo.laudos.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selecionar(a)}
+                      className="flex w-full flex-col px-3 py-1 pl-4 text-left text-xs font-normal text-[var(--color-text-soft)] hover:bg-[var(--color-accent)]/15 hover:text-[var(--color-text)]"
+                    >
+                      Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'}
+                    </button>
+                  ))}
+                </div>
+              ))}
             </div>
           )}
           {buscaAberta && busca.trim() && gruposFiltrados.length === 0 && (
-            <div className="absolute z-30 mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]/95 px-3 py-2 text-xs text-[var(--color-text-soft)] shadow-lg">
-              Nenhum produto encontrado na Tabela de Preço com esse nome.
+            <div className="absolute z-30 mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-xs font-normal text-[var(--color-text-soft)] shadow-lg">
+              Nenhum laudo encontrado com esse nome.
             </div>
           )}
+          </div>
         </div>
-        {alturaReservada > 0 && <div style={{ height: alturaReservada }} aria-hidden />}
 
-        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+        <div className="flex flex-col gap-2">
           {itens.map((item) => {
             const laudo = arquivos.find((a) => a.id === item.laudoId);
             if (!laudo) return null;
             const r = calcularResultado(laudo, item);
             return (
-              <div key={item.laudoId} className="relative overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-page)] p-2.5">
-                <button
-                  type="button"
-                  onClick={() => removerItem(item.laudoId)}
-                  title="Remover esse resultado"
-                  className="absolute right-2.5 top-2.5 text-bad hover:opacity-70"
-                >
-                  ✕
-                </button>
-                <div className="-mx-2.5 -mt-2.5 rounded-t-lg bg-slate-700 px-2.5 pt-2.5 pb-2">
-                  <div className="pr-6">
-                    <p className="truncate text-sm font-semibold text-white">{laudo.nomeProduto}</p>
-                    <p className="truncate text-[10px] text-slate-300" title={`Lote ${laudo.lote ?? '—'} · VC ${calcularVC(laudo)} · PMS ${pmsDoLaudo(laudo, produtos) ?? '—'}`}>
-                      Lote {laudo.lote ?? '—'} · VC {calcularVC(laudo)} · PMS {pmsDoLaudo(laudo, produtos) ?? '—'}
-                      {r.precoSaco !== null && ` · ${fmtBRL.format(r.precoSaco)}/saco`}
-                    </p>
-                  </div>
-
-                  <div className="mt-1.5 flex items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-0.5">
-                      {OPCOES_MODO.map((o) => (
-                        <button
-                          key={o.valor}
-                          type="button"
-                          onClick={() => mudarModo(laudo, item, o.valor)}
-                          className={`inline-flex h-5 items-center rounded-full px-1.5 text-[10px] font-medium transition ${
-                            item.modo === o.valor ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-surface)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
-                          }`}
-                        >
-                          {o.rotulo}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-slate-300">Condição:</span>
-                      <SeletorCondicaoItem valor={condicaoDoItem(item)} ajustada={item.condicaoOverride !== null} onEscolher={(v) => mudarCondicaoItem(laudo, item, v)} />
-                    </div>
-                  </div>
+              <div key={item.laudoId}>
+                <div className="mb-1 flex justify-end gap-0.5">
+                  {OPCOES_MODO.map((o) => (
+                    <button
+                      key={o.valor}
+                      type="button"
+                      onClick={() => mudarModo(laudo, item, o.valor)}
+                      className={`inline-flex h-5 items-center rounded-full px-1.5 text-[10px] font-medium transition ${
+                        item.modo === o.valor ? 'bg-orange-500 text-white' : 'bg-[var(--color-page)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+                      }`}
+                    >
+                      {o.rotulo}
+                    </button>
+                  ))}
                 </div>
+                <div className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]">
+                <div
+                  className={`grid ${
+                    item.modo === 'linha_cova'
+                      ? 'grid-cols-[minmax(160px,1.1fr)_minmax(140px,0.9fr)_minmax(160px,1.2fr)]'
+                      : 'grid-cols-[minmax(160px,1.1fr)_minmax(160px,2.1fr)]'
+                  }`}
+                >
+                  {/* Coluna 1: Cabeçalho, Área e Total de sacos */}
+                  <div className="relative flex flex-col p-2.5 pr-6">
+                    <button
+                      type="button"
+                      onClick={() => removerItem(item.laudoId)}
+                      title="Remover esse resultado"
+                      className="absolute right-1.5 top-1.5 text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                    >
+                      ✕
+                    </button>
+                    <p className="truncate text-sm font-semibold text-[var(--color-text)]">{laudo.nomeProduto}</p>
+                    <p className="truncate text-[10px] text-[var(--color-text-soft)]" title={`Lote ${laudo.lote ?? '—'} · VC ${calcularVC(laudo)} · PMS ${pmsDoLaudo(laudo, produtos) ?? '—'}`}>
+                      Lote {laudo.lote ?? '—'} · VC {calcularVC(laudo)} · PMS {pmsDoLaudo(laudo, produtos) ?? '—'}
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                      <div>
+                        <p className="text-[10px] text-[var(--color-text-soft)]">Área (ha)</p>
+                        <input
+                          value={item.area}
+                          onChange={(e) => atualizarItem(item.laudoId, { area: e.target.value })}
+                          inputMode="decimal"
+                          className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--color-text-soft)]">Total de sacos</p>
+                        <input
+                          value={r.sacos === null ? '' : String(r.sacos)}
+                          onChange={(e) => atualizarSacos(item, e.target.value, r.kgPorHa, r.pesoSaco)}
+                          disabled={r.kgPorHa === null || r.pesoSaco === null}
+                          inputMode="numeric"
+                          title={
+                            r.kgPorHa === null || r.pesoSaco === null
+                              ? 'Precisa do kg/ha (Densidade/Sobrevivência) e do peso do saco (Tabela de Preço) pra ligar com a Área'
+                              : 'Ligado com Área (ha) — editar recalcula a área pra essa quantidade de sacos'
+                          }
+                          className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                <div className="mt-1.5 flex flex-wrap items-end gap-1.5">
-                  <div>
-                    <p className="text-[10px] text-[var(--color-text-soft)]">Área (ha)</p>
-                    <input
-                      value={item.area}
-                      onChange={(e) => atualizarItem(item.laudoId, { area: e.target.value })}
-                      inputMode="decimal"
-                      className="w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-[var(--color-text-soft)]">Total de sacos</p>
-                    <input
-                      value={r.sacos === null ? '' : String(r.sacos)}
-                      onChange={(e) => atualizarSacos(item, e.target.value, r.kgPorHa, r.pesoSaco)}
-                      disabled={r.kgPorHa === null || r.pesoSaco === null}
-                      inputMode="numeric"
-                      title={
-                        r.kgPorHa === null || r.pesoSaco === null
-                          ? 'Precisa do kg/ha (Densidade/Sobrevivência) e do peso do saco (Tabela de Preço) pra ligar com a Área'
-                          : 'Ligado com Área (ha) — editar recalcula a área pra essa quantidade de sacos'
-                      }
-                      className="w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                  </div>
+                  {/* Coluna 2: Espaçamento — só existe em modo Covas, some (não só esconde) em A Lanço pra deixar o card mais baixo */}
                   {item.modo === 'linha_cova' &&
                     (() => {
                       const espacamentoBloqueado = sementesCovaValida(item.sementesCova) === null;
                       return (
-                        <>
-                          {/* Quebra a linha aqui de propósito — Distância/Corredor/Sementes-cova/Covas-m² sempre numa linha própria, embaixo de Área/Total de sacos, independente de largura disponível. */}
-                          <div className="basis-full" />
-                          <div>
-                            <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
-                            <input
-                              value={item.cova}
-                              onChange={(e) => atualizarEspacamento(laudo, item, 'cova', e.target.value)}
-                              disabled={espacamentoBloqueado}
-                              inputMode="decimal"
-                              title={espacamentoBloqueado ? 'Informe a quantidade de sementes por cova (número inteiro ≥ 1) pra liberar o espaçamento' : 'Ligado com Corredor — editar um recalcula o outro'}
-                              className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
-                            />
+                        <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
+                              <input
+                                value={item.cova}
+                                onChange={(e) => atualizarEspacamento(laudo, item, 'cova', e.target.value)}
+                                disabled={espacamentoBloqueado}
+                                inputMode="decimal"
+                                title={espacamentoBloqueado ? 'Informe a quantidade de sementes por cova (número inteiro ≥ 1) pra liberar o espaçamento' : 'Ligado com Corredor — editar um recalcula o outro'}
+                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
+                              <input
+                                value={item.corredor}
+                                onChange={(e) => atualizarEspacamento(laudo, item, 'corredor', e.target.value)}
+                                disabled={espacamentoBloqueado}
+                                inputMode="decimal"
+                                title={espacamentoBloqueado ? 'Informe a quantidade de sementes por cova (número inteiro ≥ 1) pra liberar o espaçamento' : 'Ligado com Cova — editar um recalcula o outro'}
+                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Sementes/cova</p>
+                              <input
+                                value={item.sementesCova}
+                                onChange={(e) => atualizarSementesCova(laudo, item, e.target.value)}
+                                inputMode="numeric"
+                                title="Quantidade de sementes por cova (número inteiro ≥ 1) — sempre digitada manualmente; os espaçamentos se ajustam sozinhos"
+                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
+                              <p className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
+                                {r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
-                            <input
-                              value={item.corredor}
-                              onChange={(e) => atualizarEspacamento(laudo, item, 'corredor', e.target.value)}
-                              disabled={espacamentoBloqueado}
-                              inputMode="decimal"
-                              title={espacamentoBloqueado ? 'Informe a quantidade de sementes por cova (número inteiro ≥ 1) pra liberar o espaçamento' : 'Ligado com Cova — editar um recalcula o outro'}
-                              className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-[var(--color-text-soft)]">Sementes/cova</p>
-                            <input
-                              value={item.sementesCova}
-                              onChange={(e) => atualizarSementesCova(laudo, item, e.target.value)}
-                              inputMode="numeric"
-                              title="Quantidade de sementes por cova (número inteiro ≥ 1) — sempre digitada manualmente; os espaçamentos se ajustam sozinhos"
-                              className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
-                            />
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
-                            <p className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
-                              {r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)}
-                            </p>
-                          </div>
-                        </>
+                        </div>
                       );
                     })()}
-                </div>
 
-                {r.kgPorHa === null && r.sementesPorM2 === null ? (
-                  <p className="mt-1.5 text-xs text-[var(--color-text-soft)]">
-                    Faltam dados pra calcular esse lote — confira Densidade, Índice de Sobrevivência (ou teste de campo) na Parametrização de Produtos.
-                  </p>
-                ) : (
-                  <div className="mt-1.5 grid grid-cols-2 items-center gap-x-2 gap-y-1 border-t border-[var(--color-line)] pt-1.5 text-xs">
-                    {r.kgPorHa === null && (
-                      <p className="col-span-2 pb-0.5 text-[10px] text-[var(--color-text-soft)]">
-                        Sem PMS cadastrado — Taxa, Total, Custo, Valor e Investimento ficam pendentes; sementes seguem calculadas por Densidade e Germinação.
+                  {/* Coluna 3: Resultado */}
+                  <div className="flex flex-col border-l border-[var(--color-line)] p-2.5">
+                    {r.kgPorHa === null && r.sementesPorM2 === null ? (
+                      <p className="text-xs text-[var(--color-text-soft)]">
+                        Faltam dados pra calcular esse lote — confira Densidade, Índice de Sobrevivência (ou teste de campo) na Parametrização de Produtos.
                       </p>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 items-center gap-x-2 gap-y-1 text-xs">
+                          {r.kgPorHa === null && (
+                            <p className="col-span-2 pb-0.5 text-[10px] text-[var(--color-text-soft)]">
+                              Sem PMS cadastrado — Taxa e Total ficam pendentes; sementes seguem calculadas por Densidade e Germinação.
+                            </p>
+                          )}
+                          <p className="whitespace-nowrap border-b border-[var(--color-line)] pb-1 text-[var(--color-text-soft)]">Taxa de Semeadura</p>
+                          <p className="border-b border-[var(--color-line)] pb-1 text-right font-medium text-[var(--color-text)]">
+                            {r.kgPorHa === null ? '—' : `${Math.ceil(r.kgPorHa)} kg/ha`}
+                          </p>
+
+                          <p className="whitespace-nowrap text-[var(--color-text-soft)]">Total necessário (kg)</p>
+                          <p className="text-right font-medium text-[var(--color-text)]">{r.pesoTotal === null ? '—' : `${Math.ceil(r.pesoTotal)} kg`}</p>
+                        </div>
+                        <div className="mt-1.5 flex flex-1 flex-col justify-center gap-0.5 rounded-md bg-[var(--color-page)] px-2 py-1 text-[10px] text-[var(--color-text-soft)]">
+                          {kgPorHaOutrasCondicoes(laudo, item).map((o) => (
+                            <p key={o.rotulo} className="flex justify-between gap-2">
+                              <span>Taxa na condição {o.rotulo}</span>
+                              <span className="font-medium text-[var(--color-text)]">{o.kgPorHa === null ? '—' : `${Math.ceil(o.kgPorHa)} kg/ha`}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </>
                     )}
-                    <p className="whitespace-nowrap border-b border-[var(--color-line)] pb-1 text-[var(--color-text-soft)]">Taxa de Semeadura</p>
-                    <p className="border-b border-[var(--color-line)] pb-1 text-right font-medium text-[var(--color-text)]">
-                      {r.kgPorHa === null ? '—' : `${Math.ceil(r.kgPorHa)} kg/ha`}
-                    </p>
-
-                    <p className="whitespace-nowrap border-b border-[var(--color-line)] pb-1 text-[var(--color-text-soft)]">Total necessário (kg)</p>
-                    <p className="border-b border-[var(--color-line)] pb-1 text-right font-medium text-[var(--color-text)]">
-                      {r.pesoTotal === null ? '—' : `${Math.ceil(r.pesoTotal)} kg`}
-                    </p>
-
-                    <p className="whitespace-nowrap border-b border-[var(--color-line)] pb-1 text-[var(--color-text-soft)]">Custo por ha (R$)</p>
-                    <p className="border-b border-[var(--color-line)] pb-1 text-right font-medium text-[var(--color-text)]">
-                      {r.custoPorHa === null ? '—' : fmtBRL.format(r.custoPorHa)}
-                    </p>
-
-                    <p className="whitespace-nowrap border-b border-[var(--color-line)] pb-1 text-[var(--color-text-soft)]">Total de sacos</p>
-                    <p
-                      className="border-b border-[var(--color-line)] pb-1 text-right font-medium text-[var(--color-text)]"
-                      title={r.sacos === null ? motivoSemSacos(r.pesoSaco) : undefined}
-                    >
-                      {r.sacos === null ? '—' : `${r.sacos} sacos`}
-                    </p>
-
-                    <p className="whitespace-nowrap text-[var(--color-text-soft)]">Investimento</p>
-                    <p className="text-right font-semibold text-[var(--color-text)]" title={r.valorTotal === null ? motivoSemValor(r.sacos) : undefined}>
-                      {r.valorTotal === null ? '—' : fmtBRL.format(r.valorTotal)}
-                    </p>
                   </div>
-                )}
+                </div>
+                </div>
               </div>
             );
           })}

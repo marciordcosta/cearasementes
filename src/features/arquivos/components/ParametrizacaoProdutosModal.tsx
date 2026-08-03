@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import type { Produto } from '@/features/pricing/types';
 import { paraNumero } from '../metricas';
 import { grupoDoNome, normalizarNome } from '../parametrizacaoProdutos';
-import type { ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
+import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 
 type Aba = 'produtos' | 'checklist' | 'plantio';
 
@@ -17,8 +16,8 @@ const ABAS: { valor: Aba; rotulo: string; icone: string }[] = [
 interface ParametrizacaoProdutosModalProps {
   open: boolean;
   produtos: ProdutoParametrizacao[];
-  /** Catálogo da Tabela de Preço (módulo Precificação) — a lista de grupos exibida aqui é derivada automaticamente dele (ver linhasGrupo), não digitada à mão. */
-  produtosPreco: Produto[];
+  /** Laudos importados — a lista de grupos exibida aqui é derivada automaticamente do nome deles (ver linhasGrupo), não digitada à mão. Fonte é o laudo (não a Tabela de Preço) porque é o laudo quem precisa achar essa parametrização depois — usando a mesma redução dos dois lados, o casamento nunca falha por causa de gênero científico ou peso do pacote que só a Tabela de Preço tem. */
+  arquivos: ArquivoLaudo[];
   fatores: FatorPlantio[];
   checklist: ChecklistPergunta[];
   manual: ManualPlantio | null;
@@ -199,7 +198,7 @@ function BlocoPerguntaChecklist({
 export function ParametrizacaoProdutosModal({
   open,
   produtos,
-  produtosPreco,
+  arquivos,
   fatores,
   checklist,
   manual,
@@ -224,17 +223,20 @@ export function ParametrizacaoProdutosModal({
 
   const condicoes = fatores.filter((f) => f.categoria === 'condicao');
 
-  // Nada de cadastro manual — a lista de grupos vem AUTOMATICAMENTE da
-  // Tabela de Preço (1ª + 3ª palavra de cada produto, ver grupoDoNome): um
-  // grupo só (ex.: "Panicum Incrustado") já cobre toda variedade que reduza
-  // a ele (Mombaça, Tanzânia etc.), então aparece 1 linha só, pronta pra
-  // preencher PMS/Densidade/Sobrevivência. Junta também grupo já
-  // parametrizado que não bate com nenhum produto atual da Tabela de Preço
-  // (dado legado/órfão) — pra não sumir cadastro já feito.
+  // Nada de cadastro manual — a lista de grupos vem AUTOMATICAMENTE dos
+  // LAUDOS importados (1ª + 3ª palavra do nome, ver grupoDoNome), não da
+  // Tabela de Preço: o laudo é quem vai precisar achar essa parametrização
+  // depois (resolverPmsBase etc.), e laudo do mesmo produto sempre chega com
+  // o mesmo nome — usando a mesma fonte/redução dos dois lados, o casamento
+  // nunca falha por causa de gênero científico ou peso do pacote, que só a
+  // Tabela de Preço tem (ex.: "Panicum Tanzania Tradicional 15KG" vs
+  // "Tanzania 1 Tradicional" no laudo — nomes de mundos diferentes). Junta
+  // também grupo já parametrizado que não bate com nenhum laudo atual (dado
+  // legado/órfão) — pra não sumir cadastro já feito.
   const linhasGrupo = useMemo(() => {
     const grupoPorChave = new Map<string, string>();
-    produtosPreco.forEach((p) => {
-      const grupo = grupoDoNome(p.nome);
+    arquivos.forEach((a) => {
+      const grupo = grupoDoNome(a.nomeProduto);
       grupoPorChave.set(normalizarNome(grupo), grupo);
     });
     produtos.forEach((p) => {
@@ -245,7 +247,7 @@ export function ParametrizacaoProdutosModal({
     return [...grupoPorChave.entries()]
       .map(([chave, grupo]) => ({ grupo, existente: produtos.find((p) => normalizarNome(grupoDoNome(p.nomeProduto)) === chave) ?? null }))
       .sort((a, b) => a.grupo.localeCompare(b.grupo));
-  }, [produtos, produtosPreco]);
+  }, [produtos, arquivos]);
 
   return (
     <Modal open={open} title="Parametrização de Produtos" onClose={onFechar} widthClassName="max-w-[780px]">
@@ -270,7 +272,7 @@ export function ParametrizacaoProdutosModal({
         {aba === 'produtos' && (
         <div className="space-y-3">
           <p className="px-3 text-[11px] text-[var(--color-text-soft)]">
-            Grupo calculado automaticamente da Tabela de Preço (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Margem% decide o
+            Grupo calculado automaticamente dos laudos importados (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Margem% decide o
             arredondamento de sacos no Guia de Plantio (até essa % de saco faltando arredonda pra baixo, acima pra cima) — 25% se em branco.
           </p>
           <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
@@ -411,7 +413,7 @@ export function ParametrizacaoProdutosModal({
                 )}
               </div>
             ))}
-            {linhasGrupo.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum produto cadastrado na Tabela de Preço ainda.</p>}
+            {linhasGrupo.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum laudo importado ainda.</p>}
           </div>
         </div>
         )}
