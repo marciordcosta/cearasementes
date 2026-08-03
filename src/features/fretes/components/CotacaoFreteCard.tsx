@@ -7,8 +7,8 @@ import { calcularCanal, calcularPesoCubado, calcularPesoEfetivo } from '@/featur
 import type { Canal, Categoria, Produto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtInt } from '@/lib/format';
-import { calcularCustoRota, chegadaDoTrecho, cidadesDasTransportadoras, cotarFrete, ordenarCotacoes } from '../calculations';
-import { calcularRotaKm, geocodificarCidade } from '../orsClient';
+import { calcularCustoRota, chegadaDoTrecho, cotarFrete, ordenarCotacoes } from '../calculations';
+import { calcularRotaKm, geocodificarCidade, sugerirOrdemPorProximidade } from '../orsClient';
 import type { ItemOrcamento, ModoCotacao, RotaParametros, RotaResultado, Transportadora } from '../types';
 import { AutocompleteInput } from './AutocompleteInput';
 import { RotaCidadesBuilder } from './RotaCidadesBuilder';
@@ -51,8 +51,11 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   { transportadoras, produtos, canais, categorias, parametrosRota, cidadesRotaCache, onRotaCalculada },
   ref,
 ) {
-  const [usarRota, setUsarRota] = useState(false);
-  const [cidade, setCidade] = useState('');
+  // Cidade de destino — sempre uma lista (mesma UI do antigo modo "Rota"),
+  // mesmo com 1 cidade só: 1 cidade = cotação por transportadora (como o
+  // antigo "Cidade única"); 2+ cidades = Rota de Frota Própria (como hoje),
+  // sem mais alternância manual entre os dois modos.
+  const [cidades, setCidades] = useState<string[]>([]);
   const [modo, setModo] = useState<ModoCotacao | null>(null);
 
   // ---- Modo Digitação Direta ----
@@ -65,10 +68,10 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const [buscaProduto, setBuscaProduto] = useState('');
 
   // ---- Rota (Frota Própria) — peso/valor vêm do mesmo Direta/Orçamento acima, só o cálculo (km via API) e o resultado são específicos daqui ----
-  const [cidadesRota, setCidadesRota] = useState<string[]>([]);
   const [rotaCalculando, setRotaCalculando] = useState(false);
   const [rotaErro, setRotaErro] = useState<string | null>(null);
   const [rotaResultado, setRotaResultado] = useState<RotaResultado | null>(null);
+  const [sugerindoRota, setSugerindoRota] = useState(false);
 
   // ---- Comparativo com Frota Própria, na Cidade única — mesma conta da Rota, só que pra 1 cidade só (Base -> cidade -> Base).
   // Dispara sozinho quando o peso atinge o "Peso mínimo p/ comparativo automático" da Parametrização de Rota. ----
@@ -80,20 +83,23 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   const canal = canais.find((c) => c.id === canalId);
 
-  // Cada cidade aparece com a UF da transportadora que a atende — ajuda a
-  // diferenciar cidades de nomes iguais em estados diferentes.
-  const cidadesAtendidas = useMemo(() => cidadesDasTransportadoras(transportadoras), [transportadoras]);
+  // 2+ cidades = Rota de Frota Própria (sem transportadora, custo por km); 1 cidade só = cotação por transportadora, exatamente como o antigo "Cidade única".
+  const ehRota = cidades.length >= 2;
+  // Nome completo (com ", UF" se veio de sugestão) — usado pra geocodificar (Rota/comparativo), onde a UF ajuda a desambiguar.
+  const cidadeUnica = cidades.length === 1 ? cidades[0] : null;
+  // Só o nome da cidade (sem ", UF") — é assim que fica salvo em transportadora_prazos.cidade, então a UF tem que sair antes de comparar.
+  const cidadeUnicaChave = cidadeUnica ? cidadeUnica.split(',')[0].trim() : null;
 
   const opcoesProdutos = useMemo(
     () => produtos.map((p) => ({ valor: p.nome })).sort((a, b) => a.valor.localeCompare(b.valor, 'pt-BR')),
     [produtos],
   );
 
-  // Transportadoras que atendem a cidade digitada — aparece assim que a cidade é preenchida, antes de escolher o modo.
+  // Transportadoras que atendem a cidade digitada — aparece assim que a 1ª cidade é preenchida, antes de escolher o modo (some se virar Rota).
   const transportadorasCidade = useMemo(() => {
-    if (!cidade.trim()) return null;
-    return cotarFrete(transportadoras, { cidade: cidade.trim(), peso: 0, valorMercadoria: 0 });
-  }, [transportadoras, cidade]);
+    if (!cidadeUnicaChave) return null;
+    return cotarFrete(transportadoras, { cidade: cidadeUnicaChave, peso: 0, valorMercadoria: 0 });
+  }, [transportadoras, cidadeUnicaChave]);
 
   const dadosItem = useCallback(
     (item: ItemOrcamento) => {
@@ -139,13 +145,13 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     return null;
   }, [modo, peso, valor, itens.length, resumoOrcamento]);
 
-  // Pra Cidade única, só libera escolher Direta/Orçamento se alguma transportadora atender a cidade; pra Rota, libera direto (não depende de transportadora nenhuma).
-  const podeEscolherModo = usarRota || (transportadorasCidade !== null && transportadorasCidade.length > 0);
+  // Com 1 cidade só, libera escolher Direta/Orçamento se alguma transportadora atender ela; com 2+ (Rota), libera direto (não depende de transportadora nenhuma).
+  const podeEscolherModo = ehRota || (transportadorasCidade !== null && transportadorasCidade.length > 0);
 
   const resultado = useMemo(() => {
-    if (usarRota || !cidade.trim() || !pesoValorAtual) return null;
-    return ordenarCotacoes(cotarFrete(transportadoras, { cidade: cidade.trim(), peso: pesoValorAtual.peso, valorMercadoria: pesoValorAtual.valor }));
-  }, [usarRota, transportadoras, cidade, pesoValorAtual]);
+    if (ehRota || !cidadeUnicaChave || !pesoValorAtual) return null;
+    return ordenarCotacoes(cotarFrete(transportadoras, { cidade: cidadeUnicaChave, peso: pesoValorAtual.peso, valorMercadoria: pesoValorAtual.valor }));
+  }, [ehRota, transportadoras, cidadeUnicaChave, pesoValorAtual]);
 
   /** Geocodifica Base + cidades (na ordem) e calcula km/dias/custo — usado tanto pelo botão "Calcular Rota" (várias cidades) quanto pelo comparativo automático da Cidade única (1 cidade só). */
   const calcularCustoRotaCompleta = useCallback(
@@ -178,7 +184,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
       setRotaErro('Configure a "Cidade de início (Base)" na Parametrização de Rota antes de calcular.');
       return;
     }
-    if (cidadesRota.length === 0) {
+    if (cidades.length === 0) {
       setRotaErro('Adicione ao menos uma cidade na rota.');
       return;
     }
@@ -189,7 +195,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
 
     setRotaCalculando(true);
     try {
-      const resultado = await calcularCustoRotaCompleta(cidadesRota, pesoValorAtual.peso, pesoValorAtual.valor);
+      const resultado = await calcularCustoRotaCompleta(cidades, pesoValorAtual.peso, pesoValorAtual.valor);
       setRotaResultado(resultado);
       onRotaCalculada?.();
     } catch (e) {
@@ -199,13 +205,34 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     }
   }
 
+  /** Reordena as cidades pela heurística de vizinho mais próximo (linha reta, a partir da Base) — só sugere a ordem, quem confirma o custo de verdade é o "Calcular Frete" (km real de rodovia). */
+  async function sugerirRota() {
+    setRotaErro(null);
+    if (!parametrosRota.cidadeInicio.trim()) {
+      setRotaErro('Configure a "Cidade de início (Base)" na Parametrização de Rota antes de sugerir a rota.');
+      return;
+    }
+    if (cidades.length < 2) return;
+
+    setSugerindoRota(true);
+    try {
+      const coordBase = await geocodificarCidade(parametrosRota.cidadeInicio);
+      const cidadesComCoord = await Promise.all(cidades.map(async (nome) => ({ nome, coord: await geocodificarCidade(nome) })));
+      setCidades(sugerirOrdemPorProximidade(coordBase, cidadesComCoord));
+    } catch (e) {
+      setRotaErro(mensagemDeErro(e, 'Falha ao sugerir a rota.'));
+    } finally {
+      setSugerindoRota(false);
+    }
+  }
+
   // Comparativo automático com Frota Própria na Cidade única — só dispara quando o peso
   // atinge o "Peso mínimo p/ comparativo automático" configurado (0 = gatilho desligado).
   // Um pequeno atraso evita bater a API a cada tecla digitada, e só recalcula se a "chave"
   // (cidade+peso+valor) realmente mudou.
   useEffect(() => {
     const pesoMinimo = parametrosRota.pesoMinimoComparativo;
-    if (usarRota || !cidade.trim() || !pesoValorAtual || !parametrosRota.cidadeInicio.trim() || pesoMinimo <= 0 || pesoValorAtual.peso < pesoMinimo) {
+    if (ehRota || !cidadeUnica || !pesoValorAtual || !parametrosRota.cidadeInicio.trim() || pesoMinimo <= 0 || pesoValorAtual.peso < pesoMinimo) {
       comparativoChaveRef.current = null;
       setComparativoFrota(null);
       setComparativoErro(null);
@@ -213,7 +240,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
       return;
     }
 
-    const chave = `${cidade.trim()}|${pesoValorAtual.peso}|${pesoValorAtual.valor}|${parametrosRota.cidadeInicio}`;
+    const chave = `${cidadeUnica}|${pesoValorAtual.peso}|${pesoValorAtual.valor}|${parametrosRota.cidadeInicio}`;
     if (chave === comparativoChaveRef.current) return;
 
     let cancelado = false;
@@ -221,7 +248,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
       setComparativoCalculando(true);
       setComparativoErro(null);
       try {
-        const resultado = await calcularCustoRotaCompleta([cidade.trim()], pesoValorAtual.peso, pesoValorAtual.valor);
+        const resultado = await calcularCustoRotaCompleta([cidadeUnica], pesoValorAtual.peso, pesoValorAtual.valor);
         if (cancelado) return;
         comparativoChaveRef.current = chave;
         setComparativoFrota(resultado);
@@ -238,18 +265,16 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
       cancelado = true;
       clearTimeout(timeout);
     };
-  }, [usarRota, cidade, pesoValorAtual, parametrosRota, calcularCustoRotaCompleta, onRotaCalculada]);
+  }, [ehRota, cidadeUnica, pesoValorAtual, parametrosRota, calcularCustoRotaCompleta, onRotaCalculada]);
 
   function limparTudo() {
-    setUsarRota(false);
-    setCidade('');
+    setCidades([]);
     setModo(null);
     setPeso('');
     setValor('');
     setCanalId('');
     setItens([]);
     setBuscaProduto('');
-    setCidadesRota([]);
     setRotaResultado(null);
     setRotaErro(null);
     comparativoChaveRef.current = null;
@@ -291,46 +316,27 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   }
 
   return (
-    <Card className="space-y-3 p-5">
+    <div className="space-y-3">
       <h3 className="text-sm font-semibold text-[var(--color-text)]">Cotação de Frete</h3>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* ---- Coluna 1: cidade, transportadoras, modo e resultado (ou Rota, se ativada) ---- */}
-        <div className="space-y-3">
-          <div>
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-              <label className="text-xs font-semibold text-[var(--color-text-soft)]">Cidade de destino</label>
-              <TabToggle
-                value={usarRota ? 'rota' : 'unica'}
-                onChange={(v) => setUsarRota(v === 'rota')}
-                options={[
-                  { value: 'unica', label: 'Cidade única' },
-                  { value: 'rota', label: 'Rota (múltiplas cidades)' },
-                ]}
-              />
-            </div>
-            {!usarRota && (
-              <AutocompleteInput value={cidade} onChangeTexto={setCidade} opcoes={cidadesAtendidas} placeholder="Ex.: Sobral" className={`max-w-md ${campoClasse}`} />
-            )}
-          </div>
+        {/* ---- Card 1: cidade, transportadoras, modo e resultado (ou Rota, se ativada) ---- */}
+        <Card className="space-y-3 p-5">
+          <RotaCidadesBuilder
+            cidadeInicio={parametrosRota.cidadeInicio}
+            cidades={cidades}
+            onChangeCidades={setCidades}
+            transportadoras={transportadoras}
+            cidadesCache={cidadesRotaCache}
+          />
 
-          {usarRota && (
-            <RotaCidadesBuilder
-              cidadeInicio={parametrosRota.cidadeInicio}
-              cidades={cidadesRota}
-              onChangeCidades={setCidadesRota}
-              transportadoras={transportadoras}
-              cidadesCache={cidadesRotaCache}
-            />
-          )}
-
-          {!usarRota && transportadorasCidade !== null && (
+          {!ehRota && transportadorasCidade !== null && (
             <div className="space-y-2 border-t border-[var(--color-line)] pt-3">
               {transportadorasCidade.length === 0 ? (
                 <p className="text-sm text-[var(--color-text-soft)]">Nenhuma transportadora atende essa cidade.</p>
               ) : (
                 <div>
-                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-soft)]">Transportadoras disponíveis para {cidade}:</p>
+                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-soft)]">Transportadoras disponíveis para {cidadeUnica}:</p>
                   <div className="flex flex-wrap gap-1.5">
                     {transportadorasCidade.map((t) => (
                       <span key={t.transportadoraId} className="rounded-full bg-[var(--color-page)] px-2.5 py-1 text-xs font-semibold text-[var(--color-text)]">
@@ -343,26 +349,18 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {podeEscolherModo && (
-            <div className={usarRota ? '' : 'border-t border-[var(--color-line)] pt-3'}>
-              <TabToggle
-                value={modo ?? 'orcamento'}
-                onChange={(v) => setModo(v)}
-                options={[
-                  { value: 'orcamento', label: 'Orçamento' },
-                  { value: 'direta', label: 'Digitação Direta' },
-                ]}
-              />
+          {ehRota && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={sugerirRota} disabled={sugerindoRota || rotaCalculando}>
+                {sugerindoRota ? 'Sugerindo…' : 'Sugerir Rota'}
+              </Button>
+              <Button variant="action" onClick={calcularRota} disabled={rotaCalculando || sugerindoRota || cidades.length === 0 || !pesoValorAtual}>
+                {rotaCalculando ? 'Calculando…' : 'Calcular Frete'}
+              </Button>
             </div>
           )}
 
-          {usarRota && (
-            <Button variant="action" onClick={calcularRota} disabled={rotaCalculando || cidadesRota.length === 0 || !pesoValorAtual}>
-              {rotaCalculando ? 'Calculando rota…' : 'Calcular Rota'}
-            </Button>
-          )}
-
-          {!usarRota && resultado && (
+          {!ehRota && resultado && (
             <div className="space-y-2 border-t border-[var(--color-line)] pt-3">
               <p className="text-xs font-semibold text-[var(--color-text-soft)]">Resultado do frete:</p>
               {resultado.length === 0 ? (
@@ -406,8 +404,8 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {!usarRota &&
-            cidade.trim() &&
+          {!ehRota &&
+            cidadeUnica &&
             pesoValorAtual &&
             parametrosRota.pesoMinimoComparativo > 0 &&
             pesoValorAtual.peso >= parametrosRota.pesoMinimoComparativo && (
@@ -444,9 +442,9 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {usarRota && rotaErro && <p className="text-sm text-bad">{rotaErro}</p>}
+          {ehRota && rotaErro && <p className="text-sm text-bad">{rotaErro}</p>}
 
-          {usarRota && rotaResultado && (
+          {ehRota && rotaResultado && (
             <div className="space-y-2 border-t border-[var(--color-line)] pt-3">
               <p className="text-xs font-semibold text-[var(--color-text-soft)]">Resultado do frete:</p>
               <div className="rounded-lg border-2 border-[var(--color-accent)] bg-good-soft px-3 py-2 text-sm">
@@ -477,20 +475,30 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
               </details>
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* ---- Coluna 2: formulário do modo escolhido (Direta ou Orçamento) ---- */}
-        <div>
+        {/* ---- Card 2: escolha do modo (Orçamento/Digitação Direta) + formulário correspondente ---- */}
+        <Card className="space-y-3 p-5">
+          {podeEscolherModo ? (
+            <TabToggle
+              value={modo ?? 'orcamento'}
+              onChange={(v) => setModo(v)}
+              options={[
+                { value: 'orcamento', label: 'Orçamento' },
+                { value: 'direta', label: 'Digitação Direta' },
+              ]}
+            />
+          ) : (
+            <p className="text-sm text-[var(--color-text-soft)]">Adicione uma cidade de destino para escolher Orçamento ou Digitação Direta.</p>
+          )}
+
           {podeEscolherModo && modo === 'direta' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Peso (kg)</label>
-                <input type="number" step="0.01" value={peso} onChange={(e) => setPeso(e.target.value)} className={`num ${campoClasse}`} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Valor mercadoria (R$)</label>
-                <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className={`num ${campoClasse}`} />
-              </div>
+            <div className="grid grid-cols-[auto_140px] items-center justify-start gap-x-3 gap-y-2.5">
+              <label className="text-xs font-semibold text-[var(--color-text-soft)]">Peso (kg)</label>
+              <input type="number" step="0.01" value={peso} onChange={(e) => setPeso(e.target.value)} className={`num ${campoClasse}`} />
+
+              <label className="text-xs font-semibold text-[var(--color-text-soft)]">Valor mercadoria (R$)</label>
+              <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className={`num ${campoClasse}`} />
             </div>
           )}
 
@@ -597,8 +605,8 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
               )}
             </div>
           )}
-        </div>
+        </Card>
       </div>
-    </Card>
+    </div>
   );
 });

@@ -72,6 +72,10 @@ export function FormularioUpload({ aberto, onFechar, enviando, onEnviar }: Formu
               pureza: lido.extras.Pureza,
               germinacao: lido.extras.Germinação,
               validade: lido.extras.Validade,
+              categoria: lido.extras.Categoria,
+              especie: lido.extras.Espécie,
+              processo: lido.extras.Processo,
+              pesoEmbalagem: lido.extras.Peso,
               extras: lido.extras,
             };
             return { ok: true, arquivo, processado };

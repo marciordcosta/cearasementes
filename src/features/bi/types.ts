@@ -75,3 +75,41 @@ export interface FilteredCarrierRow {
   pedidos: number;
   valor: number;
 }
+
+export interface MonthlyItem {
+  year: number;
+  month: number;
+  label: string;
+  /** Tabela de Preço da venda que originou esse item — permite filtrar a Curva ABC por tabela, além da visão Geral (todas somadas). */
+  tabela: string;
+  qtd: number;
+  valorVendido: number;
+  custoTotal: number;
+}
+
+/**
+ * Um produto, agregado por (cod_interno || produto) — unifica o mesmo
+ * produto vendido em Tabelas de Preço diferentes (a visão "Geral" soma todo
+ * mundo; a visão "por Tabela" filtra `monthly` por `tabela`). Só existe pra
+ * vendas importadas no Relatório 396 detalhado (migração 0023); vendas no
+ * formato antigo não têm item nenhum, então cobertura de margem/curva ABC é
+ * parcial pra períodos anteriores a essa migração.
+ */
+export interface ItemAgg {
+  produto: string;
+  codInterno: string | null;
+  monthly: MonthlyItem[];
+}
+
+export interface FilteredItemView {
+  produto: string;
+  codInterno: string | null;
+  qtd: number;
+  valorVendido: number;
+  custoTotal: number;
+  /** valorVendido - custoTotal. */
+  margem: number;
+  /** margem / valorVendido (0 se valorVendido for 0). */
+  margemPct: number;
+  ref: ItemAgg;
+}

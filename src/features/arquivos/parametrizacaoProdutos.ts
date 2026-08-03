@@ -1,3 +1,4 @@
+import type { Produto } from '@/features/pricing/types';
 import { paraNumero } from './metricas';
 import type { ProdutoParametrizacao } from './types';
 
@@ -75,4 +76,43 @@ export function resolverModoPlantio(nomeProduto: string, produtos: ProdutoParame
 export function resolverMargemTolerancia(nomeProduto: string, produtos: ProdutoParametrizacao[]): number {
   const percentual = paraNumero(encontrarProduto(nomeProduto, produtos)?.margemTolerancia ?? null);
   return percentual ?? 25;
+}
+
+/** Texto livre da linha "Observação" do Selo impresso (ex.: registro RENASEM do produtor). Null se não cadastrado. */
+export function resolverObservacaoEtiqueta(nomeProduto: string, produtos: ProdutoParametrizacao[]): string | null {
+  return encontrarProduto(nomeProduto, produtos)?.observacaoEtiqueta ?? null;
+}
+
+/** Duas palavras "iguais pra fins de nome" — idênticas, ou diferindo só na última letra (gênero: "incrustada" x "incrustado"). Exige pelo menos 4 caracteres pra não deixar palavra curta demais (ex.: "de", "do") crescer um falso positivo. */
+function palavrasParecidas(a: string, b: string): boolean {
+  if (a === b) return true;
+  const minLen = Math.min(a.length, b.length);
+  return minLen >= 4 && a.slice(0, minLen - 1) === b.slice(0, minLen - 1);
+}
+
+/**
+ * Casa o nome de um laudo com o nome de um produto da Tabela de Preço: toda
+ * palavra de conteúdo do laudo (ignora números soltos, tipo número de lote)
+ * precisa aparecer, em algum lugar, no nome da Tabela de Preço — não depende
+ * de posição nem de reduzir os dois nomes do mesmo jeito. Necessário porque
+ * a Tabela de Preço segue um padrão BEM diferente do laudo: tem gênero
+ * científico na frente e peso do pacote no fim ("Panicum Tanzania
+ * Tradicional 15kg"), enquanto o laudo só traz a variedade e o tratamento
+ * ("Tanzania 1 Tradicional", o "1" é o número do lote) — comparar por
+ * posição de palavra (1ª/3ª) não reconcilia os dois formatos ao mesmo
+ * tempo; comparar se as palavras do laudo aparecem soltas no nome da Tabela
+ * de Preço funciona nos dois formatos, sem precisar saber qual é o gênero.
+ */
+export function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: string): boolean {
+  const termosLaudo = normalizarNome(nomeLaudo)
+    .split(' ')
+    .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
+  if (termosLaudo.length === 0) return false;
+  const palavrasPreco = normalizarNome(nomeProdutoPreco).split(' ');
+  return termosLaudo.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
+}
+
+/** Acha o produto da Tabela de Preço (módulo Precificação) que corresponde ao nome de um laudo — usado pra puxar peso do saco/valor sem precisar cadastrar essa ligação manualmente (ver laudoCasaComNomePreco). */
+export function encontrarProdutoPreco(nomeProduto: string, produtosPreco: Produto[]): Produto | null {
+  return produtosPreco.find((p) => laudoCasaComNomePreco(nomeProduto, p.nome)) ?? null;
 }

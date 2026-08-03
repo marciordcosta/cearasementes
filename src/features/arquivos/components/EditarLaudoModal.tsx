@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -10,6 +11,9 @@ export interface PatchLaudo {
   pureza: string;
   germinacao: string;
   validade: string;
+  categoria: string;
+  processo: string;
+  pesoEmbalagem: string;
   pms: string;
 }
 
@@ -21,6 +25,16 @@ interface EditarLaudoModalProps {
 
 const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
 
+/** Linha do formulário em 2 colunas: descrição à esquerda (largura fixa), caixa à direita (ocupa o resto). */
+function Campo({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[9rem_1fr] items-center gap-3">
+      <label className="text-xs font-semibold text-[var(--color-text-soft)]">{label}</label>
+      {children}
+    </div>
+  );
+}
+
 /** O arquivo pode ter sido salvo com dados errados ou faltando (detecção automática não pega tudo em PDF) — aqui corrige os metadados, sem reenviar o arquivo. */
 export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModalProps) {
   const [nomeProduto, setNomeProduto] = useState('');
@@ -29,6 +43,9 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
   const [pureza, setPureza] = useState('');
   const [germinacao, setGerminacao] = useState('');
   const [validade, setValidade] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [processo, setProcesso] = useState('');
+  const [pesoEmbalagem, setPesoEmbalagem] = useState('');
   const [pms, setPms] = useState('');
 
   useEffect(() => {
@@ -39,6 +56,9 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
     setPureza(laudo.pureza ?? '');
     setGerminacao(laudo.germinacao ?? '');
     setValidade(laudo.validade ?? '');
+    setCategoria(laudo.categoria ?? '');
+    setProcesso(laudo.processo ?? '');
+    setPesoEmbalagem(laudo.pesoEmbalagem ?? '');
     setPms(laudo.pms ?? '');
   }, [laudo]);
 
@@ -51,6 +71,9 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
       pureza: pureza.trim(),
       germinacao: germinacao.trim(),
       validade: validade.trim(),
+      categoria: categoria.trim(),
+      processo: processo.trim(),
+      pesoEmbalagem: pesoEmbalagem.trim(),
       pms: pms.trim(),
     });
   }
@@ -71,42 +94,55 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
         </>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         <p className="truncate text-xs text-[var(--color-text-soft)]" title={laudo?.arquivoNome}>
           Arquivo: {laudo?.arquivoNome}
         </p>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Nome do Produto *</label>
+        <Campo label="Nome do Produto *">
           <input value={nomeProduto} onChange={(e) => setNomeProduto(e.target.value)} className={campoClasse} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Lote *</label>
-            <input value={lote} onChange={(e) => setLote(e.target.value)} className={campoClasse} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Ano da Safra *</label>
-            <input value={anoSafra} onChange={(e) => setAnoSafra(e.target.value)} className={campoClasse} placeholder="Ex.: 2025 ou 25" />
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Pureza</label>
-            <input value={pureza} onChange={(e) => setPureza(e.target.value)} className={campoClasse} placeholder="Ex.: 61,4" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Germinação</label>
-            <input value={germinacao} onChange={(e) => setGerminacao(e.target.value)} className={campoClasse} placeholder="Ex.: 82" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Validade</label>
-            <input value={validade} onChange={(e) => setValidade(e.target.value)} className={campoClasse} placeholder="Ex.: 11/2025" />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">PMS (Peso de Mil Sementes)</label>
+        </Campo>
+        <Campo label="Processo">
+          <input
+            value={processo}
+            onChange={(e) => setProcesso(e.target.value)}
+            className={campoClasse}
+            placeholder="Ex.: Tradicional, Incrustado (lido do laudo quando o documento traz)"
+          />
+        </Campo>
+        <Campo label="Categoria">
+          <input
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+            className={campoClasse}
+            placeholder="Ex.: S2 (lido do laudo quando o documento traz)"
+          />
+        </Campo>
+        <Campo label="Peso por Embalagem (kg)">
+          <input
+            value={pesoEmbalagem}
+            onChange={(e) => setPesoEmbalagem(e.target.value)}
+            className={campoClasse}
+            placeholder="Ex.: 6 (lido do laudo quando o documento traz; sem isso usa o peso da Tabela de Preço)"
+          />
+        </Campo>
+        <Campo label="Lote *">
+          <input value={lote} onChange={(e) => setLote(e.target.value)} className={campoClasse} />
+        </Campo>
+        <Campo label="Ano da Safra *">
+          <input value={anoSafra} onChange={(e) => setAnoSafra(e.target.value)} className={campoClasse} placeholder="Ex.: 2025 ou 25" />
+        </Campo>
+        <Campo label="Pureza">
+          <input value={pureza} onChange={(e) => setPureza(e.target.value)} className={campoClasse} placeholder="Ex.: 61,4" />
+        </Campo>
+        <Campo label="Germinação">
+          <input value={germinacao} onChange={(e) => setGerminacao(e.target.value)} className={campoClasse} placeholder="Ex.: 82" />
+        </Campo>
+        <Campo label="Validade">
+          <input value={validade} onChange={(e) => setValidade(e.target.value)} className={campoClasse} placeholder="Ex.: 11/2025" />
+        </Campo>
+        <Campo label="PMS (Peso de Mil Sementes)">
           <input value={pms} onChange={(e) => setPms(e.target.value)} className={campoClasse} placeholder="Ex.: 3,2 (em branco usa o PMS base da Parametrização)" />
-        </div>
+        </Campo>
       </div>
     </Modal>
   );

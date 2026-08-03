@@ -420,6 +420,14 @@ export interface Database {
           pureza: string | null;
           germinacao: string | null;
           validade: string | null;
+          /** Categoria de semente (ex.: "S2", "C1") — lida do laudo quando o documento traz ("Categoria: S2"), editável em "Editar Laudo" quando não. Usada no Selo impresso. */
+          categoria: string | null;
+          /** Espécie (ex.: "Andropogon Gayanus") — lida do laudo quando o documento traz ("Espécie: ..."). Compõe o Nome do Produto (Espécie + Cultivar) e é a linha ESPÉCIE do Selo impresso, sozinha; sem campo próprio em "Editar Laudo" (corrige-se pelo Nome do Produto). */
+          especie: string | null;
+          /** Processo (ex.: "Tradicional", "Incrustado") — lido do laudo quando o documento traz ("Processo: ..."), editável em "Editar Laudo" quando não. Usada no Selo impresso. */
+          processo: string | null;
+          /** Peso por Embalagem (kg) — lido do Boletim de Análise quando o documento traz, editável em "Editar Laudo" quando não. Linha PESO do Selo impresso; tem prioridade sobre o peso casado por nome na Tabela de Preço. Não confundir com "pms" (Peso de Mil Sementes). */
+          peso_embalagem: string | null;
           /** Peso de Mil Sementes — quando preenchido, sobrescreve (só pra esse lote) o PMS base da Parametrização de Produtos. */
           pms: string | null;
           /** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. */
@@ -444,6 +452,7 @@ export interface Database {
           indice_sobrevivencia: string | null;
           modo_plantio: string | null;
           margem_tolerancia: string | null;
+          observacao_etiqueta: string | null;
           atualizado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['arquivos_parametrizacao_produtos']['Row'], 'id' | 'atualizado_em'> & { id?: string; atualizado_em?: string };

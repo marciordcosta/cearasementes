@@ -52,6 +52,45 @@ export async function geocodificarCidade(cidade: string): Promise<Coordenada> {
   return { lat, lon };
 }
 
+/** Distância em linha reta (Haversine, km) entre 2 coordenadas — só pra ESTIMAR a ordem mais curta da rota (ver sugerirOrdemPorProximidade), não pro cálculo de custo real (que usa km de rodovia via calcularRotaKm). */
+function haversineKm(a: Coordenada, b: Coordenada): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const la1 = (a.lat * Math.PI) / 180;
+  const la2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Sugere a ordem das cidades que minimiza a distância total em linha reta,
+ * partindo da Base — heurística "vizinho mais próximo" (gulosa, a cada passo
+ * escolhe a cidade restante mais perto da última visitada). Não é o ótimo
+ * exato (problema do caixeiro-viajante), mas não gasta cota da API de rotas
+ * (só usa coordenadas já geocodificadas) e já evita "zigue-zague" óbvio.
+ */
+export function sugerirOrdemPorProximidade(coordBase: Coordenada, cidades: { nome: string; coord: Coordenada }[]): string[] {
+  const restantes = [...cidades];
+  const ordenadas: string[] = [];
+  let atual = coordBase;
+  while (restantes.length > 0) {
+    let melhorIndice = 0;
+    let melhorDistancia = Infinity;
+    restantes.forEach((c, i) => {
+      const d = haversineKm(atual, c.coord);
+      if (d < melhorDistancia) {
+        melhorDistancia = d;
+        melhorIndice = i;
+      }
+    });
+    const [escolhida] = restantes.splice(melhorIndice, 1);
+    ordenadas.push(escolhida.nome);
+    atual = escolhida.coord;
+  }
+  return ordenadas;
+}
+
 /**
  * Km real de rodovia entre uma sequência de pontos (uma chamada só resolve
  * a rota inteira, incluindo ida e volta se o array já começar e terminar no

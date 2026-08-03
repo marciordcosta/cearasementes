@@ -3,9 +3,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { filtrarArquivos } from '../filtrarArquivos';
 import { calcularVC } from '../metricas';
-import { resolverPmsBaseTexto } from '../parametrizacaoProdutos';
 import { resultadoTeste } from '../testeGerminacao';
-import type { ArquivoLaudo, ProdutoParametrizacao } from '../types';
+import type { ArquivoLaudo } from '../types';
 import { montarUrlVisualizacao } from '../visualizacaoArquivo';
 
 interface ListaArquivosProps {
@@ -18,10 +17,10 @@ interface ListaArquivosProps {
   onEditar: (arquivo: ArquivoLaudo) => void;
   /** Abre o modal do Teste de Germinação de Campo (clicando no valor da coluna "Último Teste", não num ícone). */
   onAbrirTeste: (arquivo: ArquivoLaudo) => void;
-  /** PMS base por produto (Parametrização) — fallback quando o lote não informa PMS. Densidade e kg/ha saíram daqui pro Guia de Plantio (dependem da forma de plantio escolhida). */
-  produtos: ProdutoParametrizacao[];
   /** Abre o Guia de Plantio já com esse laudo inserido na grade — só faz sentido com exatamente 1 selecionado. */
   onAbrirGuiaPlantio: (arquivo: ArquivoLaudo) => void;
+  /** Abre o diálogo de impressão do Selo (etiqueta de lote) — ícone 🏷️. */
+  onImprimirEtiqueta: (arquivo: ArquivoLaudo) => void;
 }
 
 /**
@@ -52,7 +51,7 @@ function imprimir(arquivo: ArquivoLaudo) {
   window.open(montarUrlVisualizacao(arquivo, 'aba'), '_blank');
 }
 
-export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, produtos, onAbrirGuiaPlantio }: ListaArquivosProps) {
+export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, onAbrirGuiaPlantio, onImprimirEtiqueta }: ListaArquivosProps) {
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
@@ -137,7 +136,7 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
               <th className="px-4 py-1.5 font-medium" title="Pureza">Pur%</th>
               <th className="px-4 py-1.5 font-medium" title="Germinação">Germ%</th>
               <th className="px-4 py-1.5 font-medium" title="Calculado: (Pureza × Germinação) / 100">VC%</th>
-              <th className="px-4 py-1.5 font-medium" title="Peso de Mil Sementes — vem da Parametrização de Produtos (busca pelo nome); ✎ sobrescreve só pra esse lote">PMS</th>
+              <th className="px-4 py-1.5 font-medium" title="Peso de Mil Sementes — só aparece quando editado manualmente (✎) pra esse lote; sem edição, o cálculo usa o PMS base da Parametrização por baixo, mas a coluna fica em branco">PMS</th>
               <th className="px-4 py-1.5 font-medium" title="Teste de Germinação de Campo — clique no valor pra ver/editar">Último Teste</th>
               <th className="px-4 py-1.5 font-medium">Data de Importação</th>
               <th className="px-4 py-1.5" />
@@ -158,7 +157,7 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{a.pureza || '—'}</td>
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{a.germinacao || '—'}</td>
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{calcularVC(a)}</td>
-                <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{a.pms || resolverPmsBaseTexto(a.nomeProduto, produtos) || '—'}</td>
+                <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{a.pms || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">
                   <button type="button" onClick={() => onAbrirTeste(a)} className="font-semibold text-good underline decoration-dotted underline-offset-2 hover:brightness-90">
                     {resultadoTeste(a)}
@@ -174,6 +173,9 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                   </button>
                   <button type="button" onClick={() => imprimir(a)} title="Abrir / Imprimir" className="mr-2 text-[var(--color-text-soft)] hover:text-[var(--color-text)]">
                     🖨️
+                  </button>
+                  <button type="button" onClick={() => onImprimirEtiqueta(a)} title="Imprimir Selo" className="mr-2 text-[var(--color-text-soft)] hover:text-[var(--color-text)]">
+                    🏷️
                   </button>
                   <button type="button" onClick={() => onApagar([a])} title="Excluir" className="text-[var(--color-text-soft)] hover:text-bad">
                     🗑

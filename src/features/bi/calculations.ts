@@ -1,8 +1,11 @@
 import { MESES_PT } from '@/lib/format';
+import type { CoberturaItens } from './aggregate';
 import type {
   CarrierAgg,
   FilteredCarrierRow,
+  FilteredItemView,
   FilteredPriceTableView,
+  ItemAgg,
   MonthAggregate,
   PeriodMode,
   PeriodStats,
@@ -205,4 +208,55 @@ export function getFilteredCarrierRows(
     if (pedidos > 0) rows.push({ name, pedidos, valor });
   });
   return rows;
+}
+
+/** `tabelaFiltro` = 'all' pra visão Geral (soma todas as Tabelas de Preço) ou o nome de uma Tabela específica (ver seletor em AnaliseProdutosSection.tsx). */
+export function getFilteredItems(ctx: PeriodContext, items: ItemAgg[], selectedPeriod: string, tabelaFiltro: string): FilteredItemView[] {
+  return items
+    .map((item): FilteredItemView | null => {
+      const meses = item.monthly.filter(
+        (m) => (tabelaFiltro === 'all' || m.tabela === tabelaFiltro) && (selectedPeriod === 'all' || getPeriodKeyFor(ctx, m.year, m.month) === selectedPeriod),
+      );
+      if (meses.length === 0) return null;
+      const qtd = meses.reduce((s, m) => s + m.qtd, 0);
+      const valorVendido = meses.reduce((s, m) => s + m.valorVendido, 0);
+      const custoTotal = meses.reduce((s, m) => s + m.custoTotal, 0);
+      if (qtd === 0 && valorVendido === 0) return null;
+      const margem = valorVendido - custoTotal;
+      return {
+        produto: item.produto,
+        codInterno: item.codInterno,
+        qtd,
+        valorVendido,
+        custoTotal,
+        margem,
+        margemPct: valorVendido > 0 ? margem / valorVendido : 0,
+        ref: item,
+      };
+    })
+    .filter((v): v is FilteredItemView => v !== null);
+}
+
+/** Classe A/B/C de cada item de `itensOrdenados` (já ordenados por valorVendido decrescente) pelo % acumulado de valor vendido — A até 80%, B até 95%, C no resto. Curva ABC clássica: poucos produtos concentram a maior parte do faturamento. */
+export function classificarABC(itensOrdenados: FilteredItemView[]): ('A' | 'B' | 'C')[] {
+  const total = itensOrdenados.reduce((s, i) => s + i.valorVendido, 0);
+  let acumulado = 0;
+  return itensOrdenados.map((item) => {
+    acumulado += item.valorVendido;
+    const pctAcumulado = total > 0 ? acumulado / total : 0;
+    if (pctAcumulado <= 0.8) return 'A';
+    if (pctAcumulado <= 0.95) return 'B';
+    return 'C';
+  });
+}
+
+/** Soma a cobertura de detalhamento por item no período/tabela selecionados — usado pra avisar quando a Análise por Produto está vendo só uma fração das vendas (ex.: ano importado sem item nenhum). */
+export function getCoberturaFiltrada(ctx: PeriodContext, cobertura: CoberturaItens[], selectedPeriod: string, tabelaFiltro: string): { totalVendas: number; vendasComItem: number } {
+  const filtrada = cobertura.filter(
+    (c) => (tabelaFiltro === 'all' || c.tabela === tabelaFiltro) && (selectedPeriod === 'all' || getPeriodKeyFor(ctx, c.year, c.month) === selectedPeriod),
+  );
+  return {
+    totalVendas: filtrada.reduce((s, c) => s + c.totalVendas, 0),
+    vendasComItem: filtrada.reduce((s, c) => s + c.vendasComItem, 0),
+  };
 }

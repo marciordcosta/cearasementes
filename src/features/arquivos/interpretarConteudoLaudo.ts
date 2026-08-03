@@ -57,8 +57,10 @@ function buscarLoteEmTabelas(tabelas: string[][][]): string | null {
  * assumir "sempre uma linha abaixo". "Mesma linha" é o último recurso, pra
  * tabelas em formato rótulo/valor lado a lado.
  */
-function buscarRotuloEmTabelas(tabelas: string[][][], rotulos: string[]): string | null {
-  const bate = (celula: string) => rotulos.some((rotulo) => new RegExp(`\\b${rotulo}\\b`, 'i').test(celula));
+function buscarRotuloEmTabelas(tabelas: string[][][], rotulos: string[], excluirSeConter: string[] = []): string | null {
+  const bate = (celula: string) =>
+    rotulos.some((rotulo) => new RegExp(`\\b${rotulo}\\b`, 'i').test(celula)) &&
+    !excluirSeConter.some((termo) => new RegExp(`\\b${termo}\\b`, 'i').test(celula));
   for (const tabela of tabelas) {
     for (let l = 0; l < tabela.length; l++) {
       const col = tabela[l].findIndex(bate);
@@ -85,18 +87,28 @@ function buscarRotuloEmTabelas(tabelas: string[][][], rotulos: string[]): string
 export function interpretarConteudoLaudo(conteudo: ConteudoExtraido): CamposDoConteudo {
   const { linhas, tabelas } = conteudo;
 
+  const especie = buscarRotulo(linhas, ['espécie', 'especie']);
   const cultivar = buscarRotulo(linhas, ['cultivar']);
   const processo = buscarRotulo(linhas, ['processo']);
-  // Nome do produto = Cultivar + Processo (ex.: "Marandu Tradicional") — quando só um dos dois bate, usa o que tem.
-  const nomeProduto = cultivar && processo ? capitalizarPalavras(`${cultivar} ${processo}`) : cultivar ? capitalizarPalavras(cultivar) : null;
+  // Nome do produto = Espécie + Cultivar (ex.: "Andropogon Gayanus Planaltina") quando o laudo traz
+  // Espécie (modelo "Termo de Conformidade"); sem Espécie, cai pro par Cultivar + Processo (ex.:
+  // "Marandu Tradicional", modelo mais simples que não destaca a Espécie à parte).
+  const nomeProduto =
+    especie && cultivar
+      ? capitalizarPalavras(`${especie} ${cultivar}`)
+      : cultivar && processo
+        ? capitalizarPalavras(`${cultivar} ${processo}`)
+        : cultivar
+          ? capitalizarPalavras(cultivar)
+          : null;
   const anoSafra = buscarRotulo(linhas, ['safra']);
   const lote = buscarLoteEmTabelas(tabelas);
 
   const extras: Record<string, string> = {};
+  if (especie) extras.Espécie = especie;
 
-  // Modelo "Termo de Conformidade": rótulo solto em texto corrido ("Espécie: X") — tenta a linha primeiro, tabela como reforço.
+  // Modelo "Termo de Conformidade": rótulo solto em texto corrido ("Categoria: X") — tenta a linha primeiro, tabela como reforço.
   const camposDeTexto: Record<string, string[]> = {
-    Espécie: ['espécie', 'especie'],
     Categoria: ['categoria'],
     Processo: ['processo'],
   };
@@ -107,13 +119,29 @@ export function interpretarConteudoLaudo(conteudo: ConteudoExtraido): CamposDoCo
 
   // Modelo "Boletim de Análise": vem na mesma tabela do Lote (cabeçalho na linha de cima, valor embaixo) — tabela primeiro.
   // Tentar a linha antes pegaria o próprio texto do cabeçalho da tabela (ex.: "Validade do teste de viabilidade (mês/ano)"), que também vira "linha" quando a célula é lida — e não tem valor nenhum colado nela.
-  const camposDeTabela: Record<string, string[]> = {
-    Validade: ['validade', 'válido até', 'valido ate'],
-    Pureza: ['pureza', 'sementes puras', 'puras'],
-    Germinação: ['germinação', 'germinacao', 'faculdade germinativa', 'poder germinativo', 'viabilidade'],
+  const camposDeTabela: Record<string, { rotulos: string[]; excluirSeConter?: string[] }> = {
+    Validade: { rotulos: ['validade', 'válido até', 'valido ate'] },
+    Pureza: { rotulos: ['pureza', 'sementes puras', 'puras'] },
+    // "viabilidade" sozinho é sinônimo de Germinação em alguns modelos, mas
+    // colide com o cabeçalho "Validade do teste de viabilidade (mês/ano)"
+    // (Boletim de Análise da Vitória Sementes) — sem excluir, pegava a data de
+    // validade em vez do % de germinação. Exclui qualquer célula que também
+    // fale de "validade" pra não confundir as duas colunas.
+    // "germina" (prefixo, sem exigir a palavra inteira) cobre um caso mais sutil
+    // do mesmo boletim: o cabeçalho "Germinação (%)" quebra em várias linhas no
+    // PDF e o texto reconstruído embaralha a ordem dos pedaços (ex.:
+    // "Germinaçã (%) o") — a palavra inteira "germinação" nunca aparece
+    // contígua, só o prefixo "germina" (que não colide com mais nada).
+    Germinação: {
+      rotulos: ['germinação', 'germinacao', 'faculdade germinativa', 'poder germinativo', 'viabilidade', 'germina'],
+      excluirSeConter: ['validade', 'válido', 'valido'],
+    },
+    // "Peso por Embalagem (kg)" — usado no Selo (linha PESO), com prioridade
+    // sobre o peso casado por nome na Tabela de Preço (ver etiqueta.ts).
+    Peso: { rotulos: ['peso por embalagem', 'peso da embalagem', 'peso'] },
   };
-  for (const [rotuloExibido, variacoes] of Object.entries(camposDeTabela)) {
-    const valor = buscarRotuloEmTabelas(tabelas, variacoes) ?? buscarRotulo(linhas, variacoes);
+  for (const [rotuloExibido, { rotulos, excluirSeConter }] of Object.entries(camposDeTabela)) {
+    const valor = buscarRotuloEmTabelas(tabelas, rotulos, excluirSeConter) ?? buscarRotulo(linhas, rotulos);
     if (valor) extras[rotuloExibido] = valor;
   }
 

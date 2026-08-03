@@ -12,6 +12,14 @@ export interface ArquivoLaudo {
   pureza: string | null;
   germinacao: string | null;
   validade: string | null;
+  /** Categoria de semente (ex.: "S2", "C1") — lida do laudo quando o documento traz ("Categoria: S2"), editável em EditarLaudoModal quando não. Usada só no Selo impresso (ver etiqueta.ts). */
+  categoria: string | null;
+  /** Espécie (ex.: "Andropogon Gayanus") — lida do laudo quando o documento traz ("Espécie: ..."). Compõe nomeProduto (Espécie + Cultivar) e é a linha ESPÉCIE do Selo impresso, sozinha (ver etiqueta.ts); sem campo próprio em EditarLaudoModal (corrige-se pelo Nome do Produto). */
+  especie: string | null;
+  /** Processo (ex.: "Tradicional", "Incrustado") — lido do laudo quando o documento traz ("Processo: ..."), editável em EditarLaudoModal quando não. Usada só no Selo impresso (ver etiqueta.ts). */
+  processo: string | null;
+  /** Peso por Embalagem (kg) — lido do Boletim de Análise quando o documento traz, editável em EditarLaudoModal quando não. Linha PESO do Selo impresso, com prioridade sobre o peso casado por nome na Tabela de Preço (ver etiqueta.ts). Não confundir com "pms" (Peso de Mil Sementes). */
+  pesoEmbalagem: string | null;
   /** Peso de Mil Sementes — editado junto com Pureza/Germinação/Validade, ou direto na grade. Quando preenchido, sobrescreve (só pra esse lote) o PMS base cadastrado na Parametrização de Produtos (ver parametrizacaoProdutos.ts); em branco, a grade mostra e o cálculo usa o PMS base. */
   pms: string | null;
   /** Teste de germinação de campo (nosso, feito com frequência) — editado num modal próprio (ver TesteModal), um resultado por laudo. */
@@ -30,6 +38,10 @@ export interface NovoLaudoInput {
   pureza?: string;
   germinacao?: string;
   validade?: string;
+  categoria?: string;
+  especie?: string;
+  processo?: string;
+  pesoEmbalagem?: string;
 }
 
 /**
@@ -51,6 +63,8 @@ export interface ProdutoParametrizacao {
   modoPlantio: 'cova' | 'lanco' | null;
   /** Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando ainda arredonda pra baixo, acima arredonda pra cima. Texto cru (ex.: "25"); null cai no padrão de 25%. */
   margemTolerancia: string | null;
+  /** Texto livre impresso na linha "Observação" do Selo (ex.: registro RENASEM do produtor) — fixo por grupo, não muda por lote. */
+  observacaoEtiqueta: string | null;
 }
 
 /**

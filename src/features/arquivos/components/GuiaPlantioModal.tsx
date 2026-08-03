@@ -5,7 +5,7 @@ import type { Produto } from '@/features/pricing/types';
 import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2 } from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
-import { normalizarNome, resolverMargemTolerancia, resolverModoPlantio, resolverPmsBaseTexto } from '../parametrizacaoProdutos';
+import { encontrarProdutoPreco, normalizarNome, resolverMargemTolerancia, resolverModoPlantio, resolverPmsBaseTexto } from '../parametrizacaoProdutos';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 import { ChecklistCondicaoModal } from './ChecklistCondicaoModal';
 
@@ -114,39 +114,6 @@ function validadeParaOrdenacao(validade: string | null): number {
   return ano * 12 + mes;
 }
 
-/** Duas palavras "iguais pra fins de nome" — idênticas, ou diferindo só na última letra (gênero: "incrustada" x "incrustado"). Exige pelo menos 4 caracteres pra não deixar palavra curta demais (ex.: "de", "do") crescer um falso positivo. */
-function palavrasParecidas(a: string, b: string): boolean {
-  if (a === b) return true;
-  const minLen = Math.min(a.length, b.length);
-  return minLen >= 4 && a.slice(0, minLen - 1) === b.slice(0, minLen - 1);
-}
-
-/**
- * Casa o nome de um laudo com o nome de um produto da Tabela de Preço: toda
- * palavra de conteúdo do laudo (ignora números soltos, tipo número de lote)
- * precisa aparecer, em algum lugar, no nome da Tabela de Preço — não depende
- * de posição nem de reduzir os dois nomes do mesmo jeito. Necessário porque
- * a Tabela de Preço segue um padrão BEM diferente do laudo: tem gênero
- * científico na frente e peso do pacote no fim ("Panicum Tanzania
- * Tradicional 15kg"), enquanto o laudo só traz a variedade e o tratamento
- * ("Tanzania 1 Tradicional", o "1" é o número do lote) — comparar por
- * posição de palavra (1ª/3ª) não reconcilia os dois formatos ao mesmo
- * tempo; comparar se as palavras do laudo aparecem soltas no nome da Tabela
- * de Preço funciona nos dois formatos, sem precisar saber qual é o gênero.
- */
-function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: string): boolean {
-  const termosLaudo = normalizarNome(nomeLaudo)
-    .split(' ')
-    .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
-  if (termosLaudo.length === 0) return false;
-  const palavrasPreco = normalizarNome(nomeProdutoPreco).split(' ');
-  return termosLaudo.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
-}
-
-function encontrarProdutoPreco(nomeProduto: string, produtosPreco: Produto[]): Produto | null {
-  return produtosPreco.find((p) => laudoCasaComNomePreco(nomeProduto, p.nome)) ?? null;
-}
-
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
 function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): string | null {
   return laudo.pms || resolverPmsBaseTexto(laudo.nomeProduto, produtos);
@@ -192,9 +159,17 @@ export function GuiaPlantioModal({
 
   const fatorCondicao = fatorDe(fatores, condicao);
 
-  /** Peso do pacote (kg) já cadastrado na Tabela de Preço — usado só pra converter kg em sacos, nunca exibido como valor. */
-  function pesoSacoDoProduto(nomeProduto: string): number | null {
-    const produtoPreco = encontrarProdutoPreco(nomeProduto, produtosPreco);
+  /**
+   * Peso do pacote (kg) — prioriza o que o próprio laudo traz (Peso por
+   * Embalagem do Boletim de Análise, ver interpretarConteudoLaudo.ts); sem
+   * isso (laudo antigo, ou modelo de documento que não traz esse dado), cai
+   * pro peso cadastrado na Tabela de Preço (casando pelo nome, mesmo mecanismo
+   * do Selo). Usado só pra converter kg em sacos, nunca exibido como valor.
+   */
+  function pesoSacoDoLaudo(laudo: ArquivoLaudo): number | null {
+    const doLaudo = paraNumero(laudo.pesoEmbalagem);
+    if (doLaudo !== null && doLaudo > 0) return doLaudo;
+    const produtoPreco = encontrarProdutoPreco(laudo.nomeProduto, produtosPreco);
     return produtoPreco && produtoPreco.peso > 0 ? produtoPreco.peso : null;
   }
 
@@ -381,7 +356,7 @@ export function GuiaPlantioModal({
     // Densidade/Germinação já carregam alguma imprecisão de campo, então é
     // melhor ter essa folga (compra um pouco a mais) do que fechar exato.
     const pesoTotal = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
-    const pesoSaco = pesoSacoDoProduto(laudo.nomeProduto);
+    const pesoSaco = pesoSacoDoLaudo(laudo);
     // Arredonda por margem de tolerância (Parametrização, 25% padrão) — não
     // por 0,5 nem sempre pra cima (Math.ceil antigo virava 1 saco a mais só
     // por faltar 1kg, um exagero em compras maiores).

@@ -1,6 +1,6 @@
 import { MESES_PT } from '@/lib/format';
-import type { EntregaRow, VendaRow } from './api';
-import type { CarrierAgg, MonthlyPriceTable, PriceTableAgg } from './types';
+import type { EntregaRow, ItemVendaRow, VendaRow } from './api';
+import type { CarrierAgg, ItemAgg, MonthlyItem, MonthlyPriceTable, PriceTableAgg } from './types';
 
 function parseDataISO(iso: string | null): { year: number; month: number } | null {
   if (!iso) return null;
@@ -109,4 +109,80 @@ export function agregarVendas(rows: VendaRow[]): PriceTableAgg[] {
       monthly,
     };
   });
+}
+
+/**
+ * Uma linha por item (produto) de uma venda -> agrupa por produto (usando
+ * cod_interno quando existe, senão o nome — unifica o mesmo produto vendido
+ * em Tabelas de Preço diferentes) e soma por (tabela, mês). Tabela e mês/ano
+ * de cada item vêm da venda-mãe (`venda_id`), por isso recebe `vendas`
+ * também — só pra montar esse cruzamento, não usa o resto dos campos da
+ * venda. A visão "Geral" (todas as tabelas somadas) e a visão "por Tabela"
+ * usam o MESMO `monthly`, só filtrando por `tabela` ou não (ver
+ * getFilteredItems em calculations.ts).
+ */
+export function agregarItens(vendas: VendaRow[], itens: ItemVendaRow[]): ItemAgg[] {
+  const infoPorVenda = new Map<string, { year: number; month: number; tabela: string }>();
+  for (const v of vendas) {
+    const data = parseDataISO(v.data_venda);
+    if (data) infoPorVenda.set(v.id, { ...data, tabela: v.tabela_preco });
+  }
+
+  const porProduto = new Map<string, { produto: string; codInterno: string | null; itens: ItemVendaRow[] }>();
+  for (const item of itens) {
+    const chave = item.cod_interno || item.produto;
+    if (!porProduto.has(chave)) porProduto.set(chave, { produto: item.produto, codInterno: item.cod_interno, itens: [] });
+    porProduto.get(chave)!.itens.push(item);
+  }
+
+  return Array.from(porProduto.values()).map(({ produto, codInterno, itens: itensDoProduto }) => {
+    const monthlyMap = new Map<string, { year: number; month: number; tabela: string; qtd: number; valorVendido: number; custoTotal: number }>();
+
+    for (const item of itensDoProduto) {
+      const info = infoPorVenda.get(item.venda_id);
+      if (!info) continue;
+      const key = `${info.tabela}|${info.year}-${String(info.month).padStart(2, '0')}`;
+      if (!monthlyMap.has(key)) monthlyMap.set(key, { year: info.year, month: info.month, tabela: info.tabela, qtd: 0, valorVendido: 0, custoTotal: 0 });
+      const mm = monthlyMap.get(key)!;
+      mm.qtd += item.qtd;
+      mm.valorVendido += item.vlr_com_desc;
+      mm.custoTotal += item.custo_unitario * item.qtd;
+    }
+
+    const monthly: MonthlyItem[] = Array.from(monthlyMap.values())
+      .sort((a, b) => a.year - b.year || a.month - b.month)
+      .map((m) => ({ ...m, label: `${MESES_PT[m.month - 1]}/${m.year}` }));
+
+    return { produto, codInterno, monthly };
+  });
+}
+
+/**
+ * Cobertura de detalhamento por item, por (tabela, mês) — quantas vendas
+ * daquele mês/tabela têm item(ns) importado(s) vs. o total de vendas. Usado
+ * só pra avisar na tela quando a Análise por Produto está vendo uma fração
+ * das vendas do período (ex.: um ano importado só no formato antigo, sem
+ * itens) — sem isso, um total "certinho" mas incompleto passa despercebido.
+ */
+export interface CoberturaItens {
+  tabela: string;
+  year: number;
+  month: number;
+  totalVendas: number;
+  vendasComItem: number;
+}
+
+export function agregarCoberturaItens(vendas: VendaRow[], itens: ItemVendaRow[]): CoberturaItens[] {
+  const vendaIdsComItem = new Set(itens.map((i) => i.venda_id));
+  const porChave = new Map<string, CoberturaItens>();
+  for (const v of vendas) {
+    const data = parseDataISO(v.data_venda);
+    if (!data) continue;
+    const key = `${v.tabela_preco}|${data.year}-${String(data.month).padStart(2, '0')}`;
+    if (!porChave.has(key)) porChave.set(key, { tabela: v.tabela_preco, year: data.year, month: data.month, totalVendas: 0, vendasComItem: 0 });
+    const c = porChave.get(key)!;
+    c.totalVendas += 1;
+    if (vendaIdsComItem.has(v.id)) c.vendasComItem += 1;
+  }
+  return Array.from(porChave.values());
 }

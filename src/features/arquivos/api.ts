@@ -25,6 +25,10 @@ function fromRow(row: ArquivoRow): ArquivoLaudo {
     pureza: row.pureza,
     germinacao: row.germinacao,
     validade: row.validade,
+    categoria: row.categoria,
+    especie: row.especie,
+    processo: row.processo,
+    pesoEmbalagem: row.peso_embalagem,
     pms: row.pms,
     testeForma: row.teste_forma,
     testeData: row.teste_data,
@@ -61,6 +65,10 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
       pureza: input.pureza || null,
       germinacao: input.germinacao || null,
       validade: input.validade || null,
+      categoria: input.categoria || null,
+      especie: input.especie || null,
+      processo: input.processo || null,
+      peso_embalagem: input.pesoEmbalagem || null,
       pms: null,
       teste_forma: null,
       teste_data: null,
@@ -77,7 +85,18 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
 /** Corrige só os metadados — não mexe no arquivo já enviado. */
 export async function atualizarLaudo(
   id: string,
-  patch: { nomeProduto: string; lote: string; anoSafra: string; pureza: string; germinacao: string; validade: string; pms: string },
+  patch: {
+    nomeProduto: string;
+    lote: string;
+    anoSafra: string;
+    pureza: string;
+    germinacao: string;
+    validade: string;
+    categoria: string;
+    processo: string;
+    pesoEmbalagem: string;
+    pms: string;
+  },
 ): Promise<void> {
   const { error } = await supabase
     .from('arquivos_laudos')
@@ -88,6 +107,9 @@ export async function atualizarLaudo(
       pureza: patch.pureza || null,
       germinacao: patch.germinacao || null,
       validade: patch.validade || null,
+      categoria: patch.categoria || null,
+      processo: patch.processo || null,
+      peso_embalagem: patch.pesoEmbalagem || null,
       pms: patch.pms || null,
     })
     .eq('id', id);
@@ -138,6 +160,7 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
     indiceSobrevivencia: row.indice_sobrevivencia,
     modoPlantio: row.modo_plantio === 'cova' || row.modo_plantio === 'lanco' ? row.modo_plantio : null,
     margemTolerancia: row.margem_tolerancia,
+    observacaoEtiqueta: row.observacao_etiqueta,
   };
 }
 
@@ -163,6 +186,7 @@ export async function salvarParametrizacaoProduto(produto: {
   indiceSobrevivencia: string;
   modoPlantio: 'cova' | 'lanco' | null;
   margemTolerancia: string;
+  observacaoEtiqueta: string;
 }): Promise<void> {
   const { error } = await supabase.from('arquivos_parametrizacao_produtos').upsert(
     {
@@ -172,6 +196,7 @@ export async function salvarParametrizacaoProduto(produto: {
       indice_sobrevivencia: produto.indiceSobrevivencia || null,
       modo_plantio: produto.modoPlantio,
       margem_tolerancia: produto.margemTolerancia || null,
+      observacao_etiqueta: produto.observacaoEtiqueta || null,
     },
     { onConflict: 'nome_produto' },
   );

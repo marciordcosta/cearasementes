@@ -30,6 +30,7 @@ import {
 import { EditarLaudoModal } from '@/features/arquivos/components/EditarLaudoModal';
 import { FormularioUpload } from '@/features/arquivos/components/FormularioUpload';
 import { GuiaPlantioModal } from '@/features/arquivos/components/GuiaPlantioModal';
+import { ImprimirEtiquetaModal } from '@/features/arquivos/components/ImprimirEtiquetaModal';
 import { ListaArquivos } from '@/features/arquivos/components/ListaArquivos';
 import { ParametrizacaoProdutosModal } from '@/features/arquivos/components/ParametrizacaoProdutosModal';
 import { TesteModal } from '@/features/arquivos/components/TesteModal';
@@ -60,6 +61,7 @@ export function ArquivosPage() {
   const [paraVisualizar, setParaVisualizar] = useState<ArquivoLaudo | null>(null);
   const [paraEditar, setParaEditar] = useState<ArquivoLaudo | null>(null);
   const [paraTeste, setParaTeste] = useState<ArquivoLaudo | null>(null);
+  const [paraImprimirEtiqueta, setParaImprimirEtiqueta] = useState<ArquivoLaudo | null>(null);
 
   function invalidar() {
     queryClient.invalidateQueries({ queryKey: ['arquivos_laudos'] });
@@ -115,7 +117,18 @@ export function ArquivosPage() {
 
   async function onSalvarEdicao(
     id: string,
-    patch: { nomeProduto: string; lote: string; anoSafra: string; pureza: string; germinacao: string; validade: string; pms: string },
+    patch: {
+      nomeProduto: string;
+      lote: string;
+      anoSafra: string;
+      pureza: string;
+      germinacao: string;
+      validade: string;
+      categoria: string;
+      processo: string;
+      pesoEmbalagem: string;
+      pms: string;
+    },
   ) {
     try {
       await atualizarLaudo(id, patch);
@@ -143,6 +156,7 @@ export function ArquivosPage() {
     indiceSobrevivencia: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
+    observacaoEtiqueta: string;
   }) {
     try {
       await salvarParametrizacaoProduto(produto);
@@ -302,8 +316,8 @@ export function ArquivosPage() {
           onVisualizar={setParaVisualizar}
           onEditar={setParaEditar}
           onAbrirTeste={setParaTeste}
-          produtos={produtos}
           onAbrirGuiaPlantio={abrirGuiaPlantioComLaudo}
+          onImprimirEtiqueta={setParaImprimirEtiqueta}
         />
       </div>
 
@@ -339,6 +353,12 @@ export function ArquivosPage() {
       <VisualizarArquivoModal laudo={paraVisualizar} onFechar={() => setParaVisualizar(null)} />
       <EditarLaudoModal laudo={paraEditar} onFechar={() => setParaEditar(null)} onSalvar={onSalvarEdicao} />
       <TesteModal laudo={paraTeste} onFechar={() => setParaTeste(null)} onSalvar={onSalvarTeste} />
+      <ImprimirEtiquetaModal
+        laudo={paraImprimirEtiqueta}
+        produtos={produtos}
+        produtosPreco={produtosPreco}
+        onFechar={() => setParaImprimirEtiqueta(null)}
+      />
       <ParametrizacaoProdutosModal
         open={parametrizacaoAberta}
         produtos={produtos}

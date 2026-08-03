@@ -29,6 +29,7 @@ interface ParametrizacaoProdutosModalProps {
     indiceSobrevivencia: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
+    observacaoEtiqueta: string;
   }) => void;
   onApagar: (id: string) => void;
   /** Corrige o grupo de uma linha já cadastrada — pra quando a extração automática (1ª + 3ª palavra) não pega o nome certo. */
@@ -250,7 +251,7 @@ export function ParametrizacaoProdutosModal({
   }, [produtos, arquivos]);
 
   return (
-    <Modal open={open} title="Parametrização de Produtos" onClose={onFechar} widthClassName="max-w-[780px]">
+    <Modal open={open} title="Parametrização de Produtos" onClose={onFechar} widthClassName="max-w-[1080px]">
       <div className="space-y-4">
         <div className="flex items-center gap-1 border-b border-[var(--color-line)] pb-2">
           {ABAS.map((a) => (
@@ -283,9 +284,20 @@ export function ParametrizacaoProdutosModal({
               <span className="w-16 shrink-0 text-center">Sobrev%</span>
               <span className="w-[74px] shrink-0 text-center">Plantio</span>
               <span className="w-16 shrink-0 text-center">Margem%</span>
+              <span className="w-56 shrink-0 text-center">Observação (selo)</span>
               <span className="w-8 shrink-0" />
             </div>
-            {linhasGrupo.map(({ grupo, existente }) => (
+            {linhasGrupo.map(({ grupo, existente }) => {
+              const camposAtuais = {
+                nomeProduto: existente?.nomeProduto ?? grupo,
+                pmsBase: existente?.pmsBase ?? '',
+                densidadeBase: existente?.densidadeBase ?? '',
+                indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                modoPlantio: existente?.modoPlantio ?? null,
+                margemTolerancia: existente?.margemTolerancia ?? '',
+                observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
+              };
+              return (
               <div key={grupo} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
                 {existente && editandoId === existente.id ? (
                   <input
@@ -308,68 +320,34 @@ export function ParametrizacaoProdutosModal({
                   </span>
                 )}
                 <input
-                  defaultValue={existente?.pmsBase ?? ''}
+                  defaultValue={camposAtuais.pmsBase}
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (existente?.pmsBase ?? ''))
-                      onSalvar({
-                        nomeProduto: existente?.nomeProduto ?? grupo,
-                        pmsBase: valor,
-                        densidadeBase: existente?.densidadeBase ?? '',
-                        indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
-                        modoPlantio: existente?.modoPlantio ?? null,
-                        margemTolerancia: existente?.margemTolerancia ?? '',
-                      });
+                    if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <input
-                  defaultValue={existente?.densidadeBase ?? ''}
+                  defaultValue={camposAtuais.densidadeBase}
                   placeholder="por m²"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (existente?.densidadeBase ?? ''))
-                      onSalvar({
-                        nomeProduto: existente?.nomeProduto ?? grupo,
-                        pmsBase: existente?.pmsBase ?? '',
-                        densidadeBase: valor,
-                        indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
-                        modoPlantio: existente?.modoPlantio ?? null,
-                        margemTolerancia: existente?.margemTolerancia ?? '',
-                      });
+                    if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <input
-                  defaultValue={existente?.indiceSobrevivencia ?? ''}
+                  defaultValue={camposAtuais.indiceSobrevivencia}
                   placeholder="ideal"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (existente?.indiceSobrevivencia ?? ''))
-                      onSalvar({
-                        nomeProduto: existente?.nomeProduto ?? grupo,
-                        pmsBase: existente?.pmsBase ?? '',
-                        densidadeBase: existente?.densidadeBase ?? '',
-                        indiceSobrevivencia: valor,
-                        modoPlantio: existente?.modoPlantio ?? null,
-                        margemTolerancia: existente?.margemTolerancia ?? '',
-                      });
+                    if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <select
-                  value={existente?.modoPlantio ?? 'lanco'}
-                  onChange={(e) => {
-                    const modoPlantio = e.target.value as 'cova' | 'lanco';
-                    onSalvar({
-                      nomeProduto: existente?.nomeProduto ?? grupo,
-                      pmsBase: existente?.pmsBase ?? '',
-                      densidadeBase: existente?.densidadeBase ?? '',
-                      indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
-                      modoPlantio,
-                      margemTolerancia: existente?.margemTolerancia ?? '',
-                    });
-                  }}
+                  value={camposAtuais.modoPlantio ?? 'lanco'}
+                  onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' })}
                   title="Modo de plantio padrão — só pré-seleciona ao adicionar no Guia de Plantio"
                   className={`w-[74px] shrink-0 ${campoClasse}`}
                 >
@@ -377,22 +355,24 @@ export function ParametrizacaoProdutosModal({
                   <option value="cova">Cova</option>
                 </select>
                 <input
-                  defaultValue={existente?.margemTolerancia ?? ''}
+                  defaultValue={camposAtuais.margemTolerancia}
                   placeholder="25"
                   title="Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando arredonda pra baixo, acima arredonda pra cima. 25% se em branco."
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== (existente?.margemTolerancia ?? ''))
-                      onSalvar({
-                        nomeProduto: existente?.nomeProduto ?? grupo,
-                        pmsBase: existente?.pmsBase ?? '',
-                        densidadeBase: existente?.densidadeBase ?? '',
-                        indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
-                        modoPlantio: existente?.modoPlantio ?? null,
-                        margemTolerancia: valor,
-                      });
+                    if (valor !== camposAtuais.margemTolerancia) onSalvar({ ...camposAtuais, margemTolerancia: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                <input
+                  defaultValue={camposAtuais.observacaoEtiqueta}
+                  placeholder="Ex.: PRODUTOR : RENASEM : GO - 02.647/2019"
+                  title="Texto livre impresso na linha Observação do Selo"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.observacaoEtiqueta) onSalvar({ ...camposAtuais, observacaoEtiqueta: valor });
+                  }}
+                  className={`w-56 shrink-0 ${campoClasse}`}
                 />
                 {existente ? (
                   <>
@@ -412,7 +392,8 @@ export function ParametrizacaoProdutosModal({
                   <span className="w-8 shrink-0" />
                 )}
               </div>
-            ))}
+              );
+            })}
             {linhasGrupo.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum laudo importado ainda.</p>}
           </div>
         </div>
