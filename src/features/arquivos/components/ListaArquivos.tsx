@@ -21,6 +21,8 @@ interface ListaArquivosProps {
   onAbrirGuiaPlantio: (arquivo: ArquivoLaudo) => void;
   /** Abre o diálogo de impressão do Selo (etiqueta de lote) — ícone 🏷️. */
   onImprimirEtiqueta: (arquivo: ArquivoLaudo) => void;
+  /** Gera o Guia de Teste (impressão) já com Produto/Lote preenchidos pelos laudos selecionados — aceita qualquer quantidade. */
+  onGerarGuiaTeste: (arquivos: ArquivoLaudo[]) => void;
 }
 
 /**
@@ -51,7 +53,7 @@ function imprimir(arquivo: ArquivoLaudo) {
   window.open(montarUrlVisualizacao(arquivo, 'aba'), '_blank');
 }
 
-export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, onAbrirGuiaPlantio, onImprimirEtiqueta }: ListaArquivosProps) {
+export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, onAbrirGuiaPlantio, onImprimirEtiqueta, onGerarGuiaTeste }: ListaArquivosProps) {
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
@@ -117,6 +119,9 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                 🌱 Guia de Plantio
               </Button>
             )}
+            <Button variant="action" onClick={() => onGerarGuiaTeste(arquivosSelecionados)}>
+              🧪 Teste
+            </Button>
           </div>
         )}
       </div>
@@ -159,8 +164,8 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{calcularVC(a)}</td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{a.pms || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">
-                  <button type="button" onClick={() => onAbrirTeste(a)} className="font-semibold text-good underline decoration-dotted underline-offset-2 hover:brightness-90">
-                    {resultadoTeste(a)}
+                  <button type="button" onClick={() => onAbrirTeste(a)} title="Teste de Germinação de Campo" className="font-semibold text-good hover:brightness-90">
+                    {a.testeForma == null ? '🧪' : <span className="underline decoration-dotted underline-offset-2">{resultadoTeste(a)}</span>}
                   </button>
                 </td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{new Date(a.enviadoEm).toLocaleDateString('pt-BR')}</td>

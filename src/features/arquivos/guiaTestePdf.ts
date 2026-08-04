@@ -1,19 +1,26 @@
 import type { ArquivoLaudo } from './types';
 
+function escapeHtml(texto: string): string {
+  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /**
  * Gera a "Guia de Teste" (via janela de impressão do navegador) — folha pra
- * preencher à mão no campo com os resultados do Teste de Germinação, TODOS os
- * campos em branco (o número de linhas só acompanha o filtro atual da tela).
+ * preencher à mão no campo com os resultados do Teste de Germinação. Produto
+ * e Lote já vêm preenchidos com os dados do próprio laudo (`arquivos`, ex.:
+ * laudos selecionados na grade); Data do teste, Quantidade, Resultado e Data
+ * do resultado ficam em branco — o teste de campo em si acontece depois, em
+ * outro dia, então não tem como saber essa data na hora de gerar a guia.
  * Mesmo padrão de gerarCatalogoPDF (features/pricing/catalogoPdf.ts).
  */
 export function gerarGuiaTestePdf(arquivos: ArquivoLaudo[]): void {
   const linhas = arquivos
     .map(
-      () => `
+      (a) => `
         <tr>
           <td class="preencher"></td>
-          <td class="preencher"></td>
-          <td class="preencher"></td>
+          <td>${escapeHtml(a.nomeProduto)}</td>
+          <td>${escapeHtml(a.lote || '')}</td>
           <td class="preencher"></td>
           <td class="preencher"></td>
           <td class="preencher"></td>

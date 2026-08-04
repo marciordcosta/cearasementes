@@ -4,16 +4,19 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import {
+  apagarFotoTeste,
   apagarLaudo,
   apagarOpcaoChecklist,
   apagarParametrizacaoProduto,
   apagarPerguntaChecklist,
   atualizarFatorPlantio,
+  atualizarFotosTeste,
   atualizarLaudo,
   atualizarOpcaoChecklist,
   atualizarPerguntaChecklist,
   atualizarResumoCondicao,
   atualizarTeste,
+  enviarFotoTeste,
   enviarLaudo,
   fetchArquivosLaudos,
   fetchChecklistPlantio,
@@ -318,6 +321,7 @@ export function ArquivosPage() {
           onAbrirTeste={setParaTeste}
           onAbrirGuiaPlantio={abrirGuiaPlantioComLaudo}
           onImprimirEtiqueta={setParaImprimirEtiqueta}
+          onGerarGuiaTeste={gerarGuiaTestePdf}
         />
       </div>
 
@@ -352,7 +356,15 @@ export function ArquivosPage() {
 
       <VisualizarArquivoModal laudo={paraVisualizar} onFechar={() => setParaVisualizar(null)} />
       <EditarLaudoModal laudo={paraEditar} onFechar={() => setParaEditar(null)} onSalvar={onSalvarEdicao} />
-      <TesteModal laudo={paraTeste} onFechar={() => setParaTeste(null)} onSalvar={onSalvarTeste} />
+      <TesteModal
+        laudo={paraTeste}
+        onFechar={() => setParaTeste(null)}
+        onSalvar={onSalvarTeste}
+        onAdicionarFoto={enviarFotoTeste}
+        onRemoverFoto={apagarFotoTeste}
+        onSalvarFotos={atualizarFotosTeste}
+        onFotosAlteradas={invalidar}
+      />
       <ImprimirEtiquetaModal
         laudo={paraImprimirEtiqueta}
         produtos={produtos}

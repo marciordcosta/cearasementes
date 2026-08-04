@@ -35,6 +35,7 @@ function fromRow(row: ArquivoRow): ArquivoLaudo {
     testePlantadas: row.teste_plantadas,
     testeGerminadas: row.teste_germinadas,
     testePesoPlantado: row.teste_peso_plantado,
+    testeFotos: row.teste_fotos ?? [],
   };
 }
 
@@ -75,6 +76,7 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
       teste_plantadas: null,
       teste_germinadas: null,
       teste_peso_plantado: null,
+      teste_fotos: null,
     })
     .select('*')
     .single();
@@ -122,6 +124,7 @@ export interface PatchTeste {
   testePlantadas: number | null;
   testeGerminadas: number | null;
   testePesoPlantado: number | null;
+  testeFotos: string[];
 }
 
 /** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. */
@@ -134,9 +137,32 @@ export async function atualizarTeste(id: string, patch: PatchTeste): Promise<voi
       teste_plantadas: patch.testePlantadas,
       teste_germinadas: patch.testeGerminadas,
       teste_peso_plantado: patch.testePesoPlantado,
+      teste_fotos: patch.testeFotos,
     })
     .eq('id', id);
   if (error) throw error;
+}
+
+/** Grava só a lista de fotos (sem tocar nos demais campos do teste) — chamado a cada foto adicionada/removida, pra persistir na hora, sem esperar o "Salvar" do resto do formulário. */
+export async function atualizarFotosTeste(id: string, testeFotos: string[]): Promise<void> {
+  const { error } = await supabase.from('arquivos_laudos').update({ teste_fotos: testeFotos }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Sobe uma foto do Teste de Campo pro bucket "laudos" (path prefixado por laudo, pra não misturar com o PDF na raiz) e devolve a URL pública. */
+export async function enviarFotoTeste(laudoId: string, arquivo: File): Promise<string> {
+  const caminho = `teste-fotos/${laudoId}/${Date.now()}_${arquivo.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const { error } = await supabase.storage.from(BUCKET).upload(caminho, arquivo, { contentType: arquivo.type || undefined });
+  if (error) throw error;
+  return supabase.storage.from(BUCKET).getPublicUrl(caminho).data.publicUrl;
+}
+
+/** Apaga uma foto do Teste de Campo do Storage — best-effort, mesmo padrão de apagarLaudo (deriva o caminho da própria URL pública). */
+export async function apagarFotoTeste(url: string): Promise<void> {
+  const marcador = `/${BUCKET}/`;
+  const idx = url.indexOf(marcador);
+  if (idx === -1) return;
+  await supabase.storage.from(BUCKET).remove([decodeURIComponent(url.slice(idx + marcador.length))]);
 }
 
 /** Apaga os metadados e, best-effort, o arquivo no Storage (o caminho é derivado da URL pública). */

@@ -28,6 +28,8 @@ export interface ArquivoLaudo {
   testePlantadas: number | null;
   testeGerminadas: number | null;
   testePesoPlantado: number | null;
+  /** Fotos do teste de campo (URLs públicas, bucket "laudos") — sempre array, nunca null; mesmo modelo "1 teste por laudo": editar/excluir o teste também substitui/limpa as fotos. */
+  testeFotos: string[];
 }
 
 export interface NovoLaudoInput {

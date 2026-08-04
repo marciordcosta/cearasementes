@@ -4,6 +4,7 @@ import { ArquivosPage } from './pages/ArquivosPage';
 import { ConciliacaoPage } from './pages/ConciliacaoPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FretesPage } from './pages/FretesPage';
+import { TesteCampoPage } from './pages/TesteCampoPage';
 import { UploadsPage } from './pages/UploadsPage';
 import { PricingPage } from './pages/PricingPage';
 
@@ -14,6 +15,7 @@ const PAGINAS = [
   { path: '/fretes', Componente: FretesPage },
   { path: '/conciliacao', Componente: ConciliacaoPage },
   { path: '/arquivos', Componente: ArquivosPage },
+  { path: '/teste-campo', Componente: TesteCampoPage },
 ];
 
 /**

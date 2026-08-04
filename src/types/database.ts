@@ -436,6 +436,8 @@ export interface Database {
           teste_plantadas: number | null;
           teste_germinadas: number | null;
           teste_peso_plantado: number | null;
+          /** Fotos do teste de campo (URLs públicas do bucket "laudos", prefixo teste-fotos/) — mesmo modelo "1 teste por laudo": editar/excluir o teste também substitui/limpa as fotos. */
+          teste_fotos: string[] | null;
         };
         Insert: Omit<Database['public']['Tables']['arquivos_laudos']['Row'], 'id' | 'enviado_em'>;
         Update: Partial<Database['public']['Tables']['arquivos_laudos']['Insert']>;
