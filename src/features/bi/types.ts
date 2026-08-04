@@ -85,6 +85,8 @@ export interface MonthlyItem {
   qtd: number;
   valorVendido: number;
   custoTotal: number;
+  /** Desconto real concedido nesse produto/tabela/mês, direto do próprio Relatório 396 (soma de vlr_desc) — não é estimado. */
+  descontoTotal: number;
 }
 
 /**
@@ -107,9 +109,24 @@ export interface FilteredItemView {
   qtd: number;
   valorVendido: number;
   custoTotal: number;
-  /** valorVendido - custoTotal. */
+  /**
+   * Margem líquida: valorVendido - custoTotal - (imposto+comissão+cartão).
+   * NÃO desconta o desconto de novo — valorVendido já vem líquido de
+   * desconto (vlr_com_desc), então descontar de novo aqui contaria o mesmo
+   * valor duas vezes.
+   */
   margem: number;
   /** margem / valorVendido (0 se valorVendido for 0). */
   margemPct: number;
+  /**
+   * Encargos* (estimativa): imposto + comissão + cartão (% do Canal/Tabela de
+   * Preço, ver construirTaxasPorTabela) sobre o valor vendido, mais o
+   * desconto REAL concedido (não estimado, vem do próprio 396) — discriminado
+   * por componente (ver tooltip no valor na UI). Marcado com "*" na UI porque
+   * a alíquota de imposto usada é uma média entre Categorias (a maioria dos
+   * produtos ainda não tem Categoria cadastrada na Precificação) —
+   * comissão/cartão já são exatos (vêm direto do Canal).
+   */
+  encargosDetalhe: { impostoReais: number; comissaoReais: number; cartaoReais: number; descontoReais: number };
   ref: ItemAgg;
 }

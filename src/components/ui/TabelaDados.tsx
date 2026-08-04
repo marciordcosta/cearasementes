@@ -6,6 +6,8 @@ export interface ColunaTabela<T> {
   render: (linha: T) => ReactNode;
   alinhamento?: 'left' | 'right';
   className?: string;
+  /** Classe extra só pro <th> (cabeçalho) — pra destacar uma coluna inteira (cabeçalho + células, ver `className`) sem repetir a classe em cada linha. */
+  classeCabecalho?: string;
 }
 
 interface TabelaDadosProps<T> {
@@ -33,7 +35,7 @@ export function TabelaDados<T>({
             {colunas.map((col) => (
               <th
                 key={col.chave}
-                className={`px-4 py-2 font-medium ${col.alinhamento === 'right' ? 'text-right' : 'text-left'}`}
+                className={`px-4 py-2 font-medium ${col.alinhamento === 'right' ? 'text-right' : 'text-left'} ${col.classeCabecalho ?? ''}`}
               >
                 {col.cabecalho}
               </th>

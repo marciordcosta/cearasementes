@@ -210,8 +210,43 @@ export function getFilteredCarrierRows(
   return rows;
 }
 
+/** Encargos percentuais de uma Tabela de Preço (Canal, ver módulo Precificação) — imposto/comissão/cartão, já resolvidos num único número por Canal. */
+export interface TaxasTabela {
+  impostoPct: number;
+  comissao: number;
+  cartao: number;
+}
+
+/**
+ * Monta a taxa de encargos (%) de cada Tabela de Preço (Canal) — chave é o
+ * nome do Canal em minúsculo, pra casar com `tabela_preco` das vendas sem
+ * depender de maiúsculas ("PADRÃO" vs "Padrão"). Imposto usa a MÉDIA das
+ * Categorias cadastradas (estadual ou interestadual, conforme o Canal) em
+ * vez do imposto exato do produto — a maioria dos produtos vendidos ainda
+ * não tem Categoria cadastrada na Precificação (só um punhado cadastrado até
+ * agora), então uma alíquota por produto deixaria a conta em branco pra
+ * quase todo mundo; a média já é exata hoje mesmo assim, porque todas as
+ * Categorias cadastradas têm a mesma alíquota (só muda se isso divergir no
+ * futuro). Comissão e Cartão já são exatos, vêm direto do Canal.
+ */
+export function construirTaxasPorTabela(canais: { nome: string; comissao: number; cartao: number; tipoImposto: 'estadual' | 'interestadual' }[], categorias: { estadual: number; interestadual: number }[]): Map<string, TaxasTabela> {
+  const impostoMedio = (tipo: 'estadual' | 'interestadual') =>
+    categorias.length > 0 ? categorias.reduce((s, c) => s + c[tipo], 0) / categorias.length : 0;
+  const mapa = new Map<string, TaxasTabela>();
+  for (const canal of canais) {
+    mapa.set(canal.nome.trim().toLowerCase(), { impostoPct: impostoMedio(canal.tipoImposto), comissao: canal.comissao, cartao: canal.cartao });
+  }
+  return mapa;
+}
+
 /** `tabelaFiltro` = 'all' pra visão Geral (soma todas as Tabelas de Preço) ou o nome de uma Tabela específica (ver seletor em AnaliseProdutosSection.tsx). */
-export function getFilteredItems(ctx: PeriodContext, items: ItemAgg[], selectedPeriod: string, tabelaFiltro: string): FilteredItemView[] {
+export function getFilteredItems(
+  ctx: PeriodContext,
+  items: ItemAgg[],
+  selectedPeriod: string,
+  tabelaFiltro: string,
+  taxasPorTabela: Map<string, TaxasTabela> = new Map(),
+): FilteredItemView[] {
   return items
     .map((item): FilteredItemView | null => {
       const meses = item.monthly.filter(
@@ -222,7 +257,24 @@ export function getFilteredItems(ctx: PeriodContext, items: ItemAgg[], selectedP
       const valorVendido = meses.reduce((s, m) => s + m.valorVendido, 0);
       const custoTotal = meses.reduce((s, m) => s + m.custoTotal, 0);
       if (qtd === 0 && valorVendido === 0) return null;
-      const margem = valorVendido - custoTotal;
+      // Cada mês/tabela usa a taxa da SUA PRÓPRIA Tabela de Preço — importa na visão "Geral", onde um
+      // mesmo produto pode ter sido vendido em Tabelas com Canais (e portanto encargos) diferentes.
+      const descontoReais = meses.reduce((s, m) => s + m.descontoTotal, 0);
+      let impostoReais = 0;
+      let comissaoReais = 0;
+      let cartaoReais = 0;
+      for (const m of meses) {
+        const taxas = taxasPorTabela.get(m.tabela.trim().toLowerCase());
+        if (!taxas) continue;
+        impostoReais += (m.valorVendido * taxas.impostoPct) / 100;
+        comissaoReais += (m.valorVendido * taxas.comissao) / 100;
+        cartaoReais += (m.valorVendido * taxas.cartao) / 100;
+      }
+      const encargosDetalhe = { impostoReais, comissaoReais, cartaoReais, descontoReais };
+      // Margem NÃO desconta o desconto — `valorVendido` já vem líquido de desconto (vlr_com_desc, ver
+      // aggregate.ts), então o desconto já está refletido nele; subtrair de novo aqui contaria o mesmo
+      // desconto duas vezes. Só imposto/comissão/cartão são custo "de verdade" ainda não refletido em `valorVendido`.
+      const margem = valorVendido - custoTotal - (impostoReais + comissaoReais + cartaoReais);
       return {
         produto: item.produto,
         codInterno: item.codInterno,
@@ -231,18 +283,40 @@ export function getFilteredItems(ctx: PeriodContext, items: ItemAgg[], selectedP
         custoTotal,
         margem,
         margemPct: valorVendido > 0 ? margem / valorVendido : 0,
+        encargosDetalhe,
         ref: item,
       };
     })
     .filter((v): v is FilteredItemView => v !== null);
 }
 
-/** Classe A/B/C de cada item de `itensOrdenados` (já ordenados por valorVendido decrescente) pelo % acumulado de valor vendido — A até 80%, B até 95%, C no resto. Curva ABC clássica: poucos produtos concentram a maior parte do faturamento. */
-export function classificarABC(itensOrdenados: FilteredItemView[]): ('A' | 'B' | 'C')[] {
-  const total = itensOrdenados.reduce((s, i) => s + i.valorVendido, 0);
+/** Base de comparação da Curva ABC: Faturamento (valor vendido), Quantidade vendida ou Margem de lucro — ver seletor em AnaliseProdutosSection.tsx. */
+export type CriterioABC = 'valor' | 'qtd' | 'margem';
+
+/** Valor do item no critério escolhido — mesma função usada pra ordenar a tabela e pra acumular a Curva ABC, pra nunca desalinhar ordenação e classificação. */
+export function valorCriterioABC(item: FilteredItemView, criterio: CriterioABC): number {
+  if (criterio === 'qtd') return item.qtd;
+  if (criterio === 'margem') return item.margem;
+  return item.valorVendido;
+}
+
+/**
+ * Classe A/B/C de cada item de `itensOrdenados` (já ordenados pelo mesmo
+ * `criterio`, decrescente) pelo % acumulado do critério escolhido — A até
+ * 80%, B até 95%, C no resto. Curva ABC clássica: poucos produtos concentram
+ * a maior parte do total (padrão: faturamento; também pode ser por
+ * quantidade ou margem). O 1º item (o mais dominante nesse critério) é
+ * SEMPRE Classe A, mesmo que ele sozinho já ultrapasse 80% acumulado —
+ * senão um produto extremamente concentrado (ex.: 81% da quantidade total
+ * sozinho) cairia em B pela régua estrita, o que é contraintuitivo: ele
+ * continua sendo o item mais importante da lista.
+ */
+export function classificarABC(itensOrdenados: FilteredItemView[], criterio: CriterioABC = 'valor'): ('A' | 'B' | 'C')[] {
+  const total = itensOrdenados.reduce((s, i) => s + valorCriterioABC(i, criterio), 0);
   let acumulado = 0;
-  return itensOrdenados.map((item) => {
-    acumulado += item.valorVendido;
+  return itensOrdenados.map((item, i) => {
+    acumulado += valorCriterioABC(item, criterio);
+    if (i === 0) return 'A';
     const pctAcumulado = total > 0 ? acumulado / total : 0;
     if (pctAcumulado <= 0.8) return 'A';
     if (pctAcumulado <= 0.95) return 'B';

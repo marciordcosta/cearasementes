@@ -112,6 +112,17 @@ export function agregarVendas(rows: VendaRow[]): PriceTableAgg[] {
 }
 
 /**
+ * Códigos internos que, no Max-Manager, foram cadastrados em duplicidade pro
+ * MESMO produto (erro de cadastro, não é variação real) — a chave é o código
+ * "extra", o valor é o código CANÔNICO em que ele deve ser unificado. Ex.:
+ * Andropogon Planaltina tem venda registrada tanto no código 1 quanto no 2;
+ * unifica tudo no 2 (nome do produto exibido também vem do 2).
+ */
+const CODIGOS_PRODUTO_UNIFICADOS: Record<string, string> = {
+  '1': '2',
+};
+
+/**
  * Uma linha por item (produto) de uma venda -> agrupa por produto (usando
  * cod_interno quando existe, senão o nome — unifica o mesmo produto vendido
  * em Tabelas de Preço diferentes) e soma por (tabela, mês). Tabela e mês/ano
@@ -128,25 +139,54 @@ export function agregarItens(vendas: VendaRow[], itens: ItemVendaRow[]): ItemAgg
     if (data) infoPorVenda.set(v.id, { ...data, tabela: v.tabela_preco });
   }
 
-  const porProduto = new Map<string, { produto: string; codInterno: string | null; itens: ItemVendaRow[] }>();
+  // Um código unificado (ver CODIGOS_PRODUTO_UNIFICADOS) pode ter vários nomes de produto
+  // diferentes gravados ao longo do tempo (variação de digitação, "06KG"/"08KG" etc.) —
+  // guarda a CONTAGEM de cada nome (não só o último visto) pra escolher o mais frequente
+  // no final, com prioridade pro nome usado pelos itens do próprio código canônico
+  // (evita o nome de exibição virar, por acaso de ordem, uma digitação rara ou um erro
+  // de cadastro isolado sob o código canônico).
+  const porProduto = new Map<
+    string,
+    { codInterno: string | null; itens: ItemVendaRow[]; contagemNomeCanonico: Map<string, number>; contagemNomeGeral: Map<string, number> }
+  >();
   for (const item of itens) {
-    const chave = item.cod_interno || item.produto;
-    if (!porProduto.has(chave)) porProduto.set(chave, { produto: item.produto, codInterno: item.cod_interno, itens: [] });
-    porProduto.get(chave)!.itens.push(item);
+    const codOriginal = item.cod_interno;
+    const codCanonico = codOriginal ? (CODIGOS_PRODUTO_UNIFICADOS[codOriginal] ?? codOriginal) : null;
+    const chave = codCanonico || item.produto;
+    if (!porProduto.has(chave)) porProduto.set(chave, { codInterno: codCanonico, itens: [], contagemNomeCanonico: new Map(), contagemNomeGeral: new Map() });
+    const grupo = porProduto.get(chave)!;
+    grupo.itens.push(item);
+    grupo.contagemNomeGeral.set(item.produto, (grupo.contagemNomeGeral.get(item.produto) ?? 0) + 1);
+    if (codOriginal === codCanonico) grupo.contagemNomeCanonico.set(item.produto, (grupo.contagemNomeCanonico.get(item.produto) ?? 0) + 1);
   }
 
-  return Array.from(porProduto.values()).map(({ produto, codInterno, itens: itensDoProduto }) => {
-    const monthlyMap = new Map<string, { year: number; month: number; tabela: string; qtd: number; valorVendido: number; custoTotal: number }>();
+  const nomeMaisFrequente = (contagem: Map<string, number>): string | null => {
+    let melhor: string | null = null;
+    let melhorContagem = 0;
+    contagem.forEach((n, nome) => {
+      if (n > melhorContagem) {
+        melhor = nome;
+        melhorContagem = n;
+      }
+    });
+    return melhor;
+  };
+
+  return Array.from(porProduto.values()).map(({ codInterno, itens: itensDoProduto, contagemNomeCanonico, contagemNomeGeral }) => {
+    const produto = nomeMaisFrequente(contagemNomeCanonico) ?? nomeMaisFrequente(contagemNomeGeral) ?? itensDoProduto[0].produto;
+    const monthlyMap = new Map<string, { year: number; month: number; tabela: string; qtd: number; valorVendido: number; custoTotal: number; descontoTotal: number }>();
 
     for (const item of itensDoProduto) {
       const info = infoPorVenda.get(item.venda_id);
       if (!info) continue;
       const key = `${info.tabela}|${info.year}-${String(info.month).padStart(2, '0')}`;
-      if (!monthlyMap.has(key)) monthlyMap.set(key, { year: info.year, month: info.month, tabela: info.tabela, qtd: 0, valorVendido: 0, custoTotal: 0 });
+      if (!monthlyMap.has(key))
+        monthlyMap.set(key, { year: info.year, month: info.month, tabela: info.tabela, qtd: 0, valorVendido: 0, custoTotal: 0, descontoTotal: 0 });
       const mm = monthlyMap.get(key)!;
       mm.qtd += item.qtd;
       mm.valorVendido += item.vlr_com_desc;
       mm.custoTotal += item.custo_unitario * item.qtd;
+      mm.descontoTotal += item.vlr_desc;
     }
 
     const monthly: MonthlyItem[] = Array.from(monthlyMap.values())

@@ -10,8 +10,9 @@ import { YearComparisonTable } from '@/features/bi/components/YearComparisonTabl
 import { Vendas396Section } from '@/features/bi/components/Vendas396Section';
 import { Entregas124Section } from '@/features/bi/components/Entregas124Section';
 import { AnaliseProdutosSection } from '@/features/bi/components/AnaliseProdutosSection';
-import { getAvailableYears, type PeriodContext } from '@/features/bi/calculations';
+import { construirTaxasPorTabela, getAvailableYears, type PeriodContext } from '@/features/bi/calculations';
 import type { PeriodMode } from '@/features/bi/types';
+import { fetchCanais, fetchCategorias } from '@/features/pricing/api';
 
 export function DashboardPage() {
   const { isDark } = useTheme();
@@ -19,11 +20,14 @@ export function DashboardPage() {
   const { data: entregas = [] } = useQuery({ queryKey: ['bi', 'entregas'], queryFn: fetchEntregas });
   const { data: vendas = [] } = useQuery({ queryKey: ['bi', 'vendas'], queryFn: fetchVendas });
   const { data: itens = [] } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens });
+  const { data: canais = [] } = useQuery({ queryKey: ['pricing', 'canais'], queryFn: fetchCanais });
+  const { data: categorias = [] } = useQuery({ queryKey: ['pricing', 'categorias'], queryFn: fetchCategorias });
 
   const carriers = useMemo(() => agregarEntregas(entregas), [entregas]);
   const priceTables = useMemo(() => agregarVendas(vendas), [vendas]);
   const itemAggs = useMemo(() => agregarItens(vendas, itens), [vendas, itens]);
   const cobertura = useMemo(() => agregarCoberturaItens(vendas, itens), [vendas, itens]);
+  const taxasPorTabela = useMemo(() => construirTaxasPorTabela(canais, categorias), [canais, categorias]);
 
   const [periodMode, setPeriodMode] = useState<PeriodMode>('calendar');
   const [seasonStartMonth, setSeasonStartMonth] = useState(10);
@@ -74,7 +78,15 @@ export function DashboardPage() {
       <YearComparisonTable ctx={ctx} priceTables={priceTables} carriers={carriers} selectedPeriod={selectedPeriod} isDark={isDark} />
       <Vendas396Section ctx={ctx} priceTables={priceTables} selectedPeriod={selectedPeriod} isDark={isDark} />
       <Entregas124Section ctx={ctx} carriers={carriers} priceTables={priceTables} selectedPeriod={selectedPeriod} isDark={isDark} />
-      <AnaliseProdutosSection ctx={ctx} items={itemAggs} cobertura={cobertura} priceTables={priceTables} selectedPeriod={selectedPeriod} isDark={isDark} />
+      <AnaliseProdutosSection
+        ctx={ctx}
+        items={itemAggs}
+        cobertura={cobertura}
+        priceTables={priceTables}
+        selectedPeriod={selectedPeriod}
+        isDark={isDark}
+        taxasPorTabela={taxasPorTabela}
+      />
     </AppShell>
   );
 }

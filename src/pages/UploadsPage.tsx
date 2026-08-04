@@ -95,8 +95,14 @@ export function UploadsPage() {
     setProcessandoVendas396(true);
     setErroVendas396(null);
     setSucessoVendas396(null);
-    try {
-      for (const grupo of grupos) {
+    // Cada arquivo é isolado no seu próprio try/catch — um arquivo com
+    // problema (formato inesperado, erro de rede no meio do upload) não pode
+    // impedir os outros do MESMO lote de serem tentados, nem fazer o "sucesso"
+    // de um arquivo anterior virar "erro" retroativamente no log.
+    const erros: string[] = [];
+    let sucessos = 0;
+    for (const grupo of grupos) {
+      try {
         const { tabelaPreco, periodoCabecalho, vendas, ignoradas } = parseVendas396(grupo);
         const criadas = vendas.length > 0 ? await garantirCanaisPreco([tabelaPreco]) : 0;
 
@@ -120,20 +126,18 @@ export function UploadsPage() {
         });
 
         await importarVendas396(logId, tabelaPreco, grupo.label, vendas);
+        sucessos += 1;
+      } catch (e) {
+        const mensagem = mensagemDeErro(e, 'Falha ao importar Vendas (Relatório 396).');
+        erros.push(`${grupo.label}: ${mensagem}`);
+        await registrarLogUpload({ arquivoNome: grupo.label, tipoRelatorio: '396', linhasImportadas: 0, status: 'erro', mensagem });
       }
-      queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
-      queryClient.invalidateQueries({ queryKey: ['pricing'] });
-      setSucessoVendas396(`${grupos.length} arquivo(s) de Vendas (396) importado(s) com sucesso.`);
-    } catch (e) {
-      const mensagem = mensagemDeErro(e, 'Falha ao importar Vendas (Relatório 396).');
-      setErroVendas396(mensagem);
-      for (const g of grupos) {
-        await registrarLogUpload({ arquivoNome: g.label, tipoRelatorio: '396', linhasImportadas: 0, status: 'erro', mensagem });
-      }
-      queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
-    } finally {
-      setProcessandoVendas396(false);
     }
+    queryClient.invalidateQueries({ queryKey: ['uploads_log'] });
+    queryClient.invalidateQueries({ queryKey: ['pricing'] });
+    if (sucessos > 0) setSucessoVendas396(`${sucessos} arquivo(s) de Vendas (396) importado(s) com sucesso.`);
+    if (erros.length > 0) setErroVendas396(erros.join(' | '));
+    setProcessandoVendas396(false);
   }
 
 /** Junta os dois lados (Banco e Sistema) — cada um com seu próprio mecanismo de detecção — numa lista só, pra mostrar antes de gravar qualquer coisa. */

@@ -23,6 +23,7 @@ export interface ItemVendaRow {
   cod_interno: string | null;
   produto: string;
   qtd: number;
+  vlr_desc: number;
   vlr_com_desc: number;
   custo_unitario: number;
 }
@@ -44,6 +45,6 @@ export async function fetchVendas(): Promise<VendaRow[]> {
 
 export async function fetchVendaItens(): Promise<ItemVendaRow[]> {
   return fetchAllRows((from, to) =>
-    supabase.from('vendas_tabela_preco_itens').select('venda_id, cod_interno, produto, qtd, vlr_com_desc, custo_unitario').range(from, to),
+    supabase.from('vendas_tabela_preco_itens').select('venda_id, cod_interno, produto, qtd, vlr_desc, vlr_com_desc, custo_unitario').range(from, to),
   );
 }

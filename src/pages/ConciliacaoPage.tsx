@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarDays } from 'lucide-react';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,6 +39,7 @@ import { VendaDetalheModal } from '@/features/conciliacao/components/VendaDetalh
 import { PendenciasBancoModal } from '@/features/conciliacao/components/PendenciasBancoModal';
 import { PendenciasModal } from '@/features/conciliacao/components/PendenciasModal';
 import { RegrasConciliacaoModal } from '@/features/conciliacao/components/RegrasConciliacaoModal';
+import { ResumoMensalBancoModal } from '@/features/conciliacao/components/ResumoMensalBancoModal';
 import { RotulosCategoriaModal } from '@/features/conciliacao/components/RotulosCategoriaModal';
 import { SugestoesPainel } from '@/features/conciliacao/components/SugestoesPainel';
 import { BANCO_FILTRO_OCULTADOS } from '@/features/conciliacao/constants';
@@ -176,6 +177,7 @@ export function ConciliacaoPage() {
   // Sistema notifica pré-lançamentos (falta cliente/documento/NF) — cada
   // bolinha abre o modal só com o tipo correspondente.
   const [modalPendenciasAberto, setModalPendenciasAberto] = useState<'preConciliados' | 'preLancamentos' | null>(null);
+  const [modalResumoMensalAberto, setModalResumoMensalAberto] = useState(false);
   const [modalManualAberto, setModalManualAberto] = useState(false);
   const [modalRegrasAberto, setModalRegrasAberto] = useState(false);
   const [modalRotulosAberto, setModalRotulosAberto] = useState(false);
@@ -715,6 +717,20 @@ export function ConciliacaoPage() {
 
   function onFiltrarObservacaoSistema(id: string) {
     setFiltroIdsSugestaoSistema([id]);
+  }
+
+  // Clique num número do Resumo Mensal (ver ResumoMensalBancoModal) — filtra a
+  // grade do Banco por aquele mês + status e fecha o modal. escopoData:'banco'
+  // garante que a varredura mensal não mexe no filtro de Data da grade do
+  // Sistema, que fica do jeito que já estava.
+  function onFiltrarResumoMensal(ano: number, mes: number, status: 'nao' | 'preConciliados' | null) {
+    const inicio = `${ano}-${String(mes + 1).padStart(2, '0')}-01`;
+    const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+    const fim = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
+    setFiltroGrupoBanco(null);
+    setFiltroIdsSugestaoBanco(null);
+    setFiltros((f) => ({ ...f, dataInicio: inicio, dataFim: fim, escopoData: 'banco', conciliado: status }));
+    setModalResumoMensalAberto(false);
   }
 
   function onAbrirVendaDetalhe(item: LancamentoSistema) {
@@ -1352,6 +1368,14 @@ export function ConciliacaoPage() {
           >
             {somaHabilitada ? '✓ Habilitar soma' : 'Habilitar soma'}
           </button>
+          <button
+            type="button"
+            onClick={() => setModalResumoMensalAberto(true)}
+            title="Resumo mensal do Banco — registros, não conciliados e pré-conciliados de cada mês"
+            className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm font-semibold text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+          >
+            <CalendarDays size={16} />
+          </button>
         </Card>
 
         {processando && (
@@ -1653,6 +1677,13 @@ export function ConciliacaoPage() {
         onExcluir={onExcluirObservacaoSistema}
       />
       <VendaDetalheModal open={documentoVendaDetalhe !== null} documento={documentoVendaDetalhe} onFechar={() => setDocumentoVendaDetalhe(null)} />
+      <ResumoMensalBancoModal
+        open={modalResumoMensalAberto}
+        banco={banco}
+        sistemaSemNfPorGrupo={sistemaSemNfPorGrupo}
+        onFechar={() => setModalResumoMensalAberto(false)}
+        onFiltrar={onFiltrarResumoMensal}
+      />
       <DescartadosModal
         open={descartadosModalAberto}
         onFechar={() => setDescartadosModalAberto(false)}

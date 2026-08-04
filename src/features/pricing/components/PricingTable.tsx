@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
@@ -82,8 +82,18 @@ export function PricingTable({
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
-  // Focar num campo de custo/preço destaca a linha inteira — igual ao original.
+  // Focar num campo de custo/preço (ou clicar na linha) destaca a linha inteira — igual ao original.
   const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
+  // Clicar fora da tabela inteira limpa o destaque — ouve o documento (não só onBlur) porque
+  // clicar numa <tr> sem focar nenhum input não dispara blur nenhum.
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function aoClicarFora(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setLinhaDestacada(null);
+    }
+    document.addEventListener('mousedown', aoClicarFora);
+    return () => document.removeEventListener('mousedown', aoClicarFora);
+  }, []);
 
   // Sombra que "descola" a coluna Produto (última fixa) do restante da
   // tabela ao rolar horizontalmente — só aparece quando há algo escondido
@@ -157,6 +167,8 @@ export function PricingTable({
             chave: 'editar',
             rotulo: '',
             larguraPadrao: defaults.editar,
+            // Gruda junto com Classe/Produto ao rolar — as três formam o bloco fixo da esquerda.
+            stickyLeft: 0,
             render: (p: Produto) => (
               <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-1 text-[var(--color-text)] hover:bg-[var(--color-line)]">
                 ✎
@@ -164,16 +176,23 @@ export function PricingTable({
             ),
           } satisfies ColunaDef,
         ]),
-    { chave: 'classe', rotulo: 'Classe', larguraPadrao: defaults.classe, stickyLeft: 0, render: (p) => getCategoria(p.categoriaId).nome },
+    {
+      chave: 'classe',
+      rotulo: 'Classe',
+      larguraPadrao: defaults.classe,
+      // Cola logo depois de "Editar" (que só existe fora do modo tela cheia por canal).
+      stickyLeft: somenteCanal ? 0 : largura('editar'),
+      render: (p) => getCategoria(p.categoriaId).nome,
+    },
     ...(mostrarColunaId ? [{ chave: 'id', rotulo: 'ID', larguraPadrao: defaults.id, render: (p: Produto) => <span className="num">{p.codigo}</span> } satisfies ColunaDef] : []),
     {
       chave: 'produto',
       rotulo: 'Produto',
       larguraPadrao: defaults.produto,
       // Fica colado logo depois de "Classe" ao rolar, igual ao original —
-      // o deslocamento acompanha a largura ATUAL de "Classe" (que agora pode
-      // ser redimensionada), não um valor fixo.
-      stickyLeft: largura('classe'),
+      // o deslocamento acompanha a largura ATUAL de "Editar"+"Classe" (que agora podem
+      // ser redimensionadas), não um valor fixo.
+      stickyLeft: (somenteCanal ? 0 : largura('editar')) + largura('classe'),
       render: (p) => <span className="font-semibold text-[var(--color-text)]">{p.nome}</span>,
     },
     { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{p.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span> },
@@ -301,19 +320,18 @@ export function PricingTable({
         ]),
   ];
 
-  // Ponto exato (em px) onde termina a última coluna fixa (Produto) — é ali
+  // Ponto exato (em px) onde termina a última coluna fixa (Editar + Classe + Produto) — é ali
   // que a faixa de sombra precisa ficar grudada enquanto rola pro lado.
-  const finalColunasFixas = largura('classe') + largura('produto');
+  const finalColunasFixas = (somenteCanal ? 0 : largura('editar')) + largura('classe') + largura('produto');
 
-  // "Produto" só termina de grudar na posição final depois que tudo que vem
-  // ANTES dela mas não é fixo (Editar, ID) escorrega por baixo — até lá, ela
-  // ainda está "andando" junto com o scroll, e mostrar sombra nesse meio-tempo
-  // é prematuro (nada foi realmente coberto ainda). Só depois desse ponto a
-  // coluna Peso passa a ficar de verdade encoberta.
-  const limiarComecoCobertura = (somenteCanal ? 0 : largura('editar')) + (mostrarColunaId ? largura('id') : 0);
+  // "Produto" só termina de grudar na posição final depois que "ID" (a única
+  // coluna entre Classe e Produto que não é fixa) escorrega por baixo — até lá,
+  // ela ainda está "andando" junto com o scroll, e mostrar sombra nesse
+  // meio-tempo é prematuro (nada foi realmente coberto ainda).
+  const limiarComecoCobertura = mostrarColunaId ? largura('id') : 0;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div className="max-h-[70vh] overflow-auto" onScroll={(e) => setRoladoLateral(e.currentTarget.scrollLeft > limiarComecoCobertura)}>
       <table className="table-fixed text-xs" style={{ width: colunas.reduce((s, c) => s + largura(c.chave), 0) }}>
         <colgroup>
