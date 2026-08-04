@@ -11,17 +11,18 @@ interface ModalProps {
   heightClassName?: string;
 }
 
-export function Modal({ open, title, onClose, children, footer, widthClassName = 'max-w-[420px]', heightClassName = 'max-h-[85vh]' }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, widthClassName = 'max-w-[420px]', heightClassName = 'sm:max-h-[85vh]' }: ModalProps) {
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-[#10233F]/45 p-5"
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-[#10233F]/45 sm:p-5"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className={`flex w-full flex-col overflow-hidden rounded-xl bg-[var(--color-surface)] shadow-2xl ${widthClassName} ${heightClassName}`}>
+      {/* Abaixo de sm, ocupa a tela inteira (sem borda/cantos arredondados) — "estilo app", não um cartão flutuante; um Modal aberto numa tela de celular hoje só acontece no Teste de Campo (TesteCampoPage), então isso não muda a aparência de nenhum outro modal no uso normal (desktop). */}
+      <div className={`flex h-full w-full flex-col overflow-hidden rounded-none bg-[var(--color-surface)] shadow-2xl sm:h-auto sm:rounded-xl ${widthClassName} ${heightClassName}`}>
         <div className="flex items-center justify-between gap-3 bg-[var(--color-navy)] px-[18px] py-3.5 text-sm font-bold text-white">
           <div className="flex min-w-0 flex-1 items-center gap-3">{title}</div>
           <button

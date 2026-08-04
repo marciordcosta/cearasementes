@@ -14,14 +14,32 @@ export function formatarDiasTeste(dias: number): string {
   return `${meses}m e ${resto} dia${resto === 1 ? '' : 's'}`;
 }
 
-/** % de germinação do teste de campo, sem formatação — só o modo "sementes" tem fórmula pronta hoje; "peso" ainda não (null). Usado tanto pra exibir quanto pra entrar na conta de kg/ha (ver calculoSemeadura.ts). */
-export function resultadoTesteNumero(a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas'>): number | null {
-  if (a.testeForma !== 'sementes' || !a.testePlantadas) return null;
-  return ((a.testeGerminadas ?? 0) / a.testePlantadas) * 100;
+/**
+ * Etapa em que o Teste de Campo está — 2 etapas, cada uma seu card no
+ * TesteModal: "Plantio" (testeForma/testeData/testePlantadas ou
+ * testePesoPlantado) e, semanas depois, "Resultado" (testeGerminadas
+ * preenchido). Sem nenhum campo preenchido ainda, `sem_teste`; Plantio feito
+ * mas Resultado pendente, `em_analise`; germinadas já contadas, `resultado`.
+ */
+export type StatusTeste = 'sem_teste' | 'em_analise' | 'resultado';
+
+export function statusTeste(a: Pick<ArquivoLaudo, 'testeForma' | 'testeGerminadas'>): StatusTeste {
+  if (a.testeForma == null) return 'sem_teste';
+  if (a.testeGerminadas == null) return 'em_analise';
+  return 'resultado';
 }
 
-/** Resultado do Teste de Germinação de Campo — % pronto (sementes) ou "Aguardando fórmula" (peso, ainda sem regra definida). */
+/** % de germinação do teste de campo, sem formatação — só o modo "sementes" tem fórmula pronta hoje; "peso" ainda não (null); germinadas ainda não contadas (Em análise) também é null, não 0. Usado tanto pra exibir quanto pra entrar na conta de kg/ha (ver calculoSemeadura.ts). */
+export function resultadoTesteNumero(a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas'>): number | null {
+  if (a.testeForma !== 'sementes' || !a.testePlantadas || a.testeGerminadas == null) return null;
+  return (a.testeGerminadas / a.testePlantadas) * 100;
+}
+
+/** Resultado do Teste de Germinação de Campo — "Em análise" (Plantio feito, Resultado pendente), % pronto (sementes), "Aguardando fórmula" (peso, ainda sem regra definida) ou "—" (sem teste nenhum). */
 export function resultadoTeste(a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas'>): string {
+  const status = statusTeste(a);
+  if (status === 'sem_teste') return '—';
+  if (status === 'em_analise') return 'Em análise';
   const numero = resultadoTesteNumero(a);
   if (numero !== null) return `${Math.round(numero)}%`;
   if (a.testeForma === 'peso') return 'Aguardando fórmula';

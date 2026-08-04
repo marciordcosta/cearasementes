@@ -463,7 +463,7 @@ export function GuiaPlantioModal({
       }
       onClose={fecharTudo}
       widthClassName="max-w-[640px]"
-      heightClassName="max-h-[92vh]"
+      heightClassName="sm:max-h-[92vh]"
     >
       <div className="min-h-[540px] space-y-3">
         <div className="sticky -top-[18px] z-20 -mx-[18px] -mt-[18px] space-y-1.5 bg-[var(--color-surface)] px-[18px] pb-2 pt-2 text-sm">

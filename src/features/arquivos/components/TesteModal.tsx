@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { PatchTeste } from '../api';
 import { redimensionarImagem } from '../fotoTeste';
-import { diasDesdeTeste, formatarDiasTeste, resultadoTeste } from '../testeGerminacao';
+import { diasDesdeTeste, formatarDiasTeste, resultadoTeste, statusTeste } from '../testeGerminacao';
 import type { ArquivoLaudo } from '../types';
 
 interface TesteModalProps {
@@ -20,6 +20,31 @@ interface TesteModalProps {
 }
 
 const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
+const valorClasse = 'w-28 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]';
+const valorNumeroClasse = `${valorClasse} text-right num`;
+
+/** Linha "descrição de um lado, valor do outro" — mais compacta que rótulo em cima do campo, cabe melhor numa tela de celular. */
+function LinhaCampo({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <span className="text-xs font-semibold text-[var(--color-text-soft)]">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** Card de uma etapa do Teste de Campo (Plantio ou Resultado) — título + selo opcional na faixa de cabeçalho. */
+function Cartao({ titulo, selo, children }: { titulo: string; selo?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-md border border-[var(--color-line)]">
+      <div className="flex items-center justify-between bg-[var(--color-page)] px-3 py-2">
+        <span className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-soft)]">{titulo}</span>
+        {selo}
+      </div>
+      <div className="divide-y divide-[var(--color-line)]">{children}</div>
+    </div>
+  );
+}
 
 /** Teste de germinação de campo (nosso, feito com frequência) — separado do EditarLaudoModal porque é aberto clicando no próprio valor da coluna "Teste", não no ✎ de editar metadados. */
 export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemoverFoto, onSalvarFotos, onFotosAlteradas }: TesteModalProps) {
@@ -28,6 +53,8 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
   const [plantadas, setPlantadas] = useState('');
   const [germinadas, setGerminadas] = useState('');
   const [pesoPlantado, setPesoPlantado] = useState('');
+  const [dataResultado, setDataResultado] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [fotos, setFotos] = useState<string[]>([]);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [erroFoto, setErroFoto] = useState<string | null>(null);
@@ -40,6 +67,8 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
     setPlantadas(laudo.testePlantadas != null ? String(laudo.testePlantadas) : '');
     setGerminadas(laudo.testeGerminadas != null ? String(laudo.testeGerminadas) : '');
     setPesoPlantado(laudo.testePesoPlantado != null ? String(laudo.testePesoPlantado) : '');
+    setDataResultado(laudo.testeDataResultado ?? '');
+    setObservacao(laudo.testeObservacao ?? '');
     setFotos(laudo.testeFotos);
     setErroFoto(null);
   }, [laudo]);
@@ -79,10 +108,31 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
     }
   }
 
+  /** Baixa a foto pro PC — um <a download> comum não funciona pra URL de outro domínio (Storage do Supabase), então busca o arquivo e baixa via blob local. */
+  async function baixarFoto(url: string) {
+    try {
+      const resposta = await fetch(url);
+      const blob = await resposta.blob();
+      const urlLocal = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = urlLocal;
+      link.download = url.split('/').pop() || 'foto-teste-campo.jpg';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(urlLocal);
+    } catch {
+      setErroFoto('Falha ao baixar a foto.');
+    }
+  }
+
   const plantadasNum = Number(plantadas.replace(',', '.')) || 0;
-  const germinadasNum = Number(germinadas.replace(',', '.')) || 0;
+  // null (não 0) enquanto "Germinadas" não foi preenchido — é o que distingue "Em análise" de "resultado 0%" (ver statusTeste).
+  const germinadasNum = germinadas.trim() ? Number(germinadas.replace(',', '.')) || 0 : null;
+  const status = statusTeste({ testeForma: forma, testeGerminadas: germinadasNum });
   const resultado = resultadoTeste({ testeForma: forma, testePlantadas: plantadasNum, testeGerminadas: germinadasNum });
-  const dias = data ? diasDesdeTeste(data) : null;
+  const diasPlantio = data ? diasDesdeTeste(data) : null;
+  const diasResultado = dataResultado ? diasDesdeTeste(dataResultado) : null;
 
   function salvar() {
     if (!laudo) return;
@@ -90,16 +140,27 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
       testeForma: forma,
       testeData: data || null,
       testePlantadas: forma === 'sementes' && plantadas.trim() ? plantadasNum : null,
-      testeGerminadas: germinadas.trim() ? germinadasNum : null,
+      testeGerminadas: germinadasNum,
       testePesoPlantado: forma === 'peso' && pesoPlantado.trim() ? Number(pesoPlantado.replace(',', '.')) || null : null,
       testeFotos: fotos,
+      testeObservacao: observacao.trim() || null,
+      testeDataResultado: dataResultado || null,
     });
   }
 
   async function excluir() {
     if (!laudo) return;
     await Promise.all(fotos.map((url) => onRemoverFoto(laudo.id, url).catch(() => {})));
-    onSalvar(laudo.id, { testeForma: null, testeData: null, testePlantadas: null, testeGerminadas: null, testePesoPlantado: null, testeFotos: [] });
+    onSalvar(laudo.id, {
+      testeForma: null,
+      testeData: null,
+      testePlantadas: null,
+      testeGerminadas: null,
+      testePesoPlantado: null,
+      testeFotos: [],
+      testeObservacao: null,
+      testeDataResultado: null,
+    });
   }
 
   return (
@@ -110,7 +171,7 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
       widthClassName="max-w-[480px]"
       footer={
         <>
-          {(laudo?.testeForma != null || fotos.length > 0) && (
+          {(laudo?.testeForma != null || fotos.length > 0 || observacao.trim() !== '') && (
             <Button variant="danger" onClick={excluir} className="mr-auto">
               Excluir
             </Button>
@@ -154,77 +215,101 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Data do teste</label>
-          <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={campoClasse} />
-        </div>
+        <Cartao titulo="Plantio">
+          <LinhaCampo label="Data do plantio">
+            <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={`${valorClasse} w-[150px]`} />
+          </LinhaCampo>
+          {forma === 'sementes' ? (
+            <LinhaCampo label="Plantadas">
+              <input type="number" min={0} value={plantadas} onChange={(e) => setPlantadas(e.target.value)} className={valorNumeroClasse} />
+            </LinhaCampo>
+          ) : (
+            <LinhaCampo label="Peso plantado (g)">
+              <input type="number" min={0} value={pesoPlantado} onChange={(e) => setPesoPlantado(e.target.value)} className={valorNumeroClasse} />
+            </LinhaCampo>
+          )}
+          {status === 'em_analise' && diasPlantio !== null && (
+            <p className="px-3 py-2 text-[11px] text-[var(--color-text-soft)]">{formatarDiasTeste(diasPlantio)} desde o plantio — aguardando resultado.</p>
+          )}
+        </Cartao>
 
-        {forma === 'sementes' ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Plantadas</label>
-              <input type="number" min={0} value={plantadas} onChange={(e) => setPlantadas(e.target.value)} className={campoClasse} placeholder="Ex.: 100" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Germinadas</label>
-              <input type="number" min={0} value={germinadas} onChange={(e) => setGerminadas(e.target.value)} className={campoClasse} placeholder="Ex.: 35" />
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Peso plantado (g)</label>
-              <input type="number" min={0} value={pesoPlantado} onChange={(e) => setPesoPlantado(e.target.value)} className={campoClasse} placeholder="Ex.: 5" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Germinadas (qtd.)</label>
-              <input type="number" min={0} value={germinadas} onChange={(e) => setGerminadas(e.target.value)} className={campoClasse} placeholder="Ex.: 35" />
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-md border border-[var(--color-line)] p-3 text-sm">
-          <p className="text-[var(--color-text)]">
-            Resultado: <strong>{resultado}</strong>
-          </p>
-          {dias !== null && <p className="mt-0.5 text-xs text-[var(--color-text-soft)]">{formatarDiasTeste(dias)} desde o teste</p>}
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Fotos</label>
-          {erroFoto && <p className="mb-1.5 text-xs text-bad">{erroFoto}</p>}
-          <div className="grid grid-cols-3 gap-2">
-            {fotos.map((url) => (
-              <div key={url} className="group relative aspect-square overflow-hidden rounded-md border border-[var(--color-line)]">
-                <img src={url} alt="Foto do teste de campo" className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => removerFoto(url)}
-                  title="Remover foto"
-                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-bad"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <label
-              className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--color-line)] text-center text-[11px] text-[var(--color-text-soft)] hover:bg-[var(--color-page)] ${enviandoFoto ? 'pointer-events-none opacity-50' : ''}`}
+        <Cartao
+          titulo="Resultado"
+          selo={
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                status === 'resultado' ? 'bg-good-soft text-good' : status === 'em_analise' ? 'bg-warn-soft text-[#8A5B10]' : 'bg-[var(--color-line)] text-[var(--color-text-soft)]'
+              }`}
             >
-              <span className="text-lg">📷</span>
-              {enviandoFoto ? 'Enviando…' : '+ Adicionar'}
-              <input
-                ref={inputFotoRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                multiple
-                disabled={enviandoFoto}
-                onChange={(e) => aoEscolherFotos(e.target.files)}
-                className="hidden"
-              />
-            </label>
+              {resultado}
+            </span>
+          }
+        >
+          <LinhaCampo label={forma === 'peso' ? 'Germinadas (qtd.)' : 'Germinadas'}>
+            <input type="number" min={0} value={germinadas} onChange={(e) => setGerminadas(e.target.value)} className={valorNumeroClasse} />
+          </LinhaCampo>
+          <LinhaCampo label="Data do resultado">
+            <input type="date" value={dataResultado} onChange={(e) => setDataResultado(e.target.value)} className={`${valorClasse} w-[150px]`} />
+          </LinhaCampo>
+          {diasResultado !== null && status === 'resultado' && (
+            <p className="px-3 py-2 text-[11px] text-[var(--color-text-soft)]">Resultado registrado há {formatarDiasTeste(diasResultado)}.</p>
+          )}
+
+          <div className="px-3 py-2.5">
+            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Observação</label>
+            <textarea
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              rows={2}
+              placeholder="Anotações do teste (opcional)"
+              className={`${campoClasse} resize-none`}
+            />
           </div>
-        </div>
+
+          <div className="px-3 py-2.5">
+            <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Fotos</label>
+            {erroFoto && <p className="mb-1.5 text-xs text-bad">{erroFoto}</p>}
+            <div className="grid grid-cols-3 gap-2">
+              {fotos.map((url) => (
+                <div key={url} className="group relative aspect-square overflow-hidden rounded-md border border-[var(--color-line)]">
+                  <img src={url} alt="Foto do teste de campo" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => baixarFoto(url)}
+                    title="Baixar foto"
+                    className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-[var(--color-accent)]"
+                  >
+                    ⬇
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removerFoto(url)}
+                    title="Remover foto"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-bad"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <label
+                className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--color-line)] text-center text-[11px] text-[var(--color-text-soft)] hover:bg-[var(--color-page)] ${enviandoFoto ? 'pointer-events-none opacity-50' : ''}`}
+              >
+                <span className="text-lg">📷</span>
+                {enviandoFoto ? 'Enviando…' : '+ Adicionar'}
+                <input
+                  ref={inputFotoRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  disabled={enviandoFoto}
+                  onChange={(e) => aoEscolherFotos(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        </Cartao>
       </div>
     </Modal>
   );

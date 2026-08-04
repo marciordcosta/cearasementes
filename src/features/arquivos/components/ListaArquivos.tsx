@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { filtrarArquivos } from '../filtrarArquivos';
 import { calcularVC } from '../metricas';
-import { resultadoTeste } from '../testeGerminacao';
+import { resultadoTeste, statusTeste } from '../testeGerminacao';
 import type { ArquivoLaudo } from '../types';
 import { montarUrlVisualizacao } from '../visualizacaoArquivo';
 
@@ -164,8 +164,15 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{calcularVC(a)}</td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{a.pms || '—'}</td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">
-                  <button type="button" onClick={() => onAbrirTeste(a)} title="Teste de Germinação de Campo" className="font-semibold text-good hover:brightness-90">
-                    {a.testeForma == null ? '🧪' : <span className="underline decoration-dotted underline-offset-2">{resultadoTeste(a)}</span>}
+                  <button
+                    type="button"
+                    onClick={() => onAbrirTeste(a)}
+                    title="Teste de Germinação de Campo"
+                    className={`font-semibold hover:brightness-90 ${
+                      statusTeste(a) === 'resultado' ? 'text-good' : statusTeste(a) === 'em_analise' ? 'text-[#8A5B10]' : 'text-[var(--color-text-soft)]'
+                    }`}
+                  >
+                    {statusTeste(a) === 'sem_teste' ? '🧪' : <span className="underline decoration-dotted underline-offset-2">{resultadoTeste(a)}</span>}
                   </button>
                 </td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{new Date(a.enviadoEm).toLocaleDateString('pt-BR')}</td>

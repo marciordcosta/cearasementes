@@ -430,14 +430,18 @@ export interface Database {
           peso_embalagem: string | null;
           /** Peso de Mil Sementes — quando preenchido, sobrescreve (só pra esse lote) o PMS base da Parametrização de Produtos. */
           pms: string | null;
-          /** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. */
+          /** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. Em 2 etapas: Plantio (teste_forma/teste_data/teste_plantadas/teste_peso_plantado) e, semanas depois, Resultado (teste_germinadas/teste_data_resultado/teste_observacao/teste_fotos) — sem germinadas ainda, o status é "Em análise" (ver statusTeste em testeGerminacao.ts). */
           teste_forma: 'sementes' | 'peso' | null;
+          /** Data do PLANTIO (etapa 1) — não confundir com teste_data_resultado (etapa 2). */
           teste_data: string | null;
           teste_plantadas: number | null;
           teste_germinadas: number | null;
           teste_peso_plantado: number | null;
           /** Fotos do teste de campo (URLs públicas do bucket "laudos", prefixo teste-fotos/) — mesmo modelo "1 teste por laudo": editar/excluir o teste também substitui/limpa as fotos. */
           teste_fotos: string[] | null;
+          teste_observacao: string | null;
+          /** Data do RESULTADO (etapa 2, quando as germinadas são contadas) — null enquanto o teste está "Em análise". */
+          teste_data_resultado: string | null;
         };
         Insert: Omit<Database['public']['Tables']['arquivos_laudos']['Row'], 'id' | 'enviado_em'>;
         Update: Partial<Database['public']['Tables']['arquivos_laudos']['Insert']>;

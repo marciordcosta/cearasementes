@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apagarFotoTeste, atualizarFotosTeste, atualizarTeste, enviarFotoTeste, fetchArquivosLaudos, type PatchTeste } from '@/features/arquivos/api';
 import { TesteModal } from '@/features/arquivos/components/TesteModal';
 import { filtrarArquivos } from '@/features/arquivos/filtrarArquivos';
-import { resultadoTeste } from '@/features/arquivos/testeGerminacao';
+import { resultadoTeste, statusTeste } from '@/features/arquivos/testeGerminacao';
 import type { ArquivoLaudo } from '@/features/arquivos/types';
 import { mensagemDeErro } from '@/lib/errors';
 
@@ -75,7 +75,13 @@ export function TesteCampoPage() {
                   {a.lote ? `Lote ${a.lote}` : 'Sem lote'}
                   {a.validade ? ` · Validade ${a.validade}` : ''}
                 </span>
-                <span className={a.testeForma != null ? 'font-semibold text-good' : ''}>{a.testeForma == null ? '🧪' : resultadoTeste(a)}</span>
+                <span
+                  className={`font-semibold ${
+                    statusTeste(a) === 'resultado' ? 'text-good' : statusTeste(a) === 'em_analise' ? 'text-[#8A5B10]' : ''
+                  }`}
+                >
+                  {statusTeste(a) === 'sem_teste' ? '🧪' : resultadoTeste(a)}
+                </span>
               </span>
             </button>
           ))

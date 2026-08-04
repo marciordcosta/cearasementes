@@ -36,6 +36,8 @@ function fromRow(row: ArquivoRow): ArquivoLaudo {
     testeGerminadas: row.teste_germinadas,
     testePesoPlantado: row.teste_peso_plantado,
     testeFotos: row.teste_fotos ?? [],
+    testeObservacao: row.teste_observacao,
+    testeDataResultado: row.teste_data_resultado,
   };
 }
 
@@ -77,6 +79,8 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
       teste_germinadas: null,
       teste_peso_plantado: null,
       teste_fotos: null,
+      teste_observacao: null,
+      teste_data_resultado: null,
     })
     .select('*')
     .single();
@@ -125,6 +129,8 @@ export interface PatchTeste {
   testeGerminadas: number | null;
   testePesoPlantado: number | null;
   testeFotos: string[];
+  testeObservacao: string | null;
+  testeDataResultado: string | null;
 }
 
 /** Teste de germinação de campo (nosso, feito com frequência) — um resultado por laudo, editar substitui o anterior. */
@@ -138,6 +144,8 @@ export async function atualizarTeste(id: string, patch: PatchTeste): Promise<voi
       teste_germinadas: patch.testeGerminadas,
       teste_peso_plantado: patch.testePesoPlantado,
       teste_fotos: patch.testeFotos,
+      teste_data_resultado: patch.testeDataResultado,
+      teste_observacao: patch.testeObservacao,
     })
     .eq('id', id);
   if (error) throw error;

@@ -22,14 +22,26 @@ export interface ArquivoLaudo {
   pesoEmbalagem: string | null;
   /** Peso de Mil Sementes — editado junto com Pureza/Germinação/Validade, ou direto na grade. Quando preenchido, sobrescreve (só pra esse lote) o PMS base cadastrado na Parametrização de Produtos (ver parametrizacaoProdutos.ts); em branco, a grade mostra e o cálculo usa o PMS base. */
   pms: string | null;
-  /** Teste de germinação de campo (nosso, feito com frequência) — editado num modal próprio (ver TesteModal), um resultado por laudo. */
+  /**
+   * Teste de germinação de campo (nosso, feito com frequência) — editado num
+   * modal próprio (ver TesteModal), um resultado por laudo. Em 2 etapas:
+   * Plantio (testeForma/testeData/testePlantadas/testePesoPlantado) e,
+   * semanas depois, Resultado (testeGerminadas/testeDataResultado/
+   * testeObservacao/testeFotos). Sem testeGerminadas ainda, o status é
+   * "Em análise" (ver statusTeste em testeGerminacao.ts).
+   */
   testeForma: 'sementes' | 'peso' | null;
+  /** Data do PLANTIO (etapa 1) — não confundir com testeDataResultado (etapa 2). */
   testeData: string | null;
   testePlantadas: number | null;
   testeGerminadas: number | null;
   testePesoPlantado: number | null;
   /** Fotos do teste de campo (URLs públicas, bucket "laudos") — sempre array, nunca null; mesmo modelo "1 teste por laudo": editar/excluir o teste também substitui/limpa as fotos. */
   testeFotos: string[];
+  /** Observação livre do teste de campo (anotação do operador) — mesmo modelo "1 teste por laudo" das demais colunas teste_*. */
+  testeObservacao: string | null;
+  /** Data do RESULTADO (etapa 2, quando as germinadas são contadas) — null enquanto o teste está "Em análise". */
+  testeDataResultado: string | null;
 }
 
 export interface NovoLaudoInput {
