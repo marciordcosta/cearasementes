@@ -129,8 +129,12 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
   const plantadasNum = Number(plantadas.replace(',', '.')) || 0;
   // null (não 0) enquanto "Germinadas" não foi preenchido — é o que distingue "Em análise" de "resultado 0%" (ver statusTeste).
   const germinadasNum = germinadas.trim() ? Number(germinadas.replace(',', '.')) || 0 : null;
-  const status = statusTeste({ testeForma: forma, testeGerminadas: germinadasNum });
-  const resultado = resultadoTeste({ testeForma: forma, testePlantadas: plantadasNum, testeGerminadas: germinadasNum });
+  // `forma` sempre tem um valor local ('sementes' por padrão, mesmo num laudo sem teste nenhum — é só o toggle
+  // pré-selecionado) — sem esse check, statusTeste nunca veria "sem_teste" aqui dentro, e um laudo nunca tocado
+  // mostraria "Em análise" só de abrir o modal, antes de preencher ou salvar qualquer coisa.
+  const testeIniciado = laudo?.testeForma != null || data.trim() !== '' || plantadas.trim() !== '' || pesoPlantado.trim() !== '';
+  const status = testeIniciado ? statusTeste({ testeForma: forma, testeGerminadas: germinadasNum }) : 'sem_teste';
+  const resultado = testeIniciado ? resultadoTeste({ testeForma: forma, testePlantadas: plantadasNum, testeGerminadas: germinadasNum }) : '—';
   const diasPlantio = data ? diasDesdeTeste(data) : null;
   const diasResultado = dataResultado ? diasDesdeTeste(dataResultado) : null;
 

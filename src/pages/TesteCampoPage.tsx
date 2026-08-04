@@ -11,7 +11,9 @@ import { mensagemDeErro } from '@/lib/errors';
  * Página enxuta pra celular — busca um laudo e abre direto o Teste de Campo
  * (mesmo TesteModal do Gerenciador de Arquivos, com câmera pra fotos). Sem
  * AppShell (sidebar/topbar do desktop não cabem numa tela de celular) e sem
- * autenticação (o app inteiro já não tem nenhuma hoje).
+ * autenticação (o app inteiro já não tem nenhuma hoje). Sempre modo claro
+ * fixo (`.tema-claro-fixo`, ver index.css) — quem usa é o operador de campo
+ * batendo foto sob luz forte, sem tema pra trocar nem botão pra isso.
  */
 export function TesteCampoPage() {
   const queryClient = useQueryClient();
@@ -37,7 +39,7 @@ export function TesteCampoPage() {
   const filtrados = [...filtrarArquivos(arquivos, busca)].sort((a, b) => a.nomeProduto.localeCompare(b.nomeProduto));
 
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--color-page)]">
+    <div className="tema-claro-fixo flex min-h-screen flex-col bg-[var(--color-page)]">
       <div className="sticky top-0 z-10 space-y-2.5 border-b border-[var(--color-line)] bg-[var(--color-navy)] px-4 py-3.5">
         <h1 className="text-base font-bold text-white">Teste de Campo</h1>
         <input
