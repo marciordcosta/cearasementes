@@ -504,7 +504,7 @@ export function PricingPage() {
         onFechar={() => setModalPdfAberto(false)}
         onConfirmar={(canal) => {
           setModalPdfAberto(false);
-          gerarCatalogoPDF(canal, produtosExibidos, categorias, transportadoraPorId);
+          gerarCatalogoPDF(canal, produtosExibidos, categorias, fornecedores, transportadoraPorId);
         }}
       />
 

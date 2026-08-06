@@ -1,6 +1,6 @@
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal } from './calculations';
-import type { Canal, Categoria, Produto } from './types';
+import { calcularCanal, gerarCorCanal } from './calculations';
+import type { Canal, Categoria, Fornecedor, Produto } from './types';
 
 function escapeHtml(texto: string): string {
   return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -27,8 +27,15 @@ function nomeComDestaqueHtml(nome: string): string {
  * canal específico, respeitando o filtro de Classe/Categoria já aplicado na
  * tela — portado 1:1 do precificacao-inteligente.html original.
  */
-export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], categorias: Categoria[], transportadoraPorId: Map<string, Transportadora>): void {
+export function gerarCatalogoPDF(
+  canal: Canal,
+  produtosFiltrados: Produto[],
+  categorias: Categoria[],
+  fornecedores: Fornecedor[],
+  transportadoraPorId: Map<string, Transportadora>,
+): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
+  const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
 
   // "Imprimir" desmarcado no Editar Produto tira o produto só daqui — continua normal em todo o resto do sistema.
   const produtosParaImprimir = produtosFiltrados.filter((p) => p.imprimir);
@@ -52,9 +59,13 @@ export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], cat
     let linhas = '';
     itens.forEach((produto) => {
       const r = calcularCanal(produto, canal, cat, transportadoraPorId);
+      const fornecedor = getFornecedor(produto.fornecedorId);
+      const tagFornecedor = fornecedor
+        ? ` <span class="tag-fornecedor" style="background:${gerarCorCanal(fornecedor.ordem).dark}">${escapeHtml(fornecedor.nome)}</span>`
+        : '';
       linhas += `
         <tr>
-          <td>${nomeComDestaqueHtml(produto.nome)}</td>
+          <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
           <td>${produto.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</td>
           <td>R$ ${f(r.preco)}</td>
         </tr>
@@ -114,6 +125,10 @@ export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], cat
           padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
         }
         table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
+        .tag-fornecedor{
+          display:inline-block; border-radius:999px; padding:1px 5px;
+          font-size:8px; font-weight:500; color:#FFFFFF; vertical-align:middle;
+        }
         .vazio{ font-size:13px; color:#000000; padding:20px 0; }
         @media print{
           .cabecalho{ position:running(head); }

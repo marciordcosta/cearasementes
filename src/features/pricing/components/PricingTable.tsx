@@ -232,7 +232,14 @@ export function PricingTable({
             <span className="text-[var(--color-text)]">
               <NomeComDestaque nome={p.nome} />
             </span>
-            {fornecedor && <span className="shrink-0 rounded-full bg-good px-1 py-[1px] text-[9px] font-medium leading-tight text-white">{fornecedor.nome}</span>}
+            {fornecedor && (
+              <span
+                className="shrink-0 rounded-full px-1 py-0 text-[8px] font-medium leading-[1.4] text-white"
+                style={{ background: gerarCorCanal(fornecedor.ordem).dark }}
+              >
+                {fornecedor.nome}
+              </span>
+            )}
           </span>
         );
       },
