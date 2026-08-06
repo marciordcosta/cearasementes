@@ -192,7 +192,7 @@ export function PricingTable({
     defaults[`${canal.id}:encargos`] = 110;
     defaults[`${canal.id}:mlpct`] = 90;
     defaults[`${canal.id}:mlvalor`] = 100;
-    defaults[`${canal.id}:ajuste`] = 40;
+    defaults[`${canal.id}:ajuste`] = 52;
   });
   const { largura, iniciarArrasto } = useColumnWidths(defaults);
 
@@ -432,7 +432,7 @@ export function PricingTable({
               {canaisVisiveis.map((canal) => (
                 <th
                   key={canal.id}
-                  colSpan={5}
+                  colSpan={6}
                   onClick={() => onAbrirCanalTelaCheia?.(canal)}
                   title="Clique para abrir esta tabela em tela cheia"
                   className="cursor-pointer px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-white hover:brightness-125"
