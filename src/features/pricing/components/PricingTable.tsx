@@ -409,7 +409,19 @@ export function PricingTable({
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
-          return <span className="num">R$ {fmtR(r.margemReais)}</span>;
+          const canalReferencia = canaisVisiveis[0];
+          const ehReferencia = canal.id === canalReferencia.id;
+          let title: string | undefined;
+          if (!ehReferencia) {
+            const rReferencia = calcularCanal(p, canalReferencia, categoria, transportadoraPorId);
+            const diffPct = rReferencia.margemReais !== 0 ? ((r.margemReais - rReferencia.margemReais) / rReferencia.margemReais) * 100 : 0;
+            title = [`Referência: R$ ${fmtR(rReferencia.margemReais)}`, `Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`].join('\n');
+          }
+          return (
+            <span className="num" title={title}>
+              R$ {fmtR(r.margemReais)}
+            </span>
+          );
         },
       },
       {
