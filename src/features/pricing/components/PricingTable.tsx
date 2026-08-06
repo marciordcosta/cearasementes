@@ -202,9 +202,16 @@ export function PricingTable({
             // Gruda junto com Classe/Produto ao rolar — as três formam o bloco fixo da esquerda.
             stickyLeft: 0,
             render: (p: Produto) => (
-              <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
-                ✎
-              </button>
+              <>
+                <span
+                  className="pointer-events-none absolute inset-y-1 left-0 w-[5px] rounded-sm"
+                  style={{ background: p.imprimir ? '#3FBF8F' : 'var(--color-line)' }}
+                  title={p.imprimir ? 'Ativo para impressão' : 'Inativo para impressão'}
+                />
+                <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
+                  ✎
+                </button>
+              </>
             ),
           } satisfies ColunaDef,
         ]),
@@ -446,9 +453,6 @@ export function PricingTable({
                       style={{
                         ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
                         ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                        ...(coluna.chave === 'editar'
-                          ? { borderLeft: `5px solid ${produto.imprimir ? '#3FBF8F' : 'var(--color-line)'}` }
-                          : undefined),
                         background: destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
                       }}
                       className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
