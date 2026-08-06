@@ -382,7 +382,7 @@ export function PricingTable({
           return (
             <span
               className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${precisaAjuste ? 'text-white' : MARGEM_CLASSE_CLASSNAME[classe]}`}
-              title={`M.B ${fmtP(margemBrutaPct)}%`}
+              title={`(${fmtP(margemBrutaPct)}%)`}
             >
               {fmtP(r.margemPct)}%
             </span>
