@@ -204,7 +204,7 @@ export function PricingTable({
             render: (p: Produto) => (
               <>
                 <span
-                  className="pointer-events-none absolute inset-y-1 left-0 w-[5px] rounded-sm"
+                  className="pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-sm"
                   style={{ background: p.imprimir ? '#A8EC7F' : 'var(--color-line)' }}
                   title={p.imprimir ? 'Ativo para impressão' : 'Inativo para impressão'}
                 />
