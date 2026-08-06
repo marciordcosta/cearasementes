@@ -65,7 +65,7 @@ export function gerarCatalogoPDF(
       linhas += `
         <tr>
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
-          <td>${produto.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</td>
+          <td>${Math.round(produto.peso)}kg</td>
           <td class="valor">R$ ${f(r.preco)}</td>
         </tr>
       `;
