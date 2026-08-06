@@ -21,11 +21,11 @@ function fmtP(v: number): string {
 /**
  * Nome do produto com marcação estilo WhatsApp, digitada no próprio campo
  * "Produto" do EditProductModal (não afeta o que é salvo, só a exibição
- * aqui na tabela): `**palavra**` sai em negrito, `--palavra--` sai em
- * itálico, o resto do nome em peso 300 (fino).
+ * aqui na tabela): `*palavra*` sai em negrito, `_palavra_` sai em itálico,
+ * o resto do nome em peso 300 (fino).
  */
 function NomeComDestaque({ nome }: { nome: string }) {
-  const regex = /\*\*(.+?)\*\*|--(.+?)--/g;
+  const regex = /\*(.+?)\*|_(.+?)_/g;
   const partes: { texto: string; estilo: 'normal' | 'negrito' | 'italico' }[] = [];
   let ultimoIndice = 0;
   let match: RegExpExecArray | null;
