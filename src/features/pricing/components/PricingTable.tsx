@@ -170,7 +170,7 @@ export function PricingTable({
             // Gruda junto com Classe/Produto ao rolar — as três formam o bloco fixo da esquerda.
             stickyLeft: 0,
             render: (p: Produto) => (
-              <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-1 text-[var(--color-text)] hover:bg-[var(--color-line)]">
+              <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
                 ✎
               </button>
             ),
@@ -208,7 +208,7 @@ export function PricingTable({
           valor={p.custo}
           onFocus={() => setLinhaDestacada(p.id)}
           onCommit={(val) => onUpdateCusto(p.id, val)}
-          className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+          className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
         />
       ),
     },
@@ -237,7 +237,7 @@ export function PricingTable({
                   if (el) precoRefs.current.set(chave, el);
                   else precoRefs.current.delete(chave);
                 }}
-                className={`num min-w-0 flex-1 rounded border px-1.5 py-1 text-right font-semibold ${manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
               />
               <button
                 type="button"
@@ -399,7 +399,7 @@ export function PricingTable({
                         ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
                         background: destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
                       }}
-                      className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-2 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
+                      className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
                     >
                       {coluna.render(produto, destacada)}
                     </td>
