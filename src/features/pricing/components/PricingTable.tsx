@@ -378,11 +378,11 @@ export function PricingTable({
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
-          const margemBruta = r.preco - p.custo;
+          const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
           return (
             <span
               className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${precisaAjuste ? 'text-white' : MARGEM_CLASSE_CLASSNAME[classe]}`}
-              title={`Margem bruta: R$ ${fmtR(margemBruta)}`}
+              title={`M.B ${fmtP(margemBrutaPct)}%`}
             >
               {fmtP(r.margemPct)}%
             </span>
