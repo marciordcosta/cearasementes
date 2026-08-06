@@ -9,6 +9,8 @@ interface ChannelFullscreenModalProps {
   produtos: Produto[];
   categorias: Categoria[];
   fornecedores: Fornecedor[];
+  /** Canal de referência GERAL (primeira tabela, entre todos os canais visíveis) — usado nos tooltips de comparação mesmo aqui, onde só 1 canal aparece. */
+  canalReferencia?: Canal;
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
   onFechar: () => void;
@@ -23,6 +25,7 @@ export function ChannelFullscreenModal({
   produtos,
   categorias,
   fornecedores,
+  canalReferencia,
   transportadoras,
   mostrarColunaId,
   onFechar,
@@ -75,6 +78,7 @@ export function ChannelFullscreenModal({
             categorias={categorias}
             fornecedores={fornecedores}
             canaisVisiveis={[canal]}
+            canalReferencia={canalReferencia}
             transportadoras={transportadoras}
             mostrarColunaId={mostrarColunaId}
             onUpdateCusto={onUpdateCusto}

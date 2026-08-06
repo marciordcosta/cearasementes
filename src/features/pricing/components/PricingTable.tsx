@@ -67,6 +67,13 @@ interface PricingTableProps {
   categorias: Categoria[];
   fornecedores: Fornecedor[];
   canaisVisiveis: Canal[];
+  /**
+   * Canal usado como referência nos tooltips de comparação (Preço/Margem) —
+   * sempre a primeira tabela GERAL (não a primeira das colunas exibidas
+   * aqui), pra continuar valendo também dentro do modal de tela cheia por
+   * canal (que só mostra 1 canal em `canaisVisiveis`, sem outro pra comparar).
+   */
+  canalReferencia?: Canal;
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
   onUpdateCusto: (produtoId: string, custo: number) => void;
@@ -104,6 +111,7 @@ export function PricingTable({
   categorias,
   fornecedores,
   canaisVisiveis,
+  canalReferencia,
   transportadoras,
   mostrarColunaId,
   onUpdateCusto,
@@ -118,6 +126,7 @@ export function PricingTable({
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
+  const referencia = canalReferencia ?? canaisVisiveis[0];
   // Focar num campo de custo/preço (ou clicar na linha) destaca a linha inteira — igual ao original.
   const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
   // Clicar fora da tabela inteira limpa o destaque — ouve o documento (não só onBlur) porque
@@ -310,14 +319,12 @@ export function PricingTable({
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
-          // A primeira tabela (conforme a ordem atual de canaisVisiveis) é sempre a referência
-          // pra comparação — não faz sentido comparar a referência com ela mesma.
-          const canalReferencia = canaisVisiveis[0];
-          const ehReferencia = canal.id === canalReferencia.id;
+          // Não faz sentido comparar a referência com ela mesma.
+          const ehReferencia = referencia !== undefined && canal.id === referencia.id;
           const partesTooltip: string[] = [];
           if (manual) partesTooltip.push(`Sugestão: R$ ${fmtR(r.precoSugerido)}`);
-          if (!ehReferencia) {
-            const rReferencia = calcularCanal(p, canalReferencia, categoria, transportadoraPorId);
+          if (referencia !== undefined && !ehReferencia) {
+            const rReferencia = calcularCanal(p, referencia, categoria, transportadoraPorId);
             const diffPct = rReferencia.preco > 0 ? ((r.preco - rReferencia.preco) / rReferencia.preco) * 100 : 0;
             partesTooltip.push(`Referência: R$ ${fmtR(rReferencia.preco)}`);
             partesTooltip.push(`Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`);
@@ -409,11 +416,10 @@ export function PricingTable({
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
-          const canalReferencia = canaisVisiveis[0];
-          const ehReferencia = canal.id === canalReferencia.id;
+          const ehReferencia = referencia !== undefined && canal.id === referencia.id;
           let title: string | undefined;
-          if (!ehReferencia) {
-            const rReferencia = calcularCanal(p, canalReferencia, categoria, transportadoraPorId);
+          if (referencia !== undefined && !ehReferencia) {
+            const rReferencia = calcularCanal(p, referencia, categoria, transportadoraPorId);
             const diffPct = rReferencia.margemReais !== 0 ? ((r.margemReais - rReferencia.margemReais) / rReferencia.margemReais) * 100 : 0;
             title = [`Referência: R$ ${fmtR(rReferencia.margemReais)}`, `Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`].join('\n');
           }

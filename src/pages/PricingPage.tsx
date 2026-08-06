@@ -482,6 +482,7 @@ export function PricingPage() {
               categorias={categorias}
               fornecedores={fornecedores}
               canaisVisiveis={canaisVisiveis}
+              canalReferencia={canaisVisiveis[0]}
               transportadoras={transportadoras}
               mostrarColunaId={mostrarColunaId}
               onUpdateCusto={onUpdateCusto}
@@ -509,6 +510,7 @@ export function PricingPage() {
         produtos={produtosExibidos}
         categorias={categorias}
         fornecedores={fornecedores}
+        canalReferencia={canaisVisiveis[0]}
         transportadoras={transportadoras}
         mostrarColunaId={mostrarColunaId}
         onFechar={() => setCanalTelaCheiaId(null)}
