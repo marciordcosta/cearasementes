@@ -124,7 +124,7 @@ export function gerarCatalogoPDF(
         }
         table.tabela-catalogo thead th{
           text-align:left; padding:7px 10px; border-bottom:1px solid #000000;
-          font-weight:700; color:#000000;
+          font-weight:700; color:#000000; white-space:nowrap;
         }
         table.tabela-catalogo tbody td{
           padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
