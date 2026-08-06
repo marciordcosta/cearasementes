@@ -67,7 +67,7 @@ export function gerarCatalogoPDF(
         <tr>
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
           <td>${produto.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</td>
-          <td>R$ ${f(r.preco)}</td>
+          <td class="valor">R$ ${f(r.preco)}</td>
         </tr>
       `;
     });
@@ -125,6 +125,7 @@ export function gerarCatalogoPDF(
           padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
         }
         table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
+        table.tabela-catalogo tbody td.valor{ font-weight:700; }
         .tag-fornecedor{
           display:inline-block; border-radius:999px; padding:1px 5px;
           font-size:8px; font-weight:500; color:#FFFFFF; vertical-align:middle;
