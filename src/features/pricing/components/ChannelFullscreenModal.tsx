@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { Transportadora } from '@/features/fretes/types';
-import type { Canal, Categoria, Produto } from '../types';
+import type { Canal, Categoria, Fornecedor, Produto } from '../types';
 import { PricingTable } from './PricingTable';
 
 interface ChannelFullscreenModalProps {
   canal: Canal | null;
   produtos: Produto[];
   categorias: Categoria[];
+  fornecedores: Fornecedor[];
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
   onFechar: () => void;
@@ -16,7 +17,18 @@ interface ChannelFullscreenModalProps {
   onResetPreco: (produtoId: string, canalId: string) => void;
 }
 
-export function ChannelFullscreenModal({ canal, produtos, categorias, transportadoras, mostrarColunaId, onFechar, onUpdateCusto, onUpdatePreco, onResetPreco }: ChannelFullscreenModalProps) {
+export function ChannelFullscreenModal({
+  canal,
+  produtos,
+  categorias,
+  fornecedores,
+  transportadoras,
+  mostrarColunaId,
+  onFechar,
+  onUpdateCusto,
+  onUpdatePreco,
+  onResetPreco,
+}: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
 
   // Cada abertura do modal (canal diferente, ou reabrir o mesmo) começa sem
@@ -54,6 +66,7 @@ export function ChannelFullscreenModal({ canal, produtos, categorias, transporta
           <PricingTable
             produtos={produtosFiltrados}
             categorias={categorias}
+            fornecedores={fornecedores}
             canaisVisiveis={[canal]}
             transportadoras={transportadoras}
             mostrarColunaId={mostrarColunaId}

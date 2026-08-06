@@ -2,6 +2,26 @@ import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal } from './calculations';
 import type { Canal, Categoria, Produto } from './types';
 
+function escapeHtml(texto: string): string {
+  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Mesma marcação do nome do produto na tela (NomeComDestaque, PricingTable.tsx): *negrito*, _itálico_. */
+function nomeComDestaqueHtml(nome: string): string {
+  const regex = /\*(.+?)\*|_(.+?)_/g;
+  let resultado = '';
+  let ultimoIndice = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(nome)) !== null) {
+    if (match.index > ultimoIndice) resultado += escapeHtml(nome.slice(ultimoIndice, match.index));
+    const tag = match[1] !== undefined ? 'b' : 'i';
+    resultado += `<${tag}>${escapeHtml((match[1] ?? match[2])!)}</${tag}>`;
+    ultimoIndice = regex.lastIndex;
+  }
+  if (ultimoIndice < nome.length) resultado += escapeHtml(nome.slice(ultimoIndice));
+  return resultado;
+}
+
 /**
  * Gera o catálogo em PDF (via janela de impressão do navegador) para um
  * canal específico, respeitando o filtro de Classe/Categoria já aplicado na
@@ -34,7 +54,7 @@ export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], cat
       const r = calcularCanal(produto, canal, cat, transportadoraPorId);
       linhas += `
         <tr>
-          <td>${produto.nome}</td>
+          <td>${nomeComDestaqueHtml(produto.nome)}</td>
           <td>${produto.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</td>
           <td>R$ ${f(r.preco)}</td>
         </tr>

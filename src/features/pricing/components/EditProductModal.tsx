@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import type { Categoria, Produto } from '../types';
+import type { Categoria, Fornecedor, Produto } from '../types';
 
 interface EditProductModalProps {
   produto: Produto | null;
   categorias: Categoria[];
+  fornecedores: Fornecedor[];
   onFechar: () => void;
   onSalvar: (patch: {
     nome: string;
@@ -14,7 +15,7 @@ interface EditProductModalProps {
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
-    fornecedor: string | null;
+    fornecedorId: string | null;
     imprimir: boolean;
   }) => void;
 }
@@ -31,7 +32,7 @@ function Linha({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function EditProductModal({ produto, categorias, onFechar, onSalvar }: EditProductModalProps) {
+export function EditProductModal({ produto, categorias, fornecedores, onFechar, onSalvar }: EditProductModalProps) {
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
@@ -40,7 +41,7 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
   const [cubagemC, setCubagemC] = useState('');
   const [cubagemL, setCubagemL] = useState('');
   const [cubagemA, setCubagemA] = useState('');
-  const [fornecedor, setFornecedor] = useState('');
+  const [fornecedorId, setFornecedorId] = useState('');
   const [imprimir, setImprimir] = useState(true);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
     setCubagemC(partes[0]?.trim() ?? '');
     setCubagemL(partes[1]?.trim() ?? '');
     setCubagemA(partes[2]?.trim() ?? '');
-    setFornecedor(produto.fornecedor ?? '');
+    setFornecedorId(produto.fornecedorId ?? '');
     setImprimir(produto.imprimir);
   }, [produto]);
 
@@ -76,7 +77,7 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
       peso: pesoNum,
       despesaExtraValor: parseFloat(despesaValor) || 0,
       cubagem: cubagemPreenchida ? `${cubagemC.trim()}x${cubagemL.trim()}x${cubagemA.trim()}` : null,
-      fornecedor: fornecedor.trim() || null,
+      fornecedorId: fornecedorId || null,
       imprimir,
     });
   }
@@ -118,12 +119,14 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
         </Linha>
 
         <Linha label="Fornecedor">
-          <input
-            value={fornecedor}
-            onChange={(e) => setFornecedor(e.target.value)}
-            placeholder="Aparece na tabela após o nome (opcional)"
-            className={campoClasse}
-          />
+          <select value={fornecedorId} onChange={(e) => setFornecedorId(e.target.value)} className={campoClasse}>
+            <option value="" className="text-[var(--color-text)]">— Nenhum —</option>
+            {fornecedores.map((f) => (
+              <option key={f.id} value={f.id} className="text-[var(--color-text)]">
+                {f.nome}
+              </option>
+            ))}
+          </select>
         </Linha>
 
         <Linha label="Peso (Kg)">

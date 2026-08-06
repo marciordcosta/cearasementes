@@ -182,8 +182,8 @@ export interface Database {
           despesa_extra_destino: 'frete' | 'impostos';
           /** "C x L x A" em metros (ex.: "0,60x0,40x0,10") — null/vazio = usa o peso cadastrado no cálculo de frete. */
           cubagem: string | null;
-          /** Aparece na Tabela de Preços logo depois do nome do produto — segue a mesma marcação (asterisco = negrito, underscore = itálico) do nome. */
-          fornecedor: string | null;
+          /** Cadastrado em Parametrização (tabela fornecedores) — aparece na Tabela de Preços logo depois do nome do produto, mesma marcação (asterisco = negrito, underscore = itálico) do nome. */
+          fornecedor_id: string | null;
           /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. */
           imprimir: boolean;
           criado_em: string;
@@ -191,6 +191,12 @@ export interface Database {
         };
         Insert: Omit<Database['public']['Tables']['produtos']['Row'], 'id' | 'criado_em' | 'atualizado_em'>;
         Update: Partial<Omit<Database['public']['Tables']['produtos']['Row'], 'id' | 'criado_em'>>;
+        Relationships: [];
+      };
+      fornecedores: {
+        Row: { id: string; nome: string; ordem: number };
+        Insert: Omit<Database['public']['Tables']['fornecedores']['Row'], 'id'>;
+        Update: Partial<Omit<Database['public']['Tables']['fornecedores']['Row'], 'id'>>;
         Relationships: [];
       };
       produto_precos: {

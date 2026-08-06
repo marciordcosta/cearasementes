@@ -2,11 +2,12 @@ import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { inferirNomeCategoriaDoNome, inferirPesoDoNome } from './produtoInferencia';
-import type { Canal, Categoria, FreteAdicionalTipo, Produto, TipoImposto } from './types';
+import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, TipoImposto } from './types';
 
 type CanalRow = Database['public']['Tables']['canais_preco']['Row'];
 type CategoriaRow = Database['public']['Tables']['categorias']['Row'];
 type ProdutoRow = Database['public']['Tables']['produtos']['Row'];
+type FornecedorRow = Database['public']['Tables']['fornecedores']['Row'];
 
 function canalFromRow(row: CanalRow): Canal {
   return {
@@ -204,6 +205,31 @@ export async function upsertCategoriaMargem(categoriaId: string, canalId: string
   if (error) throw error;
 }
 
+function fornecedorFromRow(row: FornecedorRow): Fornecedor {
+  return { id: row.id, nome: row.nome, ordem: row.ordem };
+}
+
+export async function fetchFornecedores(): Promise<Fornecedor[]> {
+  const rows = await fetchAllRows<FornecedorRow>((from, to) => supabase.from('fornecedores').select('*').order('ordem').range(from, to));
+  return rows.map(fornecedorFromRow);
+}
+
+export async function inserirFornecedor(input: { nome: string; ordem: number }): Promise<Fornecedor> {
+  const { data, error } = await supabase.from('fornecedores').insert({ nome: input.nome, ordem: input.ordem }).select('*').single();
+  if (error) throw error;
+  return fornecedorFromRow(data);
+}
+
+export async function atualizarFornecedor(id: string, patch: Partial<Pick<FornecedorRow, 'nome' | 'ordem'>>): Promise<void> {
+  const { error } = await supabase.from('fornecedores').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function apagarFornecedor(id: string): Promise<void> {
+  const { error } = await supabase.from('fornecedores').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function fetchProdutos(): Promise<Produto[]> {
   const [produtosRows, precosRows] = await Promise.all([
     fetchAllRows<ProdutoRow>((from, to) => supabase.from('produtos').select('*').range(from, to)),
@@ -224,7 +250,7 @@ export async function fetchProdutos(): Promise<Produto[]> {
       peso: row.peso,
       despesaExtraValor: row.despesa_extra_valor,
       cubagem: row.cubagem,
-      fornecedor: row.fornecedor,
+      fornecedorId: row.fornecedor_id,
       imprimir: row.imprimir,
       precos,
     };
@@ -243,7 +269,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
       despesa_extra_valor: 0,
       despesa_extra_destino: 'frete',
       cubagem: null,
-      fornecedor: null,
+      fornecedor_id: null,
       imprimir: true,
     })
     .select('*')
@@ -268,7 +294,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
     peso: data.peso,
     despesaExtraValor: data.despesa_extra_valor,
     cubagem: data.cubagem,
-    fornecedor: data.fornecedor,
+    fornecedorId: data.fornecedor_id,
     imprimir: data.imprimir,
     precos,
   };
@@ -276,7 +302,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
 
 export async function atualizarProduto(
   id: string,
-  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor' | 'imprimir'>>,
+  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor_id' | 'imprimir'>>,
 ): Promise<void> {
   const payload: Database['public']['Tables']['produtos']['Update'] = { ...patch, atualizado_em: new Date().toISOString() };
   const { error } = await supabase.from('produtos').update(payload).eq('id', id);
@@ -363,7 +389,7 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
         despesa_extra_valor: 0,
         despesa_extra_destino: 'frete' as const,
         cubagem: null,
-        fornecedor: null,
+        fornecedor_id: null,
         imprimir: true,
       });
     }

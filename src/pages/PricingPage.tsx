@@ -9,16 +9,20 @@ import { aplicarTransportadoraNoCanal, fetchTransportadoras } from '@/features/f
 import {
   apagarCanal,
   apagarCategoria,
+  apagarFornecedor,
   apagarProduto,
   apagarTodosProdutos,
   atualizarCanal,
   atualizarCategoria,
+  atualizarFornecedor,
   atualizarProduto,
   fetchCanais,
   fetchCategorias,
+  fetchFornecedores,
   fetchProdutos,
   inserirCanal,
   inserirCategoria,
+  inserirFornecedor,
   inserirProduto,
   upsertCategoriaMargem,
   upsertProdutoPreco,
@@ -32,10 +36,11 @@ import { ChannelsPanel, type NovoCanalInput } from '@/features/pricing/component
 import { EditProductModal } from '@/features/pricing/components/EditProductModal';
 import { ExportDropdown } from '@/features/pricing/components/ExportDropdown';
 import { ExportPdfModal } from '@/features/pricing/components/ExportPdfModal';
+import { FornecedoresPanel } from '@/features/pricing/components/FornecedoresPanel';
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
-import type { Canal, Categoria, FreteAdicionalTipo, Produto, TipoImposto } from '@/features/pricing/types';
+import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
 type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
@@ -57,6 +62,7 @@ export function PricingPage() {
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   const { data: categoriasData } = useQuery({ queryKey: ['pricing', 'categorias'], queryFn: fetchCategorias });
   const { data: produtosData } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
+  const { data: fornecedoresData } = useQuery({ queryKey: ['pricing', 'fornecedores'], queryFn: fetchFornecedores });
 
   // Estado local "espelha" o Supabase uma única vez ao carregar (feito pra
   // edição instantânea, tipo planilha) — depois disso, a fonte da verdade
@@ -67,14 +73,16 @@ export function PricingPage() {
   const [canais, setCanais] = useState<Canal[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
 
   useEffect(() => {
-    if (seeded.current || !canaisData || !categoriasData || !produtosData) return;
+    if (seeded.current || !canaisData || !categoriasData || !produtosData || !fornecedoresData) return;
     setCanais(canaisData);
     setCategorias(categoriasData);
     setProdutos(ordenarProdutos(produtosData, categoriasData));
+    setFornecedores(fornecedoresData);
     seeded.current = true;
-  }, [canaisData, categoriasData, produtosData]);
+  }, [canaisData, categoriasData, produtosData, fornecedoresData]);
 
   const [modalParametrizacaoAberto, setModalParametrizacaoAberto] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState('');
@@ -151,7 +159,7 @@ export function PricingPage() {
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
-    fornecedor: string | null;
+    fornecedorId: string | null;
     imprimir: boolean;
   }) {
     if (!produtoEditandoId) return;
@@ -167,7 +175,7 @@ export function PricingPage() {
                 peso: patch.peso,
                 despesaExtraValor: patch.despesaExtraValor,
                 cubagem: patch.cubagem,
-                fornecedor: patch.fornecedor,
+                fornecedorId: patch.fornecedorId,
                 imprimir: patch.imprimir,
               }
             : p,
@@ -183,7 +191,7 @@ export function PricingPage() {
         peso: patch.peso,
         despesa_extra_valor: patch.despesaExtraValor,
         cubagem: patch.cubagem,
-        fornecedor: patch.fornecedor,
+        fornecedor_id: patch.fornecedorId,
         imprimir: patch.imprimir,
       }).then(invalidarProdutosPreco),
     );
@@ -316,6 +324,32 @@ export function PricingPage() {
     }
   }
 
+  // ---------- Fornecedores ----------
+  async function onAdicionarFornecedor(nome: string) {
+    if (fornecedores.some((f) => f.nome.toLowerCase() === nome.toLowerCase())) {
+      setErro('Já existe um fornecedor com esse nome.');
+      return;
+    }
+    try {
+      const fornecedor = await inserirFornecedor({ nome, ordem: fornecedores.length });
+      setFornecedores((prev) => [...prev, fornecedor]);
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Falha ao adicionar fornecedor.'));
+    }
+  }
+
+  function onRenomearFornecedor(id: string, nome: string) {
+    setFornecedores((prev) => prev.map((f) => (f.id === id ? { ...f, nome } : f)));
+    salvarAgora(() => atualizarFornecedor(id, { nome }));
+  }
+
+  /** Sem confirmação/bloqueio: fornecedor_id é opcional (on delete set null) — produtos que usavam esse fornecedor só ficam sem fornecedor. */
+  function onRemoverFornecedor(id: string) {
+    setFornecedores((prev) => prev.filter((f) => f.id !== id));
+    setProdutos((prev) => prev.map((p) => (p.fornecedorId === id ? { ...p, fornecedorId: null } : p)));
+    salvarAgora(() => apagarFornecedor(id));
+  }
+
   function onSalvarOrdemCategorias(novaOrdem: Categoria[]) {
     const comOrdem = novaOrdem.map((c, i) => ({ ...c, ordem: i }));
     setCategorias(comOrdem);
@@ -410,6 +444,7 @@ export function PricingPage() {
             <PricingTable
               produtos={produtosExibidos}
               categorias={categorias}
+              fornecedores={fornecedores}
               canaisVisiveis={canaisVisiveis}
               transportadoras={transportadoras}
               mostrarColunaId={mostrarColunaId}
@@ -424,12 +459,19 @@ export function PricingPage() {
         </div>
       </div>
 
-      <EditProductModal produto={produtoEditando} categorias={categorias} onFechar={() => setProdutoEditandoId(null)} onSalvar={onSalvarEdicaoProduto} />
+      <EditProductModal
+        produto={produtoEditando}
+        categorias={categorias}
+        fornecedores={fornecedores}
+        onFechar={() => setProdutoEditandoId(null)}
+        onSalvar={onSalvarEdicaoProduto}
+      />
 
       <ChannelFullscreenModal
         canal={canalTelaCheia}
         produtos={produtosExibidos}
         categorias={categorias}
+        fornecedores={fornecedores}
         transportadoras={transportadoras}
         mostrarColunaId={mostrarColunaId}
         onFechar={() => setCanalTelaCheiaId(null)}
@@ -513,6 +555,12 @@ export function PricingPage() {
             onAtualizarMargem={onAtualizarMargem}
             onRemoverCategoria={onRemoverCategoria}
             onAdicionarCategoria={onAdicionarCategoria}
+          />
+          <FornecedoresPanel
+            fornecedores={fornecedores}
+            onAdicionarFornecedor={onAdicionarFornecedor}
+            onRenomearFornecedor={onRenomearFornecedor}
+            onRemoverFornecedor={onRemoverFornecedor}
           />
         </div>
       </Modal>

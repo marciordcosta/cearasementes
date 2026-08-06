@@ -36,6 +36,13 @@ export interface PrecoCanal {
   manual: boolean;
 }
 
+/** Cadastro de Fornecedor (Parametrização de Custos) — o nome pode conter a mesma marcação (asterisco = negrito, underscore = itálico) do nome do produto (ver NomeComDestaque em PricingTable.tsx). */
+export interface Fornecedor {
+  id: string;
+  nome: string;
+  ordem: number;
+}
+
 export interface Produto {
   id: string;
   nome: string;
@@ -47,8 +54,8 @@ export interface Produto {
   despesaExtraValor: number;
   /** "C x L x A" em metros (ex.: "0,60x0,40x0,10") — preenchida, o cálculo de frete usa o peso cubado (volume x 300) no lugar de `peso`. */
   cubagem: string | null;
-  /** Aparece na Tabela de Preços logo depois do nome do produto — segue a mesma marcação (asterisco = negrito, underscore = itálico) do nome (ver NomeComDestaque em PricingTable.tsx). */
-  fornecedor: string | null;
+  /** Cadastrado em Parametrização (ver Fornecedor abaixo) — aparece na Tabela de Preços logo depois do nome do produto, mesma marcação (asterisco = negrito, underscore = itálico) do nome (ver NomeComDestaque em PricingTable.tsx). */
+  fornecedorId: string | null;
   /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. Padrão true. */
   imprimir: boolean;
   /** canalId -> preço sugerido/manual daquele canal */

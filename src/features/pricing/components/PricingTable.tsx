@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloFrete } from '../calculations';
-import type { Canal, Categoria, Produto } from '../types';
+import type { Canal, Categoria, Fornecedor, Produto } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
   good: 'bg-good-soft text-good',
@@ -63,6 +63,7 @@ interface ColunaDef {
 interface PricingTableProps {
   produtos: Produto[];
   categorias: Categoria[];
+  fornecedores: Fornecedor[];
   canaisVisiveis: Canal[];
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
@@ -98,6 +99,7 @@ function AlcaRedimensionar({ onMouseDown, claro }: { onMouseDown: (e: React.Mous
 export function PricingTable({
   produtos,
   categorias,
+  fornecedores,
   canaisVisiveis,
   transportadoras,
   mostrarColunaId,
@@ -110,6 +112,7 @@ export function PricingTable({
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
+  const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   // Focar num campo de custo/preço (ou clicar na linha) destaca a linha inteira — igual ao original.
   const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
@@ -222,17 +225,15 @@ export function PricingTable({
       // o deslocamento acompanha a largura ATUAL de "Editar"+"Classe" (que agora podem
       // ser redimensionadas), não um valor fixo.
       stickyLeft: (somenteCanal ? 0 : largura('editar')) + largura('classe'),
-      render: (p) => (
-        <span className="text-[var(--color-text)]">
-          <NomeComDestaque nome={p.nome} />
-          {p.fornecedor && (
-            <>
-              {' '}
-              <NomeComDestaque nome={p.fornecedor} />
-            </>
-          )}
-        </span>
-      ),
+      render: (p) => {
+        const fornecedor = getFornecedor(p.fornecedorId);
+        return (
+          <span className="text-[var(--color-text)]">
+            <NomeComDestaque nome={p.nome} />
+            {fornecedor && <span className="text-[var(--color-text-soft)]"> - {fornecedor.nome}</span>}
+          </span>
+        );
+      },
     },
     { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{p.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span> },
     {
