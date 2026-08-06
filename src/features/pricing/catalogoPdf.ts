@@ -137,6 +137,12 @@ export function gerarCatalogoPDF(
           text-transform:uppercase; letter-spacing:.3px; vertical-align:middle;
         }
         .vazio{ font-size:13px; color:#000000; padding:20px 0; }
+        .rodape{
+          margin-top:24px; padding-top:10px; border-top:1px solid #CCCCCC;
+          page-break-inside:avoid;
+        }
+        .rodape .titulo{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#000000; margin:0 0 3px; }
+        .rodape p{ font-size:10.5px; color:#555555; margin:0; }
         @media print{
           .cabecalho{ position:running(head); }
         }
@@ -153,6 +159,10 @@ export function gerarCatalogoPDF(
         <div class="meta">${dataEmissao}</div>
       </div>
       ${corpoHtml}
+      <div class="rodape">
+        <p class="titulo">Atenção</p>
+        <p>Os valores podem ser alterados sem aviso prévio, tabela válida por 15 dias ou até durar o estoque (lote em questão).</p>
+      </div>
     </body>
     </html>
   `;
