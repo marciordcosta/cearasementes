@@ -125,11 +125,11 @@ export function PricingPage() {
       return true;
     })
     .filter((p) => {
-      const termo = buscaProduto.trim().toLowerCase();
-      if (!termo) return true;
-      if (p.nome.toLowerCase().includes(termo)) return true;
+      const palavras = buscaProduto.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (palavras.length === 0) return true;
       const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
-      return fornecedor ? fornecedor.nome.toLowerCase().includes(termo) : false;
+      const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
+      return palavras.every((palavra) => descricao.includes(palavra));
     });
 
   // ---------- Produtos ----------
