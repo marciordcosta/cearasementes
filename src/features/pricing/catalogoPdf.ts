@@ -97,7 +97,10 @@ export function gerarCatalogoPDF(
       <title>Catálogo — ${canal.nome}</title>
       <style>
         @page{ margin:18mm 14mm; }
-        *{ box-sizing:border-box; }
+        /* Sem isso, o Chrome corta fundos/cores na impressão a menos que o usuário marque
+           "Gráficos de segundo plano" no diálogo — força o título da categoria e as tags
+           de fornecedor a sempre saírem coloridas. */
+        *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
         body{
           font-family:'Inter',Arial,sans-serif; color:#000000; background:#FFFFFF;
           margin:0; padding:0 4mm;
