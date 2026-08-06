@@ -228,9 +228,11 @@ export function PricingTable({
       render: (p) => {
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
-          <span className="text-[var(--color-text)]">
-            <NomeComDestaque nome={p.nome} />
-            {fornecedor && <span className="text-[var(--color-text-soft)]"> - {fornecedor.nome}</span>}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-[var(--color-text)]">
+              <NomeComDestaque nome={p.nome} />
+            </span>
+            {fornecedor && <span className="shrink-0 rounded-full bg-good px-1.5 py-0.5 text-[10px] font-semibold text-white">{fornecedor.nome}</span>}
           </span>
         );
       },
