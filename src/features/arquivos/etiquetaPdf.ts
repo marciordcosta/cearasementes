@@ -154,13 +154,15 @@ export function gerarEtiquetaPdf(dados: DadosEtiqueta, comEstrutura: boolean): v
   janela.document.open();
   janela.document.write(htmlCompleto);
   janela.document.close();
-  janela.onload = () => {
+  // onload E o setTimeout de fallback (pra navegadores que não disparam onload de forma
+  // confiável em document.write) podem disparar os dois — a flag garante só 1 diálogo de impressão.
+  let impresso = false;
+  const imprimirUmaVez = () => {
+    if (impresso) return;
+    impresso = true;
     janela.focus();
     janela.print();
   };
-  // Fallback para navegadores que não disparam onload de forma confiável em document.write
-  setTimeout(() => {
-    janela.focus();
-    janela.print();
-  }, 400);
+  janela.onload = imprimirUmaVez;
+  setTimeout(imprimirUmaVez, 400);
 }
