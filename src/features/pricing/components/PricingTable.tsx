@@ -202,16 +202,16 @@ export function PricingTable({
             // Gruda junto com Classe/Produto ao rolar — as três formam o bloco fixo da esquerda.
             stickyLeft: 0,
             render: (p: Produto) => (
-              <>
-                <span
-                  className="pointer-events-none absolute inset-y-1 left-0 w-[2px] rounded-sm"
-                  style={{ background: p.imprimir ? '#A8EC7F' : 'var(--color-line)' }}
-                  title={p.imprimir ? 'Ativo para impressão' : 'Inativo para impressão'}
-                />
-                <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
-                  ✎
-                </button>
-              </>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => onEditarProduto?.(p.id)}
+                title={p.imprimir ? 'Editar produto (ativo para impressão)' : 'Editar produto (inativo para impressão)'}
+                className="rounded bg-[var(--color-page)] px-1.5 py-0.5 hover:bg-[var(--color-line)]"
+                style={{ color: p.imprimir ? '#2FAE5C' : 'var(--color-text)' }}
+              >
+                ✎
+              </button>
             ),
           } satisfies ColunaDef,
         ]),
