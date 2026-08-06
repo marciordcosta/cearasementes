@@ -309,6 +309,7 @@ export function PricingTable({
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
+          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
           return (
             <div className="flex items-center gap-1" title={manual ? `Preço sugerido: R$ ${fmtR(r.precoSugerido)}` : undefined}>
               <NumeroSincronizado
@@ -321,14 +322,14 @@ export function PricingTable({
                   if (el) precoRefs.current.set(chave, el);
                   else precoRefs.current.delete(chave);
                 }}
-                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${precisaAjuste ? 'border-white/40 bg-white/10 text-white' : manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada && !precisaAjuste ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
               />
               <button
                 type="button"
                 onClick={() => onResetPreco(p.id, canal.id)}
                 title="Voltar ao preço sugerido"
                 tabIndex={-1}
-                className={`shrink-0 text-[var(--color-text-soft)] hover:text-[var(--color-text)] ${manual ? 'visible' : 'invisible'}`}
+                className={`shrink-0 ${precisaAjuste ? 'text-white/80 hover:text-white' : 'text-[var(--color-text-soft)] hover:text-[var(--color-text)]'} ${manual ? 'visible' : 'invisible'}`}
               >
                 ↺
               </button>
@@ -376,7 +377,12 @@ export function PricingTable({
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
-          return <span className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[classe]}`}>{fmtP(r.margemPct)}%</span>;
+          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          return (
+            <span className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${precisaAjuste ? 'text-white' : MARGEM_CLASSE_CLASSNAME[classe]}`}>
+              {fmtP(r.margemPct)}%
+            </span>
+          );
         },
       },
       {
@@ -496,9 +502,10 @@ export function PricingTable({
                         style={{
                           ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
                           ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                          background: precisaAjuste ? '#FBE3E3' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
+                          background: precisaAjuste ? '#C24444' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
+                          ...(precisaAjuste ? { color: '#FFFFFF' } : undefined),
                         }}
-                        className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
+                        className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 ${precisaAjuste ? '' : 'text-[var(--color-text-soft)]'} ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
                       >
                         {coluna.render(produto, destacada)}
                       </td>
