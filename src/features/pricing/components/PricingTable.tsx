@@ -420,8 +420,8 @@ export function PricingTable({
           let title: string | undefined;
           if (referencia !== undefined && !ehReferencia) {
             const rReferencia = calcularCanal(p, referencia, categoria, transportadoraPorId);
-            const diffPct = rReferencia.margemReais !== 0 ? ((r.margemReais - rReferencia.margemReais) / rReferencia.margemReais) * 100 : 0;
-            title = [`Referência: R$ ${fmtR(rReferencia.margemReais)}`, `Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`].join('\n');
+            const diffReais = r.margemReais - rReferencia.margemReais;
+            title = `Diferença: ${diffReais >= 0 ? '+' : ''}R$ ${fmtR(diffReais)}`;
           }
           return (
             <span className="num" title={title}>
