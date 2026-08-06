@@ -184,7 +184,7 @@ export function PricingTable({
     peso: 90,
     custo: 110,
     editar: 44,
-    remover: 44,
+    remover: 32,
   };
   canaisVisiveis.forEach((canal) => {
     defaults[`${canal.id}:preco`] = 110;
@@ -398,7 +398,7 @@ export function PricingTable({
       },
       {
         chave: `${canal.id}:ajuste`,
-        rotulo: '✓',
+        rotulo: '✕',
         larguraPadrao: defaults[`${canal.id}:ajuste`],
         canalId: canal.id,
         render: (p) => {
@@ -414,7 +414,7 @@ export function PricingTable({
               title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
               className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad text-white' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
             >
-              ✓
+              ✕
             </button>
           );
         },
