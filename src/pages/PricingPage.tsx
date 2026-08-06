@@ -116,9 +116,21 @@ export function PricingPage() {
   const canaisVisiveis = canais.filter((c) => c.visivel);
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
+  const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
   const produtosExibidos = produtos
-    .filter((p) => filtroClasse === 'todas' || p.categoriaId === filtroClasse)
-    .filter((p) => p.nome.toLowerCase().includes(buscaProduto.trim().toLowerCase()));
+    .filter((p) => {
+      if (filtroClasse === 'todas') return true;
+      if (filtroClasse.startsWith('cat:')) return p.categoriaId === filtroClasse.slice(4);
+      if (filtroClasse.startsWith('forn:')) return p.fornecedorId === filtroClasse.slice(5);
+      return true;
+    })
+    .filter((p) => {
+      const termo = buscaProduto.trim().toLowerCase();
+      if (!termo) return true;
+      if (p.nome.toLowerCase().includes(termo)) return true;
+      const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
+      return fornecedor ? fornecedor.nome.toLowerCase().includes(termo) : false;
+    });
 
   // ---------- Produtos ----------
   function onUpdateCusto(produtoId: string, custo: number) {
@@ -307,7 +319,7 @@ export function PricingPage() {
       return;
     }
     setCategorias((prev) => prev.filter((c) => c.id !== categoriaId));
-    if (filtroClasse === categoriaId) setFiltroClasse('todas');
+    if (filtroClasse === `cat:${categoriaId}`) setFiltroClasse('todas');
     salvarAgora(() => apagarCategoria(categoriaId));
   }
 
@@ -347,6 +359,7 @@ export function PricingPage() {
   function onRemoverFornecedor(id: string) {
     setFornecedores((prev) => prev.filter((f) => f.id !== id));
     setProdutos((prev) => prev.map((p) => (p.fornecedorId === id ? { ...p, fornecedorId: null } : p)));
+    if (filtroClasse === `forn:${id}`) setFiltroClasse('todas');
     salvarAgora(() => apagarFornecedor(id));
   }
 
@@ -418,17 +431,28 @@ export function PricingPage() {
               <input
                 value={buscaProduto}
                 onChange={(e) => setBuscaProduto(e.target.value)}
-                placeholder="Buscar produto pelo nome…"
+                placeholder="Buscar produto pelo nome ou fornecedor…"
                 className="w-full max-w-xs rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)]"
               />
               <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar por classe:</span>
               <select value={filtroClasse} onChange={(e) => setFiltroClasse(e.target.value)} className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]">
                 <option value="todas" className="text-[var(--color-text)]">Mostrar Todas</option>
-                {categorias.map((c) => (
-                  <option key={c.id} value={c.id} className="text-[var(--color-text)]">
-                    {c.nome}
-                  </option>
-                ))}
+                <optgroup label="Categoria">
+                  {categorias.map((c) => (
+                    <option key={c.id} value={`cat:${c.id}`} className="text-[var(--color-text)]">
+                      {c.nome}
+                    </option>
+                  ))}
+                </optgroup>
+                {fornecedores.length > 0 && (
+                  <optgroup label="Fornecedor">
+                    {fornecedores.map((f) => (
+                      <option key={f.id} value={`forn:${f.id}`} className="text-[var(--color-text)]">
+                        {f.nome}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
                 <input type="checkbox" checked={mostrarColunaId} onChange={(e) => setMostrarColunaId(e.target.checked)} className="accent-[var(--color-navy)]" />
