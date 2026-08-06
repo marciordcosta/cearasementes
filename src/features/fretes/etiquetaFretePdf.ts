@@ -23,7 +23,9 @@ function separarCidadeUf(cidadeCompleta: string): { cidade: string; uf: string }
  * uma etiqueta física por VOLUME: uma NF com 50 volumes vira 50 etiquetas
  * "1/50", "2/50"... "50/50". Mesmo padrão de gerarEtiquetaPdf
  * (features/arquivos/etiquetaPdf.ts): HTML puro em `window.print()`, sem lib
- * de PDF. Etiqueta física de 100mm x 30mm.
+ * de PDF. Etiqueta física de 100mm (largura) x 300mm (altura) — bem mais
+ * alta que larga, por isso cada campo fica na sua própria linha (empilhado),
+ * em vez de par a par lado a lado.
  */
 export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
   const etiquetas = grupos.flatMap(({ cidade, notas }) => {
@@ -43,13 +45,13 @@ export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
     .map(
       (e) => `
         <div class="etiqueta">
-          <div class="linha">
-            <div class="celula celula-principal"><span class="rotulo">Cidade:</span> <span class="valor">${escapeHtml(e.cidade)}</span></div>
-            <div class="celula celula-lateral"><span class="rotulo">UF:</span> <span class="valor">${escapeHtml(e.uf)}</span></div>
+          <div class="grupo">
+            <div class="campo"><span class="rotulo">Cidade:</span> <span class="valor">${escapeHtml(e.cidade)}</span></div>
+            <div class="campo"><span class="rotulo">UF:</span> <span class="valor">${escapeHtml(e.uf)}</span></div>
           </div>
-          <div class="linha">
-            <div class="celula celula-principal"><span class="rotulo">NF:</span> <span class="valor">${escapeHtml(e.nf)}</span></div>
-            <div class="celula celula-lateral"><span class="rotulo">VOL:</span> <span class="valor">${e.volumeAtual}/${e.volumeTotal}</span></div>
+          <div class="grupo">
+            <div class="campo"><span class="rotulo">NF:</span> <span class="valor">${escapeHtml(e.nf)}</span></div>
+            <div class="campo"><span class="rotulo">VOL:</span> <span class="valor">${e.volumeAtual}/${e.volumeTotal}</span></div>
           </div>
         </div>
       `,
@@ -63,20 +65,19 @@ export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
       <meta charset="UTF-8">
       <title>Etiquetas de Expedição</title>
       <style>
-        @page{ size:100mm 30mm; margin:0; }
+        @page{ size:100mm 300mm; margin:0; }
         *{ box-sizing:border-box; }
-        html,body{ width:100mm; height:30mm; margin:0; padding:0; font-family:Arial,Helvetica,sans-serif; color:#000000; background:#FFFFFF; }
+        html,body{ width:100mm; height:300mm; margin:0; padding:0; font-family:Arial,Helvetica,sans-serif; color:#000000; background:#FFFFFF; }
         .etiqueta{
-          width:100mm; height:30mm; padding:2mm 3mm;
-          display:flex; flex-direction:column; justify-content:space-between;
+          width:100mm; height:300mm; padding:10mm 6mm;
+          display:flex; flex-direction:column; justify-content:center; gap:24mm;
           page-break-after:always;
         }
         .etiqueta:last-child{ page-break-after:auto; }
-        .linha{ display:flex; align-items:baseline; gap:3mm; }
-        .celula-principal{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .celula-lateral{ flex:0 0 auto; text-align:right; }
-        .rotulo{ font-size:3mm; font-weight:700; }
-        .valor{ font-size:5.5mm; font-weight:700; }
+        .grupo{ display:flex; flex-direction:column; gap:6mm; }
+        .campo{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .rotulo{ font-size:6mm; font-weight:700; }
+        .valor{ font-size:14mm; font-weight:700; display:block; line-height:1.1; }
       </style>
     </head>
     <body>
