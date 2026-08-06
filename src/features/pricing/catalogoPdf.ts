@@ -117,7 +117,10 @@ export function gerarCatalogoPDF(
           border-left:4px solid #000000; page-break-after:avoid;
         }
         table.tabela-catalogo{
-          width:100%; border-collapse:collapse; font-size:12px; margin:0 0 4px;
+          /* width:auto (em vez de 100%) — a tabela encolhe pro conteúdo, então Valor/Peso
+             ficam colados perto do nome do produto, em vez de esticados até a borda da
+             página (importante pro cliente não perder a linha ao dar zoom no PDF). */
+          width:auto; max-width:100%; border-collapse:collapse; font-size:12px; margin:0 0 4px;
         }
         table.tabela-catalogo thead th{
           text-align:left; padding:7px 10px; border-bottom:1px solid #000000;
