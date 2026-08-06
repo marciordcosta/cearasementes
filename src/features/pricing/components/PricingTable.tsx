@@ -310,8 +310,20 @@ export function PricingTable({
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          // A primeira tabela (conforme a ordem atual de canaisVisiveis) é sempre a referência
+          // pra comparação — não faz sentido comparar a referência com ela mesma.
+          const canalReferencia = canaisVisiveis[0];
+          const ehReferencia = canal.id === canalReferencia.id;
+          const partesTooltip: string[] = [];
+          if (manual) partesTooltip.push(`Preço sugerido: R$ ${fmtR(r.precoSugerido)}`);
+          if (!ehReferencia) {
+            const rReferencia = calcularCanal(p, canalReferencia, categoria, transportadoraPorId);
+            const diffPct = rReferencia.preco > 0 ? ((r.preco - rReferencia.preco) / rReferencia.preco) * 100 : 0;
+            partesTooltip.push(`Preço na tabela de referência (${canalReferencia.nome}): R$ ${fmtR(rReferencia.preco)}`);
+            partesTooltip.push(`Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}% sobre o preço de referência`);
+          }
           return (
-            <div className="flex items-center gap-1" title={manual ? `Preço sugerido: R$ ${fmtR(r.precoSugerido)}` : undefined}>
+            <div className="flex items-center gap-1" title={partesTooltip.length > 0 ? partesTooltip.join('\n') : undefined}>
               <NumeroSincronizado
                 valor={r.preco}
                 onFocus={() => setLinhaDestacada(p.id)}
