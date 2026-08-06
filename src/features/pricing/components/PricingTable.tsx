@@ -205,7 +205,7 @@ export function PricingTable({
               <>
                 <span
                   className="pointer-events-none absolute inset-y-1 left-0 w-[5px] rounded-sm"
-                  style={{ background: p.imprimir ? '#3FBF8F' : 'var(--color-line)' }}
+                  style={{ background: p.imprimir ? '#A8EC7F' : 'var(--color-line)' }}
                   title={p.imprimir ? 'Ativo para impressão' : 'Inativo para impressão'}
                 />
                 <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
