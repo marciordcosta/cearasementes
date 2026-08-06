@@ -206,7 +206,11 @@ export function PricingTable({
                 <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
                   ✎
                 </button>
-                {p.imprimir && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-good" title="Ativo para impressão" />}
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: p.imprimir ? '#3FBF8F' : 'var(--color-line)' }}
+                  title={p.imprimir ? 'Ativo para impressão' : 'Inativo para impressão'}
+                />
               </span>
             ),
           } satisfies ColunaDef,
