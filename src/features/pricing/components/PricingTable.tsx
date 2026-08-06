@@ -228,8 +228,8 @@ export function PricingTable({
       render: (p) => {
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
-          <span className="inline-flex items-start gap-1.5">
-            <span className="text-[var(--color-text)]">
+          <span className="flex w-full items-start gap-1.5">
+            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[var(--color-text)]">
               <NomeComDestaque nome={p.nome} />
             </span>
             {fornecedor && (
