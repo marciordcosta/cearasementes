@@ -97,7 +97,7 @@ export async function inserirCanal(input: {
   if (produtosIds.length > 0) {
     const { error: errPrecos } = await supabase
       .from('produto_precos')
-      .insert(produtosIds.map((p) => ({ produto_id: p.id, canal_id: data.id, preco: null, manual: false })));
+      .insert(produtosIds.map((p) => ({ produto_id: p.id, canal_id: data.id, preco: null, manual: false, precisa_ajuste: false })));
     if (errPrecos) throw errPrecos;
   }
 
@@ -233,14 +233,16 @@ export async function apagarFornecedor(id: string): Promise<void> {
 export async function fetchProdutos(): Promise<Produto[]> {
   const [produtosRows, precosRows] = await Promise.all([
     fetchAllRows<ProdutoRow>((from, to) => supabase.from('produtos').select('*').range(from, to)),
-    fetchAllRows<{ produto_id: string; canal_id: string; preco: number | null; manual: boolean }>((from, to) =>
+    fetchAllRows<{ produto_id: string; canal_id: string; preco: number | null; manual: boolean; precisa_ajuste: boolean }>((from, to) =>
       supabase.from('produto_precos').select('*').range(from, to),
     ),
   ]);
 
   return produtosRows.map((row) => {
     const precos: Produto['precos'] = {};
-    precosRows.filter((p) => p.produto_id === row.id).forEach((p) => (precos[p.canal_id] = { preco: p.preco, manual: p.manual }));
+    precosRows
+      .filter((p) => p.produto_id === row.id)
+      .forEach((p) => (precos[p.canal_id] = { preco: p.preco, manual: p.manual, precisaAjuste: p.precisa_ajuste }));
     return {
       id: row.id,
       nome: row.nome,
@@ -280,9 +282,9 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
   if (canais.length > 0) {
     const { error: errPrecos } = await supabase
       .from('produto_precos')
-      .insert(canais.map((c) => ({ produto_id: data.id, canal_id: c.id, preco: null, manual: false })));
+      .insert(canais.map((c) => ({ produto_id: data.id, canal_id: c.id, preco: null, manual: false, precisa_ajuste: false })));
     if (errPrecos) throw errPrecos;
-    canais.forEach((c) => (precos[c.id] = { preco: null, manual: false }));
+    canais.forEach((c) => (precos[c.id] = { preco: null, manual: false, precisaAjuste: false }));
   }
 
   return {
@@ -322,6 +324,12 @@ export async function apagarTodosProdutos(): Promise<void> {
 
 export async function upsertProdutoPreco(produtoId: string, canalId: string, preco: number | null, manual: boolean): Promise<void> {
   const { error } = await supabase.from('produto_precos').upsert({ produto_id: produtoId, canal_id: canalId, preco, manual });
+  if (error) throw error;
+}
+
+/** Marca (ou desmarca) que a linha desse produto, só nesse canal, precisa de ajuste — destaca na Tabela de Preços e some do catálogo em PDF desse canal. */
+export async function atualizarPrecisaAjuste(produtoId: string, canalId: string, precisaAjuste: boolean): Promise<void> {
+  const { error } = await supabase.from('produto_precos').update({ precisa_ajuste: precisaAjuste }).eq('produto_id', produtoId).eq('canal_id', canalId);
   if (error) throw error;
 }
 

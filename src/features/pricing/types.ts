@@ -34,6 +34,8 @@ export interface Categoria {
 export interface PrecoCanal {
   preco: number | null;
   manual: boolean;
+  /** Marca essa linha, só nesse canal, como precisando de ajuste — destaca na tabela e some do catálogo em PDF desse canal. */
+  precisaAjuste: boolean;
 }
 
 /** Cadastro de Fornecedor (Parametrização de Custos) — o nome pode conter a mesma marcação (asterisco = negrito, underscore = itálico) do nome do produto (ver NomeComDestaque em PricingTable.tsx). */

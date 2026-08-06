@@ -15,6 +15,7 @@ import {
   atualizarCanal,
   atualizarCategoria,
   atualizarFornecedor,
+  atualizarPrecisaAjuste,
   atualizarProduto,
   fetchCanais,
   fetchCategorias,
@@ -139,13 +140,24 @@ export function PricingPage() {
   }
 
   function onUpdatePreco(produtoId: string, canalId: string, preco: number) {
-    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { preco, manual: true } } } : p)));
+    setProdutos((prev) =>
+      prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], preco, manual: true } } } : p)),
+    );
     debounced(`produto-preco-${produtoId}-${canalId}`, () => upsertProdutoPreco(produtoId, canalId, preco, true).then(invalidarProdutosPreco));
   }
 
   function onResetPreco(produtoId: string, canalId: string) {
-    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { preco: null, manual: false } } } : p)));
+    setProdutos((prev) =>
+      prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], preco: null, manual: false } } } : p)),
+    );
     salvarAgora(() => upsertProdutoPreco(produtoId, canalId, null, false).then(invalidarProdutosPreco));
+  }
+
+  function onTogglePrecisaAjuste(produtoId: string, canalId: string, valor: boolean) {
+    setProdutos((prev) =>
+      prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], precisaAjuste: valor } } } : p)),
+    );
+    salvarAgora(() => atualizarPrecisaAjuste(produtoId, canalId, valor).then(invalidarProdutosPreco));
   }
 
   function onRemoverProduto(produtoId: string) {
@@ -292,7 +304,7 @@ export function PricingPage() {
       const canal = await inserirCanal({ ...input, ordem: canais.length });
       setCanais((prev) => [...prev, canal]);
       setCategorias((prev) => prev.map((cat) => ({ ...cat, margens: { ...cat.margens, [canal.id]: 20 } })));
-      setProdutos((prev) => prev.map((p) => ({ ...p, precos: { ...p.precos, [canal.id]: { preco: null, manual: false } } })));
+      setProdutos((prev) => prev.map((p) => ({ ...p, precos: { ...p.precos, [canal.id]: { preco: null, manual: false, precisaAjuste: false } } })));
     } catch (e) {
       setErro(mensagemDeErro(e, 'Falha ao adicionar Tabela de Preço.'));
     }
@@ -475,6 +487,7 @@ export function PricingPage() {
               onUpdateCusto={onUpdateCusto}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
+              onTogglePrecisaAjuste={onTogglePrecisaAjuste}
               onEditarProduto={setProdutoEditandoId}
               onRemoverProduto={onRemoverProduto}
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
@@ -502,6 +515,7 @@ export function PricingPage() {
         onUpdateCusto={onUpdateCusto}
         onUpdatePreco={onUpdatePreco}
         onResetPreco={onResetPreco}
+        onTogglePrecisaAjuste={onTogglePrecisaAjuste}
       />
 
       <OrderModal

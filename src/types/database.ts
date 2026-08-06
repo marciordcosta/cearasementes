@@ -200,8 +200,10 @@ export interface Database {
         Relationships: [];
       };
       produto_precos: {
-        Row: { produto_id: string; canal_id: string; preco: number | null; manual: boolean };
-        Insert: Database['public']['Tables']['produto_precos']['Row'];
+        Row: { produto_id: string; canal_id: string; preco: number | null; manual: boolean; precisa_ajuste: boolean };
+        // precisa_ajuste é opcional na inserção (default false no banco) — upsertProdutoPreco e
+        // sincronizarProdutosCusto criam/atualizam linhas de preço sem mexer nesse campo.
+        Insert: Omit<Database['public']['Tables']['produto_precos']['Row'], 'precisa_ajuste'> & { precisa_ajuste?: boolean };
         Update: Partial<Database['public']['Tables']['produto_precos']['Row']>;
         Relationships: [];
       };

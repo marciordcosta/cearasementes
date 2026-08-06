@@ -57,6 +57,8 @@ interface ColunaDef {
   corFundo?: string;
   /** cor da borda esquerda que marca o início do bloco de um canal (canal.cor.mid) */
   corBordaEsquerda?: string;
+  /** canal dono dessa coluna (Preço/Frete/.../Ajuste) — usado pra destacar a célula quando esse produto está marcado como "precisa ajuste" NESSE canal. */
+  canalId?: string;
   render: (produto: Produto, destacada: boolean) => ReactNode;
 }
 
@@ -70,6 +72,7 @@ interface PricingTableProps {
   onUpdateCusto: (produtoId: string, custo: number) => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
+  onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
   onEditarProduto?: (produtoId: string) => void;
   onRemoverProduto?: (produtoId: string) => void;
   onAbrirCanalTelaCheia?: (canal: Canal) => void;
@@ -106,6 +109,7 @@ export function PricingTable({
   onUpdateCusto,
   onUpdatePreco,
   onResetPreco,
+  onTogglePrecisaAjuste,
   onEditarProduto,
   onRemoverProduto,
   onAbrirCanalTelaCheia,
@@ -188,6 +192,7 @@ export function PricingTable({
     defaults[`${canal.id}:encargos`] = 110;
     defaults[`${canal.id}:mlpct`] = 90;
     defaults[`${canal.id}:mlvalor`] = 100;
+    defaults[`${canal.id}:ajuste`] = 40;
   });
   const { largura, iniciarArrasto } = useColumnWidths(defaults);
 
@@ -277,6 +282,7 @@ export function PricingTable({
         larguraPadrao: defaults[`${canal.id}:preco`],
         corBordaEsquerda: cor.mid,
         corFundo: cor.soft,
+        canalId: canal.id,
         render: (p, destacada) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
@@ -312,6 +318,7 @@ export function PricingTable({
         chave: `${canal.id}:frete`,
         rotulo: 'Frete (R$)',
         larguraPadrao: defaults[`${canal.id}:frete`],
+        canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
@@ -327,6 +334,7 @@ export function PricingTable({
         chave: `${canal.id}:encargos`,
         rotulo: 'Encargos (R$)',
         larguraPadrao: defaults[`${canal.id}:encargos`],
+        canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
@@ -341,6 +349,7 @@ export function PricingTable({
         chave: `${canal.id}:mlpct`,
         rotulo: 'ML (%)',
         larguraPadrao: defaults[`${canal.id}:mlpct`],
+        canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
@@ -352,10 +361,31 @@ export function PricingTable({
         chave: `${canal.id}:mlvalor`,
         rotulo: 'ML ($)',
         larguraPadrao: defaults[`${canal.id}:mlvalor`],
+        canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           return <span className="num">R$ {fmtR(r.margemReais)}</span>;
+        },
+      },
+      {
+        chave: `${canal.id}:ajuste`,
+        rotulo: '✓',
+        larguraPadrao: defaults[`${canal.id}:ajuste`],
+        canalId: canal.id,
+        render: (p) => {
+          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          return (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste)}
+              title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
+              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-warn text-white' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+            >
+              ✓
+            </button>
+          );
         },
       },
     ];
@@ -447,19 +477,22 @@ export function PricingTable({
                   onClick={() => setLinhaDestacada(produto.id)}
                   className={`border-b border-[var(--color-line)] ${novoGrupo ? 'border-t-2 border-t-[var(--color-line)]' : ''}`}
                 >
-                  {colunas.map((coluna) => (
-                    <td
-                      key={coluna.chave}
-                      style={{
-                        ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
-                        ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                        background: destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
-                      }}
-                      className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
-                    >
-                      {coluna.render(produto, destacada)}
-                    </td>
-                  ))}
+                  {colunas.map((coluna) => {
+                    const precisaAjuste = coluna.canalId !== undefined && (produto.precos[coluna.canalId]?.precisaAjuste ?? false);
+                    return (
+                      <td
+                        key={coluna.chave}
+                        style={{
+                          ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
+                          ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
+                          background: destacada ? 'var(--color-highlight-row)' : precisaAjuste ? '#FBF0DD' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
+                        }}
+                        className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
+                      >
+                        {coluna.render(produto, destacada)}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })
