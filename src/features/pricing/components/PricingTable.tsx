@@ -379,9 +379,12 @@ export function PricingTable({
             <button
               type="button"
               tabIndex={-1}
-              onClick={() => onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
+              }}
               title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-warn text-white' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad text-white' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
             >
               ✓
             </button>
@@ -485,7 +488,7 @@ export function PricingTable({
                         style={{
                           ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
                           ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                          background: destacada ? 'var(--color-highlight-row)' : precisaAjuste ? '#FBF0DD' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
+                          background: precisaAjuste ? '#FBE3E3' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
                         }}
                         className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
                       >
