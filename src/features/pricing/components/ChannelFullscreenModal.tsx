@@ -40,11 +40,16 @@ export function ChannelFullscreenModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
 
+  const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   const produtosFiltrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    if (!termo) return produtos;
-    return produtos.filter((p) => p.nome.toLowerCase().includes(termo));
-  }, [produtos, busca]);
+    const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (palavras.length === 0) return produtos;
+    return produtos.filter((p) => {
+      const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
+      const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
+      return palavras.every((palavra) => descricao.includes(palavra));
+    });
+  }, [produtos, busca, fornecedorPorId]);
 
   return (
     <Modal
@@ -55,7 +60,7 @@ export function ChannelFullscreenModal({
           <input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar produto…"
+            placeholder="Buscar produto pelo nome ou fornecedor…"
             className="w-full max-w-xs rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-normal text-white placeholder:text-white/55 focus:border-[var(--color-accent)] focus:bg-white/20 focus:outline-none"
           />
         </>
