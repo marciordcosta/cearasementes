@@ -1,5 +1,5 @@
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal, gerarCorCanal } from './calculations';
+import { calcularCanal } from './calculations';
 import type { Canal, Categoria, Fornecedor, Produto } from './types';
 
 function escapeHtml(texto: string): string {
@@ -61,9 +61,7 @@ export function gerarCatalogoPDF(
     itens.forEach((produto) => {
       const r = calcularCanal(produto, canal, cat, transportadoraPorId);
       const fornecedor = getFornecedor(produto.fornecedorId);
-      const tagFornecedor = fornecedor
-        ? ` <span class="tag-fornecedor" style="background:${gerarCorCanal(fornecedor.ordem).dark}">${escapeHtml(fornecedor.nome)}</span>`
-        : '';
+      const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
       linhas += `
         <tr>
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
@@ -131,8 +129,8 @@ export function gerarCatalogoPDF(
         table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
         table.tabela-catalogo tbody td.valor{ font-weight:700; }
         .tag-fornecedor{
-          display:inline-block; border-radius:999px; padding:1px 5px;
-          font-size:8px; font-weight:500; color:#FFFFFF; vertical-align:middle;
+          display:inline-block; font-size:9px; font-weight:500; color:#777777;
+          text-transform:uppercase; letter-spacing:.3px; vertical-align:middle;
         }
         .vazio{ font-size:13px; color:#000000; padding:20px 0; }
         @media print{
