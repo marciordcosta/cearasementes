@@ -46,7 +46,13 @@ export interface CotacaoFreteResultado {
   custoPorKg: number;
 }
 
-export type ModoCotacao = 'direta' | 'orcamento';
+export type ModoCotacao = 'direta' | 'orcamento' | 'etiquetas';
+
+/** Uma NF (nota fiscal) a etiquetar, com a quantidade de volumes — cada cidade da cotação pode ter várias (ex.: 2 pedidos diferentes indo pra mesma cidade). Imprime 1 etiqueta por volume ("1/N", "2/N"...). */
+export interface NotaEtiqueta {
+  nf: string;
+  volumes: number;
+}
 
 /** Parametrização única (não por transportadora) da Rota de Frota Própria. */
 export interface RotaParametros {

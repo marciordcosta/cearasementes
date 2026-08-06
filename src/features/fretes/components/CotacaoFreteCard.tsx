@@ -8,10 +8,13 @@ import type { Canal, Categoria, Produto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { calcularCustoRota, chegadaDoTrecho, cotarFrete, ordenarCotacoes } from '../calculations';
+import { gerarEtiquetaFretePdf } from '../etiquetaFretePdf';
 import { calcularRotaKm, geocodificarCidade, sugerirOrdemPorProximidade } from '../orsClient';
-import type { ItemOrcamento, ModoCotacao, RotaParametros, RotaResultado, Transportadora } from '../types';
+import type { ItemOrcamento, ModoCotacao, NotaEtiqueta, RotaParametros, RotaResultado, Transportadora } from '../types';
 import { AutocompleteInput } from './AutocompleteInput';
 import { RotaCidadesBuilder } from './RotaCidadesBuilder';
+
+const NOTA_VAZIA: NotaEtiqueta = { nf: '', volumes: 1 };
 
 interface CotacaoFreteCardProps {
   transportadoras: Transportadora[];
@@ -66,6 +69,10 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const [canalId, setCanalId] = useState('');
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
+
+  // ---- Modo Etiquetas — NF(s) + volumes por cidade da lista acima; chaveado pelo texto da cidade
+  // (não por índice) pra não perder os dados se a lista for reordenada nas setas ▲▼. ----
+  const [notasPorCidade, setNotasPorCidade] = useState<Record<string, NotaEtiqueta[]>>({});
 
   // ---- Rota (Frota Própria) — peso/valor vêm do mesmo Direta/Orçamento acima, só o cálculo (km via API) e o resultado são específicos daqui ----
   const [rotaCalculando, setRotaCalculando] = useState(false);
@@ -275,6 +282,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     setCanalId('');
     setItens([]);
     setBuscaProduto('');
+    setNotasPorCidade({});
     setRotaResultado(null);
     setRotaErro(null);
     comparativoChaveRef.current = null;
@@ -313,6 +321,37 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
 
   function restaurarValor(produtoId: string) {
     setItens((prev) => prev.map((i) => (i.produtoId === produtoId ? { ...i, valorManual: null } : i)));
+  }
+
+  function notasDaCidade(cidade: string): NotaEtiqueta[] {
+    return notasPorCidade[cidade] ?? [NOTA_VAZIA];
+  }
+
+  function atualizarNota(cidade: string, indice: number, patch: Partial<NotaEtiqueta>) {
+    setNotasPorCidade((prev) => {
+      const atuais = prev[cidade] ?? [NOTA_VAZIA];
+      return { ...prev, [cidade]: atuais.map((n, i) => (i === indice ? { ...n, ...patch } : n)) };
+    });
+  }
+
+  function adicionarNota(cidade: string) {
+    setNotasPorCidade((prev) => ({ ...prev, [cidade]: [...(prev[cidade] ?? [NOTA_VAZIA]), { nf: '', volumes: 1 }] }));
+  }
+
+  function removerNota(cidade: string, indice: number) {
+    setNotasPorCidade((prev) => {
+      const restantes = (prev[cidade] ?? [NOTA_VAZIA]).filter((_, i) => i !== indice);
+      return { ...prev, [cidade]: restantes.length > 0 ? restantes : [NOTA_VAZIA] };
+    });
+  }
+
+  /** Ignora NF em branco ou volumes ≤ 0 — não precisa validar antes, só não gera etiqueta pra linha vazia. */
+  function imprimirEtiquetas() {
+    const grupos = cidades
+      .map((cidade) => ({ cidade, notas: notasDaCidade(cidade).filter((n) => n.nf.trim() && n.volumes > 0) }))
+      .filter((g) => g.notas.length > 0);
+    if (grupos.length === 0) return;
+    gerarEtiquetaFretePdf(grupos);
   }
 
   return (
@@ -479,13 +518,19 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
 
         {/* ---- Card 2: escolha do modo (Orçamento/Digitação Direta) + formulário correspondente ---- */}
         <Card className="space-y-3 p-5">
-          {podeEscolherModo ? (
+          {podeEscolherModo || cidades.length > 0 ? (
             <TabToggle
-              value={modo ?? 'orcamento'}
+              value={modo ?? (podeEscolherModo ? 'orcamento' : 'etiquetas')}
               onChange={(v) => setModo(v)}
               options={[
-                { value: 'orcamento', label: 'Orçamento' },
-                { value: 'direta', label: 'Digitação Direta' },
+                ...(podeEscolherModo
+                  ? [
+                      { value: 'orcamento' as const, label: 'Orçamento' },
+                      { value: 'direta' as const, label: 'Digitação Direta' },
+                    ]
+                  : []),
+                // Etiquetas não depende de nenhuma transportadora atender a cidade — é só rotulagem física do envio.
+                ...(cidades.length > 0 ? [{ value: 'etiquetas' as const, label: 'Etiquetas' }] : []),
               ]}
             />
           ) : (
@@ -603,6 +648,57 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                   )}
                 </>
               )}
+            </div>
+          )}
+
+          {modo === 'etiquetas' && cidades.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--color-text-soft)]">
+                Pra cada cidade, informe a(s) NF(s) e a quantidade de volumes — sai 1 etiqueta por volume (ex.: 50 volumes = etiquetas "1/50" a "50/50").
+              </p>
+              {cidades.map((cidade, indiceCidade) => (
+                <div key={`${cidade}_${indiceCidade}`} className="space-y-2 rounded-md border border-[var(--color-line)] p-3">
+                  <p className="text-sm font-semibold text-[var(--color-text)]">
+                    {indiceCidade + 1}. {cidade}
+                  </p>
+                  <div className="space-y-1.5">
+                    {notasDaCidade(cidade).map((nota, indiceNota) => (
+                      <div key={indiceNota} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="NF"
+                          value={nota.nf}
+                          onChange={(e) => atualizarNota(cidade, indiceNota, { nf: e.target.value })}
+                          className={`max-w-[160px] ${campoClasse}`}
+                        />
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="Volumes"
+                          value={nota.volumes || ''}
+                          onChange={(e) => atualizarNota(cidade, indiceNota, { volumes: parseInt(e.target.value, 10) || 0 })}
+                          title="Quantidade de volumes"
+                          className={`w-24 ${campoPequenoClasse}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removerNota(cidade, indiceNota)}
+                          title="Remover NF"
+                          className="shrink-0 text-[var(--color-text-soft)] hover:text-bad"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button variant="outline" onClick={() => adicionarNota(cidade)}>
+                    + Adicionar NF
+                  </Button>
+                </div>
+              ))}
+              <Button variant="primary" onClick={imprimirEtiquetas}>
+                🏷️ Imprimir Etiquetas
+              </Button>
             </div>
           )}
         </Card>
