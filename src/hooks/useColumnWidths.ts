@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'pricing-table-column-widths';
-const LARGURA_MINIMA = 50;
+const LARGURA_MINIMA = 24;
 
 function carregarLarguras(): Record<string, number> {
   try {
