@@ -196,16 +196,38 @@ export function PricingTable({
   });
   const { largura, iniciarArrasto } = useColumnWidths(defaults);
 
+  // "Excluir" + "Editar" só existem fora do modo tela cheia por canal — juntas formam o
+  // início fixo da tabela; as demais colunas fixas (Classe/Produto) acompanham essa largura.
+  const larguraExcluirEditar = somenteCanal ? 0 : largura('remover') + largura('editar');
+
   const colunas: ColunaDef[] = [
     ...(somenteCanal
       ? []
       : [
           {
+            chave: 'remover',
+            rotulo: '',
+            larguraPadrao: defaults.remover,
+            stickyLeft: 0,
+            render: (p: Produto) => (
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => {
+                  if (window.confirm(`Excluir o produto "${p.nome}"? Essa ação não pode ser desfeita.`)) onRemoverProduto?.(p.id);
+                }}
+                title="Remover produto"
+                className="text-[var(--color-text-soft)] hover:text-bad"
+              >
+                ✕
+              </button>
+            ),
+          } satisfies ColunaDef,
+          {
             chave: 'editar',
             rotulo: '',
             larguraPadrao: defaults.editar,
-            // Gruda junto com Classe/Produto ao rolar — as três formam o bloco fixo da esquerda.
-            stickyLeft: 0,
+            stickyLeft: largura('remover'),
             render: (p: Produto) => (
               <button
                 type="button"
@@ -224,8 +246,8 @@ export function PricingTable({
       chave: 'classe',
       rotulo: 'Classe',
       larguraPadrao: defaults.classe,
-      // Cola logo depois de "Editar" (que só existe fora do modo tela cheia por canal).
-      stickyLeft: somenteCanal ? 0 : largura('editar'),
+      // Cola logo depois de "Excluir"+"Editar" (que só existem fora do modo tela cheia por canal).
+      stickyLeft: larguraExcluirEditar,
       render: (p) => getCategoria(p.categoriaId).nome,
     },
     ...(mostrarColunaId ? [{ chave: 'id', rotulo: 'ID', larguraPadrao: defaults.id, render: (p: Produto) => <span className="num">{p.codigo}</span> } satisfies ColunaDef] : []),
@@ -234,9 +256,9 @@ export function PricingTable({
       rotulo: 'Produto',
       larguraPadrao: defaults.produto,
       // Fica colado logo depois de "Classe" ao rolar, igual ao original —
-      // o deslocamento acompanha a largura ATUAL de "Editar"+"Classe" (que agora podem
+      // o deslocamento acompanha a largura ATUAL de "Excluir"+"Editar"+"Classe" (que agora podem
       // ser redimensionadas), não um valor fixo.
-      stickyLeft: (somenteCanal ? 0 : largura('editar')) + largura('classe'),
+      stickyLeft: larguraExcluirEditar + largura('classe'),
       render: (p) => {
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
@@ -288,7 +310,7 @@ export function PricingTable({
           const r = calcularCanal(p, canal, categoria, transportadoraPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
           return (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1" title={manual ? `Preço sugerido: R$ ${fmtR(r.precoSugerido)}` : undefined}>
               <NumeroSincronizado
                 valor={r.preco}
                 onFocus={() => setLinhaDestacada(p.id)}
@@ -393,25 +415,11 @@ export function PricingTable({
       },
     ];
     }),
-    ...(somenteCanal
-      ? []
-      : [
-          {
-            chave: 'remover',
-            rotulo: '',
-            larguraPadrao: defaults.remover,
-            render: (p: Produto) => (
-              <button type="button" tabIndex={-1} onClick={() => onRemoverProduto?.(p.id)} title="Remover produto" className="text-[var(--color-text-soft)] hover:text-bad">
-                ✕
-              </button>
-            ),
-          } satisfies ColunaDef,
-        ]),
   ];
 
-  // Ponto exato (em px) onde termina a última coluna fixa (Editar + Classe + Produto) — é ali
+  // Ponto exato (em px) onde termina a última coluna fixa (Excluir + Editar + Classe + Produto) — é ali
   // que a faixa de sombra precisa ficar grudada enquanto rola pro lado.
-  const finalColunasFixas = (somenteCanal ? 0 : largura('editar')) + largura('classe') + largura('produto');
+  const finalColunasFixas = larguraExcluirEditar + largura('classe') + largura('produto');
 
   // "Produto" só termina de grudar na posição final depois que "ID" (a única
   // coluna entre Classe e Produto que não é fixa) escorrega por baixo — até lá,
@@ -431,7 +439,7 @@ export function PricingTable({
         <thead>
           {!somenteCanal && (
             <tr ref={linhaGrupoRef} className="sticky top-0 z-[2]">
-              <th className="bg-[var(--color-navy)] px-2 py-2" colSpan={mostrarColunaId ? 6 : 5} />
+              <th className="bg-[var(--color-navy)] px-2 py-2" colSpan={mostrarColunaId ? 7 : 6} />
               {canaisVisiveis.map((canal) => (
                 <th
                   key={canal.id}

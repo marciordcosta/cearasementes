@@ -66,6 +66,8 @@ export interface Produto {
 
 export interface ResultadoCalculo {
   preco: number;
+  /** Preço calculado pela fórmula (markup por dentro), ignorando preço manual — usado só pra exibir "sugerido: R$ X" quando o preço estiver em modo manual. */
+  precoSugerido: number;
   freteReais: number;
   impostoReais: number;
   margemReais: number;

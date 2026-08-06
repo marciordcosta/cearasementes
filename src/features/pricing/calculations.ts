@@ -68,15 +68,11 @@ export function calcularCanal(produto: Produto, canal: Canal, categoria: Categor
   const custoBase = Math.max(0, produto.custo + freteKgComponente + outrosEncargos + valorDespesaExtra - freteAdicionalReais);
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
 
+  const divisor = 1 - totalPct / 100;
+  const precoSugerido = Math.round(divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor);
+
   const estado = produto.precos[canal.id] ?? { preco: null, manual: false };
-  let preco: number;
-  if (estado.manual && estado.preco !== null && !isNaN(estado.preco)) {
-    preco = estado.preco;
-  } else {
-    const divisor = 1 - totalPct / 100;
-    preco = divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor;
-    preco = Math.round(preco);
-  }
+  const preco = estado.manual && estado.preco !== null && !isNaN(estado.preco) ? estado.preco : precoSugerido;
 
   const freteBruto = freteKgComponente + (preco * fretePctEfetivo) / 100;
   const freteReais = Math.max(0, freteBruto - freteAdicionalReais);
@@ -87,6 +83,7 @@ export function calcularCanal(produto: Produto, canal: Canal, categoria: Categor
 
   return {
     preco,
+    precoSugerido,
     freteReais,
     impostoReais,
     margemReais,
