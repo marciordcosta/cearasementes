@@ -65,8 +65,8 @@ export function gerarCatalogoPDF(
       linhas += `
         <tr>
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
-          <td>${Math.round(produto.peso)}kg</td>
           <td class="valor">R$ ${f(r.preco)}</td>
+          <td class="peso">${Math.round(produto.peso)}kg</td>
         </tr>
       `;
     });
@@ -75,7 +75,7 @@ export function gerarCatalogoPDF(
       <h2 class="cat-titulo">${cat.nome}</h2>
       <table class="tabela-catalogo">
         <thead>
-          <tr><th>Produto</th><th>Peso (Kg)</th><th>Valor (R$)</th></tr>
+          <tr><th>Produto</th><th class="valor">Valor (R$)</th><th class="peso">Peso (Kg)</th></tr>
         </thead>
         <tbody>${linhas}</tbody>
       </table>
@@ -127,9 +127,10 @@ export function gerarCatalogoPDF(
           padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
         }
         table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
-        table.tabela-catalogo tbody td.valor{ font-weight:700; }
+        table.tabela-catalogo th.valor, table.tabela-catalogo td.valor{ width:80px; padding-right:4px; text-align:right; font-weight:700; }
+        table.tabela-catalogo th.peso, table.tabela-catalogo td.peso{ width:50px; padding-left:4px; text-align:right; }
         .tag-fornecedor{
-          display:inline-block; font-size:9px; font-weight:500; color:#777777;
+          display:inline-block; margin-left:8px; font-size:9px; font-weight:500; color:#777777;
           text-transform:uppercase; letter-spacing:.3px; vertical-align:middle;
         }
         .vazio{ font-size:13px; color:#000000; padding:20px 0; }
