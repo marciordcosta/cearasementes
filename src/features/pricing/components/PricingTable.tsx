@@ -225,6 +225,12 @@ export function PricingTable({
       render: (p) => (
         <span className="text-[var(--color-text)]">
           <NomeComDestaque nome={p.nome} />
+          {p.fornecedor && (
+            <>
+              {' '}
+              <NomeComDestaque nome={p.fornecedor} />
+            </>
+          )}
         </span>
       ),
     },

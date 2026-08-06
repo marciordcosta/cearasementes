@@ -14,6 +14,8 @@ interface EditProductModalProps {
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
+    fornecedor: string | null;
+    imprimir: boolean;
   }) => void;
 }
 
@@ -38,6 +40,8 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
   const [cubagemC, setCubagemC] = useState('');
   const [cubagemL, setCubagemL] = useState('');
   const [cubagemA, setCubagemA] = useState('');
+  const [fornecedor, setFornecedor] = useState('');
+  const [imprimir, setImprimir] = useState(true);
 
   useEffect(() => {
     if (!produto) return;
@@ -50,6 +54,8 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
     setCubagemC(partes[0]?.trim() ?? '');
     setCubagemL(partes[1]?.trim() ?? '');
     setCubagemA(partes[2]?.trim() ?? '');
+    setFornecedor(produto.fornecedor ?? '');
+    setImprimir(produto.imprimir);
   }, [produto]);
 
   function salvar() {
@@ -70,6 +76,8 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
       peso: pesoNum,
       despesaExtraValor: parseFloat(despesaValor) || 0,
       cubagem: cubagemPreenchida ? `${cubagemC.trim()}x${cubagemL.trim()}x${cubagemA.trim()}` : null,
+      fornecedor: fornecedor.trim() || null,
+      imprimir,
     });
   }
 
@@ -107,6 +115,15 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
 
         <Linha label="Produto">
           <input value={nome} onChange={(e) => setNome(e.target.value)} className={campoClasse} />
+        </Linha>
+
+        <Linha label="Fornecedor">
+          <input
+            value={fornecedor}
+            onChange={(e) => setFornecedor(e.target.value)}
+            placeholder="Aparece na tabela após o nome (opcional)"
+            className={campoClasse}
+          />
         </Linha>
 
         <Linha label="Peso (Kg)">
@@ -157,6 +174,12 @@ export function EditProductModal({ produto, categorias, onFechar, onSalvar }: Ed
             <p className="mt-1 text-xs text-[var(--color-text-soft)]">Soma sempre como mais Encargos (não afeta o frete — pra isso, use a Cubagem).</p>
           </div>
         </Linha>
+
+        <label className="flex items-center gap-2 text-sm text-[var(--color-text)]">
+          <input type="checkbox" checked={imprimir} onChange={(e) => setImprimir(e.target.checked)} className="accent-[var(--color-accent)]" />
+          Imprimir
+          <span className="text-xs font-normal text-[var(--color-text-soft)]">— desmarcado, o produto some do catálogo em PDF (continua normal na tela)</span>
+        </label>
       </div>
     </Modal>
   );

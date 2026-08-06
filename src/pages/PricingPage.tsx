@@ -144,13 +144,32 @@ export function PricingPage() {
     }
   }
 
-  function onSalvarEdicaoProduto(patch: { nome: string; codigo: string; categoriaId: string; peso: number; despesaExtraValor: number; cubagem: string | null }) {
+  function onSalvarEdicaoProduto(patch: {
+    nome: string;
+    codigo: string;
+    categoriaId: string;
+    peso: number;
+    despesaExtraValor: number;
+    cubagem: string | null;
+    fornecedor: string | null;
+    imprimir: boolean;
+  }) {
     if (!produtoEditandoId) return;
     setProdutos((prev) =>
       ordenarProdutos(
         prev.map((p) =>
           p.id === produtoEditandoId
-            ? { ...p, nome: patch.nome, codigo: patch.codigo || null, categoriaId: patch.categoriaId, peso: patch.peso, despesaExtraValor: patch.despesaExtraValor, cubagem: patch.cubagem }
+            ? {
+                ...p,
+                nome: patch.nome,
+                codigo: patch.codigo || null,
+                categoriaId: patch.categoriaId,
+                peso: patch.peso,
+                despesaExtraValor: patch.despesaExtraValor,
+                cubagem: patch.cubagem,
+                fornecedor: patch.fornecedor,
+                imprimir: patch.imprimir,
+              }
             : p,
         ),
         categorias,
@@ -164,6 +183,8 @@ export function PricingPage() {
         peso: patch.peso,
         despesa_extra_valor: patch.despesaExtraValor,
         cubagem: patch.cubagem,
+        fornecedor: patch.fornecedor,
+        imprimir: patch.imprimir,
       }).then(invalidarProdutosPreco),
     );
     setProdutoEditandoId(null);

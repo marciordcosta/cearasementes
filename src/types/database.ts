@@ -182,6 +182,10 @@ export interface Database {
           despesa_extra_destino: 'frete' | 'impostos';
           /** "C x L x A" em metros (ex.: "0,60x0,40x0,10") — null/vazio = usa o peso cadastrado no cálculo de frete. */
           cubagem: string | null;
+          /** Aparece na Tabela de Preços logo depois do nome do produto — segue a mesma marcação (asterisco = negrito, underscore = itálico) do nome. */
+          fornecedor: string | null;
+          /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. */
+          imprimir: boolean;
           criado_em: string;
           atualizado_em: string;
         };

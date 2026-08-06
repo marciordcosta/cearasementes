@@ -10,8 +10,11 @@ import type { Canal, Categoria, Produto } from './types';
 export function gerarCatalogoPDF(canal: Canal, produtosFiltrados: Produto[], categorias: Categoria[], transportadoraPorId: Map<string, Transportadora>): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
 
+  // "Imprimir" desmarcado no Editar Produto tira o produto só daqui — continua normal em todo o resto do sistema.
+  const produtosParaImprimir = produtosFiltrados.filter((p) => p.imprimir);
+
   const categoriasPresentes = new Map<string, Produto[]>();
-  produtosFiltrados.forEach((p) => {
+  produtosParaImprimir.forEach((p) => {
     const lista = categoriasPresentes.get(p.categoriaId) ?? [];
     lista.push(p);
     categoriasPresentes.set(p.categoriaId, lista);

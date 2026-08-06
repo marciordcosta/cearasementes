@@ -47,6 +47,10 @@ export interface Produto {
   despesaExtraValor: number;
   /** "C x L x A" em metros (ex.: "0,60x0,40x0,10") — preenchida, o cálculo de frete usa o peso cubado (volume x 300) no lugar de `peso`. */
   cubagem: string | null;
+  /** Aparece na Tabela de Preços logo depois do nome do produto — segue a mesma marcação (asterisco = negrito, underscore = itálico) do nome (ver NomeComDestaque em PricingTable.tsx). */
+  fornecedor: string | null;
+  /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. Padrão true. */
+  imprimir: boolean;
   /** canalId -> preço sugerido/manual daquele canal */
   precos: Record<string, PrecoCanal>;
 }

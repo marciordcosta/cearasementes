@@ -224,6 +224,8 @@ export async function fetchProdutos(): Promise<Produto[]> {
       peso: row.peso,
       despesaExtraValor: row.despesa_extra_valor,
       cubagem: row.cubagem,
+      fornecedor: row.fornecedor,
+      imprimir: row.imprimir,
       precos,
     };
   });
@@ -241,6 +243,8 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
       despesa_extra_valor: 0,
       despesa_extra_destino: 'frete',
       cubagem: null,
+      fornecedor: null,
+      imprimir: true,
     })
     .select('*')
     .single();
@@ -264,13 +268,15 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
     peso: data.peso,
     despesaExtraValor: data.despesa_extra_valor,
     cubagem: data.cubagem,
+    fornecedor: data.fornecedor,
+    imprimir: data.imprimir,
     precos,
   };
 }
 
 export async function atualizarProduto(
   id: string,
-  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem'>>,
+  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor' | 'imprimir'>>,
 ): Promise<void> {
   const payload: Database['public']['Tables']['produtos']['Update'] = { ...patch, atualizado_em: new Date().toISOString() };
   const { error } = await supabase.from('produtos').update(payload).eq('id', id);
@@ -357,6 +363,8 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
         despesa_extra_valor: 0,
         despesa_extra_destino: 'frete' as const,
         cubagem: null,
+        fornecedor: null,
+        imprimir: true,
       });
     }
     const { data, error } = await supabase.from('produtos').insert(linhas).select('id');
