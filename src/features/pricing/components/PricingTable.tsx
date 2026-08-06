@@ -179,7 +179,7 @@ export function PricingTable({
     produto: 190,
     peso: 90,
     custo: 110,
-    editar: 44,
+    editar: 58,
     remover: 44,
   };
   canaisVisiveis.forEach((canal) => {
@@ -202,9 +202,12 @@ export function PricingTable({
             // Gruda junto com Classe/Produto ao rolar — as três formam o bloco fixo da esquerda.
             stickyLeft: 0,
             render: (p: Produto) => (
-              <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
-                ✎
-              </button>
+              <span className="inline-flex items-center gap-1">
+                <button type="button" tabIndex={-1} onClick={() => onEditarProduto?.(p.id)} title="Editar produto" className="rounded bg-[var(--color-page)] px-1.5 py-0.5 text-[var(--color-text)] hover:bg-[var(--color-line)]">
+                  ✎
+                </button>
+                {p.imprimir && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-good" title="Ativo para impressão" />}
+              </span>
             ),
           } satisfies ColunaDef,
         ]),
