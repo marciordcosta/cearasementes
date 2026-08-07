@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import type { HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
+import { precoLiquidoDesconto, type HistoricoSafra, type MargemBrutaAgregada, type Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -557,8 +557,12 @@ export function PricingTable({
                 const canal = canaisVisiveis[0];
                 const categoria = getCategoria(produto.categoriaId);
                 const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
-                const margemAtual = r.preco - produto.custo;
-                const margemAtualPct = r.preco > 0 ? (margemAtual / r.preco) * 100 : 0;
+                // O valor histórico já vem líquido do desconto real dado naquela safra (vlr_com_desc) —
+                // sem aplicar o mesmo desconto no preço de hoje, a "margem atual" fica inflada (preço
+                // de tabela cheio) na comparação com a margem histórica (já descontada).
+                const precoAtualLiquido = precoLiquidoDesconto(r.preco, agregada?.descontoPct ?? 0);
+                const margemAtual = precoAtualLiquido - produto.custo;
+                const margemAtualPct = precoAtualLiquido > 0 ? (margemAtual / precoAtualLiquido) * 100 : 0;
                 // Diferença em PONTOS percentuais, safra sobre hoje (35,0% na safra − 36,7% hoje = -1,7,
                 // ou seja: safra menor que hoje = negativo, safra maior que hoje = positivo) — não uma
                 // razão sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa

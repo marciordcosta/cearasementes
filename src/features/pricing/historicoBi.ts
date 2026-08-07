@@ -91,6 +91,15 @@ export interface MargemBrutaAgregada {
   custoTotal: number;
   /** (valorVendido - custoTotal) / valorVendido * 100 — já pondera as quantidades por natureza (valorVendido/custoTotal são SOMAS sobre todo mundo vendido, não médias por produto). */
   margemBrutaPct: number;
+  /**
+   * Desconto médio REAL dado nessa safra, como % do valor SEM desconto
+   * (vlr_desc / vlr_sem_desc) — vem direto do 396, não é estimado. Usado
+   * pra "descontar" o preço de HOJE antes de comparar com o histórico, já
+   * que `valorVendido`/`valorMedio` aqui já saem líquidos de desconto
+   * (vlr_com_desc) — sem isso a "margem atual" (preço de tabela cheio)
+   * fica inflada em relação à margem histórica (preço já com desconto).
+   */
+  descontoPct: number;
 }
 
 /**
@@ -101,23 +110,39 @@ export interface MargemBrutaAgregada {
  */
 export function construirMargemBrutaAgregadaPorSafra(items: ItemAgg[], canalNome: string, ctx: PeriodContext = SAFRA_PADRAO): Map<string, MargemBrutaAgregada> {
   const alvo = canalNome.trim().toLowerCase();
-  const acumulado = new Map<string, { valorVendido: number; custoTotal: number }>();
+  const acumulado = new Map<string, { valorVendido: number; custoTotal: number; descontoTotal: number }>();
   for (const item of items) {
     for (const m of item.monthly) {
       if (m.tabela.trim().toLowerCase() !== alvo) continue;
       const key = getPeriodKeyFor(ctx, m.year, m.month);
-      const acc = acumulado.get(key) ?? { valorVendido: 0, custoTotal: 0 };
+      const acc = acumulado.get(key) ?? { valorVendido: 0, custoTotal: 0, descontoTotal: 0 };
       acc.valorVendido += m.valorVendido;
       acc.custoTotal += m.custoTotal;
+      acc.descontoTotal += m.descontoTotal;
       acumulado.set(key, acc);
     }
   }
   const resultado = new Map<string, MargemBrutaAgregada>();
-  acumulado.forEach((acc, key) => {
-    const margemBrutaPct = acc.valorVendido > 0 ? ((acc.valorVendido - acc.custoTotal) / acc.valorVendido) * 100 : 0;
-    resultado.set(key, { ...acc, margemBrutaPct });
+  acumulado.forEach(({ valorVendido, custoTotal, descontoTotal }, key) => {
+    const margemBrutaPct = valorVendido > 0 ? ((valorVendido - custoTotal) / valorVendido) * 100 : 0;
+    // valorVendido já é líquido de desconto (vlr_com_desc) — o "sem desconto" é valorVendido + descontoTotal.
+    const valorSemDesconto = valorVendido + descontoTotal;
+    const descontoPct = valorSemDesconto > 0 ? (descontoTotal / valorSemDesconto) * 100 : 0;
+    resultado.set(key, { valorVendido, custoTotal, margemBrutaPct, descontoPct });
   });
   return resultado;
+}
+
+/**
+ * Aplica o desconto médio real daquela safra (ver `descontoPct` em
+ * MargemBrutaAgregada) sobre o preço de hoje — deixa comparável com o
+ * valor histórico da mesma safra, que já vem líquido de desconto real
+ * (vlr_com_desc). Só usado na comparação por Safra (coluna a coluna); o
+ * restante do sistema (grade principal, MB atual/M.C. prevista) continua
+ * usando o preço de tabela cheio, sem esse ajuste.
+ */
+export function precoLiquidoDesconto(preco: number, descontoPct: number): number {
+  return preco * (1 - descontoPct / 100);
 }
 
 /** Média de quantidade vendida nas últimas (até) MAX_SAFRAS_EXIBIDAS safras desse produto — usada como peso/estimativa de volume pra projetar a MB atual da tabela. */
