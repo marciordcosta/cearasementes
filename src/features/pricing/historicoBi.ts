@@ -11,6 +11,8 @@ export interface HistoricoSafra {
   custoMedio: number;
   valorMedio: number;
   margemBruta: number;
+  /** Margem bruta como % do Valor Médio (não dos R$) — comparável em pontos percentuais com a margem de hoje, mesmo quando a margem em R$ daquela safra é pequena. */
+  margemBrutaPct: number;
   qtd: number;
 }
 
@@ -46,7 +48,9 @@ export function construirHistoricoPorCodigo(
       if (acc.qtd === 0) return;
       const custoMedio = acc.custoTotal / acc.qtd;
       const valorMedio = acc.valorVendido / acc.qtd;
-      mapaSafras.set(key, { key, label: getPeriodLabel(ctx, key), custoMedio, valorMedio, margemBruta: valorMedio - custoMedio, qtd: acc.qtd });
+      const margemBruta = valorMedio - custoMedio;
+      const margemBrutaPct = valorMedio > 0 ? (margemBruta / valorMedio) * 100 : 0;
+      mapaSafras.set(key, { key, label: getPeriodLabel(ctx, key), custoMedio, valorMedio, margemBruta, margemBrutaPct, qtd: acc.qtd });
     });
     if (mapaSafras.size > 0) resultado.set(item.codInterno, mapaSafras);
   }

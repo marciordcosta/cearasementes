@@ -499,19 +499,16 @@ export function PricingTable({
             const categoria = getCategoria(produto.categoriaId);
             const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
             const margemAtual = r.preco - produto.custo;
-            const diffPct = hist.margemBruta !== 0 ? ((margemAtual - hist.margemBruta) / Math.abs(hist.margemBruta)) * 100 : null;
-            const titulo = `Margem bruta hoje: R$ ${fmtR(margemAtual)} — Margem bruta ${safra.label}: R$ ${fmtR(hist.margemBruta)} (Custo Médio R$ ${fmtR(hist.custoMedio)}, Valor Médio R$ ${fmtR(hist.valorMedio)}, ${hist.qtd} un. vendidas)`;
-            if (diffPct === null) {
-              return (
-                <span className="text-[var(--color-text-soft)]" title={titulo}>
-                  —
-                </span>
-              );
-            }
+            const margemAtualPct = r.preco > 0 ? (margemAtual / r.preco) * 100 : 0;
+            // Diferença em PONTOS percentuais (36,7% hoje − 35,0% na safra = +1,7) — não uma razão
+            // sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
+            // margem é pequena (ex.: R$ 0,30 de diferença sobre R$ 0,30 de base = +100%).
+            const diffPontos = margemAtualPct - hist.margemBrutaPct;
+            const titulo = `Margem bruta hoje: ${fmtP(margemAtualPct)}% (R$ ${fmtR(margemAtual)}) — Margem bruta ${safra.label}: ${fmtP(hist.margemBrutaPct)}% (Custo Médio R$ ${fmtR(hist.custoMedio)}, Valor Médio R$ ${fmtR(hist.valorMedio)}, ${hist.qtd} un. vendidas)`;
             return (
-              <span className={`num ${diffPct >= 0 ? 'text-good' : 'text-bad'}`} title={titulo}>
-                {diffPct >= 0 ? '+' : ''}
-                {fmtP(diffPct)}%
+              <span className={`num ${diffPontos >= 0 ? 'text-good' : 'text-bad'}`} title={titulo}>
+                {diffPontos >= 0 ? '+' : ''}
+                {fmtP(diffPontos)}%
               </span>
             );
           },
