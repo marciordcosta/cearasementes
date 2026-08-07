@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import { MAX_SAFRAS_EXIBIDAS, type HistoricoSafra, type MargemAtualProjetada, type MargemBrutaAgregada } from '../historicoBi';
+import { MAX_SAFRAS_EXIBIDAS, type HistoricoSafra, type MargemBrutaAgregada } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -103,8 +103,8 @@ interface PricingTableProps {
   historicoPorCodigo?: Map<string, Map<string, HistoricoSafra>>;
   /** safraKey -> Margem Bruta agregada de TODA a Tabela naquela safra — mostrada como selo no cabeçalho da coluna. */
   margemAgregadaPorSafra?: Map<string, MargemBrutaAgregada>;
-  /** Projeção pelos preços/custos de hoje, ponderada pelas últimas safras — alimenta a coluna "Representação (%)" (quanto cada item pesa no valor projetado total da Tabela). */
-  margemAtualProjetada?: MargemAtualProjetada | null;
+  /** produtoId -> % que representa do valor vendido médio (últimas safras) da Tabela inteira — alimenta a coluna "Repres. (%)". */
+  representatividadePorProduto?: Map<string, number>;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -148,7 +148,7 @@ export function PricingTable({
   historicoSafras,
   historicoPorCodigo,
   margemAgregadaPorSafra,
-  margemAtualProjetada,
+  representatividadePorProduto,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -362,11 +362,12 @@ export function PricingTable({
         corFundo: cor.soft,
         canalId: canal.id,
         render: (p, destacada) => {
+          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          if (precisaAjuste) return null;
           const categoria = getCategoria(p.categoriaId);
           const subcategoria = getSubcategoria(p.subcategoriaId);
           const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
-          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
           // Não faz sentido comparar a referência com ela mesma.
           const ehReferencia = referencia !== undefined && canal.id === referencia.id;
           const partesTooltip: string[] = [];
@@ -387,7 +388,7 @@ export function PricingTable({
                   if (el) precoRefs.current.set(chave, el);
                   else precoRefs.current.delete(chave);
                 }}
-                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${precisaAjuste ? 'border-[var(--color-line)] bg-white/50 text-[var(--color-text-soft)]' : manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada && !precisaAjuste ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
               />
               <button
                 type="button"
@@ -409,6 +410,7 @@ export function PricingTable({
         larguraChave: 'col:frete',
         canalId: canal.id,
         render: (p) => {
+          if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           const freteIncluso = canal.freteIncluso !== false;
@@ -426,6 +428,7 @@ export function PricingTable({
         larguraChave: 'col:encargos',
         canalId: canal.id,
         render: (p) => {
+          if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           return (
@@ -442,16 +445,14 @@ export function PricingTable({
         larguraChave: 'col:mlpct',
         canalId: canal.id,
         render: (p) => {
+          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          if (precisaAjuste) return null;
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
-          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
           return (
-            <span
-              className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${precisaAjuste ? 'text-[var(--color-text-soft)]' : MARGEM_CLASSE_CLASSNAME[classe]}`}
-              title={`(${fmtP(margemBrutaPct)}%)`}
-            >
+            <span className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[classe]}`} title={`(${fmtP(margemBrutaPct)}%)`}>
               {fmtP(r.margemPct)}%
             </span>
           );
@@ -464,13 +465,14 @@ export function PricingTable({
         larguraChave: 'col:mlvalor',
         canalId: canal.id,
         render: (p) => {
+          if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
           const categoria = getCategoria(p.categoriaId);
           const subcategoria = getSubcategoria(p.subcategoriaId);
           const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
           return <span className="num">R$ {fmtR(r.margemReais)}</span>;
         },
       },
-      ...(margemAtualProjetada
+      ...(representatividadePorProduto
         ? [
             {
               chave: `${canal.id}:representacao`,
@@ -479,12 +481,10 @@ export function PricingTable({
               larguraChave: 'col:representacao',
               canalId: canal.id,
               render: (p: Produto) => {
-                const projecao = margemAtualProjetada.porProduto.get(p.id);
-                if (!projecao || margemAtualProjetada.valorProjetado <= 0) return <span className="text-[var(--color-text-soft)]">—</span>;
-                const pct = (projecao.valorProjetado / margemAtualProjetada.valorProjetado) * 100;
-                const titulo = `Qtd. média/ano (últimas ${MAX_SAFRAS_EXIBIDAS} safras): ${Math.round(projecao.qtdMedia)} un.\nValor projetado: R$ ${fmtR(projecao.valorProjetado)}`;
+                const pct = representatividadePorProduto.get(p.id);
+                if (pct === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
                 return (
-                  <span className="num" title={titulo}>
+                  <span className="num" title={`% do valor vendido médio (últimas ${MAX_SAFRAS_EXIBIDAS} safras) desse produto sobre o total da Tabela no mesmo período.`}>
                     {fmtP(pct)}%
                   </span>
                 );
@@ -494,7 +494,7 @@ export function PricingTable({
         : []),
       {
         chave: `${canal.id}:ajuste`,
-        rotulo: '✕',
+        rotulo: '',
         larguraPadrao: defaults['col:ajuste'],
         larguraChave: 'col:ajuste',
         canalId: canal.id,
@@ -668,7 +668,7 @@ export function PricingTable({
                         style={{
                           ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
                           ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                          background: precisaAjuste ? '#E5E7EB' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
+                          background: precisaAjuste ? 'var(--color-surface)' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
                         }}
                         className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
                       >

@@ -6,6 +6,7 @@ import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
 import {
   calcularMargemAtualProjetada,
+  calcularRepresentatividade,
   construirHistoricoPorCodigo,
   construirMargemBrutaAgregadaPorSafra,
   listarSafrasDisponiveis,
@@ -85,6 +86,10 @@ export function ChannelFullscreenModal({
     if (!canal) return null;
     return calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
   }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo]);
+  const representatividadePorProduto = useMemo(() => {
+    if (!canal) return new Map<string, number>();
+    return calcularRepresentatividade(itemsAgregados, canal.nome, produtos, historicoPorCodigo);
+  }, [itemsAgregados, canal, produtos, historicoPorCodigo]);
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   const produtosFiltrados = useMemo(() => {
@@ -152,7 +157,7 @@ export function ChannelFullscreenModal({
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}
-            margemAtualProjetada={margemAtualProjetada}
+            representatividadePorProduto={representatividadePorProduto}
             somenteCanal
           />
         )}

@@ -116,12 +116,49 @@ function mediaQtdUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
   return ordenadas.reduce((s, h) => s + h.qtd, 0) / ordenadas.length;
 }
 
-export interface ProjecaoProduto {
-  qtdMedia: number;
-  valorProjetado: number;
-  margemProjetada: number;
-  /** Margem líquida (a mesma já informada por produto — ML $, com imposto/encargos/frete), ponderada pela mesma qtdMedia. */
-  margemLiquidaProjetada: number;
+/** Média (últimas MAX_SAFRAS_EXIBIDAS safras) do valor vendido TOTAL desse produto — histórico puro, sem projetar pro preço de hoje. */
+function mediaValorVendidoUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
+  const ordenadas = Array.from(porSafra.values())
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .slice(0, MAX_SAFRAS_EXIBIDAS);
+  if (ordenadas.length === 0) return 0;
+  return ordenadas.reduce((s, h) => s + h.valorMedio * h.qtd, 0) / ordenadas.length;
+}
+
+/**
+ * "Representação (%)" — quanto o valor vendido médio (últimas
+ * MAX_SAFRAS_EXIBIDAS safras) de cada produto pesa no valor vendido médio
+ * da Tabela INTEIRA no mesmo período. O denominador soma TODO mundo vendido
+ * naquela tabela (via `items`, direto do BI — inclui produto sem Código
+ * cadastrado na Precificação); só o numerador (de qual produto é cada
+ * fatia) depende do Código pra saber a quem pertence. Histórico puro (não
+ * projeta pro preço de hoje) — por isso o denominador já fecha em 100% sem
+ * precisar de nenhum produto "extra" fora do cruzamento por Código.
+ */
+export function calcularRepresentatividade(
+  items: ItemAgg[],
+  canalNome: string,
+  produtos: Produto[],
+  historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
+  ctx: PeriodContext = SAFRA_PADRAO,
+): Map<string, number> {
+  const agregadoPorSafra = construirMargemBrutaAgregadaPorSafra(items, canalNome, ctx);
+  const ultimasSafras = Array.from(agregadoPorSafra.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, MAX_SAFRAS_EXIBIDAS);
+  const valorMedioTotalTabela = ultimasSafras.length === 0 ? 0 : ultimasSafras.reduce((s, [, v]) => s + v.valorVendido, 0) / ultimasSafras.length;
+
+  const resultado = new Map<string, number>();
+  if (valorMedioTotalTabela <= 0) return resultado;
+  for (const produto of produtos) {
+    if (!produto.codigo) continue;
+    const porSafra = historicoPorCodigo.get(produto.codigo);
+    if (!porSafra) continue;
+    const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
+    if (valorMedioProduto <= 0) continue;
+    resultado.set(produto.id, (valorMedioProduto / valorMedioTotalTabela) * 100);
+  }
+  return resultado;
 }
 
 export interface MargemAtualProjetada {
@@ -131,8 +168,6 @@ export interface MargemAtualProjetada {
   margemLiquidaProjetada: number;
   /** "M.C. prevista" — margem líquida (ML $, já com imposto/encargos/frete) projetada, em % do valor projetado. */
   margemLiquidaPct: number;
-  /** produtoId -> projeção individual — usado pra "Representação (%)": quanto esse item pesa no valorProjetado total. */
-  porProduto: Map<string, ProjecaoProduto>;
 }
 
 /**
@@ -156,7 +191,6 @@ export function calcularMargemAtualProjetada(
   let valorProjetado = 0;
   let margemProjetada = 0;
   let margemLiquidaProjetada = 0;
-  const porProduto = new Map<string, ProjecaoProduto>();
   for (const produto of produtos) {
     if (!produto.codigo) continue;
     const porSafra = historicoPorCodigo.get(produto.codigo);
@@ -166,18 +200,9 @@ export function calcularMargemAtualProjetada(
     const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
     const subcategoria = subcategorias.find((s) => s.id === produto.subcategoriaId);
     const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
-    const valorProdutoProjetado = r.preco * qtdMedia;
-    const margemProdutoProjetada = (r.preco - produto.custo) * qtdMedia;
-    const margemLiquidaProdutoProjetada = r.margemReais * qtdMedia;
-    valorProjetado += valorProdutoProjetado;
-    margemProjetada += margemProdutoProjetada;
-    margemLiquidaProjetada += margemLiquidaProdutoProjetada;
-    porProduto.set(produto.id, {
-      qtdMedia,
-      valorProjetado: valorProdutoProjetado,
-      margemProjetada: margemProdutoProjetada,
-      margemLiquidaProjetada: margemLiquidaProdutoProjetada,
-    });
+    valorProjetado += r.preco * qtdMedia;
+    margemProjetada += (r.preco - produto.custo) * qtdMedia;
+    margemLiquidaProjetada += r.margemReais * qtdMedia;
   }
   return {
     valorProjetado,
@@ -185,6 +210,5 @@ export function calcularMargemAtualProjetada(
     margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0,
     margemLiquidaProjetada,
     margemLiquidaPct: valorProjetado > 0 ? (margemLiquidaProjetada / valorProjetado) * 100 : 0,
-    porProduto,
   };
 }
