@@ -559,10 +559,11 @@ export function PricingTable({
                 const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
                 const margemAtual = r.preco - produto.custo;
                 const margemAtualPct = r.preco > 0 ? (margemAtual / r.preco) * 100 : 0;
-                // Diferença em PONTOS percentuais (36,7% hoje − 35,0% na safra = +1,7) — não uma razão
-                // sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
+                // Diferença em PONTOS percentuais, safra sobre hoje (35,0% na safra − 36,7% hoje = -1,7,
+                // ou seja: safra menor que hoje = negativo, safra maior que hoje = positivo) — não uma
+                // razão sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
                 // margem é pequena (ex.: R$ 0,30 de diferença sobre R$ 0,30 de base = +100%).
-                const diffPontos = margemAtualPct - hist.margemBrutaPct;
+                const diffPontos = hist.margemBrutaPct - margemAtualPct;
                 const titulo = [
                   `Custo Médio: R$ ${fmtR(hist.custoMedio)}`,
                   `Valor Médio: R$ ${fmtR(hist.valorMedio)}`,
