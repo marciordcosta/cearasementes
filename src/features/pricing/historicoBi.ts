@@ -120,23 +120,29 @@ export interface ProjecaoProduto {
   qtdMedia: number;
   valorProjetado: number;
   margemProjetada: number;
+  /** Margem líquida (a mesma já informada por produto — ML $, com imposto/encargos/frete), ponderada pela mesma qtdMedia. */
+  margemLiquidaProjetada: number;
 }
 
 export interface MargemAtualProjetada {
   valorProjetado: number;
   margemProjetada: number;
   margemBrutaPct: number;
+  margemLiquidaProjetada: number;
+  /** "M.C. prevista" — margem líquida (ML $, já com imposto/encargos/frete) projetada, em % do valor projetado. */
+  margemLiquidaPct: number;
   /** produtoId -> projeção individual — usado pra "Representação (%)": quanto esse item pesa no valorProjetado total. */
   porProduto: Map<string, ProjecaoProduto>;
 }
 
 /**
- * MB "atual" da Tabela inteira, projetada: pra cada produto com Código
- * batendo no histórico, usa a média de quantidade vendida nas últimas
- * safras como peso, aplicada à margem bruta de HOJE (preço atual − custo
- * atual) desse produto — estimativa de quanto a tabela renderia de margem
- * vendendo no volume/mix de sempre, aos preços de hoje. Produto sem
- * histórico (Código não batendo) não entra na conta.
+ * MB/M.C. "atuais" da Tabela inteira, projetadas: pra cada produto com
+ * Código batendo no histórico, usa a média de quantidade vendida nas
+ * últimas safras como peso, aplicada à margem de HOJE desse produto —
+ * bruta (preço atual − custo atual) e líquida (a mesma margem líquida já
+ * calculada por produto, ML $, com imposto/encargos/frete) — estimativa de
+ * quanto a tabela renderia vendendo no volume/mix de sempre, aos preços de
+ * hoje. Produto sem histórico (Código não batendo) não entra na conta.
  */
 export function calcularMargemAtualProjetada(
   produtos: Produto[],
@@ -149,6 +155,7 @@ export function calcularMargemAtualProjetada(
 ): MargemAtualProjetada {
   let valorProjetado = 0;
   let margemProjetada = 0;
+  let margemLiquidaProjetada = 0;
   const porProduto = new Map<string, ProjecaoProduto>();
   for (const produto of produtos) {
     if (!produto.codigo) continue;
@@ -161,9 +168,23 @@ export function calcularMargemAtualProjetada(
     const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
     const valorProdutoProjetado = r.preco * qtdMedia;
     const margemProdutoProjetada = (r.preco - produto.custo) * qtdMedia;
+    const margemLiquidaProdutoProjetada = r.margemReais * qtdMedia;
     valorProjetado += valorProdutoProjetado;
     margemProjetada += margemProdutoProjetada;
-    porProduto.set(produto.id, { qtdMedia, valorProjetado: valorProdutoProjetado, margemProjetada: margemProdutoProjetada });
+    margemLiquidaProjetada += margemLiquidaProdutoProjetada;
+    porProduto.set(produto.id, {
+      qtdMedia,
+      valorProjetado: valorProdutoProjetado,
+      margemProjetada: margemProdutoProjetada,
+      margemLiquidaProjetada: margemLiquidaProdutoProjetada,
+    });
   }
-  return { valorProjetado, margemProjetada, margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0, porProduto };
+  return {
+    valorProjetado,
+    margemProjetada,
+    margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0,
+    margemLiquidaProjetada,
+    margemLiquidaPct: valorProjetado > 0 ? (margemLiquidaProjetada / valorProjetado) * 100 : 0,
+    porProduto,
+  };
 }

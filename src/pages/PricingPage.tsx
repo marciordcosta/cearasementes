@@ -143,13 +143,16 @@ export function PricingPage() {
   const canaisPorId = useMemo(() => new Map(canais.map((c) => [c.id, c])), [canais]);
   let margemAtualTotalValor = 0;
   let margemAtualTotalMargem = 0;
+  let margemAtualTotalMargemLiquida = 0;
   for (const canal of canaisVisiveis) {
     const historicoPorCodigo = construirHistoricoPorCodigo(itemsAgregadosBi, canal.nome);
     const r = calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
     margemAtualTotalValor += r.valorProjetado;
     margemAtualTotalMargem += r.margemProjetada;
+    margemAtualTotalMargemLiquida += r.margemLiquidaProjetada;
   }
   const margemAtualTotalPct = margemAtualTotalValor > 0 ? (margemAtualTotalMargem / margemAtualTotalValor) * 100 : 0;
+  const margemAtualTotalLiquidaPct = margemAtualTotalValor > 0 ? (margemAtualTotalMargemLiquida / margemAtualTotalValor) * 100 : 0;
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
@@ -605,6 +608,14 @@ export function PricingPage() {
                   title="Margem bruta de hoje (preço e custo atuais) somando TODAS as Tabelas visíveis, ponderada pela média de quantidade vendida nas últimas safras de cada produto — estimativa de volume, já que a safra atual ainda não fechou."
                 >
                   MB atual: {fmtP(margemAtualTotalPct)}%
+                </span>
+              )}
+              {margemAtualTotalValor > 0 && (
+                <span
+                  className="shrink-0 rounded-full bg-[var(--color-navy)] px-2.5 py-1 text-xs font-normal whitespace-nowrap text-white"
+                  title="Margem líquida (a mesma já informada por produto — ML $, com imposto/encargos/frete) de hoje somando TODAS as Tabelas visíveis, ponderada pela média de quantidade vendida nas últimas safras de cada produto."
+                >
+                  M.C prevista: {fmtP(margemAtualTotalLiquidaPct)}%
                 </span>
               )}
               <ReorderDropdown

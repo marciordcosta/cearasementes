@@ -117,6 +117,14 @@ export function ChannelFullscreenModal({
               MB atual: {fmtP(margemAtualProjetada.margemBrutaPct)}%
             </span>
           )}
+          {margemAtualProjetada && margemAtualProjetada.valorProjetado > 0 && (
+            <span
+              className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-xs font-normal whitespace-nowrap text-white"
+              title="Margem líquida (a mesma já informada por produto — ML $, com imposto/encargos/frete) de hoje pra tabela inteira, ponderada pela média de quantidade vendida nas últimas safras."
+            >
+              M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
+            </span>
+          )}
         </>
       }
       onClose={onFechar}
