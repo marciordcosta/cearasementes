@@ -26,8 +26,7 @@ export interface HistoricoSafra {
   label: string;
   custoMedio: number;
   valorMedio: number;
-  margemBruta: number;
-  /** Margem bruta como % do Valor Médio (não dos R$) — comparável em pontos percentuais com a margem de hoje, mesmo quando a margem em R$ daquela safra é pequena. */
+  /** Margem bruta como % do Valor Médio (não dos R$) — comparável em pontos percentuais com a margem de hoje, mesmo quando a margem em R$ daquela safra é pequena. Calculada sobre o Valor Médio LÍQUIDO (vlr_com_desc) — ver PricingTable.tsx pra a versão "regrossada" (com o desconto somado de volta) usada na comparação por Safra. */
   margemBrutaPct: number;
   qtd: number;
 }
@@ -64,9 +63,8 @@ export function construirHistoricoPorCodigo(
       if (acc.qtd === 0) return;
       const custoMedio = acc.custoTotal / acc.qtd;
       const valorMedio = acc.valorVendido / acc.qtd;
-      const margemBruta = valorMedio - custoMedio;
-      const margemBrutaPct = valorMedio > 0 ? (margemBruta / valorMedio) * 100 : 0;
-      mapaSafras.set(key, { key, label: getPeriodLabel(ctx, key), custoMedio, valorMedio, margemBruta, margemBrutaPct, qtd: acc.qtd });
+      const margemBrutaPct = valorMedio > 0 ? ((valorMedio - custoMedio) / valorMedio) * 100 : 0;
+      mapaSafras.set(key, { key, label: getPeriodLabel(ctx, key), custoMedio, valorMedio, margemBrutaPct, qtd: acc.qtd });
     });
     if (mapaSafras.size > 0) resultado.set(item.codInterno, mapaSafras);
   }
@@ -94,10 +92,11 @@ export interface MargemBrutaAgregada {
   /**
    * Desconto médio REAL dado nessa safra, como % do valor SEM desconto
    * (vlr_desc / vlr_sem_desc) — vem direto do 396, não é estimado. Usado
-   * pra "descontar" o preço de HOJE antes de comparar com o histórico, já
-   * que `valorVendido`/`valorMedio` aqui já saem líquidos de desconto
-   * (vlr_com_desc) — sem isso a "margem atual" (preço de tabela cheio)
-   * fica inflada em relação à margem histórica (preço já com desconto).
+   * pra "regrossar" o Valor Médio da safra (somar o desconto de volta)
+   * antes de calcular a Margem Bruta daquela safra — `valorVendido`/
+   * `valorMedio` aqui já saem líquidos de desconto (vlr_com_desc), então
+   * sem isso a margem histórica saía descontada duas vezes na comparação
+   * com a margem atual (preço de tabela cheio).
    */
   descontoPct: number;
 }
