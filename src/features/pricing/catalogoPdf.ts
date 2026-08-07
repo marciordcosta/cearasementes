@@ -1,9 +1,20 @@
+import qrcode from 'qrcode-generator';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, primeirasDuasPalavras } from './calculations';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from './types';
 
+const LINK_CATALOGO = 'https://linktr.ee/cearasementes';
+
 function escapeHtml(texto: string): string {
   return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** SVG embutido (sem chamada de rede) — gerado localmente pra sempre imprimir, mesmo sem internet. */
+function gerarQrCodeSvg(url: string): string {
+  const qr = qrcode(0, 'M');
+  qr.addData(url);
+  qr.make();
+  return qr.createSvgTag({ scalable: true });
 }
 
 /** Mesma marcação do nome do produto na tela (NomeComDestaque, PricingTable.tsx): *negrito*, _itálico_. */
@@ -118,7 +129,11 @@ export function gerarCatalogoPDF(
         .cabecalho .marca{ display:flex; flex-direction:column; gap:2px; }
         .cabecalho h1{font-size:20px; font-weight:700; margin:0; letter-spacing:.3px;}
         .cabecalho .subtitulo{font-size:12.5px; font-weight:400; color:#333333; margin:0;}
+        .cabecalho .lado-direito{ display:flex; align-items:flex-start; gap:12px; }
         .cabecalho .meta{font-size:11px; color:#333333; text-align:right; line-height:1.5; white-space:nowrap;}
+        .cabecalho .qrcode{ display:flex; flex-direction:column; align-items:center; gap:2px; }
+        .cabecalho .qrcode svg{ width:50px; height:50px; }
+        .cabecalho .qrcode p{ font-size:7.5px; color:#333333; margin:0; white-space:nowrap; }
         .cat-titulo{
           font-size:13.5px; text-transform:uppercase; letter-spacing:.6px;
           background:#EFEFEF; color:#000000; padding:7px 10px; margin:20px 0 0;
@@ -165,7 +180,13 @@ export function gerarCatalogoPDF(
           <p class="subtitulo">Fone/Whatsapp: (85) 3275-2074</p>
           <p class="subtitulo">${canal.nome}</p>
         </div>
-        <div class="meta">${dataEmissao}</div>
+        <div class="lado-direito">
+          <div class="meta">${dataEmissao}</div>
+          <div class="qrcode">
+            ${gerarQrCodeSvg(LINK_CATALOGO)}
+            <p>linktr.ee/cearasementes</p>
+          </div>
+        </div>
       </div>
       ${corpoHtml}
       <div class="rodape">
