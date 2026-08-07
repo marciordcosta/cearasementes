@@ -292,6 +292,7 @@ export function gerarCatalogoGerenciamentoPDF(
   );
 
   const f = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fPct = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   let corpoHtml = '';
   categoriasOrdenadas.forEach((cat) => {
@@ -312,6 +313,7 @@ export function gerarCatalogoGerenciamentoPDF(
           <td class="cinza numero">${f(freteExibido)}</td>
           <td class="cinza numero">${f(r.impostoReais)}</td>
           <td class="cinza numero">${f(r.margemReais)}</td>
+          <td class="numero">${fPct(r.margemPct)}%</td>
         </tr>
       `;
     });
@@ -328,6 +330,7 @@ export function gerarCatalogoGerenciamentoPDF(
             <th class="cinza numero">Frete</th>
             <th class="cinza numero">Encargos</th>
             <th class="cinza numero">Margem R$</th>
+            <th class="numero">Margem %</th>
           </tr>
         </thead>
         <tbody>${linhas}</tbody>
