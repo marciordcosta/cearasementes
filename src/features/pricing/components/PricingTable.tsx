@@ -103,7 +103,7 @@ interface PricingTableProps {
   historicoPorCodigo?: Map<string, Map<string, HistoricoSafra>>;
   /** safraKey -> Margem Bruta agregada de TODA a Tabela naquela safra — mostrada como selo no cabeçalho da coluna. */
   margemAgregadaPorSafra?: Map<string, MargemBrutaAgregada>;
-  /** produtoId -> % que representa do valor vendido médio (últimas safras) da Tabela inteira — alimenta a coluna "Repres. (%)". */
+  /** produtoId -> % da soma dos valores vendidos médios entre os produtos com Código cadastrado nessa Tabela (soma sempre 100%) — alimenta a coluna "Repres. (%)". */
   representatividadePorProduto?: Map<string, number>;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
@@ -484,7 +484,10 @@ export function PricingTable({
                 const pct = representatividadePorProduto.get(p.id);
                 if (pct === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
                 return (
-                  <span className="num" title={`% do valor vendido médio (últimas ${MAX_SAFRAS_EXIBIDAS} safras) desse produto sobre o total da Tabela no mesmo período.`}>
+                  <span
+                    className="num"
+                    title={`Fatia do valor vendido médio (até ${MAX_SAFRAS_EXIBIDAS} últimas safras de cada produto) em relação à soma de todos os produtos com Código cadastrado nessa Tabela — soma sempre 100% entre eles.`}
+                  >
                     {fmtP(pct)}%
                   </span>
                 );

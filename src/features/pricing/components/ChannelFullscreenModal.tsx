@@ -86,10 +86,10 @@ export function ChannelFullscreenModal({
     if (!canal) return null;
     return calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
   }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo]);
-  const representatividadePorProduto = useMemo(() => {
-    if (!canal) return new Map<string, number>();
-    return calcularRepresentatividade(itemsAgregados, canal.nome, produtos, historicoPorCodigo);
-  }, [itemsAgregados, canal, produtos, historicoPorCodigo]);
+  const representatividadePorProduto = useMemo(
+    () => calcularRepresentatividade(produtos, historicoPorCodigo),
+    [produtos, historicoPorCodigo],
+  );
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   const produtosFiltrados = useMemo(() => {

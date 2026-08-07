@@ -140,37 +140,28 @@ function mediaValorVendidoUltimasSafras(porSafra: Map<string, HistoricoSafra>): 
 
 /**
  * "Representação (%)" — quanto o valor vendido médio (últimas
- * MAX_SAFRAS_EXIBIDAS safras) de cada produto pesa no valor vendido médio
- * da Tabela INTEIRA no mesmo período. O denominador soma TODO mundo vendido
- * naquela tabela (via `items`, direto do BI — inclui produto sem Código
- * cadastrado na Precificação); só o numerador (de qual produto é cada
- * fatia) depende do Código pra saber a quem pertence. Histórico puro (não
- * projeta pro preço de hoje) — por isso o denominador já fecha em 100% sem
- * precisar de nenhum produto "extra" fora do cruzamento por Código.
+ * MAX_SAFRAS_EXIBIDAS safras, cada produto com a sua própria quantidade de
+ * safras disponíveis) de cada produto pesa em relação à SOMA dessas médias
+ * entre os produtos com Código cadastrado e batendo nessa Tabela. Por
+ * construção, a soma das % sempre fecha 100% entre os produtos que
+ * aparecem — não compara com o valor vendido real da tabela inteira (que
+ * inclui produto sem Código cadastrado, fora da conta aqui de propósito).
  */
-export function calcularRepresentatividade(
-  items: ItemAgg[],
-  canalNome: string,
-  produtos: Produto[],
-  historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
-  ctx: PeriodContext = SAFRA_PADRAO,
-): Map<string, number> {
-  const agregadoPorSafra = construirMargemBrutaAgregadaPorSafra(items, canalNome, ctx);
-  const ultimasSafras = Array.from(agregadoPorSafra.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .slice(0, MAX_SAFRAS_EXIBIDAS);
-  const valorMedioTotalTabela = ultimasSafras.length === 0 ? 0 : ultimasSafras.reduce((s, [, v]) => s + v.valorVendido, 0) / ultimasSafras.length;
-
-  const resultado = new Map<string, number>();
-  if (valorMedioTotalTabela <= 0) return resultado;
+export function calcularRepresentatividade(produtos: Produto[], historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>): Map<string, number> {
+  const valorMedioPorProduto = new Map<string, number>();
+  let totalValorMedio = 0;
   for (const produto of produtos) {
     if (!produto.codigo) continue;
     const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
     if (!porSafra) continue;
     const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
     if (valorMedioProduto <= 0) continue;
-    resultado.set(produto.id, (valorMedioProduto / valorMedioTotalTabela) * 100);
+    valorMedioPorProduto.set(produto.id, valorMedioProduto);
+    totalValorMedio += valorMedioProduto;
   }
+  const resultado = new Map<string, number>();
+  if (totalValorMedio <= 0) return resultado;
+  valorMedioPorProduto.forEach((valor, produtoId) => resultado.set(produtoId, (valor / totalValorMedio) * 100));
   return resultado;
 }
 
