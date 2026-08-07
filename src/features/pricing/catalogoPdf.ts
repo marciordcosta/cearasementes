@@ -329,7 +329,7 @@ export function gerarCatalogoGerenciamentoPDF(
             <th class="cinza numero">Custo</th>
             <th class="cinza numero">Frete</th>
             <th class="cinza numero">Encargos</th>
-            <th class="cinza numero">Margem R$</th>
+            <th class="cinza numero">Margem</th>
             <th class="numero">Margem %</th>
           </tr>
         </thead>
