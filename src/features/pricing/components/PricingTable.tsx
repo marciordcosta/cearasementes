@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal, gerarCorCanal, margemClasse, montarTituloFrete } from '../calculations';
+import { calcularCanal, gerarCorCanal, margemClasse, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -16,17 +16,6 @@ function fmtR(v: number): string {
 }
 function fmtP(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-
-/** As duas primeiras palavras do nome (sem a marcação de negrito/itálico, maiúsculas) — usado pra decidir se a linha divisória entre produtos deve ficar espessa (produto "diferente" do anterior). */
-function primeirasDuasPalavras(nome: string): string {
-  return nome
-    .replace(/[*_]/g, '')
-    .trim()
-    .toUpperCase()
-    .split(/\s+/)
-    .slice(0, 2)
-    .join(' ');
 }
 
 /**
@@ -557,7 +546,8 @@ export function PricingTable({
                 <tr
                   key={produto.id}
                   onClick={() => setLinhaDestacada(produto.id)}
-                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? (categoriaMudou ? 'border-t-2 border-t-good' : 'border-t-2 border-t-[var(--color-line)]') : ''}`}
+                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? `border-t-2 ${categoriaMudou ? 'border-t-good' : ''}` : ''}`}
+                  style={linhaEspessa && !categoriaMudou ? { borderTopColor: 'color-mix(in srgb, var(--color-line) 55%, black 45%)' } : undefined}
                 >
                   {colunas.map((coluna) => {
                     const precisaAjuste = coluna.canalId !== undefined && (produto.precos[coluna.canalId]?.precisaAjuste ?? false);

@@ -1,5 +1,5 @@
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal } from './calculations';
+import { calcularCanal, primeirasDuasPalavras } from './calculations';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from './types';
 
 function escapeHtml(texto: string): string {
@@ -60,12 +60,16 @@ export function gerarCatalogoPDF(
   categoriasOrdenadas.forEach((cat) => {
     const itens = [...(categoriasPresentes.get(cat.id) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     let linhas = '';
-    itens.forEach((produto) => {
+    itens.forEach((produto, indice) => {
       const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId);
       const fornecedor = getFornecedor(produto.fornecedorId);
       const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
+      // Mesma regra da Tabela de Preços: linha divisória mais espessa quando o produto "muda"
+      // (duas primeiras palavras do nome diferentes do anterior) — sem a cor verde de categoria,
+      // que aqui já fica implícita (cada categoria vira sua própria tabela/seção).
+      const produtoMudou = indice > 0 && primeirasDuasPalavras(produto.nome) !== primeirasDuasPalavras(itens[indice - 1].nome);
       linhas += `
-        <tr>
+        <tr class="${produtoMudou ? 'divisor' : ''}">
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
           <td class="valor">R$ ${f(r.preco)}</td>
           <td class="peso">${Math.round(produto.peso)}kg</td>
@@ -132,6 +136,7 @@ export function gerarCatalogoPDF(
           padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
         }
         table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
+        table.tabela-catalogo tbody tr.divisor td{ border-top:2px solid #888888; }
         table.tabela-catalogo th.valor, table.tabela-catalogo td.valor{ width:80px; padding-right:4px; text-align:right; font-weight:700; }
         table.tabela-catalogo th.peso, table.tabela-catalogo td.peso{ width:50px; padding-left:4px; text-align:right; }
         .tag-fornecedor{

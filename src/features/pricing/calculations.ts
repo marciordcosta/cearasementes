@@ -21,6 +21,21 @@ export function calcularPesoEfetivo(produto: Produto): number {
 }
 
 /**
+ * As duas primeiras palavras do nome (sem a marcação de negrito/itálico, maiúsculas) — usado
+ * pra decidir se a linha divisória entre produtos deve ficar espessa (produto "diferente" do
+ * anterior), tanto na Tabela de Preços (PricingTable.tsx) quanto no catálogo em PDF.
+ */
+export function primeirasDuasPalavras(nome: string): string {
+  return nome
+    .replace(/[*_]/g, '')
+    .trim()
+    .toUpperCase()
+    .split(/\s+/)
+    .slice(0, 2)
+    .join(' ');
+}
+
+/**
  * Markup "por dentro": o preço é o custo dividido por (1 - soma de todos os
  * percentuais), não multiplicado — assim imposto/encargos/frete/margem são
  * garantidos sobre o PREÇO final, não sobre o custo. Portado 1:1 do
