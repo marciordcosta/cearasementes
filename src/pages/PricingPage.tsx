@@ -215,8 +215,11 @@ export function PricingPage() {
 
   async function onAdicionarProduto(input: { nome: string; categoriaId: string; peso: number; valorKg: number; custo: number }) {
     try {
-      const codigo = String(1000 + produtos.length + 1);
-      const produto = await inserirProduto({ ...input, codigo }, canais);
+      // Sem código automático — um código inventado (ex.: sequencial) pode coincidir por acaso com
+      // o Código Interno real de outro produto no Max Manager e puxar histórico de vendas errado
+      // (ver colunas de Safra/MB/M.C. e Representação, que cruzam por Código). Fica em branco até o
+      // usuário preencher o código de verdade em "Editar Produto".
+      const produto = await inserirProduto({ ...input, codigo: null }, canais);
       setProdutos((prev) => ordenarProdutos([...prev, produto], categorias));
       invalidarProdutosPreco();
     } catch (e) {
