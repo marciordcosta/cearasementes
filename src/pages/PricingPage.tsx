@@ -95,6 +95,7 @@ export function PricingPage() {
   }, [canaisData, categoriasData, subcategoriasData, produtosData, fornecedoresData]);
 
   const [modalParametrizacaoAberto, setModalParametrizacaoAberto] = useState(false);
+  const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores'>('tabelas');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarColunaId, setMostrarColunaId] = useState(true);
@@ -507,7 +508,10 @@ export function PricingPage() {
       topbarNavy
       title={<AddProductForm categorias={categorias} onAdicionar={onAdicionarProduto} />}
       mostrarParametrizacao
-      onAbrirParametrizacao={() => setModalParametrizacaoAberto(true)}
+      onAbrirParametrizacao={() => {
+        setAbaParametrizacao('tabelas');
+        setModalParametrizacaoAberto(true);
+      }}
       actions={
         <>
           <ExportDropdown onExportarPdf={() => setModalPdfAberto(true)} />
@@ -670,7 +674,30 @@ export function PricingPage() {
         onClose={() => setModalParametrizacaoAberto(false)}
         widthClassName="max-w-[95vw]"
       >
-        <div className="space-y-8">
+        <div className="sticky -top-[18px] z-20 -mx-[18px] -mt-[18px] mb-4 flex gap-2 border-b border-[var(--color-line)] bg-[var(--color-surface)] px-[18px] pb-2 pt-2.5">
+          {(
+            [
+              { valor: 'tabelas', rotulo: 'Tabelas' },
+              { valor: 'categorias', rotulo: 'Categorias' },
+              { valor: 'fornecedores', rotulo: 'Fornecedores' },
+            ] as const
+          ).map((aba) => (
+            <button
+              key={aba.valor}
+              type="button"
+              onClick={() => setAbaParametrizacao(aba.valor)}
+              className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition ${
+                abaParametrizacao === aba.valor
+                  ? 'bg-[var(--color-navy)] text-white'
+                  : 'bg-[var(--color-page)] text-[var(--color-text-soft)] hover:text-[var(--color-text)]'
+              }`}
+            >
+              {aba.rotulo}
+            </button>
+          ))}
+        </div>
+
+        {abaParametrizacao === 'tabelas' && (
           <ChannelsPanel
             canais={canais}
             transportadoras={transportadoras}
@@ -683,6 +710,8 @@ export function PricingPage() {
             onRemoverCanal={onRemoverCanal}
             onAdicionarCanal={onAdicionarCanal}
           />
+        )}
+        {abaParametrizacao === 'categorias' && (
           <CategoryMarginsPanel
             categorias={categorias}
             subcategorias={subcategorias}
@@ -698,13 +727,15 @@ export function PricingPage() {
             onAtualizarMargemReferencia={onAtualizarMargemReferencia}
             onAtualizarMargemReferenciaAjuste={onAtualizarMargemReferenciaAjuste}
           />
+        )}
+        {abaParametrizacao === 'fornecedores' && (
           <FornecedoresPanel
             fornecedores={fornecedores}
             onAdicionarFornecedor={onAdicionarFornecedor}
             onRenomearFornecedor={onRenomearFornecedor}
             onRemoverFornecedor={onRemoverFornecedor}
           />
-        </div>
+        )}
       </Modal>
     </AppShell>
   );
