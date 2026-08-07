@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import { MAX_SAFRAS_EXIBIDAS, type HistoricoSafra, type MargemBrutaAgregada, type Representatividade } from '../historicoBi';
+import type { HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -483,7 +483,7 @@ export function PricingTable({
               render: (p: Produto) => {
                 const repr = representatividadePorProduto.get(p.id);
                 if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
-                const titulo = `Qtd. média vendida: ${Math.round(repr.qtdMedia)} un./safra\nFatia do valor vendido médio (até ${MAX_SAFRAS_EXIBIDAS} últimas safras de cada produto) em relação à soma de todos os produtos com Código cadastrado nessa Tabela — soma sempre 100% entre eles.`;
+                const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades`;
                 return (
                   <span className="num" title={titulo}>
                     {fmtP(repr.pct)}%
