@@ -76,9 +76,8 @@ export function CategoryMarginsPanel({
             <thead>
               <tr className="bg-[var(--color-navy)] text-left text-white">
                 <th className="px-3 py-2 font-semibold">Categoria</th>
-                <th className="px-3 py-2 font-semibold">Estadual (%)</th>
-                <th className="px-3 py-2 font-semibold">Interestadual (%)</th>
-                <th className="w-3 border-x border-white/15 bg-black/10 p-0" />
+                <th className="w-28 px-2 py-2 font-semibold">Estadual (%)</th>
+                <th className="w-28 border-r-2 border-white/20 px-2 py-2 font-semibold">Interestadual (%)</th>
                 {canais.map((canal) => (
                   <th key={canal.id} className="px-3 py-2 font-semibold">
                     {canal.nome} (%)
@@ -89,10 +88,9 @@ export function CategoryMarginsPanel({
             </thead>
             <tbody>
               <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                <td className="px-3 py-2 text-[11px] font-semibold text-[var(--color-text-soft)]" colSpan={3}>
+                <td className="border-r-2 border-[var(--color-line)] px-3 py-2 text-[11px] font-semibold text-[var(--color-text-soft)]" colSpan={3}>
                   Cálculo da margem sugerida
                 </td>
-                <td className="border-x border-[var(--color-line)] bg-[var(--color-surface)] p-0" />
                 {canais.map((canal) => (
                   <td key={canal.id} className="px-3 py-2">
                     <div className="flex flex-col gap-1">
@@ -149,7 +147,7 @@ export function CategoryMarginsPanel({
                           </button>
                         </span>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="w-28 px-2 py-2">
                         <input
                           type="number"
                           step="0.1"
@@ -159,7 +157,7 @@ export function CategoryMarginsPanel({
                           className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="w-28 border-r-2 border-[var(--color-line)] px-2 py-2">
                         <input
                           type="number"
                           step="0.1"
@@ -169,7 +167,6 @@ export function CategoryMarginsPanel({
                           className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
                         />
                       </td>
-                      <td className="border-x border-[var(--color-line)] bg-[var(--color-page)] p-0" />
                       {canais.map((canal) => {
                         const referencia = nomeReferencia(canal);
                         return (
@@ -213,8 +210,7 @@ export function CategoryMarginsPanel({
                           />
                         </td>
                         <td className="px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
-                        <td className="px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
-                        <td className="border-x border-[var(--color-line)] bg-[var(--color-page)] p-0" />
+                        <td className="border-r-2 border-[var(--color-line)] px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
                         {canais.map((canal) => {
                           const referencia = nomeReferencia(canal);
                           return (
@@ -250,7 +246,7 @@ export function CategoryMarginsPanel({
                     ))}
                     {adicionandoSubDe === cat.id && (
                       <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                        <td colSpan={canais.length + 5} className="px-3 py-2">
+                        <td colSpan={canais.length + 4} className="px-3 py-2">
                           <div className="flex items-center gap-2 pl-8">
                             <input
                               type="text"
