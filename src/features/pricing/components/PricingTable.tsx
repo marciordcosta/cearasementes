@@ -226,6 +226,7 @@ export function PricingTable({
     'col:mlpct': 90,
     'col:mlvalor': 100,
     'col:ajuste': 52,
+    'safra:espacador': 10,
   };
   const { largura, iniciarArrasto } = useColumnWidths(defaults);
 
@@ -495,7 +496,7 @@ export function PricingTable({
           {
             chave: 'safra:espacador',
             rotulo: '',
-            larguraPadrao: 24,
+            larguraPadrao: 10,
             semRedimensionar: true,
             corFundo: 'var(--color-page)',
             render: () => null,
