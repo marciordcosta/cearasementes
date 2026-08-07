@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import { precoLiquidoDesconto, type HistoricoSafra, type MargemBrutaAgregada, type Representatividade } from '../historicoBi';
+import type { HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -557,22 +557,26 @@ export function PricingTable({
                 const canal = canaisVisiveis[0];
                 const categoria = getCategoria(produto.categoriaId);
                 const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
-                // O valor histórico já vem líquido do desconto real dado naquela safra (vlr_com_desc) —
-                // sem aplicar o mesmo desconto no preço de hoje, a "margem atual" fica inflada (preço
-                // de tabela cheio) na comparação com a margem histórica (já descontada).
-                const precoAtualLiquido = precoLiquidoDesconto(r.preco, agregada?.descontoPct ?? 0);
-                const margemAtual = precoAtualLiquido - produto.custo;
-                const margemAtualPct = precoAtualLiquido > 0 ? (margemAtual / precoAtualLiquido) * 100 : 0;
+                // O Preço de hoje já é o preço de tabela cheio (o desconto entra na conta da própria
+                // grade principal, não aqui) — quem precisa de ajuste é o histórico: `hist.valorMedio` já
+                // vem líquido do desconto real dado naquela safra (vlr_com_desc), então "regrossa" ele
+                // (soma o desconto de volta) antes de calcular a Margem Bruta da safra, pra comparar
+                // preço cheio com preço cheio.
+                const descontoPct = agregada?.descontoPct ?? 0;
+                const valorMedioBruto = descontoPct < 100 ? hist.valorMedio / (1 - descontoPct / 100) : hist.valorMedio;
+                const margemBrutaSafraPct = valorMedioBruto > 0 ? ((valorMedioBruto - hist.custoMedio) / valorMedioBruto) * 100 : hist.margemBrutaPct;
+                const margemAtual = r.preco - produto.custo;
+                const margemAtualPct = r.preco > 0 ? (margemAtual / r.preco) * 100 : 0;
                 // Diferença em PONTOS percentuais, safra sobre hoje (35,0% na safra − 36,7% hoje = -1,7,
                 // ou seja: safra menor que hoje = negativo, safra maior que hoje = positivo) — não uma
                 // razão sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
                 // margem é pequena (ex.: R$ 0,30 de diferença sobre R$ 0,30 de base = +100%).
-                const diffPontos = hist.margemBrutaPct - margemAtualPct;
+                const diffPontos = margemBrutaSafraPct - margemAtualPct;
                 const titulo = [
                   `Custo Médio: R$ ${fmtR(hist.custoMedio)}`,
                   `Valor Médio: R$ ${fmtR(hist.valorMedio)}`,
                   `Qtd. Vendida: ${Math.round(hist.qtd)} un.`,
-                  `Margem Bruta: ${fmtP(hist.margemBrutaPct)}%`,
+                  `Margem Bruta: ${fmtP(margemBrutaSafraPct)}%`,
                   `Margem Bruta Atual: ${fmtP(margemAtualPct)}%`,
                 ].join('\n');
                 return (

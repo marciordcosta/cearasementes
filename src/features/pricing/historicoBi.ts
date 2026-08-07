@@ -133,18 +133,6 @@ export function construirMargemBrutaAgregadaPorSafra(items: ItemAgg[], canalNome
   return resultado;
 }
 
-/**
- * Aplica o desconto médio real daquela safra (ver `descontoPct` em
- * MargemBrutaAgregada) sobre o preço de hoje — deixa comparável com o
- * valor histórico da mesma safra, que já vem líquido de desconto real
- * (vlr_com_desc). Só usado na comparação por Safra (coluna a coluna); o
- * restante do sistema (grade principal, MB atual/M.C. prevista) continua
- * usando o preço de tabela cheio, sem esse ajuste.
- */
-export function precoLiquidoDesconto(preco: number, descontoPct: number): number {
-  return preco * (1 - descontoPct / 100);
-}
-
 /** Média de quantidade vendida nas últimas (até) MAX_SAFRAS_EXIBIDAS safras desse produto — usada como peso/estimativa de volume pra projetar a MB atual da tabela. */
 function mediaQtdUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
   const ordenadas = Array.from(porSafra.values())
