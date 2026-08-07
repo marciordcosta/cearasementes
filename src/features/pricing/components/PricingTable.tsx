@@ -668,7 +668,7 @@ export function PricingTable({
                         style={{
                           ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
                           ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                          background: precisaAjuste ? 'var(--color-surface)' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
+                          background: destacada ? 'var(--color-highlight-row)' : precisaAjuste ? 'var(--color-surface)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
                         }}
                         className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
                       >
