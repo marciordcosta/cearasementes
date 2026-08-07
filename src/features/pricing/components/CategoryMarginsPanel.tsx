@@ -88,11 +88,11 @@ export function CategoryMarginsPanel({
             </thead>
             <tbody>
               <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                <td className="border-r-2 border-[var(--color-line)] px-3 py-2 text-[11px] font-semibold text-[var(--color-text-soft)]" colSpan={3}>
+                <td className="border-r-2 border-[var(--color-line)] px-3 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]" colSpan={3}>
                   Cálculo da margem sugerida
                 </td>
                 {canais.map((canal) => (
-                  <td key={canal.id} className="px-3 py-2">
+                  <td key={canal.id} className="px-3 py-1">
                     <div className="flex flex-col gap-1">
                       <select
                         value={canal.margemReferenciaCanalId ? 'referencia' : 'categoria'}
@@ -127,14 +127,14 @@ export function CategoryMarginsPanel({
                     </div>
                   </td>
                 ))}
-                <td className="px-3 py-2" />
+                <td className="px-3 py-1" />
               </tr>
               {categorias.map((cat) => {
                 const subsDaCategoria = subcategorias.filter((s) => s.categoriaId === cat.id);
                 return (
                   <Fragment key={cat.id}>
                     <tr className="border-t border-[var(--color-line)]">
-                      <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] px-3 py-2 font-semibold text-[var(--color-text)]">
+                      <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] px-3 py-1 font-semibold text-[var(--color-text)]">
                         <span className="inline-flex items-center gap-1.5">
                           {cat.nome}
                           <button
@@ -147,34 +147,33 @@ export function CategoryMarginsPanel({
                           </button>
                         </span>
                       </td>
-                      <td className="w-28 px-2 py-2">
+                      <td className="w-28 px-2 py-1">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
                           defaultValue={cat.estadual}
                           onBlur={(e) => onAtualizarCategoria(cat.id, 'estadual', parseFloat(e.target.value) || 0)}
-                          className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
+                          className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                         />
                       </td>
-                      <td className="w-28 border-r-2 border-[var(--color-line)] px-2 py-2">
+                      <td className="w-28 border-r-2 border-[var(--color-line)] px-2 py-1">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
                           defaultValue={cat.interestadual}
                           onBlur={(e) => onAtualizarCategoria(cat.id, 'interestadual', parseFloat(e.target.value) || 0)}
-                          className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
+                          className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                         />
                       </td>
                       {canais.map((canal) => {
                         const referencia = nomeReferencia(canal);
                         return (
-                          <td key={canal.id} className="px-3 py-2">
+                          <td key={canal.id} className="px-3 py-1">
                             {referencia ? (
-                              <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center">
-                                <div className="text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-soft)]">Referência</div>
-                                <div className="text-[11px] font-semibold text-[var(--color-text)]">{referencia}</div>
+                              <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text)]">
+                                {referencia}
                               </div>
                             ) : (
                               <input
@@ -183,13 +182,13 @@ export function CategoryMarginsPanel({
                                 min="0"
                                 defaultValue={cat.margens[canal.id] ?? 20}
                                 onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
-                                className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-[var(--color-text)]"
+                                className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                               />
                             )}
                           </td>
                         );
                       })}
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-1">
                         <button type="button" onClick={() => onRemoverCategoria(cat.id)} title="Deletar categoria" className="text-[var(--color-text-soft)] hover:text-bad">
                           🗑
                         </button>
@@ -197,7 +196,7 @@ export function CategoryMarginsPanel({
                     </tr>
                     {subsDaCategoria.map((sub) => (
                       <tr key={sub.id} className="border-t border-[var(--color-line)]">
-                        <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] py-1.5 pl-8 pr-3 text-[var(--color-text-soft)]">
+                        <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] py-1 pl-8 pr-3 text-[var(--color-text-soft)]">
                           <input
                             type="text"
                             defaultValue={sub.nome}
@@ -209,16 +208,15 @@ export function CategoryMarginsPanel({
                             className="w-full rounded-md border border-transparent bg-transparent px-1 py-1 text-[var(--color-text-soft)] hover:border-[var(--color-line)] focus:border-[var(--color-line)] focus:bg-[var(--color-surface)]"
                           />
                         </td>
-                        <td className="px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
-                        <td className="border-r-2 border-[var(--color-line)] px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
+                        <td className="px-3 py-1 text-center text-[var(--color-text-soft)]">—</td>
+                        <td className="border-r-2 border-[var(--color-line)] px-3 py-1 text-center text-[var(--color-text-soft)]">—</td>
                         {canais.map((canal) => {
                           const referencia = nomeReferencia(canal);
                           return (
-                            <td key={canal.id} className="px-3 py-1.5">
+                            <td key={canal.id} className="px-3 py-1">
                               {referencia ? (
-                                <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center">
-                                  <div className="text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-soft)]">Referência</div>
-                                  <div className="text-[11px] font-semibold text-[var(--color-text)]">{referencia}</div>
+                                <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text)]">
+                                  {referencia}
                                 </div>
                               ) : (
                                 <input
@@ -237,7 +235,7 @@ export function CategoryMarginsPanel({
                             </td>
                           );
                         })}
-                        <td className="px-3 py-1.5">
+                        <td className="px-3 py-1">
                           <button type="button" onClick={() => onRemoverSubcategoria(sub.id)} title="Deletar subcategoria" className="text-[var(--color-text-soft)] hover:text-bad">
                             🗑
                           </button>
