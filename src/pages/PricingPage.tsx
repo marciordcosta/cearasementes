@@ -34,7 +34,7 @@ import {
   upsertProdutoPreco,
   upsertSubcategoriaMargem,
 } from '@/features/pricing/api';
-import { gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
+import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
 import { ordenarProdutos } from '@/features/pricing/calculations';
 import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
@@ -103,6 +103,7 @@ export function PricingPage() {
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
   const [modalPdfAberto, setModalPdfAberto] = useState(false);
+  const [modoExportacaoPdf, setModoExportacaoPdf] = useState<'padrao' | 'gerenciamento'>('padrao');
   const [modalLimparAberto, setModalLimparAberto] = useState(false);
   const [limpandoTabela, setLimpandoTabela] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -514,7 +515,16 @@ export function PricingPage() {
       }}
       actions={
         <>
-          <ExportDropdown onExportarPdf={() => setModalPdfAberto(true)} />
+          <ExportDropdown
+            onExportarPdf={() => {
+              setModoExportacaoPdf('padrao');
+              setModalPdfAberto(true);
+            }}
+            onExportarGerenciamento={() => {
+              setModoExportacaoPdf('gerenciamento');
+              setModalPdfAberto(true);
+            }}
+          />
           <Button variant="danger" onClick={() => setModalLimparAberto(true)} title="Apaga todos os produtos da Tabela de Preços">
             Limpar Tabela
           </Button>
@@ -640,10 +650,15 @@ export function PricingPage() {
       <ExportPdfModal
         open={modalPdfAberto}
         canaisVisiveis={canaisVisiveis}
+        modo={modoExportacaoPdf}
         onFechar={() => setModalPdfAberto(false)}
         onConfirmar={(canal) => {
           setModalPdfAberto(false);
-          gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId);
+          if (modoExportacaoPdf === 'gerenciamento') {
+            gerarCatalogoGerenciamentoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId);
+          } else {
+            gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId);
+          }
         }}
       />
 

@@ -7,11 +7,13 @@ import type { Canal } from '../types';
 interface ExportPdfModalProps {
   open: boolean;
   canaisVisiveis: Canal[];
+  /** 'gerenciamento' expõe Custo/Frete/Encargos/Margem no PDF — só ajusta o texto do modal, quem gera o HTML é o chamador. */
+  modo?: 'padrao' | 'gerenciamento';
   onFechar: () => void;
   onConfirmar: (canal: Canal) => void;
 }
 
-export function ExportPdfModal({ open, canaisVisiveis, onFechar, onConfirmar }: ExportPdfModalProps) {
+export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar, onConfirmar }: ExportPdfModalProps) {
   const [selecionadoId, setSelecionadoId] = useState<string | null>(canaisVisiveis[0]?.id ?? null);
 
   function confirmar() {
@@ -26,7 +28,7 @@ export function ExportPdfModal({ open, canaisVisiveis, onFechar, onConfirmar }: 
   return (
     <Modal
       open={open}
-      title="Exportar Catálogo em PDF"
+      title={modo === 'gerenciamento' ? 'Exportar Relatório de Gerenciamento' : 'Exportar Catálogo em PDF'}
       onClose={onFechar}
       footer={
         <>
@@ -40,8 +42,9 @@ export function ExportPdfModal({ open, canaisVisiveis, onFechar, onConfirmar }: 
       }
     >
       <p className="mb-3 text-sm text-[var(--color-text-soft)]">
-        Escolha qual Tabela de Preço será usada como coluna "Valor (R$)" no catálogo. O relatório respeitará o filtro de
-        Classe/Categoria atualmente selecionado na tela.
+        {modo === 'gerenciamento'
+          ? 'Escolha qual Tabela de Preço será usada no relatório — ele traz Custo/Frete/Encargos/Margem R$ além de Valor e Peso, uso interno (não é pra ir pro cliente). Respeita o filtro de Classe/Categoria atualmente selecionado na tela.'
+          : 'Escolha qual Tabela de Preço será usada como coluna "Valor (R$)" no catálogo. O relatório respeitará o filtro de Classe/Categoria atualmente selecionado na tela.'}
       </p>
       {canaisVisiveis.length === 0 ? (
         <p className="text-sm text-[var(--color-text-soft)]">
