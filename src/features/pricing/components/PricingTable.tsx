@@ -566,7 +566,9 @@ export function PricingTable({
                 const titulo = [
                   `Custo Médio: R$ ${fmtR(hist.custoMedio)}`,
                   `Valor Médio: R$ ${fmtR(hist.valorMedio)}`,
-                  `Margem Bruta: R$ ${fmtR(hist.margemBruta)} (${fmtP(hist.margemBrutaPct)}%)`,
+                  `Qtd. Vendida: ${Math.round(hist.qtd)} un.`,
+                  `Margem Bruta: ${fmtP(hist.margemBrutaPct)}%`,
+                  `Margem Bruta Atual: ${fmtP(margemAtualPct)}%`,
                 ].join('\n');
                 return (
                   <span
