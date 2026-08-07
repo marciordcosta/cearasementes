@@ -485,7 +485,7 @@ export function PricingTable({
                 if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
                 const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades`;
                 return (
-                  <span className="num" title={titulo}>
+                  <span className="num inline-block min-w-[52px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700" title={titulo}>
                     {fmtP(repr.pct)}%
                   </span>
                 );
