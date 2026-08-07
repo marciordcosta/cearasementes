@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import type { HistoricoSafra, MargemBrutaAgregada } from '../historicoBi';
+import { MAX_SAFRAS_EXIBIDAS, type HistoricoSafra, type MargemAtualProjetada, type MargemBrutaAgregada } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -103,6 +103,8 @@ interface PricingTableProps {
   historicoPorCodigo?: Map<string, Map<string, HistoricoSafra>>;
   /** safraKey -> Margem Bruta agregada de TODA a Tabela naquela safra — mostrada como selo no cabeçalho da coluna. */
   margemAgregadaPorSafra?: Map<string, MargemBrutaAgregada>;
+  /** Projeção pelos preços/custos de hoje, ponderada pelas últimas safras — alimenta a coluna "Representação (%)" (quanto cada item pesa no valor projetado total da Tabela). */
+  margemAtualProjetada?: MargemAtualProjetada | null;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -146,6 +148,7 @@ export function PricingTable({
   historicoSafras,
   historicoPorCodigo,
   margemAgregadaPorSafra,
+  margemAtualProjetada,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -228,6 +231,7 @@ export function PricingTable({
     'col:encargos': 110,
     'col:mlpct': 90,
     'col:mlvalor': 100,
+    'col:representacao': 90,
     'col:ajuste': 52,
     'safra:espacador': 10,
   };
@@ -466,6 +470,28 @@ export function PricingTable({
           return <span className="num">R$ {fmtR(r.margemReais)}</span>;
         },
       },
+      ...(margemAtualProjetada
+        ? [
+            {
+              chave: `${canal.id}:representacao`,
+              rotulo: 'Repres. (%)',
+              larguraPadrao: defaults['col:representacao'],
+              larguraChave: 'col:representacao',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                const projecao = margemAtualProjetada.porProduto.get(p.id);
+                if (!projecao || margemAtualProjetada.valorProjetado <= 0) return <span className="text-[var(--color-text-soft)]">—</span>;
+                const pct = (projecao.valorProjetado / margemAtualProjetada.valorProjetado) * 100;
+                const titulo = `Qtd. média/ano (últimas ${MAX_SAFRAS_EXIBIDAS} safras): ${Math.round(projecao.qtdMedia)} un.\nValor projetado: R$ ${fmtR(projecao.valorProjetado)}`;
+                return (
+                  <span className="num" title={titulo}>
+                    {fmtP(pct)}%
+                  </span>
+                );
+              },
+            } satisfies ColunaDef,
+          ]
+        : []),
       {
         chave: `${canal.id}:ajuste`,
         rotulo: '✕',

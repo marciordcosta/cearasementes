@@ -116,10 +116,18 @@ function mediaQtdUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
   return ordenadas.reduce((s, h) => s + h.qtd, 0) / ordenadas.length;
 }
 
+export interface ProjecaoProduto {
+  qtdMedia: number;
+  valorProjetado: number;
+  margemProjetada: number;
+}
+
 export interface MargemAtualProjetada {
   valorProjetado: number;
   margemProjetada: number;
   margemBrutaPct: number;
+  /** produtoId -> projeção individual — usado pra "Representação (%)": quanto esse item pesa no valorProjetado total. */
+  porProduto: Map<string, ProjecaoProduto>;
 }
 
 /**
@@ -141,6 +149,7 @@ export function calcularMargemAtualProjetada(
 ): MargemAtualProjetada {
   let valorProjetado = 0;
   let margemProjetada = 0;
+  const porProduto = new Map<string, ProjecaoProduto>();
   for (const produto of produtos) {
     if (!produto.codigo) continue;
     const porSafra = historicoPorCodigo.get(produto.codigo);
@@ -150,8 +159,11 @@ export function calcularMargemAtualProjetada(
     const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
     const subcategoria = subcategorias.find((s) => s.id === produto.subcategoriaId);
     const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
-    valorProjetado += r.preco * qtdMedia;
-    margemProjetada += (r.preco - produto.custo) * qtdMedia;
+    const valorProdutoProjetado = r.preco * qtdMedia;
+    const margemProdutoProjetada = (r.preco - produto.custo) * qtdMedia;
+    valorProjetado += valorProdutoProjetado;
+    margemProjetada += margemProdutoProjetada;
+    porProduto.set(produto.id, { qtdMedia, valorProjetado: valorProdutoProjetado, margemProjetada: margemProdutoProjetada });
   }
-  return { valorProjetado, margemProjetada, margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0 };
+  return { valorProjetado, margemProjetada, margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0, porProduto };
 }

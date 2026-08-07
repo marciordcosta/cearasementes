@@ -144,6 +144,7 @@ export function ChannelFullscreenModal({
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}
+            margemAtualProjetada={margemAtualProjetada}
             somenteCanal
           />
         )}
