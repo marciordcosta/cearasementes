@@ -306,8 +306,8 @@ export function gerarCatalogoGerenciamentoPDF(
       linhas += `
         <tr class="${produtoMudou ? 'divisor' : ''}">
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
-          <td class="valor">R$ ${f(r.preco)}</td>
           <td class="peso">${Math.round(produto.peso)}kg</td>
+          <td class="valor">R$ ${f(r.preco)}</td>
           <td class="cinza numero">${f(produto.custo)}</td>
           <td class="cinza numero">${f(freteExibido)}</td>
           <td class="cinza numero">${f(r.impostoReais)}</td>
@@ -322,8 +322,8 @@ export function gerarCatalogoGerenciamentoPDF(
         <thead>
           <tr>
             <th>Produto</th>
-            <th class="valor">Valor (R$)</th>
             <th class="peso">Kg</th>
+            <th class="valor">Valor (R$)</th>
             <th class="cinza numero">Custo</th>
             <th class="cinza numero">Frete</th>
             <th class="cinza numero">Encargos</th>
@@ -390,8 +390,8 @@ export function gerarCatalogoGerenciamentoPDF(
         table.tabela-gerenciamento th:first-child, table.tabela-gerenciamento td:first-child{ min-width:${larguraProdutoCh}ch; }
         /* min-width (em vez de width) + nowrap — a coluna nunca quebra o número em duas
            linhas, mesmo com "R$ 1.234,56"; se precisar de mais espaço, ela cresce. */
-        table.tabela-gerenciamento th.valor, table.tabela-gerenciamento td.valor{ min-width:70px; padding-right:4px; text-align:right; font-weight:700; white-space:nowrap; }
-        table.tabela-gerenciamento th.peso, table.tabela-gerenciamento td.peso{ min-width:36px; padding-left:4px; text-align:right; white-space:nowrap; }
+        table.tabela-gerenciamento th.valor, table.tabela-gerenciamento td.valor{ min-width:70px; padding-left:4px; text-align:right; font-weight:700; white-space:nowrap; }
+        table.tabela-gerenciamento th.peso, table.tabela-gerenciamento td.peso{ min-width:36px; padding-right:4px; text-align:right; white-space:nowrap; }
         table.tabela-gerenciamento th.numero, table.tabela-gerenciamento td.numero{ min-width:56px; text-align:right; white-space:nowrap; }
         table.tabela-gerenciamento .cinza{ background:#F2F2F2; }
         .tag-fornecedor{
