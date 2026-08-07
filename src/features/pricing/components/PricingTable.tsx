@@ -3,6 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
+import type { HistoricoSafra } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -94,6 +95,10 @@ interface PricingTableProps {
   onEditarProduto?: (produtoId: string) => void;
   onRemoverProduto?: (produtoId: string) => void;
   onAbrirCanalTelaCheia?: (canal: Canal) => void;
+  /** Colunas extras (uma por Safra) com o histórico de vendas do BI — só passadas pelo modal de tela cheia por canal (ver ChannelFullscreenModal.tsx). */
+  historicoSafras?: { key: string; label: string }[];
+  /** codInterno (= Produto.codigo) -> safraKey -> dados agregados daquela safra, pra essa Tabela de Preço. */
+  historicoPorCodigo?: Map<string, Map<string, HistoricoSafra>>;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -134,6 +139,8 @@ export function PricingTable({
   onEditarProduto,
   onRemoverProduto,
   onAbrirCanalTelaCheia,
+  historicoSafras,
+  historicoPorCodigo,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -479,6 +486,37 @@ export function PricingTable({
       },
     ];
     }),
+    ...(historicoSafras && historicoSafras.length > 0 && historicoPorCodigo
+      ? historicoSafras.map((safra, indiceSafra): ColunaDef => ({
+          chave: `safra:${safra.key}`,
+          rotulo: safra.label,
+          larguraPadrao: 90,
+          corBordaEsquerda: indiceSafra === 0 ? '#94A3B8' : undefined,
+          render: (produto) => {
+            const hist = produto.codigo ? historicoPorCodigo.get(produto.codigo)?.get(safra.key) : undefined;
+            if (!hist) return <span className="text-[var(--color-text-soft)]">—</span>;
+            const canal = canaisVisiveis[0];
+            const categoria = getCategoria(produto.categoriaId);
+            const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
+            const margemAtual = r.preco - produto.custo;
+            const diffPct = hist.margemBruta !== 0 ? ((margemAtual - hist.margemBruta) / Math.abs(hist.margemBruta)) * 100 : null;
+            const titulo = `Margem bruta hoje: R$ ${fmtR(margemAtual)} — Margem bruta ${safra.label}: R$ ${fmtR(hist.margemBruta)} (Custo Médio R$ ${fmtR(hist.custoMedio)}, Valor Médio R$ ${fmtR(hist.valorMedio)}, ${hist.qtd} un. vendidas)`;
+            if (diffPct === null) {
+              return (
+                <span className="text-[var(--color-text-soft)]" title={titulo}>
+                  —
+                </span>
+              );
+            }
+            return (
+              <span className={`num ${diffPct >= 0 ? 'text-good' : 'text-bad'}`} title={titulo}>
+                {diffPct >= 0 ? '+' : ''}
+                {fmtP(diffPct)}%
+              </span>
+            );
+          },
+        }))
+      : []),
   ];
 
   // Ponto exato (em px) onde termina a última coluna fixa (Excluir + Editar + Classe + Produto) — é ali

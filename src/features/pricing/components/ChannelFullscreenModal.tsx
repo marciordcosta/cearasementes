@@ -1,6 +1,10 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
+import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
+import { construirHistoricoPorCodigo, listarSafrasDisponiveis, type HistoricoSafra } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 import { PricingTable } from './PricingTable';
 
@@ -48,6 +52,19 @@ export function ChannelFullscreenModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
 
+  // Só busca o histórico de vendas (BI) enquanto o modal estiver aberto — nunca na carga normal
+  // da página de Precificação. Mesma queryKey que o Dashboard usa, então se ele já foi aberto
+  // nesta sessão os dados vêm do cache na hora; senão, busca uma vez só.
+  const { data: vendasBi = [], isLoading: carregandoVendasBi } = useQuery({ queryKey: ['bi', 'vendas'], queryFn: fetchVendas, enabled: canal !== null });
+  const { data: itensBi = [], isLoading: carregandoItensBi } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens, enabled: canal !== null });
+  const carregandoHistorico = carregandoVendasBi || carregandoItensBi;
+  const historicoPorCodigo = useMemo((): Map<string, Map<string, HistoricoSafra>> => {
+    if (!canal) return new Map();
+    const itemsAgregados = agregarItens(vendasBi, itensBi);
+    return construirHistoricoPorCodigo(itemsAgregados, canal.nome);
+  }, [vendasBi, itensBi, canal]);
+  const safrasDisponiveis = useMemo(() => listarSafrasDisponiveis(historicoPorCodigo), [historicoPorCodigo]);
+
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   const produtosFiltrados = useMemo(() => {
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -77,6 +94,9 @@ export function ChannelFullscreenModal({
       widthClassName="max-w-[95vw]"
     >
       <div className="max-h-[75vh]">
+        {canal && carregandoHistorico && (
+          <p className="mb-2 text-xs text-[var(--color-text-soft)]">Carregando histórico de safras…</p>
+        )}
         {canal && (
           <PricingTable
             produtos={produtosFiltrados}
@@ -92,6 +112,8 @@ export function ChannelFullscreenModal({
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+            historicoSafras={safrasDisponiveis}
+            historicoPorCodigo={historicoPorCodigo}
             somenteCanal
           />
         )}
