@@ -452,19 +452,7 @@ export function PricingTable({
           const categoria = getCategoria(p.categoriaId);
           const subcategoria = getSubcategoria(p.subcategoriaId);
           const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
-          const ehReferencia = referencia !== undefined && canal.id === referencia.id;
-          let title: string | undefined;
-          if (referencia !== undefined && !ehReferencia) {
-            const rReferencia = calcularCanal(p, referencia, categoria, subcategoria, transportadoraPorId, canaisPorId);
-            const diffReais = r.margemReais - rReferencia.margemReais;
-            const diffPct = rReferencia.margemReais !== 0 ? (diffReais / Math.abs(rReferencia.margemReais)) * 100 : 0;
-            title = `${diffReais >= 0 ? '+' : ''}R$ ${fmtR(diffReais)}\n(${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%)`;
-          }
-          return (
-            <span className="num" title={title}>
-              R$ {fmtR(r.margemReais)}
-            </span>
-          );
+          return <span className="num">R$ {fmtR(r.margemReais)}</span>;
         },
       },
       {
