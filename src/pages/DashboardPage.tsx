@@ -30,7 +30,7 @@ export function DashboardPage() {
   const taxasPorTabela = useMemo(() => construirTaxasPorTabela(canais, categorias), [canais, categorias]);
 
   const [periodMode, setPeriodMode] = useState<PeriodMode>('calendar');
-  const [seasonStartMonth, setSeasonStartMonth] = useState(10);
+  const [seasonStartMonth, setSeasonStartMonth] = useState(8);
   const ctx: PeriodContext = useMemo(() => ({ mode: periodMode, seasonStartMonth }), [periodMode, seasonStartMonth]);
 
   const periods = useMemo(() => getAvailableYears(ctx, priceTables, carriers), [ctx, priceTables, carriers]);

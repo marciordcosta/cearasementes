@@ -2,8 +2,8 @@ import type { PeriodContext } from '@/features/bi/calculations';
 import { getPeriodKeyFor, getPeriodLabel } from '@/features/bi/calculations';
 import type { ItemAgg } from '@/features/bi/types';
 
-/** Mesma definição de "Safra" usada por padrão no BI (DashboardPage.tsx) — começa em outubro. */
-export const SAFRA_PADRAO: PeriodContext = { mode: 'season', seasonStartMonth: 10 };
+/** Mesma definição de "Safra" usada por padrão no BI (DashboardPage.tsx) — começa em agosto. */
+export const SAFRA_PADRAO: PeriodContext = { mode: 'season', seasonStartMonth: 8 };
 
 export interface HistoricoSafra {
   key: string;
@@ -57,11 +57,15 @@ export function construirHistoricoPorCodigo(
   return resultado;
 }
 
-/** União de safras presentes (pra essa Tabela) em qualquer produto — mais recente primeiro. */
+/** Quantas Safras mostrar como coluna — mais que isso lota a grade de tela cheia. */
+export const MAX_SAFRAS_EXIBIDAS = 3;
+
+/** União de safras presentes (pra essa Tabela) em qualquer produto — mais recente primeiro, limitada a MAX_SAFRAS_EXIBIDAS. */
 export function listarSafrasDisponiveis(historico: Map<string, Map<string, HistoricoSafra>>): { key: string; label: string }[] {
   const vistos = new Map<string, string>();
   historico.forEach((porSafra) => porSafra.forEach((s) => vistos.set(s.key, s.label)));
   return Array.from(vistos.entries())
     .sort((a, b) => b[0].localeCompare(a[0]))
+    .slice(0, MAX_SAFRAS_EXIBIDAS)
     .map(([key, label]) => ({ key, label }));
 }
