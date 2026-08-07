@@ -520,7 +520,11 @@ export function PricingTable({
                 // sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
                 // margem é pequena (ex.: R$ 0,30 de diferença sobre R$ 0,30 de base = +100%).
                 const diffPontos = margemAtualPct - hist.margemBrutaPct;
-                const titulo = `Margem bruta hoje: ${fmtP(margemAtualPct)}% (R$ ${fmtR(margemAtual)}) — Margem bruta ${safra.label}: ${fmtP(hist.margemBrutaPct)}% (Custo Médio R$ ${fmtR(hist.custoMedio)}, Valor Médio R$ ${fmtR(hist.valorMedio)}, ${hist.qtd} un. vendidas)`;
+                const titulo = [
+                  `Custo Médio: R$ ${fmtR(hist.custoMedio)}`,
+                  `Valor Médio: R$ ${fmtR(hist.valorMedio)}`,
+                  `Margem Bruta: R$ ${fmtR(hist.margemBruta)} (${fmtP(hist.margemBrutaPct)}%)`,
+                ].join('\n');
                 return (
                   <span
                     className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[diffPontos >= 0 ? 'good' : 'bad']}`}
