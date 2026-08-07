@@ -308,10 +308,10 @@ export function gerarCatalogoGerenciamentoPDF(
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
           <td class="valor">R$ ${f(r.preco)}</td>
           <td class="peso">${Math.round(produto.peso)}kg</td>
-          <td class="cinza numero">R$ ${f(produto.custo)}</td>
-          <td class="cinza numero">R$ ${f(freteExibido)}</td>
-          <td class="cinza numero">R$ ${f(r.impostoReais)}</td>
-          <td class="cinza numero">R$ ${f(r.margemReais)}</td>
+          <td class="cinza numero">${f(produto.custo)}</td>
+          <td class="cinza numero">${f(freteExibido)}</td>
+          <td class="cinza numero">${f(r.impostoReais)}</td>
+          <td class="cinza numero">${f(r.margemReais)}</td>
         </tr>
       `;
     });
@@ -323,10 +323,10 @@ export function gerarCatalogoGerenciamentoPDF(
           <tr>
             <th>Produto</th>
             <th class="valor">Valor (R$)</th>
-            <th class="peso">Peso (Kg)</th>
-            <th class="cinza numero">Custo (R$)</th>
-            <th class="cinza numero">Frete (R$)</th>
-            <th class="cinza numero">Encargos (R$)</th>
+            <th class="peso">Kg</th>
+            <th class="cinza numero">Custo</th>
+            <th class="cinza numero">Frete</th>
+            <th class="cinza numero">Encargos</th>
             <th class="cinza numero">Margem R$</th>
           </tr>
         </thead>
@@ -388,9 +388,11 @@ export function gerarCatalogoGerenciamentoPDF(
         table.tabela-gerenciamento tbody tr{ page-break-inside:avoid; }
         table.tabela-gerenciamento tbody tr.divisor td{ border-top:2px solid #888888; }
         table.tabela-gerenciamento th:first-child, table.tabela-gerenciamento td:first-child{ min-width:${larguraProdutoCh}ch; }
-        table.tabela-gerenciamento th.valor, table.tabela-gerenciamento td.valor{ width:78px; padding-right:4px; text-align:right; font-weight:700; }
-        table.tabela-gerenciamento th.peso, table.tabela-gerenciamento td.peso{ width:48px; padding-left:4px; text-align:right; }
-        table.tabela-gerenciamento th.numero, table.tabela-gerenciamento td.numero{ width:72px; text-align:right; }
+        /* min-width (em vez de width) + nowrap — a coluna nunca quebra o número em duas
+           linhas, mesmo com "R$ 1.234,56"; se precisar de mais espaço, ela cresce. */
+        table.tabela-gerenciamento th.valor, table.tabela-gerenciamento td.valor{ min-width:70px; padding-right:4px; text-align:right; font-weight:700; white-space:nowrap; }
+        table.tabela-gerenciamento th.peso, table.tabela-gerenciamento td.peso{ min-width:36px; padding-left:4px; text-align:right; white-space:nowrap; }
+        table.tabela-gerenciamento th.numero, table.tabela-gerenciamento td.numero{ min-width:56px; text-align:right; white-space:nowrap; }
         table.tabela-gerenciamento .cinza{ background:#F2F2F2; }
         .tag-fornecedor{
           display:inline-block; margin-left:8px; font-size:9px; font-weight:500; color:#777777;
