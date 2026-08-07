@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import { MAX_SAFRAS_EXIBIDAS, type HistoricoSafra, type MargemBrutaAgregada } from '../historicoBi';
+import { MAX_SAFRAS_EXIBIDAS, type HistoricoSafra, type MargemBrutaAgregada, type Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -104,7 +104,7 @@ interface PricingTableProps {
   /** safraKey -> Margem Bruta agregada de TODA a Tabela naquela safra — mostrada como selo no cabeçalho da coluna. */
   margemAgregadaPorSafra?: Map<string, MargemBrutaAgregada>;
   /** produtoId -> % da soma dos valores vendidos médios entre os produtos com Código cadastrado nessa Tabela (soma sempre 100%) — alimenta a coluna "Repres. (%)". */
-  representatividadePorProduto?: Map<string, number>;
+  representatividadePorProduto?: Map<string, Representatividade>;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -481,14 +481,12 @@ export function PricingTable({
               larguraChave: 'col:representacao',
               canalId: canal.id,
               render: (p: Produto) => {
-                const pct = representatividadePorProduto.get(p.id);
-                if (pct === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
+                const repr = representatividadePorProduto.get(p.id);
+                if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
+                const titulo = `Qtd. média vendida: ${Math.round(repr.qtdMedia)} un./safra\nFatia do valor vendido médio (até ${MAX_SAFRAS_EXIBIDAS} últimas safras de cada produto) em relação à soma de todos os produtos com Código cadastrado nessa Tabela — soma sempre 100% entre eles.`;
                 return (
-                  <span
-                    className="num"
-                    title={`Fatia do valor vendido médio (até ${MAX_SAFRAS_EXIBIDAS} últimas safras de cada produto) em relação à soma de todos os produtos com Código cadastrado nessa Tabela — soma sempre 100% entre eles.`}
-                  >
-                    {fmtP(pct)}%
+                  <span className="num" title={titulo}>
+                    {fmtP(repr.pct)}%
                   </span>
                 );
               },

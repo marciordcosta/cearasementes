@@ -138,6 +138,12 @@ function mediaValorVendidoUltimasSafras(porSafra: Map<string, HistoricoSafra>): 
   return ordenadas.reduce((s, h) => s + h.valorMedio * h.qtd, 0) / ordenadas.length;
 }
 
+export interface Representatividade {
+  pct: number;
+  /** Média de quantidade vendida (mesma janela de safras usada no valor) — só pra exibir no tooltip. */
+  qtdMedia: number;
+}
+
 /**
  * "Representação (%)" — quanto o valor vendido médio (últimas
  * MAX_SAFRAS_EXIBIDAS safras, cada produto com a sua própria quantidade de
@@ -147,8 +153,8 @@ function mediaValorVendidoUltimasSafras(porSafra: Map<string, HistoricoSafra>): 
  * aparecem — não compara com o valor vendido real da tabela inteira (que
  * inclui produto sem Código cadastrado, fora da conta aqui de propósito).
  */
-export function calcularRepresentatividade(produtos: Produto[], historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>): Map<string, number> {
-  const valorMedioPorProduto = new Map<string, number>();
+export function calcularRepresentatividade(produtos: Produto[], historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>): Map<string, Representatividade> {
+  const valorMedioPorProduto = new Map<string, { valorMedio: number; qtdMedia: number }>();
   let totalValorMedio = 0;
   for (const produto of produtos) {
     if (!produto.codigo) continue;
@@ -156,12 +162,12 @@ export function calcularRepresentatividade(produtos: Produto[], historicoPorCodi
     if (!porSafra) continue;
     const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
     if (valorMedioProduto <= 0) continue;
-    valorMedioPorProduto.set(produto.id, valorMedioProduto);
+    valorMedioPorProduto.set(produto.id, { valorMedio: valorMedioProduto, qtdMedia: mediaQtdUltimasSafras(porSafra) });
     totalValorMedio += valorMedioProduto;
   }
-  const resultado = new Map<string, number>();
+  const resultado = new Map<string, Representatividade>();
   if (totalValorMedio <= 0) return resultado;
-  valorMedioPorProduto.forEach((valor, produtoId) => resultado.set(produtoId, (valor / totalValorMedio) * 100));
+  valorMedioPorProduto.forEach(({ valorMedio, qtdMedia }, produtoId) => resultado.set(produtoId, { pct: (valorMedio / totalValorMedio) * 100, qtdMedia }));
   return resultado;
 }
 

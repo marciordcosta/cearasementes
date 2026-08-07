@@ -56,11 +56,15 @@ export function ChannelFullscreenModal({
   onTogglePrecisaAjuste,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
+  const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
 
   // Cada abertura do modal (canal diferente, ou reabrir o mesmo) começa sem
-  // busca — não faz sentido herdar o termo de uma sessão anterior do modal.
+  // busca nem ordenação — não faz sentido herdar isso de uma sessão anterior do modal.
   useEffect(() => {
-    if (canal) setBusca('');
+    if (canal) {
+      setBusca('');
+      setOrdenarPorRepresentacao(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
 
@@ -94,13 +98,18 @@ export function ChannelFullscreenModal({
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   const produtosFiltrados = useMemo(() => {
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (palavras.length === 0) return produtos;
-    return produtos.filter((p) => {
-      const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
-      const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
-      return palavras.every((palavra) => descricao.includes(palavra));
-    });
-  }, [produtos, busca, fornecedorPorId]);
+    const filtrados =
+      palavras.length === 0
+        ? produtos
+        : produtos.filter((p) => {
+            const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
+            const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
+            return palavras.every((palavra) => descricao.includes(palavra));
+          });
+    if (!ordenarPorRepresentacao) return filtrados;
+    // Maior Representação primeiro — produto sem dado (Código não batendo) vai pro final.
+    return [...filtrados].sort((a, b) => (representatividadePorProduto.get(b.id)?.pct ?? -1) - (representatividadePorProduto.get(a.id)?.pct ?? -1));
+  }, [produtos, busca, fornecedorPorId, ordenarPorRepresentacao, representatividadePorProduto]);
 
   return (
     <Modal
@@ -130,6 +139,14 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setOrdenarPorRepresentacao((v) => !v)}
+            title={ordenarPorRepresentacao ? 'Ordenado por Representação (maior → menor) — clique pra voltar à ordem padrão' : 'Ordenar por Representação (maior → menor)'}
+            className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${ordenarPorRepresentacao ? 'bg-[var(--color-accent)] text-white' : 'bg-white/15 text-white hover:bg-white/25'}`}
+          >
+            ⇅ Repres.
+          </button>
         </>
       }
       onClose={onFechar}
