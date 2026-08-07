@@ -17,6 +17,23 @@ function gerarQrCodeSvg(url: string): string {
   return qr.createSvgTag({ scalable: true });
 }
 
+/**
+ * Estimativa (em `ch`, aproximando a largura média de um caractere na fonte
+ * usada) do quanto a coluna "Produto" precisa pra caber esse nome + tag de
+ * fornecedor sem quebrar linha — usada pra alinhar a coluna Valor/Peso no
+ * mesmo x em TODAS as categorias da tabela (a referência é sempre o produto
+ * com o nome mais longo do catálogo inteiro, não só da categoria dele).
+ */
+function tamanhoNomeCh(produto: Produto, fornecedor: Fornecedor | undefined): number {
+  const nomeVisivel = produto.nome.replace(/[*_]/g, '');
+  let ch = nomeVisivel.length * 1.05; // negrito deixa o texto um pouco mais largo que o resto
+  if (fornecedor) {
+    const fornecedorVisivel = fornecedor.nome.replace(/[*_]/g, '');
+    ch += fornecedorVisivel.length * 0.65 + 2; // tag em fonte menor (9px) + margem antes dela
+  }
+  return ch;
+}
+
 /** Mesma marcação do nome do produto na tela (NomeComDestaque, PricingTable.tsx): *negrito*, _itálico_. */
 function nomeComDestaqueHtml(nome: string): string {
   const regex = /\*(.+?)\*|_(.+?)_/g;
@@ -66,6 +83,13 @@ export function gerarCatalogoPDF(
   const categoriasOrdenadas = Array.from(categoriasPresentes.keys())
     .map((id) => getCategoria(id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  // Referência única (o nome mais longo de TODO o catálogo) pra coluna Produto
+  // sair com a mesma largura em toda categoria — sem isso, cada tabela encolhe
+  // pro seu próprio conteúdo e a coluna Valor/Peso fica desalinhada entre elas.
+  const larguraProdutoCh = Math.ceil(
+    Math.max(4, ...produtosParaImprimir.map((p) => tamanhoNomeCh(p, getFornecedor(p.fornecedorId)))) + 2,
+  );
 
   const f = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -154,6 +178,10 @@ export function gerarCatalogoPDF(
         }
         table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
         table.tabela-catalogo tbody tr.divisor td{ border-top:2px solid #888888; }
+        /* Mesma largura mínima em toda categoria (calculada a partir do nome mais
+           longo do catálogo inteiro) — sem isso, Valor/Peso saem em x diferente
+           em cada tabela, já que cada uma encolhe pro próprio conteúdo. */
+        table.tabela-catalogo th:first-child, table.tabela-catalogo td:first-child{ min-width:${larguraProdutoCh}ch; }
         table.tabela-catalogo th.valor, table.tabela-catalogo td.valor{ width:80px; padding-right:4px; text-align:right; font-weight:700; }
         table.tabela-catalogo th.peso, table.tabela-catalogo td.peso{ width:50px; padding-left:4px; text-align:right; }
         .tag-fornecedor{
