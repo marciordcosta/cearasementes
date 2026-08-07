@@ -4,9 +4,20 @@ import { Modal } from '@/components/ui/Modal';
 import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
-import { construirHistoricoPorCodigo, listarSafrasDisponiveis, type HistoricoSafra } from '../historicoBi';
+import {
+  calcularMargemAtualProjetada,
+  construirHistoricoPorCodigo,
+  construirMargemBrutaAgregadaPorSafra,
+  listarSafrasDisponiveis,
+  type HistoricoSafra,
+  type MargemBrutaAgregada,
+} from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 import { PricingTable } from './PricingTable';
+
+function fmtP(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
 
 interface ChannelFullscreenModalProps {
   canal: Canal | null;
@@ -58,12 +69,22 @@ export function ChannelFullscreenModal({
   const { data: vendasBi = [], isLoading: carregandoVendasBi } = useQuery({ queryKey: ['bi', 'vendas'], queryFn: fetchVendas, enabled: canal !== null });
   const { data: itensBi = [], isLoading: carregandoItensBi } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens, enabled: canal !== null });
   const carregandoHistorico = carregandoVendasBi || carregandoItensBi;
+  const itemsAgregados = useMemo(() => agregarItens(vendasBi, itensBi), [vendasBi, itensBi]);
   const historicoPorCodigo = useMemo((): Map<string, Map<string, HistoricoSafra>> => {
     if (!canal) return new Map();
-    const itemsAgregados = agregarItens(vendasBi, itensBi);
     return construirHistoricoPorCodigo(itemsAgregados, canal.nome);
-  }, [vendasBi, itensBi, canal]);
+  }, [itemsAgregados, canal]);
   const safrasDisponiveis = useMemo(() => listarSafrasDisponiveis(historicoPorCodigo), [historicoPorCodigo]);
+  const margemAgregadaPorSafra = useMemo((): Map<string, MargemBrutaAgregada> => {
+    if (!canal) return new Map();
+    return construirMargemBrutaAgregadaPorSafra(itemsAgregados, canal.nome);
+  }, [itemsAgregados, canal]);
+  const canaisPorId = useMemo(() => new Map(todosCanais.map((c) => [c.id, c])), [todosCanais]);
+  const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
+  const margemAtualProjetada = useMemo(() => {
+    if (!canal) return null;
+    return calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
+  }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo]);
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   const produtosFiltrados = useMemo(() => {
@@ -88,6 +109,14 @@ export function ChannelFullscreenModal({
             placeholder="Buscar produto pelo nome ou fornecedor…"
             className="w-full max-w-xs rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-sm font-normal text-white placeholder:text-white/55 focus:border-[var(--color-accent)] focus:bg-white/20 focus:outline-none"
           />
+          {margemAtualProjetada && margemAtualProjetada.valorProjetado > 0 && (
+            <span
+              className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-xs font-normal whitespace-nowrap text-white"
+              title="Margem bruta de hoje (preço e custo atuais) pra tabela inteira, ponderada pela média de quantidade vendida nas últimas safras — estimativa de volume, já que a safra atual ainda não fechou."
+            >
+              MB atual: {fmtP(margemAtualProjetada.margemBrutaPct)}%
+            </span>
+          )}
         </>
       }
       onClose={onFechar}
@@ -114,6 +143,7 @@ export function ChannelFullscreenModal({
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
+            margemAgregadaPorSafra={margemAgregadaPorSafra}
             somenteCanal
           />
         )}

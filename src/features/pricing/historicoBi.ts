@@ -1,6 +1,9 @@
 import type { PeriodContext } from '@/features/bi/calculations';
 import { getPeriodKeyFor, getPeriodLabel } from '@/features/bi/calculations';
 import type { ItemAgg } from '@/features/bi/types';
+import type { Transportadora } from '@/features/fretes/types';
+import { calcularCanal } from './calculations';
+import type { Canal, Categoria, Produto, Subcategoria } from './types';
 
 /** Mesma definição de "Safra" usada por padrão no BI (DashboardPage.tsx) — começa em agosto. */
 export const SAFRA_PADRAO: PeriodContext = { mode: 'season', seasonStartMonth: 8 };
@@ -68,4 +71,87 @@ export function listarSafrasDisponiveis(historico: Map<string, Map<string, Histo
     .sort((a, b) => b[0].localeCompare(a[0]))
     .slice(0, MAX_SAFRAS_EXIBIDAS)
     .map(([key, label]) => ({ key, label }));
+}
+
+export interface MargemBrutaAgregada {
+  valorVendido: number;
+  custoTotal: number;
+  /** (valorVendido - custoTotal) / valorVendido * 100 — já pondera as quantidades por natureza (valorVendido/custoTotal são SOMAS sobre todo mundo vendido, não médias por produto). */
+  margemBrutaPct: number;
+}
+
+/**
+ * MB agregada (Margem Bruta de TODA a Tabela, ponderada pelas quantidades
+ * vendidas) por Safra — soma direto os totais de TODOS os itens do BI cuja
+ * `tabela` bate com esse canal, sem passar pelo cruzamento por Código (então
+ * cobre a tabela inteira, mesmo produto sem Código cadastrado na Precificação).
+ */
+export function construirMargemBrutaAgregadaPorSafra(items: ItemAgg[], canalNome: string, ctx: PeriodContext = SAFRA_PADRAO): Map<string, MargemBrutaAgregada> {
+  const alvo = canalNome.trim().toLowerCase();
+  const acumulado = new Map<string, { valorVendido: number; custoTotal: number }>();
+  for (const item of items) {
+    for (const m of item.monthly) {
+      if (m.tabela.trim().toLowerCase() !== alvo) continue;
+      const key = getPeriodKeyFor(ctx, m.year, m.month);
+      const acc = acumulado.get(key) ?? { valorVendido: 0, custoTotal: 0 };
+      acc.valorVendido += m.valorVendido;
+      acc.custoTotal += m.custoTotal;
+      acumulado.set(key, acc);
+    }
+  }
+  const resultado = new Map<string, MargemBrutaAgregada>();
+  acumulado.forEach((acc, key) => {
+    const margemBrutaPct = acc.valorVendido > 0 ? ((acc.valorVendido - acc.custoTotal) / acc.valorVendido) * 100 : 0;
+    resultado.set(key, { ...acc, margemBrutaPct });
+  });
+  return resultado;
+}
+
+/** Média de quantidade vendida nas últimas (até) MAX_SAFRAS_EXIBIDAS safras desse produto — usada como peso/estimativa de volume pra projetar a MB atual da tabela. */
+function mediaQtdUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
+  const ordenadas = Array.from(porSafra.values())
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .slice(0, MAX_SAFRAS_EXIBIDAS);
+  if (ordenadas.length === 0) return 0;
+  return ordenadas.reduce((s, h) => s + h.qtd, 0) / ordenadas.length;
+}
+
+export interface MargemAtualProjetada {
+  valorProjetado: number;
+  margemProjetada: number;
+  margemBrutaPct: number;
+}
+
+/**
+ * MB "atual" da Tabela inteira, projetada: pra cada produto com Código
+ * batendo no histórico, usa a média de quantidade vendida nas últimas
+ * safras como peso, aplicada à margem bruta de HOJE (preço atual − custo
+ * atual) desse produto — estimativa de quanto a tabela renderia de margem
+ * vendendo no volume/mix de sempre, aos preços de hoje. Produto sem
+ * histórico (Código não batendo) não entra na conta.
+ */
+export function calcularMargemAtualProjetada(
+  produtos: Produto[],
+  canal: Canal,
+  categorias: Categoria[],
+  subcategorias: Subcategoria[],
+  transportadoraPorId: Map<string, Transportadora>,
+  canaisPorId: Map<string, Canal>,
+  historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
+): MargemAtualProjetada {
+  let valorProjetado = 0;
+  let margemProjetada = 0;
+  for (const produto of produtos) {
+    if (!produto.codigo) continue;
+    const porSafra = historicoPorCodigo.get(produto.codigo);
+    if (!porSafra) continue;
+    const qtdMedia = mediaQtdUltimasSafras(porSafra);
+    if (qtdMedia <= 0) continue;
+    const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
+    const subcategoria = subcategorias.find((s) => s.id === produto.subcategoriaId);
+    const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
+    valorProjetado += r.preco * qtdMedia;
+    margemProjetada += (r.preco - produto.custo) * qtdMedia;
+  }
+  return { valorProjetado, margemProjetada, margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0 };
 }

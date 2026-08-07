@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import type { HistoricoSafra } from '../historicoBi';
+import type { HistoricoSafra, MargemBrutaAgregada } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -101,6 +101,8 @@ interface PricingTableProps {
   historicoSafras?: { key: string; label: string }[];
   /** codInterno (= Produto.codigo) -> safraKey -> dados agregados daquela safra, pra essa Tabela de Preço. */
   historicoPorCodigo?: Map<string, Map<string, HistoricoSafra>>;
+  /** safraKey -> Margem Bruta agregada de TODA a Tabela naquela safra — mostrada como selo no cabeçalho da coluna. */
+  margemAgregadaPorSafra?: Map<string, MargemBrutaAgregada>;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -143,6 +145,7 @@ export function PricingTable({
   onAbrirCanalTelaCheia,
   historicoSafras,
   historicoPorCodigo,
+  margemAgregadaPorSafra,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -501,10 +504,23 @@ export function PricingTable({
             corFundo: 'var(--color-page)',
             render: () => null,
           } satisfies ColunaDef,
-          ...historicoSafras.map(
-            (safra): ColunaDef => ({
+          ...historicoSafras.map((safra): ColunaDef => {
+            const agregada = margemAgregadaPorSafra?.get(safra.key);
+            return {
               chave: `safra:${safra.key}`,
-              rotulo: safra.label,
+              rotulo: (
+                <div className="flex flex-col items-center gap-0.5">
+                  <span>{safra.label}</span>
+                  {agregada && (
+                    <span
+                      className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px] font-normal"
+                      title="Margem Bruta da Tabela inteira nessa Safra, considerando as quantidades vendidas de cada produto."
+                    >
+                      MB {fmtP(agregada.margemBrutaPct)}%
+                    </span>
+                  )}
+                </div>
+              ),
               larguraPadrao: 90,
               // Linha discreta separando CADA coluna de Safra da vizinha (não só a primeira).
               corBordaEsquerda: '#CBD5E1',
@@ -535,8 +551,8 @@ export function PricingTable({
                   </span>
                 );
               },
-            }),
-          ),
+            };
+          }),
         ]
       : []),
   ];
