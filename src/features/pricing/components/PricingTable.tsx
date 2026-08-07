@@ -65,6 +65,8 @@ interface ColunaDef {
   corFundo?: string;
   /** cor da borda esquerda que marca o início do bloco de um canal (canal.cor.mid) */
   corBordaEsquerda?: string;
+  /** true = sem alça de arrastar no cabeçalho (colunas puramente decorativas, ex.: o espaçador antes do bloco de Safras). */
+  semRedimensionar?: boolean;
   /** canal dono dessa coluna (Preço/Frete/.../Ajuste) — usado pra destacar a célula quando esse produto está marcado como "precisa ajuste" NESSE canal. */
   canalId?: string;
   render: (produto: Produto, destacada: boolean) => ReactNode;
@@ -487,32 +489,50 @@ export function PricingTable({
     ];
     }),
     ...(historicoSafras && historicoSafras.length > 0 && historicoPorCodigo
-      ? historicoSafras.map((safra, indiceSafra): ColunaDef => ({
-          chave: `safra:${safra.key}`,
-          rotulo: safra.label,
-          larguraPadrao: 90,
-          corBordaEsquerda: indiceSafra === 0 ? '#94A3B8' : undefined,
-          render: (produto) => {
-            const hist = produto.codigo ? historicoPorCodigo.get(produto.codigo)?.get(safra.key) : undefined;
-            if (!hist) return <span className="text-[var(--color-text-soft)]">—</span>;
-            const canal = canaisVisiveis[0];
-            const categoria = getCategoria(produto.categoriaId);
-            const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
-            const margemAtual = r.preco - produto.custo;
-            const margemAtualPct = r.preco > 0 ? (margemAtual / r.preco) * 100 : 0;
-            // Diferença em PONTOS percentuais (36,7% hoje − 35,0% na safra = +1,7) — não uma razão
-            // sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
-            // margem é pequena (ex.: R$ 0,30 de diferença sobre R$ 0,30 de base = +100%).
-            const diffPontos = margemAtualPct - hist.margemBrutaPct;
-            const titulo = `Margem bruta hoje: ${fmtP(margemAtualPct)}% (R$ ${fmtR(margemAtual)}) — Margem bruta ${safra.label}: ${fmtP(hist.margemBrutaPct)}% (Custo Médio R$ ${fmtR(hist.custoMedio)}, Valor Médio R$ ${fmtR(hist.valorMedio)}, ${hist.qtd} un. vendidas)`;
-            return (
-              <span className={`num ${diffPontos >= 0 ? 'text-good' : 'text-bad'}`} title={titulo}>
-                {diffPontos >= 0 ? '+' : ''}
-                {fmtP(diffPontos)}%
-              </span>
-            );
-          },
-        }))
+      ? [
+          // Espaçador vazio — separa fisicamente o bloco de Safras da grade de preços
+          // (não é só uma linha divisória: é "outra grade", com respiro de verdade entre as duas).
+          {
+            chave: 'safra:espacador',
+            rotulo: '',
+            larguraPadrao: 24,
+            semRedimensionar: true,
+            corFundo: 'var(--color-page)',
+            render: () => null,
+          } satisfies ColunaDef,
+          ...historicoSafras.map(
+            (safra): ColunaDef => ({
+              chave: `safra:${safra.key}`,
+              rotulo: safra.label,
+              larguraPadrao: 90,
+              // Linha discreta separando CADA coluna de Safra da vizinha (não só a primeira).
+              corBordaEsquerda: '#CBD5E1',
+              render: (produto) => {
+                const hist = produto.codigo ? historicoPorCodigo.get(produto.codigo)?.get(safra.key) : undefined;
+                if (!hist) return <span className="text-[var(--color-text-soft)]">—</span>;
+                const canal = canaisVisiveis[0];
+                const categoria = getCategoria(produto.categoriaId);
+                const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
+                const margemAtual = r.preco - produto.custo;
+                const margemAtualPct = r.preco > 0 ? (margemAtual / r.preco) * 100 : 0;
+                // Diferença em PONTOS percentuais (36,7% hoje − 35,0% na safra = +1,7) — não uma razão
+                // sobre o R$ da margem histórica, que dispara pra percentuais absurdos quando essa
+                // margem é pequena (ex.: R$ 0,30 de diferença sobre R$ 0,30 de base = +100%).
+                const diffPontos = margemAtualPct - hist.margemBrutaPct;
+                const titulo = `Margem bruta hoje: ${fmtP(margemAtualPct)}% (R$ ${fmtR(margemAtual)}) — Margem bruta ${safra.label}: ${fmtP(hist.margemBrutaPct)}% (Custo Médio R$ ${fmtR(hist.custoMedio)}, Valor Médio R$ ${fmtR(hist.valorMedio)}, ${hist.qtd} un. vendidas)`;
+                return (
+                  <span
+                    className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[diffPontos >= 0 ? 'good' : 'bad']}`}
+                    title={titulo}
+                  >
+                    {diffPontos >= 0 ? '+' : ''}
+                    {fmtP(diffPontos)}%
+                  </span>
+                );
+              },
+            }),
+          ),
+        ]
       : []),
   ];
 
@@ -565,7 +585,7 @@ export function PricingTable({
                 className={`relative overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-2 font-semibold ${coluna.stickyLeft !== undefined ? 'sticky z-[3] bg-[var(--color-navy)]' : ''}`}
               >
                 {coluna.rotulo}
-                <AlcaRedimensionar onMouseDown={iniciarArrasto(coluna.larguraChave ?? coluna.chave)} claro />
+                {!coluna.semRedimensionar && <AlcaRedimensionar onMouseDown={iniciarArrasto(coluna.larguraChave ?? coluna.chave)} claro />}
               </th>
             ))}
           </tr>
