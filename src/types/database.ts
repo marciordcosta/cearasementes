@@ -144,6 +144,8 @@ export interface Database {
           ordem: number;
           /** Transportadora+Região (tabela `transportadoras`) usada pra alimentar frete_kg/frete_pct automaticamente */
           transportadora_id: string | null;
+          /** Preenchido, ignora a margem % da categoria/subcategoria — mira o mesmo Margem R$ desse outro canal. */
+          margem_referencia_canal_id: string | null;
           criado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em'>;

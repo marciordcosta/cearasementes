@@ -12,6 +12,8 @@ interface ChannelFullscreenModalProps {
   fornecedores: Fornecedor[];
   /** Canal de referência GERAL (primeira tabela, entre todos os canais visíveis) — usado nos tooltips de comparação mesmo aqui, onde só 1 canal aparece. */
   canalReferencia?: Canal;
+  /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência". */
+  todosCanais: Canal[];
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
   onFechar: () => void;
@@ -27,6 +29,7 @@ export function ChannelFullscreenModal({
   subcategorias,
   fornecedores,
   canalReferencia,
+  todosCanais,
   transportadoras,
   mostrarColunaId,
   onFechar,
@@ -80,6 +83,7 @@ export function ChannelFullscreenModal({
             fornecedores={fornecedores}
             canaisVisiveis={[canal]}
             canalReferencia={canalReferencia}
+            todosCanais={todosCanais}
             transportadoras={transportadoras}
             mostrarColunaId={mostrarColunaId}
             onUpdatePreco={onUpdatePreco}

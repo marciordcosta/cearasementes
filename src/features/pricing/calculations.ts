@@ -52,6 +52,14 @@ export function primeirasDuasPalavras(nome: string): string {
  * Margem alvo: se o produto tem subcategoria E ela tem um valor próprio
  * pra esse canal, ele sobrepõe o da categoria pai — senão, usa o da
  * categoria (imposto nunca vem da subcategoria, só a margem).
+ *
+ * Sugestão de Margem por referência: se o canal tiver `margemReferenciaCanalId`,
+ * o preço sugerido IGNORA margemAlvo (%) e passa a mirar o mesmo Margem R$
+ * que o canal referenciado calcula pra esse produto — usando os
+ * encargos/frete/imposto DESTE canal pra resolver o preço. `permitirReferencia`
+ * (default true) existe só pra impedir encadeamento: ao resolver a meta,
+ * a chamada recursiva pro canal de referência sempre usa `false`, ignorando
+ * a própria referência DELE (nunca uma cadeia A→B→C, só 1 nível).
  */
 export function calcularCanal(
   produto: Produto,
@@ -59,6 +67,8 @@ export function calcularCanal(
   categoria: Categoria,
   subcategoria: Subcategoria | undefined,
   transportadoraPorId: Map<string, Transportadora>,
+  canaisPorId: Map<string, Canal>,
+  permitirReferencia = true,
 ): ResultadoCalculo {
   const transportadora = canal.transportadoraId ? transportadoraPorId.get(canal.transportadoraId) : undefined;
   const freteKgEfetivo = transportadora ? transportadora.valorPorKg : canal.freteKg;
@@ -68,6 +78,7 @@ export function calcularCanal(
   const margemAlvo = subcategoria?.margens[canal.id] ?? categoria.margens[canal.id] ?? 0;
   const encargosPct = canal.desconto + canal.comissao + canal.cartao;
   const outrosEncargos = canal.outrosEncargos || 0;
+  const freteConsiderado = canal.freteIncluso !== false;
 
   const pesoCubadoValor = calcularPesoCubado(produto.cubagem);
   const pesoUsado = pesoCubadoValor ?? produto.peso;
@@ -93,8 +104,18 @@ export function calcularCanal(
   const custoBase = Math.max(0, produto.custo + freteKgComponente + outrosEncargos + valorDespesaExtra - freteAdicionalReais);
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
 
-  const divisor = 1 - totalPct / 100;
-  const precoSugerido = Math.round(divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor);
+  const canalReferencia = permitirReferencia && canal.margemReferenciaCanalId ? canaisPorId.get(canal.margemReferenciaCanalId) : undefined;
+  let precoSugerido: number;
+  if (canalReferencia && canalReferencia.id !== canal.id) {
+    const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
+    const pctParaMeta = impostoPct + encargosPct + (freteConsiderado ? fretePctEfetivo : 0);
+    const baseParaMeta = freteConsiderado ? custoBase : produto.custo + outrosEncargos + valorDespesaExtra;
+    const divisorMeta = 1 - pctParaMeta / 100;
+    precoSugerido = Math.round(divisorMeta <= 0.01 ? (referencia.margemReais + baseParaMeta) / 0.01 : (referencia.margemReais + baseParaMeta) / divisorMeta);
+  } else {
+    const divisor = 1 - totalPct / 100;
+    precoSugerido = Math.round(divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor);
+  }
 
   const estado = produto.precos[canal.id] ?? { preco: null, manual: false };
   const preco = estado.manual && estado.preco !== null && !isNaN(estado.preco) ? estado.preco : precoSugerido;
@@ -102,7 +123,6 @@ export function calcularCanal(
   const freteBruto = freteKgComponente + (preco * fretePctEfetivo) / 100;
   const freteReais = Math.max(0, freteBruto - freteAdicionalReais);
   const impostoReais = (preco * (impostoPct + encargosPct)) / 100 + outrosEncargos + valorDespesaExtra;
-  const freteConsiderado = canal.freteIncluso !== false;
   const margemReais = preco - produto.custo - impostoReais - (freteConsiderado ? freteReais : 0);
   const margemPct = preco > 0 ? (margemReais / preco) * 100 : 0;
 

@@ -294,7 +294,9 @@ export function PricingPage() {
       setErro('É necessário manter ao menos uma Tabela de Preço ativa no sistema.');
       return;
     }
-    setCanais((prev) => prev.filter((c) => c.id !== canalId));
+    setCanais((prev) =>
+      prev.filter((c) => c.id !== canalId).map((c) => (c.margemReferenciaCanalId === canalId ? { ...c, margemReferenciaCanalId: null } : c)),
+    );
     setCategorias((prev) => prev.map((cat) => {
       const margens = { ...cat.margens };
       delete margens[canalId];
@@ -337,6 +339,12 @@ export function PricingPage() {
   function onAtualizarMargem(categoriaId: string, canalId: string, valor: number) {
     setCategorias((prev) => prev.map((c) => (c.id === categoriaId ? { ...c, margens: { ...c.margens, [canalId]: valor } } : c)));
     debounced(`margem-${categoriaId}-${canalId}`, () => upsertCategoriaMargem(categoriaId, canalId, valor));
+  }
+
+  /** null = volta a calcular por categoria; um canalId = passa a mirar o mesmo Margem R$ desse outro canal. */
+  function onAtualizarMargemReferencia(canalId: string, valor: string | null) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, margemReferenciaCanalId: valor } : c)));
+    salvarAgora(() => atualizarCanal(canalId, { margem_referencia_canal_id: valor }));
   }
 
   function onRemoverCategoria(categoriaId: string) {
@@ -545,6 +553,7 @@ export function PricingPage() {
               fornecedores={fornecedores}
               canaisVisiveis={canaisVisiveis}
               canalReferencia={canaisVisiveis[0]}
+              todosCanais={canais}
               transportadoras={transportadoras}
               mostrarColunaId={mostrarColunaId}
               onUpdatePreco={onUpdatePreco}
@@ -574,6 +583,7 @@ export function PricingPage() {
         subcategorias={subcategorias}
         fornecedores={fornecedores}
         canalReferencia={canaisVisiveis[0]}
+        todosCanais={canais}
         transportadoras={transportadoras}
         mostrarColunaId={mostrarColunaId}
         onFechar={() => setCanalTelaCheiaId(null)}
@@ -606,7 +616,7 @@ export function PricingPage() {
         onFechar={() => setModalPdfAberto(false)}
         onConfirmar={(canal) => {
           setModalPdfAberto(false);
-          gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, transportadoraPorId);
+          gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId);
         }}
       />
 
@@ -662,6 +672,7 @@ export function PricingPage() {
             onRenomearSubcategoria={onRenomearSubcategoria}
             onRemoverSubcategoria={onRemoverSubcategoria}
             onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}
+            onAtualizarMargemReferencia={onAtualizarMargemReferencia}
           />
           <FornecedoresPanel
             fornecedores={fornecedores}

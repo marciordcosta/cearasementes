@@ -16,6 +16,8 @@ interface CategoryMarginsPanelProps {
   onRemoverSubcategoria: (id: string) => void;
   /** valor null = apaga o override, volta a herdar a margem da categoria pai. */
   onAtualizarMargemSubcategoria: (subcategoriaId: string, canalId: string, valor: number | null) => void;
+  /** valor null = volta a calcular por categoria; um canalId = passa a mirar o mesmo Margem R$ desse outro canal. */
+  onAtualizarMargemReferencia: (canalId: string, valor: string | null) => void;
 }
 
 export function CategoryMarginsPanel({
@@ -30,12 +32,14 @@ export function CategoryMarginsPanel({
   onRenomearSubcategoria,
   onRemoverSubcategoria,
   onAtualizarMargemSubcategoria,
+  onAtualizarMargemReferencia,
 }: CategoryMarginsPanelProps) {
   const [nome, setNome] = useState('');
   const [estadual, setEstadual] = useState('');
   const [interestadual, setInterestadual] = useState('');
   const [adicionandoSubDe, setAdicionandoSubDe] = useState<string | null>(null);
   const [nomeSub, setNomeSub] = useState('');
+  const [colunaAberta, setColunaAberta] = useState<string | null>(null);
 
   function submeter() {
     if (!nome.trim()) return;
@@ -72,8 +76,50 @@ export function CategoryMarginsPanel({
                 <th className="px-3 py-2 font-semibold">Estadual (%)</th>
                 <th className="px-3 py-2 font-semibold">Interestadual (%)</th>
                 {canais.map((canal) => (
-                  <th key={canal.id} className="px-3 py-2 font-semibold">
-                    {canal.nome} (%)
+                  <th key={canal.id} className="min-w-[140px] px-3 py-2 font-semibold align-top">
+                    <button
+                      type="button"
+                      onClick={() => setColunaAberta(colunaAberta === canal.id ? null : canal.id)}
+                      className="flex items-center gap-1 hover:underline"
+                      title="Clique para escolher como calcular a margem sugerida desse canal"
+                    >
+                      {canal.nome} (%)
+                      {canal.margemReferenciaCanalId && <span className="text-[10px] font-normal normal-case text-[var(--color-text-soft)]">(ref.)</span>}
+                    </button>
+                    {colunaAberta === canal.id && (
+                      <div className="mt-1 flex flex-col gap-1">
+                        <select
+                          value={canal.margemReferenciaCanalId ? 'referencia' : 'categoria'}
+                          onChange={(e) => {
+                            if (e.target.value === 'categoria') {
+                              onAtualizarMargemReferencia(canal.id, null);
+                            } else {
+                              const outro = canais.find((c) => c.id !== canal.id);
+                              if (outro) onAtualizarMargemReferencia(canal.id, outro.id);
+                            }
+                          }}
+                          className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] font-normal normal-case text-[var(--color-text)]"
+                        >
+                          <option value="categoria">Por categoria</option>
+                          <option value="referencia">Por referência</option>
+                        </select>
+                        {canal.margemReferenciaCanalId && (
+                          <select
+                            value={canal.margemReferenciaCanalId}
+                            onChange={(e) => onAtualizarMargemReferencia(canal.id, e.target.value)}
+                            className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] font-normal normal-case text-[var(--color-text)]"
+                          >
+                            {canais
+                              .filter((c) => c.id !== canal.id)
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.nome}
+                                </option>
+                              ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
                   </th>
                 ))}
                 <th className="px-3 py-2" />

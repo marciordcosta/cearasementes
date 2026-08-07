@@ -33,11 +33,13 @@ export function gerarCatalogoPDF(
   categorias: Categoria[],
   subcategorias: Subcategoria[],
   fornecedores: Fornecedor[],
+  todosCanais: Canal[],
   transportadoraPorId: Map<string, Transportadora>,
 ): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
+  const canaisPorId = new Map(todosCanais.map((c) => [c.id, c]));
 
   // "Imprimir" desmarcado no Editar Produto tira o produto de todo catálogo — continua normal em todo o resto do sistema.
   // "Precisa de ajuste" (✓) é por canal — some só do PDF DESSE canal específico.
@@ -61,7 +63,7 @@ export function gerarCatalogoPDF(
     const itens = [...(categoriasPresentes.get(cat.id) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     let linhas = '';
     itens.forEach((produto, indice) => {
-      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId);
+      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
       const fornecedor = getFornecedor(produto.fornecedorId);
       const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
       // Mesma regra da Tabela de Preços: linha divisória mais espessa quando o produto "muda"

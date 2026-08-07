@@ -89,6 +89,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const comparativoChaveRef = useRef<string | null>(null);
 
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
+  const canaisPorId = useMemo(() => new Map(canais.map((c) => [c.id, c])), [canais]);
   const canal = canais.find((c) => c.id === canalId);
 
   // 2+ cidades = Rota de Frota Própria (sem transportadora, custo por km); 1 cidade só = cotação por transportadora, exatamente como o antigo "Cidade única".
@@ -115,13 +116,13 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
       if (!produto) return null;
       const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
       const subcategoria = produto.subcategoriaId ? subcategorias.find((s) => s.id === produto.subcategoriaId) : undefined;
-      const valorTabela = canal ? calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId).preco : 0;
+      const valorTabela = canal ? calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId).preco : 0;
       const valorUnitario = item.valorManual ?? valorTabela;
       const pesoEfetivo = calcularPesoEfetivo(produto);
       const pesoCubado = calcularPesoCubado(produto.cubagem) !== null;
       return { produto, valorTabela, valorUnitario, pesoEfetivo, pesoCubado };
     },
-    [produtos, canal, categorias, subcategorias, transportadoraPorId],
+    [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId],
   );
 
   const resumoOrcamento = useMemo(() => {

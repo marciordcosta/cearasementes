@@ -28,6 +28,7 @@ function canalFromRow(row: CanalRow): Canal {
     corIndice: row.cor_indice,
     ordem: row.ordem,
     transportadoraId: row.transportadora_id,
+    margemReferenciaCanalId: row.margem_referencia_canal_id,
   };
 }
 
@@ -77,6 +78,7 @@ export async function inserirCanal(input: {
       cor_indice: input.ordem,
       ordem: input.ordem,
       transportadora_id: input.transportadoraId ?? null,
+      margem_referencia_canal_id: null,
     })
     .select('*')
     .single();

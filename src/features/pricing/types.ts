@@ -19,6 +19,8 @@ export interface Canal {
   ordem: number;
   /** Transportadora+Região (módulo Fretes) que alimentou frete_kg/frete_pct — null se preenchido manualmente */
   transportadoraId: string | null;
+  /** Preenchido, a margem alvo (%) da categoria/subcategoria é ignorada — o preço sugerido mira o mesmo valor de Margem R$ que ESSE outro canal calcula, usando os encargos/frete/imposto DESTE canal. */
+  margemReferenciaCanalId: string | null;
 }
 
 export interface Categoria {
