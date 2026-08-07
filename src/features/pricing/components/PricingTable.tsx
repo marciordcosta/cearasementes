@@ -306,7 +306,7 @@ export function PricingTable({
         );
       },
     },
-    { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{p.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span> },
+    { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{Math.round(p.peso)}kg</span> },
     {
       // Não editável: custo = Valor Kg x Peso, calculado e salvo no Editar Produto.
       chave: 'custo',
