@@ -362,6 +362,12 @@ export function PricingPage() {
     salvarAgora(() => atualizarCanal(canalId, { margem_referencia_canal_id: valor }));
   }
 
+  /** 0 = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor antes de virar a meta. */
+  function onAtualizarMargemReferenciaAjuste(canalId: string, valor: number) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, margemReferenciaAjustePct: valor } : c)));
+    salvarAgora(() => atualizarCanal(canalId, { margem_referencia_ajuste_pct: valor }));
+  }
+
   function onRemoverCategoria(categoriaId: string) {
     if (produtos.some((p) => p.categoriaId === categoriaId)) {
       setErro('Não é possível deletar esta categoria: existem produtos cadastrados vinculados a ela.');
@@ -690,6 +696,7 @@ export function PricingPage() {
             onRemoverSubcategoria={onRemoverSubcategoria}
             onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}
             onAtualizarMargemReferencia={onAtualizarMargemReferencia}
+            onAtualizarMargemReferenciaAjuste={onAtualizarMargemReferenciaAjuste}
           />
           <FornecedoresPanel
             fornecedores={fornecedores}

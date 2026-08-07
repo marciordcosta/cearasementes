@@ -146,6 +146,8 @@ export interface Database {
           transportadora_id: string | null;
           /** Preenchido, ignora a margem % da categoria/subcategoria — mira o mesmo Margem R$ desse outro canal. */
           margem_referencia_canal_id: string | null;
+          /** 0 (padrão) = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor. */
+          margem_referencia_ajuste_pct: number;
           criado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em'>;

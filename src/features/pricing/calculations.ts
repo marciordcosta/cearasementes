@@ -108,10 +108,11 @@ export function calcularCanal(
   let precoSugerido: number;
   if (canalReferencia && canalReferencia.id !== canal.id) {
     const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
+    const metaReais = referencia.margemReais * (1 + (canal.margemReferenciaAjustePct || 0) / 100);
     const pctParaMeta = impostoPct + encargosPct + (freteConsiderado ? fretePctEfetivo : 0);
     const baseParaMeta = freteConsiderado ? custoBase : produto.custo + outrosEncargos + valorDespesaExtra;
     const divisorMeta = 1 - pctParaMeta / 100;
-    precoSugerido = Math.round(divisorMeta <= 0.01 ? (referencia.margemReais + baseParaMeta) / 0.01 : (referencia.margemReais + baseParaMeta) / divisorMeta);
+    precoSugerido = Math.round(divisorMeta <= 0.01 ? (metaReais + baseParaMeta) / 0.01 : (metaReais + baseParaMeta) / divisorMeta);
   } else {
     const divisor = 1 - totalPct / 100;
     precoSugerido = Math.round(divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor);

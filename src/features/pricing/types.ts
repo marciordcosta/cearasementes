@@ -21,6 +21,8 @@ export interface Canal {
   transportadoraId: string | null;
   /** Preenchido, a margem alvo (%) da categoria/subcategoria é ignorada — o preço sugerido mira o mesmo valor de Margem R$ que ESSE outro canal calcula, usando os encargos/frete/imposto DESTE canal. */
   margemReferenciaCanalId: string | null;
+  /** 0 (padrão) = mira a Margem R$ da referência sem alteração; positivo/negativo = ajusta esse % sobre o valor antes de virar a meta (ex.: -5 tira 5% da margem da referência). Só vale com margemReferenciaCanalId preenchido. */
+  margemReferenciaAjustePct: number;
 }
 
 export interface Categoria {

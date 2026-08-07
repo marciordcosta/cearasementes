@@ -18,6 +18,8 @@ interface CategoryMarginsPanelProps {
   onAtualizarMargemSubcategoria: (subcategoriaId: string, canalId: string, valor: number | null) => void;
   /** valor null = volta a calcular por categoria; um canalId = passa a mirar o mesmo Margem R$ desse outro canal. */
   onAtualizarMargemReferencia: (canalId: string, valor: string | null) => void;
+  /** 0 = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor antes de virar a meta. */
+  onAtualizarMargemReferenciaAjuste: (canalId: string, valor: number) => void;
 }
 
 export function CategoryMarginsPanel({
@@ -33,6 +35,7 @@ export function CategoryMarginsPanel({
   onRemoverSubcategoria,
   onAtualizarMargemSubcategoria,
   onAtualizarMargemReferencia,
+  onAtualizarMargemReferenciaAjuste,
 }: CategoryMarginsPanelProps) {
   const [nome, setNome] = useState('');
   const [estadual, setEstadual] = useState('');
@@ -110,19 +113,29 @@ export function CategoryMarginsPanel({
                         <option value="referencia">Por referência</option>
                       </select>
                       {canal.margemReferenciaCanalId && (
-                        <select
-                          value={canal.margemReferenciaCanalId}
-                          onChange={(e) => onAtualizarMargemReferencia(canal.id, e.target.value)}
-                          className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
-                        >
-                          {canais
-                            .filter((c) => c.id !== canal.id)
-                            .map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.nome}
-                              </option>
-                            ))}
-                        </select>
+                        <div className="flex gap-1">
+                          <select
+                            value={canal.margemReferenciaCanalId}
+                            onChange={(e) => onAtualizarMargemReferencia(canal.id, e.target.value)}
+                            className="min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
+                          >
+                            {canais
+                              .filter((c) => c.id !== canal.id)
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.nome}
+                                </option>
+                              ))}
+                          </select>
+                          <input
+                            type="number"
+                            title="Ajuste (%) sobre a Margem R$ da referência — positivo ou negativo"
+                            placeholder="0%"
+                            value={canal.margemReferenciaAjustePct || ''}
+                            onChange={(e) => onAtualizarMargemReferenciaAjuste(canal.id, parseFloat(e.target.value) || 0)}
+                            className="w-12 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-[11px] text-[var(--color-text)]"
+                          />
+                        </div>
                       )}
                     </div>
                   </td>
