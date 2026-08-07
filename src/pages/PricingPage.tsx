@@ -169,7 +169,7 @@ export function PricingPage() {
     salvarAgora(() => apagarProduto(produtoId).then(invalidarProdutosPreco));
   }
 
-  async function onAdicionarProduto(input: { nome: string; categoriaId: string; peso: number; custo: number }) {
+  async function onAdicionarProduto(input: { nome: string; categoriaId: string; peso: number; valorKg: number; custo: number }) {
     try {
       const codigo = String(1000 + produtos.length + 1);
       const produto = await inserirProduto({ ...input, codigo }, canais);

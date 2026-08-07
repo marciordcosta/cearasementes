@@ -311,7 +311,10 @@ export async function fetchProdutos(): Promise<Produto[]> {
   });
 }
 
-export async function inserirProduto(input: { nome: string; codigo: string | null; categoriaId: string; custo: number; peso: number }, canais: Canal[]): Promise<Produto> {
+export async function inserirProduto(
+  input: { nome: string; codigo: string | null; categoriaId: string; custo: number; valorKg: number; peso: number },
+  canais: Canal[],
+): Promise<Produto> {
   const { data, error } = await supabase
     .from('produtos')
     .insert({
@@ -319,8 +322,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
       codigo: input.codigo,
       categoria_id: input.categoriaId,
       custo: input.custo,
-      // Retroalimentado a partir do custo digitado — o Editar Produto ajusta com precisão depois.
-      valor_kg: input.peso > 0 ? Math.round((input.custo / input.peso) * 10000) / 10000 : 0,
+      valor_kg: input.valorKg,
       peso: input.peso,
       despesa_extra_valor: 0,
       despesa_extra_destino: 'frete',

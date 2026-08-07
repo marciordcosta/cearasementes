@@ -3,7 +3,7 @@ import type { Categoria } from '../types';
 
 interface AddProductFormProps {
   categorias: Categoria[];
-  onAdicionar: (input: { nome: string; categoriaId: string; peso: number; custo: number }) => void;
+  onAdicionar: (input: { nome: string; categoriaId: string; peso: number; valorKg: number; custo: number }) => void;
 }
 
 const campoClasse =
@@ -13,17 +13,17 @@ export function AddProductForm({ categorias, onAdicionar }: AddProductFormProps)
   const [categoriaId, setCategoriaId] = useState(categorias[0]?.id ?? '');
   const [nome, setNome] = useState('');
   const [peso, setPeso] = useState('');
-  const [custo, setCusto] = useState('');
+  const [valorKg, setValorKg] = useState('');
 
   function submeter(e: FormEvent) {
     e.preventDefault();
     const pesoNum = parseFloat(peso);
-    const custoNum = parseFloat(custo);
-    if (!nome.trim() || isNaN(pesoNum) || isNaN(custoNum)) return;
-    onAdicionar({ nome: nome.trim(), categoriaId: categoriaId || categorias[0]?.id, peso: pesoNum, custo: custoNum });
+    const valorKgNum = parseFloat(valorKg);
+    if (!nome.trim() || isNaN(pesoNum) || isNaN(valorKgNum)) return;
+    onAdicionar({ nome: nome.trim(), categoriaId: categoriaId || categorias[0]?.id, peso: pesoNum, valorKg: valorKgNum, custo: valorKgNum * pesoNum });
     setNome('');
     setPeso('');
-    setCusto('');
+    setValorKg('');
   }
 
   return (
@@ -48,11 +48,11 @@ export function AddProductForm({ categorias, onAdicionar }: AddProductFormProps)
       />
       <input
         type="number"
-        step="0.1"
+        step="0.01"
         min="0"
-        value={custo}
-        onChange={(e) => setCusto(e.target.value)}
-        placeholder="Custo (R$)"
+        value={valorKg}
+        onChange={(e) => setValorKg(e.target.value)}
+        placeholder="Valor Kg (R$)"
         required
         className={`num w-28 ${campoClasse}`}
       />
