@@ -51,6 +51,13 @@ interface ColunaDef {
   chave: string;
   rotulo: ReactNode;
   larguraPadrao: number;
+  /**
+   * Chave usada pra guardar/ler a largura arrastável — quando ausente, usa `chave`. As colunas
+   * repetidas por canal (Preço/Frete/Encargos/ML%/ML$/Ajuste) compartilham uma chave "col:tipo"
+   * (sem o canal.id) pra que redimensionar uma delas ajuste as equivalentes em TODOS os canais,
+   * mantendo um padrão único de largura em vez de um ajuste independente por tabela.
+   */
+  larguraChave?: string;
   /** deslocamento (em px) do position:sticky — undefined = coluna rola normalmente */
   stickyLeft?: number;
   /** matiz de fundo do canal (soft na coluna de Preço, subtle nas demais) — igual ao original */
@@ -189,6 +196,8 @@ export function PricingTable({
     return () => observer.disconnect();
   }, [somenteCanal]);
 
+  // Preço/Frete/Encargos/ML%/ML$/Ajuste usam uma largura ÚNICA ("col:tipo"), compartilhada por
+  // todos os canais — arrastar qualquer uma delas ajusta o padrão pra todas as tabelas de uma vez.
   const defaults: Record<string, number> = {
     classe: 110,
     id: 70,
@@ -197,15 +206,13 @@ export function PricingTable({
     custo: 110,
     editar: 44,
     remover: 32,
+    'col:preco': 110,
+    'col:frete': 100,
+    'col:encargos': 110,
+    'col:mlpct': 90,
+    'col:mlvalor': 100,
+    'col:ajuste': 52,
   };
-  canaisVisiveis.forEach((canal) => {
-    defaults[`${canal.id}:preco`] = 110;
-    defaults[`${canal.id}:frete`] = 100;
-    defaults[`${canal.id}:encargos`] = 110;
-    defaults[`${canal.id}:mlpct`] = 90;
-    defaults[`${canal.id}:mlvalor`] = 100;
-    defaults[`${canal.id}:ajuste`] = 52;
-  });
   const { largura, iniciarArrasto } = useColumnWidths(defaults);
 
   // "Excluir" + "Editar" só existem fora do modo tela cheia por canal — juntas formam o
@@ -313,7 +320,8 @@ export function PricingTable({
       {
         chave: `${canal.id}:preco`,
         rotulo: 'Preço',
-        larguraPadrao: defaults[`${canal.id}:preco`],
+        larguraPadrao: defaults['col:preco'],
+        larguraChave: 'col:preco',
         corBordaEsquerda: cor.mid,
         corFundo: cor.soft,
         canalId: canal.id,
@@ -363,7 +371,8 @@ export function PricingTable({
       {
         chave: `${canal.id}:frete`,
         rotulo: 'Frete (R$)',
-        larguraPadrao: defaults[`${canal.id}:frete`],
+        larguraPadrao: defaults['col:frete'],
+        larguraChave: 'col:frete',
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
@@ -379,7 +388,8 @@ export function PricingTable({
       {
         chave: `${canal.id}:encargos`,
         rotulo: 'Encargos (R$)',
-        larguraPadrao: defaults[`${canal.id}:encargos`],
+        larguraPadrao: defaults['col:encargos'],
+        larguraChave: 'col:encargos',
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
@@ -394,7 +404,8 @@ export function PricingTable({
       {
         chave: `${canal.id}:mlpct`,
         rotulo: 'ML (%)',
-        larguraPadrao: defaults[`${canal.id}:mlpct`],
+        larguraPadrao: defaults['col:mlpct'],
+        larguraChave: 'col:mlpct',
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
@@ -415,7 +426,8 @@ export function PricingTable({
       {
         chave: `${canal.id}:mlvalor`,
         rotulo: 'ML ($)',
-        larguraPadrao: defaults[`${canal.id}:mlvalor`],
+        larguraPadrao: defaults['col:mlvalor'],
+        larguraChave: 'col:mlvalor',
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
@@ -439,7 +451,8 @@ export function PricingTable({
       {
         chave: `${canal.id}:ajuste`,
         rotulo: '✕',
-        larguraPadrao: defaults[`${canal.id}:ajuste`],
+        larguraPadrao: defaults['col:ajuste'],
+        larguraChave: 'col:ajuste',
         canalId: canal.id,
         render: (p) => {
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
@@ -476,10 +489,10 @@ export function PricingTable({
   return (
     <div className="relative" ref={containerRef}>
       <div className="max-h-[70vh] overflow-auto" onScroll={(e) => setRoladoLateral(e.currentTarget.scrollLeft > limiarComecoCobertura)}>
-      <table className="table-fixed text-xs" style={{ width: colunas.reduce((s, c) => s + largura(c.chave), 0) }}>
+      <table className="table-fixed text-xs" style={{ width: colunas.reduce((s, c) => s + largura(c.larguraChave ?? c.chave), 0) }}>
         <colgroup>
           {colunas.map((c) => (
-            <col key={c.chave} style={{ width: largura(c.chave) }} />
+            <col key={c.chave} style={{ width: largura(c.larguraChave ?? c.chave) }} />
           ))}
         </colgroup>
         <thead>
@@ -512,7 +525,7 @@ export function PricingTable({
                 className={`relative overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-2 font-semibold ${coluna.stickyLeft !== undefined ? 'sticky z-[3] bg-[var(--color-navy)]' : ''}`}
               >
                 {coluna.rotulo}
-                <AlcaRedimensionar onMouseDown={iniciarArrasto(coluna.chave)} claro />
+                <AlcaRedimensionar onMouseDown={iniciarArrasto(coluna.larguraChave ?? coluna.chave)} claro />
               </th>
             ))}
           </tr>
