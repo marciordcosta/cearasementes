@@ -121,6 +121,14 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
       }
     >
       <div className="space-y-2">
+        <Linha label="ID">
+          <input value={codigo} onChange={(e) => setCodigo(e.target.value)} className={campoClasse} />
+        </Linha>
+
+        <Linha label="Produto">
+          <input value={nome} onChange={(e) => setNome(e.target.value)} className={campoClasse} />
+        </Linha>
+
         <Linha label="Classe">
           <select value={classeValue} onChange={(e) => onClasseChange(e.target.value)} className={campoClasse}>
             {categorias.map((c) => (
@@ -138,14 +146,6 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
               </optgroup>
             ))}
           </select>
-        </Linha>
-
-        <Linha label="ID">
-          <input value={codigo} onChange={(e) => setCodigo(e.target.value)} className={campoClasse} />
-        </Linha>
-
-        <Linha label="Produto">
-          <input value={nome} onChange={(e) => setNome(e.target.value)} className={campoClasse} />
         </Linha>
 
         <Linha label="Fornecedor">
@@ -202,16 +202,12 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
         </Linha>
 
         <Linha label="Despesa Extra (R$)">
-          <div>
-            <input type="number" step="0.1" min="0" value={despesaValor} onChange={(e) => setDespesaValor(e.target.value)} placeholder="Valor R$" className={campoClasse} />
-            <p className="mt-1 text-[11px] text-[var(--color-text-soft)]">Soma sempre como mais Encargos (não afeta o frete — pra isso, use a Cubagem).</p>
-          </div>
+          <input type="number" step="0.1" min="0" value={despesaValor} onChange={(e) => setDespesaValor(e.target.value)} placeholder="Valor R$" className={campoClasse} />
         </Linha>
 
         <label className="flex items-center gap-2 text-xs text-[var(--color-text)]">
           <input type="checkbox" checked={imprimir} onChange={(e) => setImprimir(e.target.checked)} className="accent-[var(--color-accent)]" />
           Imprimir
-          <span className="text-[11px] font-normal text-[var(--color-text-soft)]">— desmarcado, o produto some do catálogo em PDF (continua normal na tela)</span>
         </label>
       </div>
     </Modal>
