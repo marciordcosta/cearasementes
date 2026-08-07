@@ -1,6 +1,6 @@
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal } from './calculations';
-import type { Canal, Categoria, Fornecedor, Produto } from './types';
+import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from './types';
 
 function escapeHtml(texto: string): string {
   return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -31,10 +31,12 @@ export function gerarCatalogoPDF(
   canal: Canal,
   produtosFiltrados: Produto[],
   categorias: Categoria[],
+  subcategorias: Subcategoria[],
   fornecedores: Fornecedor[],
   transportadoraPorId: Map<string, Transportadora>,
 ): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
+  const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
 
   // "Imprimir" desmarcado no Editar Produto tira o produto de todo catálogo — continua normal em todo o resto do sistema.
@@ -59,7 +61,7 @@ export function gerarCatalogoPDF(
     const itens = [...(categoriasPresentes.get(cat.id) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     let linhas = '';
     itens.forEach((produto) => {
-      const r = calcularCanal(produto, canal, cat, transportadoraPorId);
+      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId);
       const fornecedor = getFornecedor(produto.fornecedorId);
       const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
       linhas += `

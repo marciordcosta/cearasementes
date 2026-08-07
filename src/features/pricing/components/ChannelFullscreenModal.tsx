@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { Transportadora } from '@/features/fretes/types';
-import type { Canal, Categoria, Fornecedor, Produto } from '../types';
+import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 import { PricingTable } from './PricingTable';
 
 interface ChannelFullscreenModalProps {
   canal: Canal | null;
   produtos: Produto[];
   categorias: Categoria[];
+  subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
   /** Canal de referência GERAL (primeira tabela, entre todos os canais visíveis) — usado nos tooltips de comparação mesmo aqui, onde só 1 canal aparece. */
   canalReferencia?: Canal;
@@ -24,6 +25,7 @@ export function ChannelFullscreenModal({
   canal,
   produtos,
   categorias,
+  subcategorias,
   fornecedores,
   canalReferencia,
   transportadoras,
@@ -76,6 +78,7 @@ export function ChannelFullscreenModal({
           <PricingTable
             produtos={produtosFiltrados}
             categorias={categorias}
+            subcategorias={subcategorias}
             fornecedores={fornecedores}
             canaisVisiveis={[canal]}
             canalReferencia={canalReferencia}

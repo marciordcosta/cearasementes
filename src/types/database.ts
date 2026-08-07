@@ -184,6 +184,8 @@ export interface Database {
           cubagem: string | null;
           /** Cadastrado em Parametrização (tabela fornecedores) — aparece na Tabela de Preços logo depois do nome do produto, mesma marcação (asterisco = negrito, underscore = itálico) do nome. */
           fornecedor_id: string | null;
+          /** Escolhida junto com a categoria no campo "Classe" do Editar Produto — a margem dela sobrepõe a da categoria pai quando preenchida. */
+          subcategoria_id: string | null;
           /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. */
           imprimir: boolean;
           criado_em: string;
@@ -197,6 +199,20 @@ export interface Database {
         Row: { id: string; nome: string; ordem: number };
         Insert: Omit<Database['public']['Tables']['fornecedores']['Row'], 'id'>;
         Update: Partial<Omit<Database['public']['Tables']['fornecedores']['Row'], 'id'>>;
+        Relationships: [];
+      };
+      subcategorias: {
+        Row: { id: string; categoria_id: string; nome: string; ordem: number };
+        Insert: Omit<Database['public']['Tables']['subcategorias']['Row'], 'id'>;
+        Update: Partial<Omit<Database['public']['Tables']['subcategorias']['Row'], 'id'>>;
+        Relationships: [];
+      };
+      // subcategoria_margens é esparsa de propósito — só existe linha quando a subcategoria
+      // sobrescreve a margem da categoria pai naquele canal (ver Subcategoria em pricing/types.ts).
+      subcategoria_margens: {
+        Row: { subcategoria_id: string; canal_id: string; margem_pct: number };
+        Insert: Database['public']['Tables']['subcategoria_margens']['Row'];
+        Update: Partial<Database['public']['Tables']['subcategoria_margens']['Row']>;
         Relationships: [];
       };
       produto_precos: {

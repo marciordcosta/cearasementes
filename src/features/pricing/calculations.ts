@@ -1,5 +1,5 @@
 import type { Transportadora } from '@/features/fretes/types';
-import type { Canal, Categoria, Produto, ResultadoCalculo } from './types';
+import type { Canal, Categoria, Produto, ResultadoCalculo, Subcategoria } from './types';
 
 /**
  * Peso cubado = volume (m³) x 300 — fator de cubagem padrão do frete
@@ -33,14 +33,24 @@ export function calcularPesoEfetivo(produto: Produto): number {
  * precisar reselecionar. Exceção: Custo NF fixo em R$ (ex.: Potyguar) não
  * tem como virar % dentro dessa fórmula — nesse caso o Frete NF (%) do
  * canal continua valendo (ajustável manualmente, ex. via Outros Encargos).
+ *
+ * Margem alvo: se o produto tem subcategoria E ela tem um valor próprio
+ * pra esse canal, ele sobrepõe o da categoria pai — senão, usa o da
+ * categoria (imposto nunca vem da subcategoria, só a margem).
  */
-export function calcularCanal(produto: Produto, canal: Canal, categoria: Categoria, transportadoraPorId: Map<string, Transportadora>): ResultadoCalculo {
+export function calcularCanal(
+  produto: Produto,
+  canal: Canal,
+  categoria: Categoria,
+  subcategoria: Subcategoria | undefined,
+  transportadoraPorId: Map<string, Transportadora>,
+): ResultadoCalculo {
   const transportadora = canal.transportadoraId ? transportadoraPorId.get(canal.transportadoraId) : undefined;
   const freteKgEfetivo = transportadora ? transportadora.valorPorKg : canal.freteKg;
   const fretePctEfetivo = transportadora && transportadora.valorPorNfTipo === 'percentual' ? transportadora.valorPorNf * 100 : canal.fretePct;
 
   const impostoPct = canal.tipoImposto === 'interestadual' ? categoria.interestadual : categoria.estadual;
-  const margemAlvo = categoria.margens[canal.id] ?? 0;
+  const margemAlvo = subcategoria?.margens[canal.id] ?? categoria.margens[canal.id] ?? 0;
   const encargosPct = canal.desconto + canal.comissao + canal.cartao;
   const outrosEncargos = canal.outrosEncargos || 0;
 

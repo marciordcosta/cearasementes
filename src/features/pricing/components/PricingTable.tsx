@@ -3,7 +3,7 @@ import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloFrete } from '../calculations';
-import type { Canal, Categoria, Fornecedor, Produto } from '../types';
+import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
   good: 'bg-good-soft text-good',
@@ -65,6 +65,7 @@ interface ColunaDef {
 interface PricingTableProps {
   produtos: Produto[];
   categorias: Categoria[];
+  subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
   canaisVisiveis: Canal[];
   /**
@@ -109,6 +110,7 @@ function AlcaRedimensionar({ onMouseDown, claro }: { onMouseDown: (e: React.Mous
 export function PricingTable({
   produtos,
   categorias,
+  subcategorias,
   fornecedores,
   canaisVisiveis,
   canalReferencia,
@@ -124,6 +126,7 @@ export function PricingTable({
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
+  const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   const referencia = canalReferencia ?? canaisVisiveis[0];
@@ -316,7 +319,8 @@ export function PricingTable({
         canalId: canal.id,
         render: (p, destacada) => {
           const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, transportadoraPorId);
+          const subcategoria = getSubcategoria(p.subcategoriaId);
+          const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
           // Não faz sentido comparar a referência com ela mesma.
@@ -324,7 +328,7 @@ export function PricingTable({
           const partesTooltip: string[] = [];
           if (manual) partesTooltip.push(`Sugestão: R$ ${fmtR(r.precoSugerido)}`);
           if (referencia !== undefined && !ehReferencia) {
-            const rReferencia = calcularCanal(p, referencia, categoria, transportadoraPorId);
+            const rReferencia = calcularCanal(p, referencia, categoria, subcategoria, transportadoraPorId);
             const diffPct = rReferencia.preco > 0 ? ((r.preco - rReferencia.preco) / rReferencia.preco) * 100 : 0;
             partesTooltip.push(`Referência: R$ ${fmtR(rReferencia.preco)}`);
             partesTooltip.push(`Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`);
@@ -363,7 +367,7 @@ export function PricingTable({
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, transportadoraPorId);
+          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId);
           const freteIncluso = canal.freteIncluso !== false;
           return (
             <span className={`num ${freteIncluso ? '' : 'text-[var(--color-text-soft)] line-through opacity-80'}`} title={montarTituloFrete(r, freteIncluso)}>
@@ -379,7 +383,7 @@ export function PricingTable({
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, transportadoraPorId);
+          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId);
           return (
             <span className="num" title={`Imposto ${fmtP(r.impostoPct)}% + Encargos ${fmtP(r.encargosPct)}%${r.outrosEncargos ? ' + Outros Encargos R$ ' + fmtR(r.outrosEncargos) : ''}`}>
               R$ {fmtR(r.impostoReais)}
@@ -394,7 +398,7 @@ export function PricingTable({
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, transportadoraPorId);
+          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
@@ -415,11 +419,12 @@ export function PricingTable({
         canalId: canal.id,
         render: (p) => {
           const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, transportadoraPorId);
+          const subcategoria = getSubcategoria(p.subcategoriaId);
+          const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId);
           const ehReferencia = referencia !== undefined && canal.id === referencia.id;
           let title: string | undefined;
           if (referencia !== undefined && !ehReferencia) {
-            const rReferencia = calcularCanal(p, referencia, categoria, transportadoraPorId);
+            const rReferencia = calcularCanal(p, referencia, categoria, subcategoria, transportadoraPorId);
             const diffReais = r.margemReais - rReferencia.margemReais;
             const diffPct = rReferencia.margemReais !== 0 ? (diffReais / Math.abs(rReferencia.margemReais)) * 100 : 0;
             title = `${diffReais >= 0 ? '+' : ''}R$ ${fmtR(diffReais)}\n(${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%)`;

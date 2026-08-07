@@ -2,12 +2,13 @@ import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { inferirNomeCategoriaDoNome, inferirPesoDoNome } from './produtoInferencia';
-import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, TipoImposto } from './types';
+import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from './types';
 
 type CanalRow = Database['public']['Tables']['canais_preco']['Row'];
 type CategoriaRow = Database['public']['Tables']['categorias']['Row'];
 type ProdutoRow = Database['public']['Tables']['produtos']['Row'];
 type FornecedorRow = Database['public']['Tables']['fornecedores']['Row'];
+type SubcategoriaRow = Database['public']['Tables']['subcategorias']['Row'];
 
 function canalFromRow(row: CanalRow): Canal {
   return {
@@ -205,6 +206,55 @@ export async function upsertCategoriaMargem(categoriaId: string, canalId: string
   if (error) throw error;
 }
 
+export async function fetchSubcategorias(): Promise<Subcategoria[]> {
+  const [subcategoriasRows, margensRows] = await Promise.all([
+    fetchAllRows<SubcategoriaRow>((from, to) => supabase.from('subcategorias').select('*').order('ordem').range(from, to)),
+    fetchAllRows<{ subcategoria_id: string; canal_id: string; margem_pct: number }>((from, to) =>
+      supabase.from('subcategoria_margens').select('*').range(from, to),
+    ),
+  ]);
+
+  return subcategoriasRows.map((row) => {
+    const margens: Record<string, number> = {};
+    margensRows.filter((m) => m.subcategoria_id === row.id).forEach((m) => (margens[m.canal_id] = m.margem_pct));
+    return { id: row.id, categoriaId: row.categoria_id, nome: row.nome, ordem: row.ordem, margens };
+  });
+}
+
+/** Sem linhas em subcategoria_margens na criação — começa sem overrides, herdando tudo da categoria pai. */
+export async function inserirSubcategoria(input: { categoriaId: string; nome: string; ordem: number }): Promise<Subcategoria> {
+  const { data, error } = await supabase
+    .from('subcategorias')
+    .insert({ categoria_id: input.categoriaId, nome: input.nome, ordem: input.ordem })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return { id: data.id, categoriaId: data.categoria_id, nome: data.nome, ordem: data.ordem, margens: {} };
+}
+
+export async function atualizarSubcategoria(id: string, patch: Partial<Pick<SubcategoriaRow, 'nome' | 'ordem'>>): Promise<void> {
+  const { error } = await supabase.from('subcategorias').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function apagarSubcategoria(id: string): Promise<void> {
+  const { error } = await supabase.from('subcategorias').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function upsertSubcategoriaMargem(subcategoriaId: string, canalId: string, margemPct: number): Promise<void> {
+  const { error } = await supabase
+    .from('subcategoria_margens')
+    .upsert({ subcategoria_id: subcategoriaId, canal_id: canalId, margem_pct: margemPct });
+  if (error) throw error;
+}
+
+/** Campo deixado em branco no painel — apaga o override, volta a herdar a margem da categoria pai. */
+export async function apagarSubcategoriaMargem(subcategoriaId: string, canalId: string): Promise<void> {
+  const { error } = await supabase.from('subcategoria_margens').delete().eq('subcategoria_id', subcategoriaId).eq('canal_id', canalId);
+  if (error) throw error;
+}
+
 function fornecedorFromRow(row: FornecedorRow): Fornecedor {
   return { id: row.id, nome: row.nome, ordem: row.ordem };
 }
@@ -253,6 +303,7 @@ export async function fetchProdutos(): Promise<Produto[]> {
       despesaExtraValor: row.despesa_extra_valor,
       cubagem: row.cubagem,
       fornecedorId: row.fornecedor_id,
+      subcategoriaId: row.subcategoria_id,
       imprimir: row.imprimir,
       precos,
     };
@@ -272,6 +323,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
       despesa_extra_destino: 'frete',
       cubagem: null,
       fornecedor_id: null,
+      subcategoria_id: null,
       imprimir: true,
     })
     .select('*')
@@ -297,6 +349,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
     despesaExtraValor: data.despesa_extra_valor,
     cubagem: data.cubagem,
     fornecedorId: data.fornecedor_id,
+    subcategoriaId: data.subcategoria_id,
     imprimir: data.imprimir,
     precos,
   };
@@ -304,7 +357,9 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
 
 export async function atualizarProduto(
   id: string,
-  patch: Partial<Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor_id' | 'imprimir'>>,
+  patch: Partial<
+    Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor_id' | 'subcategoria_id' | 'imprimir'>
+  >,
 ): Promise<void> {
   const payload: Database['public']['Tables']['produtos']['Update'] = { ...patch, atualizado_em: new Date().toISOString() };
   const { error } = await supabase.from('produtos').update(payload).eq('id', id);
@@ -398,6 +453,7 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
         despesa_extra_destino: 'frete' as const,
         cubagem: null,
         fornecedor_id: null,
+        subcategoria_id: null,
         imprimir: true,
       });
     }

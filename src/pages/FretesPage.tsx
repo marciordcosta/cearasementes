@@ -21,7 +21,7 @@ import { PrazosModal } from '@/features/fretes/components/PrazosModal';
 import { RotaParametrosPanel } from '@/features/fretes/components/RotaParametrosPanel';
 import { TransportadorasTable } from '@/features/fretes/components/TransportadorasTable';
 import type { RotaParametros, Transportadora } from '@/features/fretes/types';
-import { fetchCanais, fetchCategorias, fetchProdutos } from '@/features/pricing/api';
+import { fetchCanais, fetchCategorias, fetchProdutos, fetchSubcategorias } from '@/features/pricing/api';
 import { mensagemDeErro } from '@/lib/errors';
 
 const ROTA_PARAMETROS_PADRAO: RotaParametros = {
@@ -44,6 +44,7 @@ export function FretesPage() {
   const { data: produtos = [] } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
   const { data: canais = [] } = useQuery({ queryKey: ['pricing', 'canais'], queryFn: fetchCanais });
   const { data: categorias = [] } = useQuery({ queryKey: ['pricing', 'categorias'], queryFn: fetchCategorias });
+  const { data: subcategorias = [] } = useQuery({ queryKey: ['pricing', 'subcategorias'], queryFn: fetchSubcategorias });
   const { data: parametrosRota = ROTA_PARAMETROS_PADRAO } = useQuery({ queryKey: ['fretes', 'rota_parametros'], queryFn: fetchRotaParametros });
   const { data: cidadesRotaCache = [] } = useQuery({ queryKey: ['fretes', 'rota_cidades_cache'], queryFn: fetchCidadesRotaCache });
 
@@ -166,6 +167,7 @@ export function FretesPage() {
           produtos={produtos}
           canais={canais}
           categorias={categorias}
+          subcategorias={subcategorias}
           parametrosRota={parametrosRota}
           cidadesRotaCache={cidadesRotaCache}
           onRotaCalculada={() => queryClient.invalidateQueries({ queryKey: ['fretes', 'rota_cidades_cache'] })}

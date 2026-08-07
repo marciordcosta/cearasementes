@@ -1,17 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import type { Categoria, Fornecedor, Produto } from '../types';
+import type { Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 interface EditProductModalProps {
   produto: Produto | null;
   categorias: Categoria[];
+  subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
   onFechar: () => void;
   onSalvar: (patch: {
     nome: string;
     codigo: string;
     categoriaId: string;
+    subcategoriaId: string | null;
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
@@ -20,22 +22,23 @@ interface EditProductModalProps {
   }) => void;
 }
 
-const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-2 text-sm text-[var(--color-text)]';
+const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)]';
 
 /** Linha do formulário: rótulo (descrição) numa coluna fixa à esquerda, campo de preenchimento à direita. */
 function Linha({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[110px_1fr] items-center gap-3">
-      <label className="text-sm text-[var(--color-text-soft)]">{label}</label>
+    <div className="grid grid-cols-[90px_1fr] items-center gap-2">
+      <label className="text-xs text-[var(--color-text-soft)]">{label}</label>
       {children}
     </div>
   );
 }
 
-export function EditProductModal({ produto, categorias, fornecedores, onFechar, onSalvar }: EditProductModalProps) {
+export function EditProductModal({ produto, categorias, subcategorias, fornecedores, onFechar, onSalvar }: EditProductModalProps) {
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
+  const [subcategoriaId, setSubcategoriaId] = useState<string | null>(null);
   const [peso, setPeso] = useState('');
   const [despesaValor, setDespesaValor] = useState('0');
   const [cubagemC, setCubagemC] = useState('');
@@ -49,6 +52,7 @@ export function EditProductModal({ produto, categorias, fornecedores, onFechar, 
     setNome(produto.nome);
     setCodigo(produto.codigo ?? '');
     setCategoriaId(produto.categoriaId);
+    setSubcategoriaId(produto.subcategoriaId);
     setPeso(String(produto.peso));
     setDespesaValor(String(produto.despesaExtraValor || 0));
     const partes = produto.cubagem?.split(/x/i) ?? [];
@@ -58,6 +62,22 @@ export function EditProductModal({ produto, categorias, fornecedores, onFechar, 
     setFornecedorId(produto.fornecedorId ?? '');
     setImprimir(produto.imprimir);
   }, [produto]);
+
+  // Valor do select de Classe: "sub:ID" quando o produto tem subcategoria, senão "cat:ID" — mesmo
+  // esquema de prefixo usado no filtro da Tabela de Preços (PricingPage.tsx).
+  const classeValue = subcategoriaId ? `sub:${subcategoriaId}` : `cat:${categoriaId}`;
+  function onClasseChange(valor: string) {
+    if (valor.startsWith('sub:')) {
+      const subId = valor.slice(4);
+      const sub = subcategorias.find((s) => s.id === subId);
+      if (!sub) return;
+      setSubcategoriaId(sub.id);
+      setCategoriaId(sub.categoriaId);
+    } else {
+      setCategoriaId(valor.slice(4));
+      setSubcategoriaId(null);
+    }
+  }
 
   function salvar() {
     const pesoNum = parseFloat(peso);
@@ -74,6 +94,7 @@ export function EditProductModal({ produto, categorias, fornecedores, onFechar, 
       nome: nome.trim(),
       codigo: codigo.trim(),
       categoriaId,
+      subcategoriaId,
       peso: pesoNum,
       despesaExtraValor: parseFloat(despesaValor) || 0,
       cubagem: cubagemPreenchida ? `${cubagemC.trim()}x${cubagemL.trim()}x${cubagemA.trim()}` : null,
@@ -99,13 +120,22 @@ export function EditProductModal({ produto, categorias, fornecedores, onFechar, 
         </>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-2">
         <Linha label="Classe">
-          <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className={campoClasse}>
+          <select value={classeValue} onChange={(e) => onClasseChange(e.target.value)} className={campoClasse}>
             {categorias.map((c) => (
-              <option key={c.id} value={c.id} className="text-[var(--color-text)]">
-                {c.nome}
-              </option>
+              <optgroup key={c.id} label={c.nome}>
+                <option value={`cat:${c.id}`} className="text-[var(--color-text)]">
+                  {c.nome} (geral)
+                </option>
+                {subcategorias
+                  .filter((s) => s.categoriaId === c.id)
+                  .map((s) => (
+                    <option key={s.id} value={`sub:${s.id}`} className="text-[var(--color-text)]">
+                      {s.nome}
+                    </option>
+                  ))}
+              </optgroup>
             ))}
           </select>
         </Linha>
@@ -134,38 +164,38 @@ export function EditProductModal({ produto, categorias, fornecedores, onFechar, 
         </Linha>
 
         <Linha label="Cubagem (m)">
-          <div className="flex gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[var(--color-text-soft)]">Compr.</span>
+          <div className="flex gap-1.5">
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--color-text-soft)]">Compr.</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={cubagemC}
                 onChange={(e) => setCubagemC(e.target.value)}
-                className="num w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-right text-sm text-[var(--color-text)]"
+                className="num w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-xs text-[var(--color-text)]"
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[var(--color-text-soft)]">Larg.</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--color-text-soft)]">Larg.</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={cubagemL}
                 onChange={(e) => setCubagemL(e.target.value)}
-                className="num w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-right text-sm text-[var(--color-text)]"
+                className="num w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-xs text-[var(--color-text)]"
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[var(--color-text-soft)]">Alt.</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-[var(--color-text-soft)]">Alt.</span>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={cubagemA}
                 onChange={(e) => setCubagemA(e.target.value)}
-                className="num w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-right text-sm text-[var(--color-text)]"
+                className="num w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-xs text-[var(--color-text)]"
               />
             </div>
           </div>
@@ -174,14 +204,14 @@ export function EditProductModal({ produto, categorias, fornecedores, onFechar, 
         <Linha label="Despesa Extra (R$)">
           <div>
             <input type="number" step="0.1" min="0" value={despesaValor} onChange={(e) => setDespesaValor(e.target.value)} placeholder="Valor R$" className={campoClasse} />
-            <p className="mt-1 text-xs text-[var(--color-text-soft)]">Soma sempre como mais Encargos (não afeta o frete — pra isso, use a Cubagem).</p>
+            <p className="mt-1 text-[11px] text-[var(--color-text-soft)]">Soma sempre como mais Encargos (não afeta o frete — pra isso, use a Cubagem).</p>
           </div>
         </Linha>
 
-        <label className="flex items-center gap-2 text-sm text-[var(--color-text)]">
+        <label className="flex items-center gap-2 text-xs text-[var(--color-text)]">
           <input type="checkbox" checked={imprimir} onChange={(e) => setImprimir(e.target.checked)} className="accent-[var(--color-accent)]" />
           Imprimir
-          <span className="text-xs font-normal text-[var(--color-text-soft)]">— desmarcado, o produto some do catálogo em PDF (continua normal na tela)</span>
+          <span className="text-[11px] font-normal text-[var(--color-text-soft)]">— desmarcado, o produto some do catálogo em PDF (continua normal na tela)</span>
         </label>
       </div>
     </Modal>

@@ -11,22 +11,28 @@ import {
   apagarCategoria,
   apagarFornecedor,
   apagarProduto,
+  apagarSubcategoria,
+  apagarSubcategoriaMargem,
   apagarTodosProdutos,
   atualizarCanal,
   atualizarCategoria,
   atualizarFornecedor,
   atualizarPrecisaAjuste,
   atualizarProduto,
+  atualizarSubcategoria,
   fetchCanais,
   fetchCategorias,
   fetchFornecedores,
   fetchProdutos,
+  fetchSubcategorias,
   inserirCanal,
   inserirCategoria,
   inserirFornecedor,
   inserirProduto,
+  inserirSubcategoria,
   upsertCategoriaMargem,
   upsertProdutoPreco,
+  upsertSubcategoriaMargem,
 } from '@/features/pricing/api';
 import { gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
 import { ordenarProdutos } from '@/features/pricing/calculations';
@@ -41,7 +47,7 @@ import { FornecedoresPanel } from '@/features/pricing/components/FornecedoresPan
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
-import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, TipoImposto } from '@/features/pricing/types';
+import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
 type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
@@ -62,6 +68,7 @@ export function PricingPage() {
   const { data: transportadoras = [] } = useQuery({ queryKey: ['fretes', 'transportadoras'], queryFn: fetchTransportadoras });
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   const { data: categoriasData } = useQuery({ queryKey: ['pricing', 'categorias'], queryFn: fetchCategorias });
+  const { data: subcategoriasData } = useQuery({ queryKey: ['pricing', 'subcategorias'], queryFn: fetchSubcategorias });
   const { data: produtosData } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
   const { data: fornecedoresData } = useQuery({ queryKey: ['pricing', 'fornecedores'], queryFn: fetchFornecedores });
 
@@ -73,17 +80,19 @@ export function PricingPage() {
   const seeded = useRef(false);
   const [canais, setCanais] = useState<Canal[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [subcategorias, setSubcategorias] = useState<Subcategoria[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
 
   useEffect(() => {
-    if (seeded.current || !canaisData || !categoriasData || !produtosData || !fornecedoresData) return;
+    if (seeded.current || !canaisData || !categoriasData || !subcategoriasData || !produtosData || !fornecedoresData) return;
     setCanais(canaisData);
     setCategorias(categoriasData);
+    setSubcategorias(subcategoriasData);
     setProdutos(ordenarProdutos(produtosData, categoriasData));
     setFornecedores(fornecedoresData);
     seeded.current = true;
-  }, [canaisData, categoriasData, produtosData, fornecedoresData]);
+  }, [canaisData, categoriasData, subcategoriasData, produtosData, fornecedoresData]);
 
   const [modalParametrizacaoAberto, setModalParametrizacaoAberto] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState('');
@@ -180,6 +189,7 @@ export function PricingPage() {
     nome: string;
     codigo: string;
     categoriaId: string;
+    subcategoriaId: string | null;
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
@@ -196,6 +206,7 @@ export function PricingPage() {
                 nome: patch.nome,
                 codigo: patch.codigo || null,
                 categoriaId: patch.categoriaId,
+                subcategoriaId: patch.subcategoriaId,
                 peso: patch.peso,
                 despesaExtraValor: patch.despesaExtraValor,
                 cubagem: patch.cubagem,
@@ -212,6 +223,7 @@ export function PricingPage() {
         nome: patch.nome,
         codigo: patch.codigo || null,
         categoria_id: patch.categoriaId,
+        subcategoria_id: patch.subcategoriaId,
         peso: patch.peso,
         despesa_extra_valor: patch.despesaExtraValor,
         cubagem: patch.cubagem,
@@ -287,6 +299,11 @@ export function PricingPage() {
       delete margens[canalId];
       return { ...cat, margens };
     }));
+    setSubcategorias((prev) => prev.map((sub) => {
+      const margens = { ...sub.margens };
+      delete margens[canalId];
+      return { ...sub, margens };
+    }));
     setProdutos((prev) => prev.map((p) => {
       const precos = { ...p.precos };
       delete precos[canalId];
@@ -331,6 +348,8 @@ export function PricingPage() {
       return;
     }
     setCategorias((prev) => prev.filter((c) => c.id !== categoriaId));
+    // O cascade do banco já apaga as subcategorias dela — só reflete no estado local.
+    setSubcategorias((prev) => prev.filter((s) => s.categoriaId !== categoriaId));
     if (filtroClasse === `cat:${categoriaId}`) setFiltroClasse('todas');
     salvarAgora(() => apagarCategoria(categoriaId));
   }
@@ -346,6 +365,47 @@ export function PricingPage() {
     } catch (e) {
       setErro(mensagemDeErro(e, 'Falha ao adicionar categoria.'));
     }
+  }
+
+  // ---------- Subcategorias ----------
+  async function onAdicionarSubcategoria(categoriaId: string, nome: string) {
+    const irmas = subcategorias.filter((s) => s.categoriaId === categoriaId);
+    if (irmas.some((s) => s.nome.toLowerCase() === nome.toLowerCase())) {
+      setErro('Já existe uma subcategoria com esse nome nessa categoria.');
+      return;
+    }
+    try {
+      const subcategoria = await inserirSubcategoria({ categoriaId, nome, ordem: irmas.length });
+      setSubcategorias((prev) => [...prev, subcategoria]);
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Falha ao adicionar subcategoria.'));
+    }
+  }
+
+  function onRenomearSubcategoria(id: string, nome: string) {
+    setSubcategorias((prev) => prev.map((s) => (s.id === id ? { ...s, nome } : s)));
+    salvarAgora(() => atualizarSubcategoria(id, { nome }));
+  }
+
+  /** Sem confirmação/bloqueio: subcategoria_id é opcional (on delete set null) — produtos que a usavam só ficam sem subcategoria. */
+  function onRemoverSubcategoria(id: string) {
+    setSubcategorias((prev) => prev.filter((s) => s.id !== id));
+    setProdutos((prev) => prev.map((p) => (p.subcategoriaId === id ? { ...p, subcategoriaId: null } : p)));
+    salvarAgora(() => apagarSubcategoria(id));
+  }
+
+  /** valor null = apaga o override daquele canal, volta a herdar a margem da categoria pai. */
+  function onAtualizarMargemSubcategoria(subcategoriaId: string, canalId: string, valor: number | null) {
+    setSubcategorias((prev) =>
+      prev.map((s) => {
+        if (s.id !== subcategoriaId) return s;
+        const margens = { ...s.margens };
+        if (valor === null) delete margens[canalId];
+        else margens[canalId] = valor;
+        return { ...s, margens };
+      }),
+    );
+    salvarAgora(() => (valor === null ? apagarSubcategoriaMargem(subcategoriaId, canalId) : upsertSubcategoriaMargem(subcategoriaId, canalId, valor)));
   }
 
   // ---------- Fornecedores ----------
@@ -480,6 +540,7 @@ export function PricingPage() {
             <PricingTable
               produtos={produtosExibidos}
               categorias={categorias}
+              subcategorias={subcategorias}
               fornecedores={fornecedores}
               canaisVisiveis={canaisVisiveis}
               canalReferencia={canaisVisiveis[0]}
@@ -500,6 +561,7 @@ export function PricingPage() {
       <EditProductModal
         produto={produtoEditando}
         categorias={categorias}
+        subcategorias={subcategorias}
         fornecedores={fornecedores}
         onFechar={() => setProdutoEditandoId(null)}
         onSalvar={onSalvarEdicaoProduto}
@@ -509,6 +571,7 @@ export function PricingPage() {
         canal={canalTelaCheia}
         produtos={produtosExibidos}
         categorias={categorias}
+        subcategorias={subcategorias}
         fornecedores={fornecedores}
         canalReferencia={canaisVisiveis[0]}
         transportadoras={transportadoras}
@@ -544,7 +607,7 @@ export function PricingPage() {
         onFechar={() => setModalPdfAberto(false)}
         onConfirmar={(canal) => {
           setModalPdfAberto(false);
-          gerarCatalogoPDF(canal, produtosExibidos, categorias, fornecedores, transportadoraPorId);
+          gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, transportadoraPorId);
         }}
       />
 
@@ -590,11 +653,16 @@ export function PricingPage() {
           />
           <CategoryMarginsPanel
             categorias={categorias}
+            subcategorias={subcategorias}
             canais={canais}
             onAtualizarCategoria={onAtualizarCategoria}
             onAtualizarMargem={onAtualizarMargem}
             onRemoverCategoria={onRemoverCategoria}
             onAdicionarCategoria={onAdicionarCategoria}
+            onAdicionarSubcategoria={onAdicionarSubcategoria}
+            onRenomearSubcategoria={onRenomearSubcategoria}
+            onRemoverSubcategoria={onRemoverSubcategoria}
+            onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}
           />
           <FornecedoresPanel
             fornecedores={fornecedores}

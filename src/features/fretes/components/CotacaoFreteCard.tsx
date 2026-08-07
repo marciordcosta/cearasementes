@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import { TabToggle } from '@/components/ui/TabToggle';
 import { calcularCanal, calcularPesoCubado, calcularPesoEfetivo } from '@/features/pricing/calculations';
-import type { Canal, Categoria, Produto } from '@/features/pricing/types';
+import type { Canal, Categoria, Produto, Subcategoria } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { calcularCustoRota, chegadaDoTrecho, cotarFrete, ordenarCotacoes } from '../calculations';
@@ -21,6 +21,7 @@ interface CotacaoFreteCardProps {
   produtos: Produto[];
   canais: Canal[];
   categorias: Categoria[];
+  subcategorias: Subcategoria[];
   parametrosRota: RotaParametros;
   cidadesRotaCache: string[];
   onRotaCalculada?: () => void;
@@ -51,7 +52,7 @@ function kmDeIda(resultado: RotaResultado): number {
 
 /** Simulador de cotação/orçamento de frete — porte do frete.html original, estendido com o modo "Orçamento" (produtos da Tabela de Preço + despesa extra). */
 export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteCardProps>(function CotacaoFreteCard(
-  { transportadoras, produtos, canais, categorias, parametrosRota, cidadesRotaCache, onRotaCalculada },
+  { transportadoras, produtos, canais, categorias, subcategorias, parametrosRota, cidadesRotaCache, onRotaCalculada },
   ref,
 ) {
   // Cidade de destino — sempre uma lista (mesma UI do antigo modo "Rota"),
@@ -113,13 +114,14 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
       const produto = produtos.find((p) => p.id === item.produtoId);
       if (!produto) return null;
       const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
-      const valorTabela = canal ? calcularCanal(produto, canal, categoria, transportadoraPorId).preco : 0;
+      const subcategoria = produto.subcategoriaId ? subcategorias.find((s) => s.id === produto.subcategoriaId) : undefined;
+      const valorTabela = canal ? calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId).preco : 0;
       const valorUnitario = item.valorManual ?? valorTabela;
       const pesoEfetivo = calcularPesoEfetivo(produto);
       const pesoCubado = calcularPesoCubado(produto.cubagem) !== null;
       return { produto, valorTabela, valorUnitario, pesoEfetivo, pesoCubado };
     },
-    [produtos, canal, categorias, transportadoraPorId],
+    [produtos, canal, categorias, subcategorias, transportadoraPorId],
   );
 
   const resumoOrcamento = useMemo(() => {

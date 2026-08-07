@@ -31,6 +31,16 @@ export interface Categoria {
   margens: Record<string, number>;
 }
 
+/** Subcategoria (Parametrização) — não tem alíquota própria (imposto sempre vem da categoria pai). */
+export interface Subcategoria {
+  id: string;
+  categoriaId: string;
+  nome: string;
+  ordem: number;
+  /** canalId -> margem (%) só quando sobrescreve a da categoria pai — chave ausente = herda. */
+  margens: Record<string, number>;
+}
+
 export interface PrecoCanal {
   preco: number | null;
   manual: boolean;
@@ -58,6 +68,8 @@ export interface Produto {
   cubagem: string | null;
   /** Cadastrado em Parametrização (ver Fornecedor abaixo) — aparece na Tabela de Preços logo depois do nome do produto, mesma marcação (asterisco = negrito, underscore = itálico) do nome (ver NomeComDestaque em PricingTable.tsx). */
   fornecedorId: string | null;
+  /** Escolhida junto com a categoria no campo "Classe" do Editar Produto — a margem dela sobrepõe a da categoria pai quando preenchida. */
+  subcategoriaId: string | null;
   /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. Padrão true. */
   imprimir: boolean;
   /** canalId -> preço sugerido/manual daquele canal */
