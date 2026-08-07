@@ -353,13 +353,11 @@ export function PricingTable({
           // Não faz sentido comparar a referência com ela mesma.
           const ehReferencia = referencia !== undefined && canal.id === referencia.id;
           const partesTooltip: string[] = [];
-          if (manual) partesTooltip.push(`Sugestão: R$ ${fmtR(r.precoSugerido)}`);
           if (referencia !== undefined && !ehReferencia) {
             const rReferencia = calcularCanal(p, referencia, categoria, subcategoria, transportadoraPorId, canaisPorId);
-            const diffPct = rReferencia.preco > 0 ? ((r.preco - rReferencia.preco) / rReferencia.preco) * 100 : 0;
             partesTooltip.push(`Padrão: R$ ${fmtR(rReferencia.preco)}`);
-            partesTooltip.push(`Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`);
           }
+          if (manual) partesTooltip.push(`Sugestão: R$ ${fmtR(r.precoSugerido)}`);
           return (
             <div className="flex items-center gap-1" title={partesTooltip.length > 0 ? partesTooltip.join('\n') : undefined}>
               <NumeroSincronizado
