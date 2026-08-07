@@ -211,22 +211,32 @@ export function CategoryMarginsPanel({
                         </td>
                         <td className="px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
                         <td className="px-3 py-1.5 text-center text-[var(--color-text-soft)]">—</td>
-                        {canais.map((canal) => (
-                          <td key={canal.id} className="px-3 py-1.5">
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              placeholder={String(cat.margens[canal.id] ?? 20)}
-                              defaultValue={sub.margens[canal.id] ?? ''}
-                              onBlur={(e) => {
-                                const texto = e.target.value.trim();
-                                onAtualizarMargemSubcategoria(sub.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
-                              }}
-                              className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)] placeholder:text-[var(--color-text-soft)]"
-                            />
-                          </td>
-                        ))}
+                        {canais.map((canal) => {
+                          const referencia = nomeReferencia(canal);
+                          return (
+                            <td key={canal.id} className="px-3 py-1.5">
+                              {referencia ? (
+                                <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center">
+                                  <div className="text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-soft)]">Referência</div>
+                                  <div className="text-[11px] font-semibold text-[var(--color-text)]">{referencia}</div>
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  placeholder={String(cat.margens[canal.id] ?? 20)}
+                                  defaultValue={sub.margens[canal.id] ?? ''}
+                                  onBlur={(e) => {
+                                    const texto = e.target.value.trim();
+                                    onAtualizarMargemSubcategoria(sub.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
+                                  }}
+                                  className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)] placeholder:text-[var(--color-text-soft)]"
+                                />
+                              )}
+                            </td>
+                          );
+                        })}
                         <td className="px-3 py-1.5">
                           <button type="button" onClick={() => onRemoverSubcategoria(sub.id)} title="Deletar subcategoria" className="text-[var(--color-text-soft)] hover:text-bad">
                             🗑
