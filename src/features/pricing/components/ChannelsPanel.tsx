@@ -64,6 +64,7 @@ export function ChannelsPanel({
   acaoTitulo,
 }: ChannelsPanelProps) {
   const [canalParaRemover, setCanalParaRemover] = useState<Canal | null>(null);
+  const [modalNovoAberto, setModalNovoAberto] = useState(false);
   const [novo, setNovo] = useState<NovoCanalInput>({
     nome: '',
     desconto: 0,
@@ -88,13 +89,19 @@ export function ChannelsPanel({
     if (!novo.nome.trim()) return;
     onAdicionarCanal(novo);
     setNovo({ nome: '', desconto: 0, comissao: 0, cartao: 0, outrosEncargos: 0, freteKg: 0, fretePct: 0, freteAdicionalTipo: 'fixo', freteAdicionalValor: 0, tipoImposto: 'estadual', transportadoraId: null });
+    setModalNovoAberto(false);
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-bold text-[var(--color-text)]">Tabelas de Preço / Canais de Venda</p>
-        {acaoTitulo}
+        <span className="flex items-center gap-2">
+          <Button variant="primary" onClick={() => setModalNovoAberto(true)}>
+            + Nova Tabela
+          </Button>
+          {acaoTitulo}
+        </span>
       </div>
       <p className="text-xs text-[var(--color-text-soft)]">
         Cada tabela gera um bloco de colunas (Preço, Frete, Encargos, ML % e ML $) na Tabela de Preços. Excluir remove
@@ -205,82 +212,6 @@ export function ChannelsPanel({
             </Card>
           );
         })}
-
-        <Card className="border-2 border-dashed border-[var(--color-line)] bg-[var(--color-page)]">
-          <div className="px-3.5 py-2.5 text-sm font-bold text-[var(--color-text)]">+ Adicionar Nova Tabela de Preço</div>
-          <div className="flex flex-col gap-2 p-3.5">
-            <input
-              type="text"
-              placeholder="Nome da tabela"
-              value={novo.nome}
-              onChange={(e) => setNovo((n) => ({ ...n, nome: e.target.value }))}
-              className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)]"
-            />
-            <CampoRow label="Média de Desconto (%)">
-              <input type="number" step="0.1" min="0" value={novo.desconto} onChange={(e) => setNovo((n) => ({ ...n, desconto: parseFloat(e.target.value) || 0 }))} className={inputClass} />
-            </CampoRow>
-            <CampoRow label="Comissão Vendedor (%)">
-              <input type="number" step="0.1" min="0" value={novo.comissao} onChange={(e) => setNovo((n) => ({ ...n, comissao: parseFloat(e.target.value) || 0 }))} className={inputClass} />
-            </CampoRow>
-            <CampoRow label="Taxa de Cartão (%)">
-              <input type="number" step="0.1" min="0" value={novo.cartao} onChange={(e) => setNovo((n) => ({ ...n, cartao: parseFloat(e.target.value) || 0 }))} className={inputClass} />
-            </CampoRow>
-            <CampoRow label="Transportadora Padrão">
-              <select
-                value={novo.transportadoraId ?? ''}
-                onChange={(e) => setNovo((n) => ({ ...n, transportadoraId: e.target.value || null }))}
-                title="O cálculo passa a usar o Valor/Kg e o Custo NF dela ao vivo — editar a taxa no módulo Fretes atualiza aqui automaticamente"
-                className={selectClass}
-              >
-                <option value="" className="text-[var(--color-text)]">— Manual —</option>
-                {transportadoras.map((t) => (
-                  <option key={t.id} value={t.id} className="text-[var(--color-text)]">
-                    {t.nome} — {t.uf}
-                  </option>
-                ))}
-              </select>
-            </CampoRow>
-            {novoTransportadoraVinculada ? (
-              <div className="rounded-md bg-[var(--color-surface)] px-2.5 py-2 text-xs text-[var(--color-text-soft)]">
-                Ao vivo via <strong className="text-[var(--color-text)]">{novoTransportadoraVinculada.nome}</strong>: Frete Kg{' '}
-                <span className="num font-semibold text-[var(--color-text)]">R$ {novoTransportadoraVinculada.valorPorKg.toFixed(2)}</span>
-                {novoTransportadoraVinculada.valorPorNfTipo === 'percentual' ? (
-                  <>
-                    {' '}
-                    · Frete NF <span className="num font-semibold text-[var(--color-text)]">{(novoTransportadoraVinculada.valorPorNf * 100).toFixed(2)}%</span>
-                  </>
-                ) : (
-                  <>
-                    {' '}
-                    · Custo NF é fixo (R$ {novoTransportadoraVinculada.valorPorNf.toFixed(2)}) — não entra como %; ajuste em Outros Encargos se precisar refletir no preço.
-                  </>
-                )}
-              </div>
-            ) : (
-              <>
-                <CampoRow label="Frete Kg (R$)">
-                  <input type="number" step="0.1" min="0" value={novo.freteKg} onChange={(e) => setNovo((n) => ({ ...n, freteKg: parseFloat(e.target.value) || 0 }))} className={inputClass} />
-                </CampoRow>
-                <CampoRow label="Frete NF (%)">
-                  <input type="number" step="0.1" min="0" value={novo.fretePct} onChange={(e) => setNovo((n) => ({ ...n, fretePct: parseFloat(e.target.value) || 0 }))} className={inputClass} />
-                </CampoRow>
-              </>
-            )}
-            <CampoRow label="Tipo de Imposto (ICMS)">
-              <select
-                value={novo.tipoImposto}
-                onChange={(e) => setNovo((n) => ({ ...n, tipoImposto: e.target.value as TipoImposto }))}
-                className={selectClass}
-              >
-                <option value="estadual" className="text-[var(--color-text)]">Estadual</option>
-                <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
-              </select>
-            </CampoRow>
-            <Button variant="primary" className="mt-2" onClick={submeterNovoCanal}>
-              + Adicionar Nova Tabela de Preço
-            </Button>
-          </div>
-        </Card>
       </div>
 
       <Modal
@@ -302,6 +233,81 @@ export function ChannelsPanel({
           Excluir a Tabela de Preço <strong>{canalParaRemover?.nome}</strong>? As colunas dela vão sumir da Tabela de Preços
           imediatamente, para todos que acessarem o sistema.
         </p>
+      </Modal>
+
+      <Modal open={modalNovoAberto} title="Nova Tabela de Preço" onClose={() => setModalNovoAberto(false)}>
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            placeholder="Nome da tabela"
+            value={novo.nome}
+            onChange={(e) => setNovo((n) => ({ ...n, nome: e.target.value }))}
+            className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)]"
+          />
+          <CampoRow label="Média de Desconto (%)">
+            <input type="number" step="0.1" min="0" value={novo.desconto} onChange={(e) => setNovo((n) => ({ ...n, desconto: parseFloat(e.target.value) || 0 }))} className={inputClass} />
+          </CampoRow>
+          <CampoRow label="Comissão Vendedor (%)">
+            <input type="number" step="0.1" min="0" value={novo.comissao} onChange={(e) => setNovo((n) => ({ ...n, comissao: parseFloat(e.target.value) || 0 }))} className={inputClass} />
+          </CampoRow>
+          <CampoRow label="Taxa de Cartão (%)">
+            <input type="number" step="0.1" min="0" value={novo.cartao} onChange={(e) => setNovo((n) => ({ ...n, cartao: parseFloat(e.target.value) || 0 }))} className={inputClass} />
+          </CampoRow>
+          <CampoRow label="Transportadora Padrão">
+            <select
+              value={novo.transportadoraId ?? ''}
+              onChange={(e) => setNovo((n) => ({ ...n, transportadoraId: e.target.value || null }))}
+              title="O cálculo passa a usar o Valor/Kg e o Custo NF dela ao vivo — editar a taxa no módulo Fretes atualiza aqui automaticamente"
+              className={selectClass}
+            >
+              <option value="" className="text-[var(--color-text)]">— Manual —</option>
+              {transportadoras.map((t) => (
+                <option key={t.id} value={t.id} className="text-[var(--color-text)]">
+                  {t.nome} — {t.uf}
+                </option>
+              ))}
+            </select>
+          </CampoRow>
+          {novoTransportadoraVinculada ? (
+            <div className="rounded-md bg-[var(--color-page)] px-2.5 py-2 text-xs text-[var(--color-text-soft)]">
+              Ao vivo via <strong className="text-[var(--color-text)]">{novoTransportadoraVinculada.nome}</strong>: Frete Kg{' '}
+              <span className="num font-semibold text-[var(--color-text)]">R$ {novoTransportadoraVinculada.valorPorKg.toFixed(2)}</span>
+              {novoTransportadoraVinculada.valorPorNfTipo === 'percentual' ? (
+                <>
+                  {' '}
+                  · Frete NF <span className="num font-semibold text-[var(--color-text)]">{(novoTransportadoraVinculada.valorPorNf * 100).toFixed(2)}%</span>
+                </>
+              ) : (
+                <>
+                  {' '}
+                  · Custo NF é fixo (R$ {novoTransportadoraVinculada.valorPorNf.toFixed(2)}) — não entra como %; ajuste em Outros Encargos se precisar refletir no preço.
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <CampoRow label="Frete Kg (R$)">
+                <input type="number" step="0.1" min="0" value={novo.freteKg} onChange={(e) => setNovo((n) => ({ ...n, freteKg: parseFloat(e.target.value) || 0 }))} className={inputClass} />
+              </CampoRow>
+              <CampoRow label="Frete NF (%)">
+                <input type="number" step="0.1" min="0" value={novo.fretePct} onChange={(e) => setNovo((n) => ({ ...n, fretePct: parseFloat(e.target.value) || 0 }))} className={inputClass} />
+              </CampoRow>
+            </>
+          )}
+          <CampoRow label="Tipo de Imposto (ICMS)">
+            <select
+              value={novo.tipoImposto}
+              onChange={(e) => setNovo((n) => ({ ...n, tipoImposto: e.target.value as TipoImposto }))}
+              className={selectClass}
+            >
+              <option value="estadual" className="text-[var(--color-text)]">Estadual</option>
+              <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
+            </select>
+          </CampoRow>
+          <Button variant="primary" className="mt-2" onClick={submeterNovoCanal}>
+            + Adicionar Nova Tabela de Preço
+          </Button>
+        </div>
       </Modal>
     </div>
   );
