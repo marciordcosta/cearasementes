@@ -166,6 +166,16 @@ export function montarTituloFrete(r: ResultadoCalculo, freteIncluso: boolean): s
   return partes.join(' — ');
 }
 
+/** Discrimina o que compõe a coluna "Encargos (R$)" — imposto + cada encargo do canal (só os que existirem). */
+export function montarTituloEncargos(canal: Canal, r: ResultadoCalculo): string {
+  const partes: string[] = [`Imposto ${r.impostoPct.toFixed(1)}%`];
+  if (canal.desconto) partes.push(`Desconto ${canal.desconto.toFixed(1)}%`);
+  if (canal.comissao) partes.push(`Comissão ${canal.comissao.toFixed(1)}%`);
+  if (canal.cartao) partes.push(`Cartão ${canal.cartao.toFixed(1)}%`);
+  if (r.outrosEncargos) partes.push(`Outros Encargos R$ ${r.outrosEncargos.toFixed(2)}`);
+  return partes.join(' + ');
+}
+
 export function gerarCorCanal(indice: number) {
   const hue = Math.round((210 + indice * 137.508) % 360);
   return {

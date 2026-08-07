@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal, gerarCorCanal, margemClasse, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
+import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -412,7 +412,7 @@ export function PricingTable({
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           return (
-            <span className="num" title={`Imposto ${fmtP(r.impostoPct)}% + Encargos ${fmtP(r.encargosPct)}%${r.outrosEncargos ? ' + Outros Encargos R$ ' + fmtR(r.outrosEncargos) : ''}`}>
+            <span className="num" title={montarTituloEncargos(canal, r)}>
               R$ {fmtR(r.impostoReais)}
             </span>
           );
