@@ -40,15 +40,15 @@ interface ChannelsPanelProps {
 
 function CampoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-2.5">
-      <label className="text-xs text-[var(--color-text-soft)]">{label}</label>
+    <div className="flex items-center justify-between gap-1.5">
+      <label className="whitespace-nowrap text-[11px] text-[var(--color-text-soft)]">{label}</label>
       {children}
     </div>
   );
 }
 
-const inputClass = 'w-24 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-xs text-[var(--color-text)] num';
-const selectClass = 'rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-xs text-[var(--color-text)]';
+const inputClass = 'w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-right text-xs text-[var(--color-text)] num';
+const selectClass = 'min-w-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1.5 text-[11px] text-[var(--color-text)]';
 
 export function ChannelsPanel({
   canais,
@@ -107,7 +107,7 @@ export function ChannelsPanel({
         Cada tabela gera um bloco de colunas (Preço, Frete, Encargos, ML % e ML $) na Tabela de Preços. Excluir remove
         imediatamente da tela.
       </p>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {canais.map((canal) => {
           const cor = gerarCorCanal(canal.corIndice);
           const transportadoraVinculada = canal.transportadoraId ? transportadoras.find((t) => t.id === canal.transportadoraId) : undefined;
@@ -123,13 +123,13 @@ export function ChannelsPanel({
                   🗑 Excluir
                 </button>
               </div>
-              <div className="flex flex-col gap-2 p-3.5">
-                <label className="flex items-center justify-between border-b border-dashed border-[var(--color-line)] pb-1.5 text-xs">
-                  <span className="font-semibold text-[var(--color-text)]">Exibir na Tabela Principal</span>
+              <div className="flex flex-col gap-1.5 p-2.5">
+                <label className="flex items-center justify-between gap-1.5 border-b border-dashed border-[var(--color-line)] pb-1.5 text-[11px]">
+                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Exibir na Tabela Principal</span>
                   <input type="checkbox" checked={canal.visivel} onChange={(e) => onToggleVisivel(canal.id, e.target.checked)} className="accent-[var(--color-navy)]" />
                 </label>
-                <label className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-[var(--color-text)]">Frete Incluso na Margem</span>
+                <label className="flex items-center justify-between gap-1.5 text-[11px]">
+                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Frete Incluso na Margem</span>
                   <input type="checkbox" checked={canal.freteIncluso} onChange={(e) => onToggleFreteIncluso(canal.id, e.target.checked)} className="accent-accent" />
                 </label>
                 <CampoRow label="Média de Desconto (%)">
@@ -195,7 +195,7 @@ export function ChannelsPanel({
                       <option value="fixo" className="text-[var(--color-text)]">R$ Fixo</option>
                       <option value="kg" className="text-[var(--color-text)]">R$/Kg</option>
                     </select>
-                    <input type="number" step="0.1" min="0" defaultValue={canal.freteAdicionalValor} onBlur={(e) => onAtualizarCampo(canal.id, 'freteAdicionalValor', parseFloat(e.target.value) || 0)} className="w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-xs text-[var(--color-text)] num" />
+                    <input type="number" step="0.1" min="0" defaultValue={canal.freteAdicionalValor} onBlur={(e) => onAtualizarCampo(canal.id, 'freteAdicionalValor', parseFloat(e.target.value) || 0)} className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-right text-xs text-[var(--color-text)] num" />
                   </span>
                 </CampoRow>
                 <CampoRow label="Tipo de Imposto (ICMS)">
