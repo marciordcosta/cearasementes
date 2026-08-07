@@ -175,7 +175,10 @@ export interface Database {
           nome: string;
           codigo: string | null;
           categoria_id: string;
+          /** custo = valor_kg x peso — calculado e salvo a partir do Editar Produto. */
           custo: number;
+          /** R$/Kg cadastrado no Editar Produto — junto com o peso, define o custo. */
+          valor_kg: number;
           peso: number;
           despesa_extra_valor: number;
           /** Sem uso a partir da introdução da Cubagem — mantido só por compatibilidade com a coluna já existente no banco. */

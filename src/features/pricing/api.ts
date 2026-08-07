@@ -299,6 +299,7 @@ export async function fetchProdutos(): Promise<Produto[]> {
       codigo: row.codigo,
       categoriaId: row.categoria_id,
       custo: row.custo,
+      valorKg: row.valor_kg,
       peso: row.peso,
       despesaExtraValor: row.despesa_extra_valor,
       cubagem: row.cubagem,
@@ -318,6 +319,8 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
       codigo: input.codigo,
       categoria_id: input.categoriaId,
       custo: input.custo,
+      // Retroalimentado a partir do custo digitado — o Editar Produto ajusta com precisão depois.
+      valor_kg: input.peso > 0 ? Math.round((input.custo / input.peso) * 10000) / 10000 : 0,
       peso: input.peso,
       despesa_extra_valor: 0,
       despesa_extra_destino: 'frete',
@@ -345,6 +348,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
     codigo: data.codigo,
     categoriaId: data.categoria_id,
     custo: data.custo,
+    valorKg: data.valor_kg,
     peso: data.peso,
     despesaExtraValor: data.despesa_extra_valor,
     cubagem: data.cubagem,
@@ -358,7 +362,7 @@ export async function inserirProduto(input: { nome: string; codigo: string | nul
 export async function atualizarProduto(
   id: string,
   patch: Partial<
-    Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor_id' | 'subcategoria_id' | 'imprimir'>
+    Pick<ProdutoRow, 'nome' | 'codigo' | 'categoria_id' | 'custo' | 'valor_kg' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor_id' | 'subcategoria_id' | 'imprimir'>
   >,
 ): Promise<void> {
   const payload: Database['public']['Tables']['produtos']['Update'] = { ...patch, atualizado_em: new Date().toISOString() };
@@ -427,7 +431,9 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
   for (const item of existentesItens) {
     const produto = porCodigo.get(item.codigo)!;
     if (produto.custo !== item.custo) {
-      await atualizarProduto(produto.id, { custo: item.custo });
+      // Recalcula valor_kg junto — senão o Editar Produto mostraria um valor desatualizado em relação ao custo recém-sincronizado.
+      const valorKg = produto.peso > 0 ? Math.round((item.custo / produto.peso) * 10000) / 10000 : 0;
+      await atualizarProduto(produto.id, { custo: item.custo, valor_kg: valorKg });
       atualizados++;
     }
   }
@@ -443,12 +449,15 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
       if (!categoriaInferida && categoriaPadraoId === null) {
         categoriaPadraoId = await garantirCategoriaSemCategoria(categorias, canais);
       }
+      const pesoInferido = inferirPesoDoNome(item.nome);
       linhas.push({
         nome: item.nome,
         codigo: item.codigo,
         categoria_id: categoriaInferida?.id ?? categoriaPadraoId!,
         custo: item.custo,
-        peso: inferirPesoDoNome(item.nome),
+        // Retroalimentado a partir do custo importado — o Editar Produto ajusta com precisão depois.
+        valor_kg: pesoInferido > 0 ? Math.round((item.custo / pesoInferido) * 10000) / 10000 : 0,
+        peso: pesoInferido,
         despesa_extra_valor: 0,
         despesa_extra_destino: 'frete' as const,
         cubagem: null,

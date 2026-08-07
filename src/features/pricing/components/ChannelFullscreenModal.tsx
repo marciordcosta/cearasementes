@@ -15,7 +15,6 @@ interface ChannelFullscreenModalProps {
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
   onFechar: () => void;
-  onUpdateCusto: (produtoId: string, custo: number) => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
@@ -31,7 +30,6 @@ export function ChannelFullscreenModal({
   transportadoras,
   mostrarColunaId,
   onFechar,
-  onUpdateCusto,
   onUpdatePreco,
   onResetPreco,
   onTogglePrecisaAjuste,
@@ -84,7 +82,6 @@ export function ChannelFullscreenModal({
             canalReferencia={canalReferencia}
             transportadoras={transportadoras}
             mostrarColunaId={mostrarColunaId}
-            onUpdateCusto={onUpdateCusto}
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}

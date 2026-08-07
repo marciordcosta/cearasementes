@@ -14,6 +14,8 @@ interface EditProductModalProps {
     codigo: string;
     categoriaId: string;
     subcategoriaId: string | null;
+    valorKg: number;
+    custo: number;
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
@@ -39,6 +41,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
   const [codigo, setCodigo] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [subcategoriaId, setSubcategoriaId] = useState<string | null>(null);
+  const [valorKg, setValorKg] = useState('');
   const [peso, setPeso] = useState('');
   const [despesaValor, setDespesaValor] = useState('0');
   const [cubagemC, setCubagemC] = useState('');
@@ -53,6 +56,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
     setCodigo(produto.codigo ?? '');
     setCategoriaId(produto.categoriaId);
     setSubcategoriaId(produto.subcategoriaId);
+    setValorKg(produto.valorKg ? String(produto.valorKg) : '');
     setPeso(String(produto.peso));
     setDespesaValor(String(produto.despesaExtraValor || 0));
     const partes = produto.cubagem?.split(/x/i) ?? [];
@@ -81,6 +85,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
 
   function salvar() {
     const pesoNum = parseFloat(peso);
+    const valorKgNum = parseFloat(valorKg);
     if (!nome.trim()) {
       alert('Informe o nome do produto.');
       return;
@@ -89,12 +94,18 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
       alert('Informe um peso válido para o produto.');
       return;
     }
+    if (isNaN(valorKgNum) || valorKgNum <= 0) {
+      alert('Informe o Valor Kg do produto.');
+      return;
+    }
     const cubagemPreenchida = cubagemC.trim() && cubagemL.trim() && cubagemA.trim();
     onSalvar({
       nome: nome.trim(),
       codigo: codigo.trim(),
       categoriaId,
       subcategoriaId,
+      valorKg: valorKgNum,
+      custo: valorKgNum * pesoNum,
       peso: pesoNum,
       despesaExtraValor: parseFloat(despesaValor) || 0,
       cubagem: cubagemPreenchida ? `${cubagemC.trim()}x${cubagemL.trim()}x${cubagemA.trim()}` : null,
@@ -157,6 +168,18 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
               </option>
             ))}
           </select>
+        </Linha>
+
+        <Linha label="Valor Kg">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={valorKg}
+            onChange={(e) => setValorKg(e.target.value)}
+            placeholder="R$/Kg"
+            className="num w-full rounded-md border-2 border-[var(--color-accent)] bg-[var(--color-surface)] px-2 py-1.5 text-sm font-bold text-[var(--color-text)]"
+          />
         </Linha>
 
         <Linha label="Peso (Kg)">

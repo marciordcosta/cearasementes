@@ -18,6 +18,17 @@ function fmtP(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
+/** As duas primeiras palavras do nome (sem a marcação de negrito/itálico, maiúsculas) — usado pra decidir se a linha divisória entre produtos deve ficar espessa (produto "diferente" do anterior). */
+function primeirasDuasPalavras(nome: string): string {
+  return nome
+    .replace(/[*_]/g, '')
+    .trim()
+    .toUpperCase()
+    .split(/\s+/)
+    .slice(0, 2)
+    .join(' ');
+}
+
 /**
  * Nome do produto com marcação estilo WhatsApp, digitada no próprio campo
  * "Produto" do EditProductModal (não afeta o que é salvo, só a exibição
@@ -84,7 +95,6 @@ interface PricingTableProps {
   canalReferencia?: Canal;
   transportadoras: Transportadora[];
   mostrarColunaId: boolean;
-  onUpdateCusto: (produtoId: string, custo: number) => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
@@ -123,7 +133,6 @@ export function PricingTable({
   canalReferencia,
   transportadoras,
   mostrarColunaId,
-  onUpdateCusto,
   onUpdatePreco,
   onResetPreco,
   onTogglePrecisaAjuste,
@@ -299,19 +308,16 @@ export function PricingTable({
     },
     { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{p.peso.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} kg</span> },
     {
+      // Não editável: custo = Valor Kg x Peso, calculado e salvo no Editar Produto.
       chave: 'custo',
       rotulo: 'Custo (R$)',
       larguraPadrao: defaults.custo,
       render: (p, destacada) => (
-        <NumeroSincronizado
-          step="0.1"
-          min="0"
-          tabIndex={-1}
-          valor={p.custo}
-          onFocus={() => setLinhaDestacada(p.id)}
-          onCommit={(val) => onUpdateCusto(p.id, val)}
+        <div
           className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
-        />
+        >
+          {fmtR(p.custo)}
+        </div>
       ),
     },
     ...canaisVisiveis.flatMap((canal): ColunaDef[] => {
@@ -539,13 +545,19 @@ export function PricingTable({
             </tr>
           ) : (
             produtos.map((produto, indice) => {
-              const novoGrupo = indice > 0 && produto.categoriaId !== produtos[indice - 1].categoriaId;
+              const anterior = indice > 0 ? produtos[indice - 1] : null;
+              const categoriaMudou = anterior !== null && produto.categoriaId !== anterior.categoriaId;
+              // Produto "diferente" do anterior (mesmo dentro da mesma categoria) — mesma
+              // linha divisória espessa usada entre categorias, só que verde quando a
+              // categoria TAMBÉM mudou.
+              const produtoMudou = anterior !== null && primeirasDuasPalavras(produto.nome) !== primeirasDuasPalavras(anterior.nome);
+              const linhaEspessa = categoriaMudou || produtoMudou;
               const destacada = produto.id === linhaDestacada;
               return (
                 <tr
                   key={produto.id}
                   onClick={() => setLinhaDestacada(produto.id)}
-                  className={`border-b border-[var(--color-line)] ${novoGrupo ? 'border-t-2 border-t-[var(--color-line)]' : ''}`}
+                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? (categoriaMudou ? 'border-t-2 border-t-good' : 'border-t-2 border-t-[var(--color-line)]') : ''}`}
                 >
                   {colunas.map((coluna) => {
                     const precisaAjuste = coluna.canalId !== undefined && (produto.precos[coluna.canalId]?.precisaAjuste ?? false);

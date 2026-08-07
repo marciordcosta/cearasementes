@@ -60,7 +60,10 @@ export interface Produto {
   nome: string;
   codigo: string | null;
   categoriaId: string;
+  /** custo = valorKg x peso — calculado e salvo a partir do Editar Produto, não é mais digitado direto na Tabela de Preços. */
   custo: number;
+  /** R$/Kg cadastrado no Editar Produto — junto com o peso, define o Custo (R$) da Tabela de Preços. */
+  valorKg: number;
   peso: number;
   /** Sempre entra como Encargos na precificação (não afeta mais o frete — pra isso, ver `cubagem`). */
   despesaExtraValor: number;

@@ -143,11 +143,6 @@ export function PricingPage() {
     });
 
   // ---------- Produtos ----------
-  function onUpdateCusto(produtoId: string, custo: number) {
-    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, custo } : p)));
-    debounced(`produto-custo-${produtoId}`, () => atualizarProduto(produtoId, { custo }).then(invalidarProdutosPreco));
-  }
-
   function onUpdatePreco(produtoId: string, canalId: string, preco: number) {
     setProdutos((prev) =>
       prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], preco, manual: true } } } : p)),
@@ -190,6 +185,8 @@ export function PricingPage() {
     codigo: string;
     categoriaId: string;
     subcategoriaId: string | null;
+    valorKg: number;
+    custo: number;
     peso: number;
     despesaExtraValor: number;
     cubagem: string | null;
@@ -207,6 +204,8 @@ export function PricingPage() {
                 codigo: patch.codigo || null,
                 categoriaId: patch.categoriaId,
                 subcategoriaId: patch.subcategoriaId,
+                valorKg: patch.valorKg,
+                custo: patch.custo,
                 peso: patch.peso,
                 despesaExtraValor: patch.despesaExtraValor,
                 cubagem: patch.cubagem,
@@ -224,6 +223,8 @@ export function PricingPage() {
         codigo: patch.codigo || null,
         categoria_id: patch.categoriaId,
         subcategoria_id: patch.subcategoriaId,
+        valor_kg: patch.valorKg,
+        custo: patch.custo,
         peso: patch.peso,
         despesa_extra_valor: patch.despesaExtraValor,
         cubagem: patch.cubagem,
@@ -546,7 +547,6 @@ export function PricingPage() {
               canalReferencia={canaisVisiveis[0]}
               transportadoras={transportadoras}
               mostrarColunaId={mostrarColunaId}
-              onUpdateCusto={onUpdateCusto}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onTogglePrecisaAjuste={onTogglePrecisaAjuste}
@@ -577,7 +577,6 @@ export function PricingPage() {
         transportadoras={transportadoras}
         mostrarColunaId={mostrarColunaId}
         onFechar={() => setCanalTelaCheiaId(null)}
-        onUpdateCusto={onUpdateCusto}
         onUpdatePreco={onUpdatePreco}
         onResetPreco={onResetPreco}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
