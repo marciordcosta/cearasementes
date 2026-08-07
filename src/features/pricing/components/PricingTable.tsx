@@ -546,8 +546,7 @@ export function PricingTable({
                 <tr
                   key={produto.id}
                   onClick={() => setLinhaDestacada(produto.id)}
-                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? `border-t-2 ${categoriaMudou ? 'border-t-good' : ''}` : ''}`}
-                  style={linhaEspessa && !categoriaMudou ? { borderTopColor: 'color-mix(in srgb, var(--color-line) 55%, black 45%)' } : undefined}
+                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? (categoriaMudou ? 'border-t-2 border-t-good' : 'border-t-2 border-t-[var(--color-line)]') : ''}`}
                 >
                   {colunas.map((coluna) => {
                     const precisaAjuste = coluna.canalId !== undefined && (produto.precos[coluna.canalId]?.precisaAjuste ?? false);
