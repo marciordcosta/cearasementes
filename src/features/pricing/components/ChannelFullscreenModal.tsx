@@ -19,6 +19,7 @@ interface ChannelFullscreenModalProps {
   onFechar: () => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
+  onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
 }
 
@@ -35,6 +36,7 @@ export function ChannelFullscreenModal({
   onFechar,
   onUpdatePreco,
   onResetPreco,
+  onResetTodosPrecos,
   onTogglePrecisaAjuste,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
@@ -88,6 +90,7 @@ export function ChannelFullscreenModal({
             mostrarColunaId={mostrarColunaId}
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
+            onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
             somenteCanal
           />

@@ -157,6 +157,21 @@ export function PricingPage() {
     salvarAgora(() => upsertProdutoPreco(produtoId, canalId, null, false).then(invalidarProdutosPreco));
   }
 
+  /** Restaura o preço sugerido de todos os produtos que estão manuais nessa tabela — ícone ↺ ao lado do rótulo "Preço". */
+  function onResetTodosPrecos(canalId: string) {
+    const idsParaResetar = produtos.filter((p) => p.precos[canalId]?.manual).map((p) => p.id);
+    if (idsParaResetar.length === 0) return;
+    setProdutos((prev) =>
+      prev.map((p) => (idsParaResetar.includes(p.id) ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], preco: null, manual: false } } } : p)),
+    );
+    salvarAgora(async () => {
+      for (const produtoId of idsParaResetar) {
+        await upsertProdutoPreco(produtoId, canalId, null, false);
+      }
+      invalidarProdutosPreco();
+    });
+  }
+
   function onTogglePrecisaAjuste(produtoId: string, canalId: string, valor: boolean) {
     setProdutos((prev) =>
       prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], precisaAjuste: valor } } } : p)),
@@ -558,6 +573,7 @@ export function PricingPage() {
               mostrarColunaId={mostrarColunaId}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
+              onResetTodosPrecos={onResetTodosPrecos}
               onTogglePrecisaAjuste={onTogglePrecisaAjuste}
               onEditarProduto={setProdutoEditandoId}
               onRemoverProduto={onRemoverProduto}
@@ -589,6 +605,7 @@ export function PricingPage() {
         onFechar={() => setCanalTelaCheiaId(null)}
         onUpdatePreco={onUpdatePreco}
         onResetPreco={onResetPreco}
+        onResetTodosPrecos={onResetTodosPrecos}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
       />
 

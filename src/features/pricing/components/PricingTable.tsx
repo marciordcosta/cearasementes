@@ -88,6 +88,8 @@ interface PricingTableProps {
   mostrarColunaId: boolean;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
+  /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
+  onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
   onEditarProduto?: (produtoId: string) => void;
   onRemoverProduto?: (produtoId: string) => void;
@@ -127,6 +129,7 @@ export function PricingTable({
   mostrarColunaId,
   onUpdatePreco,
   onResetPreco,
+  onResetTodosPrecos,
   onTogglePrecisaAjuste,
   onEditarProduto,
   onRemoverProduto,
@@ -318,7 +321,24 @@ export function PricingTable({
       return [
       {
         chave: `${canal.id}:preco`,
-        rotulo: 'Preço',
+        rotulo: (
+          <span className="inline-flex items-center gap-1">
+            Preço
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Restaurar o preço sugerido de TODOS os produtos da tabela "${canal.nome}"? Os preços editados manualmente aqui serão perdidos.`)) {
+                  onResetTodosPrecos(canal.id);
+                }
+              }}
+              title="Restaurar todos os preços sugeridos desta tabela"
+              className="text-white/70 hover:text-white"
+            >
+              ↺
+            </button>
+          </span>
+        ),
         larguraPadrao: defaults['col:preco'],
         larguraChave: 'col:preco',
         corBordaEsquerda: cor.mid,
@@ -337,7 +357,7 @@ export function PricingTable({
           if (referencia !== undefined && !ehReferencia) {
             const rReferencia = calcularCanal(p, referencia, categoria, subcategoria, transportadoraPorId, canaisPorId);
             const diffPct = rReferencia.preco > 0 ? ((r.preco - rReferencia.preco) / rReferencia.preco) * 100 : 0;
-            partesTooltip.push(`Referência: R$ ${fmtR(rReferencia.preco)}`);
+            partesTooltip.push(`Padrão: R$ ${fmtR(rReferencia.preco)}`);
             partesTooltip.push(`Diferença: ${diffPct >= 0 ? '+' : ''}${fmtP(diffPct)}%`);
           }
           return (
@@ -352,14 +372,14 @@ export function PricingTable({
                   if (el) precoRefs.current.set(chave, el);
                   else precoRefs.current.delete(chave);
                 }}
-                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${precisaAjuste ? 'border-white/40 bg-white/10 text-white' : manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada && !precisaAjuste ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+                className={`num min-w-0 flex-1 rounded border px-1.5 py-0.5 text-right font-semibold ${precisaAjuste ? 'border-[var(--color-line)] bg-white/50 text-[var(--color-text-soft)]' : manual ? 'price-input-manual border-warn bg-warn-soft text-[var(--color-navy)]' : 'border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-text)]'} ${destacada && !precisaAjuste ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
               />
               <button
                 type="button"
                 onClick={() => onResetPreco(p.id, canal.id)}
                 title="Voltar ao preço sugerido"
                 tabIndex={-1}
-                className={`shrink-0 ${precisaAjuste ? 'text-white/80 hover:text-white' : 'text-[var(--color-text-soft)] hover:text-[var(--color-text)]'} ${manual ? 'visible' : 'invisible'}`}
+                className={`shrink-0 text-[var(--color-text-soft)] hover:text-[var(--color-text)] ${manual ? 'visible' : 'invisible'}`}
               >
                 ↺
               </button>
@@ -414,7 +434,7 @@ export function PricingTable({
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
           return (
             <span
-              className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${precisaAjuste ? 'text-white' : MARGEM_CLASSE_CLASSNAME[classe]}`}
+              className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${precisaAjuste ? 'text-[var(--color-text-soft)]' : MARGEM_CLASSE_CLASSNAME[classe]}`}
               title={`(${fmtP(margemBrutaPct)}%)`}
             >
               {fmtP(r.margemPct)}%
@@ -464,7 +484,7 @@ export function PricingTable({
                 onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
               }}
               title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad text-white' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-[var(--color-text-soft)] text-white' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
             >
               ✕
             </button>
@@ -560,10 +580,9 @@ export function PricingTable({
                         style={{
                           ...(coluna.stickyLeft !== undefined ? { left: coluna.stickyLeft } : undefined),
                           ...(coluna.corBordaEsquerda ? { borderLeft: `2px solid ${coluna.corBordaEsquerda}` } : undefined),
-                          background: precisaAjuste ? '#C24444' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
-                          ...(precisaAjuste ? { color: '#FFFFFF' } : undefined),
+                          background: precisaAjuste ? '#E5E7EB' : destacada ? 'var(--color-highlight-row)' : (coluna.corFundo ?? (coluna.stickyLeft !== undefined ? 'var(--color-surface)' : undefined)),
                         }}
-                        className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 ${precisaAjuste ? '' : 'text-[var(--color-text-soft)]'} ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
+                        className={`overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-1 text-[var(--color-text-soft)] ${coluna.stickyLeft !== undefined ? 'sticky z-[1]' : ''}`}
                       >
                         {coluna.render(produto, destacada)}
                       </td>
