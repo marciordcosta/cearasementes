@@ -103,10 +103,6 @@ export function ChannelsPanel({
           {acaoTitulo}
         </span>
       </div>
-      <p className="text-xs text-[var(--color-text-soft)]">
-        Cada tabela gera um bloco de colunas (Preço, Frete, Encargos, ML % e ML $) na Tabela de Preços. Excluir remove
-        imediatamente da tela.
-      </p>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {canais.map((canal) => {
           const cor = gerarCorCanal(canal.corIndice);

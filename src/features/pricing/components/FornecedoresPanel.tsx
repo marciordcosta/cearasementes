@@ -23,9 +23,6 @@ export function FornecedoresPanel({ fornecedores, onAdicionarFornecedor, onRenom
   return (
     <div className="space-y-3">
       <p className="text-sm font-bold text-[var(--color-text)]">Gerenciamento de Fornecedores</p>
-      <p className="text-xs text-[var(--color-text-soft)]">
-        O campo "Fornecedor" do Editar Produto puxa essa lista — aparece na Tabela de Preços logo depois do nome do produto (" - Fornecedor").
-      </p>
       <Card className="overflow-hidden">
         {fornecedores.length > 0 && (
           <div className="divide-y divide-[var(--color-line)]">

@@ -69,10 +69,6 @@ export function CategoryMarginsPanel({
   return (
     <div className="space-y-3">
       <p className="text-sm font-bold text-[var(--color-text)]">Gerenciamento de Categorias</p>
-      <p className="text-xs text-[var(--color-text-soft)]">
-        Para cada categoria, defina as alíquotas de imposto e a margem de lucro sugerida para cada Tabela de Preço existente. Use o "+" pra
-        criar subcategorias — a margem delas (por canal) sobrepõe a da categoria pai quando preenchida; em branco, herda normalmente.
-      </p>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-xs">
