@@ -1,3 +1,4 @@
+import { CODIGOS_PRODUTO_UNIFICADOS } from '@/features/bi/aggregate';
 import type { PeriodContext } from '@/features/bi/calculations';
 import { getPeriodKeyFor, getPeriodLabel } from '@/features/bi/calculations';
 import type { ItemAgg } from '@/features/bi/types';
@@ -7,6 +8,18 @@ import type { Canal, Categoria, Produto, Subcategoria } from './types';
 
 /** Mesma definição de "Safra" usada por padrão no BI (DashboardPage.tsx) — começa em agosto. */
 export const SAFRA_PADRAO: PeriodContext = { mode: 'season', seasonStartMonth: 8 };
+
+/**
+ * O BI já unifica códigos duplicados do MESMO produto (ver
+ * CODIGOS_PRODUTO_UNIFICADOS em bi/aggregate.ts, ex.: 1 e 2 = mesmo produto,
+ * tudo fica gravado só sob o 2) — então `historicoPorCodigo` NUNCA tem uma
+ * entrada pro código "extra" (1). Sem isso, um produto da Precificação
+ * cadastrado com o Código "extra" nunca encontraria histórico nenhum, mesmo
+ * vendendo normalmente sob o outro código.
+ */
+function codigoCanonico(codigo: string): string {
+  return CODIGOS_PRODUTO_UNIFICADOS[codigo] ?? codigo;
+}
 
 export interface HistoricoSafra {
   key: string;
@@ -152,7 +165,7 @@ export function calcularRepresentatividade(
   if (valorMedioTotalTabela <= 0) return resultado;
   for (const produto of produtos) {
     if (!produto.codigo) continue;
-    const porSafra = historicoPorCodigo.get(produto.codigo);
+    const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
     if (!porSafra) continue;
     const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
     if (valorMedioProduto <= 0) continue;
@@ -193,7 +206,7 @@ export function calcularMargemAtualProjetada(
   let margemLiquidaProjetada = 0;
   for (const produto of produtos) {
     if (!produto.codigo) continue;
-    const porSafra = historicoPorCodigo.get(produto.codigo);
+    const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
     if (!porSafra) continue;
     const qtdMedia = mediaQtdUltimasSafras(porSafra);
     if (qtdMedia <= 0) continue;

@@ -118,7 +118,7 @@ export function agregarVendas(rows: VendaRow[]): PriceTableAgg[] {
  * Andropogon Planaltina tem venda registrada tanto no código 1 quanto no 2;
  * unifica tudo no 2 (nome do produto exibido também vem do 2).
  */
-const CODIGOS_PRODUTO_UNIFICADOS: Record<string, string> = {
+export const CODIGOS_PRODUTO_UNIFICADOS: Record<string, string> = {
   '1': '2',
 };
 
