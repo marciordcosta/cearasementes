@@ -94,11 +94,11 @@ body {
   width: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-text-soft);
+  background: var(--color-line);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text);
+  background: var(--color-text-soft);
 }
 
 /* HTML gerado pelo mammoth (preview de .docx antes de enviar) — sem essas
