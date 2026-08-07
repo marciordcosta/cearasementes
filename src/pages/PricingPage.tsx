@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
+import { agregarItens } from '@/features/bi/aggregate';
+import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { aplicarTransportadoraNoCanal, fetchTransportadoras } from '@/features/fretes/api';
 import {
   apagarCanal,
@@ -47,10 +49,15 @@ import { FornecedoresPanel } from '@/features/pricing/components/FornecedoresPan
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
+import { calcularMargemAtualProjetada, construirHistoricoPorCodigo } from '@/features/pricing/historicoBi';
 import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
 type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
+
+function fmtP(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
 
 const CAMPO_PARA_COLUNA: Record<CampoNumericoCanal, string> = {
   desconto: 'desconto',
@@ -126,6 +133,23 @@ export function PricingPage() {
   }
 
   const canaisVisiveis = canais.filter((c) => c.visivel);
+
+  // Selo "MB atual" na barra de ferramentas — mesma conta do modal de tela cheia por canal (ver
+  // historicoBi.ts), só que somando TODAS as Tabelas visíveis de uma vez. Mesma queryKey do
+  // Dashboard/modal, então reaproveita o cache se algum dos dois já tiver sido aberto na sessão.
+  const { data: vendasBi = [] } = useQuery({ queryKey: ['bi', 'vendas'], queryFn: fetchVendas });
+  const { data: itensBi = [] } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens });
+  const itemsAgregadosBi = useMemo(() => agregarItens(vendasBi, itensBi), [vendasBi, itensBi]);
+  const canaisPorId = useMemo(() => new Map(canais.map((c) => [c.id, c])), [canais]);
+  let margemAtualTotalValor = 0;
+  let margemAtualTotalMargem = 0;
+  for (const canal of canaisVisiveis) {
+    const historicoPorCodigo = construirHistoricoPorCodigo(itemsAgregadosBi, canal.nome);
+    const r = calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
+    margemAtualTotalValor += r.valorProjetado;
+    margemAtualTotalMargem += r.margemProjetada;
+  }
+  const margemAtualTotalPct = margemAtualTotalValor > 0 ? (margemAtualTotalMargem / margemAtualTotalValor) * 100 : 0;
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
@@ -575,6 +599,14 @@ export function PricingPage() {
                 Exibir coluna ID
               </label>
               <div className="flex-1" />
+              {margemAtualTotalValor > 0 && (
+                <span
+                  className="shrink-0 rounded-full bg-[var(--color-navy)] px-2.5 py-1 text-xs font-normal whitespace-nowrap text-white"
+                  title="Margem bruta de hoje (preço e custo atuais) somando TODAS as Tabelas visíveis, ponderada pela média de quantidade vendida nas últimas safras de cada produto — estimativa de volume, já que a safra atual ainda não fechou."
+                >
+                  MB atual: {fmtP(margemAtualTotalPct)}%
+                </span>
+              )}
               <ReorderDropdown
                 onEscolherCategorias={() => setModalOrdemTipo('categorias')}
                 onEscolherCanais={() => setModalOrdemTipo('canais')}
