@@ -136,7 +136,7 @@ export function CategoryMarginsPanel({
                 return (
                   <Fragment key={cat.id}>
                     <tr className="border-t border-[var(--color-line)]">
-                      <td className="px-3 py-2 font-semibold text-[var(--color-text)]">
+                      <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] px-3 py-2 font-semibold text-[var(--color-text)]">
                         <span className="inline-flex items-center gap-1.5">
                           {cat.nome}
                           <button
@@ -199,8 +199,8 @@ export function CategoryMarginsPanel({
                       </td>
                     </tr>
                     {subsDaCategoria.map((sub) => (
-                      <tr key={sub.id} className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                        <td className="py-1.5 pl-8 pr-3 text-[var(--color-text-soft)]">
+                      <tr key={sub.id} className="border-t border-[var(--color-line)]">
+                        <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] py-1.5 pl-8 pr-3 text-[var(--color-text-soft)]">
                           <input
                             type="text"
                             defaultValue={sub.nome}
