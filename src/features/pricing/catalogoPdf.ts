@@ -396,7 +396,7 @@ export function gerarCatalogoGerenciamentoPDF(
         table.tabela-gerenciamento th.valor, table.tabela-gerenciamento td.valor{ min-width:70px; padding-left:4px; text-align:right; font-weight:700; white-space:nowrap; }
         table.tabela-gerenciamento th.peso, table.tabela-gerenciamento td.peso{ min-width:36px; padding-right:4px; text-align:right; white-space:nowrap; }
         table.tabela-gerenciamento th.numero, table.tabela-gerenciamento td.numero{ min-width:56px; text-align:right; white-space:nowrap; }
-        table.tabela-gerenciamento .cinza{ background:#F2F2F2; }
+        table.tabela-gerenciamento .cinza{ background:#E4E4E4; }
         .tag-fornecedor{
           display:inline-block; margin-left:8px; font-size:9px; font-weight:500; color:#777777;
           text-transform:uppercase; letter-spacing:.3px; vertical-align:middle;
