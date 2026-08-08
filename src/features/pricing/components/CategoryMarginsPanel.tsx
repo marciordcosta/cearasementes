@@ -66,6 +66,27 @@ export function CategoryMarginsPanel({
     return canal.margemReferenciaCanalId ? canais.find((c) => c.id === canal.margemReferenciaCanalId)?.nome : undefined;
   }
 
+  /**
+   * Escolher `candidatoId` como referência de `canalId` criaria um ciclo (ex.:
+   * Revenda PI já referencia Revenda CE — deixar a Revenda CE referenciar a
+   * Revenda PI de volta é confuso, já que cada uma passaria a mirar a % "crua"
+   * de Categoria da outra, não o que aparece de verdade na tela dela — ver
+   * calculations.ts, `permitirReferencia`). Segue a cadeia de referências a
+   * partir do candidato; se ela chegar de volta em `canalId`, bloqueia.
+   */
+  function criariCiclo(canalId: string, candidatoId: string): boolean {
+    const porId = new Map(canais.map((c) => [c.id, c]));
+    let atual: string | null = candidatoId;
+    const visitados = new Set<string>();
+    while (atual) {
+      if (atual === canalId) return true;
+      if (visitados.has(atual)) return false;
+      visitados.add(atual);
+      atual = porId.get(atual)?.margemReferenciaCanalId ?? null;
+    }
+    return false;
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm font-bold text-[var(--color-text)]">Gerenciamento de Categorias</p>
@@ -99,7 +120,7 @@ export function CategoryMarginsPanel({
                           if (e.target.value === 'categoria') {
                             onAtualizarMargemReferencia(canal.id, null);
                           } else {
-                            const outro = canais.find((c) => c.id !== canal.id);
+                            const outro = canais.find((c) => c.id !== canal.id && !criariCiclo(canal.id, c.id));
                             if (outro) onAtualizarMargemReferencia(canal.id, outro.id);
                           }
                         }}
@@ -116,7 +137,10 @@ export function CategoryMarginsPanel({
                             className="min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
                           >
                             {canais
-                              .filter((c) => c.id !== canal.id)
+                              // Mantém a opção já selecionada na lista mesmo que ela hoje "criasse" um ciclo
+                              // (ex.: as duas pontas de uma referência cruzada já configurada antes dessa
+                              // trava existir) — só barra escolher uma NOVA opção que geraria confusão.
+                              .filter((c) => c.id !== canal.id && (c.id === canal.margemReferenciaCanalId || !criariCiclo(canal.id, c.id)))
                               .map((c) => (
                                 <option key={c.id} value={c.id}>
                                   {c.nome}
