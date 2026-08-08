@@ -105,7 +105,8 @@ export function PricingPage() {
   const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores'>('tabelas');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
-  const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(true);
+  const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
+  const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
@@ -162,7 +163,7 @@ export function PricingPage() {
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
-  const produtosExibidos = produtos
+  const produtosFiltrados = produtos
     .filter((p) => {
       if (filtroClasse === 'todas') return true;
       if (filtroClasse.startsWith('cat:')) return p.categoriaId === filtroClasse.slice(4);
@@ -176,6 +177,12 @@ export function PricingPage() {
       const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
+  // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
+  const produtosExibidos = !ordenarPorRepresentacao
+    ? produtosFiltrados
+    : [...produtosFiltrados].sort(
+        (a, b) => (representatividadeGeralPorProduto.get(b.id)?.pct ?? -1) - (representatividadeGeralPorProduto.get(a.id)?.pct ?? -1),
+      );
 
   // ---------- Produtos ----------
   function onUpdatePreco(produtoId: string, canalId: string, preco: number) {
@@ -586,7 +593,7 @@ export function PricingPage() {
                 placeholder="Buscar produto pelo nome ou fornecedor…"
                 className="w-full max-w-xs rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)]"
               />
-              <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar por classe:</span>
+              <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar:</span>
               <select value={filtroClasse} onChange={(e) => setFiltroClasse(e.target.value)} className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]">
                 <option value="todas" className="text-[var(--color-text)]">Mostrar Todas</option>
                 <optgroup label="Categoria">
@@ -615,6 +622,14 @@ export function PricingPage() {
                 />
                 Mais detalhes
               </label>
+              <button
+                type="button"
+                onClick={() => setOrdenarPorRepresentacao((v) => !v)}
+                title={ordenarPorRepresentacao ? 'Ordenado por Repres. Geral (maior → menor) — clique pra voltar à ordem padrão' : 'Ordenar por Repres. Geral (maior → menor)'}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${ordenarPorRepresentacao ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-navy)] text-white hover:brightness-110'}`}
+              >
+                ⇅ Repres.
+              </button>
               <div className="flex-1" />
               {margemAtualTotalValor > 0 && (
                 <span

@@ -350,7 +350,7 @@ export function PricingTable({
       ? [
           {
             chave: 'representacaoGeral',
-            rotulo: 'Repres. Geral (%)',
+            rotulo: 'Repres%',
             larguraPadrao: defaults.representacaoGeral,
             render: (p: Produto) => {
               const repr = representatividadeGeralPorProduto.get(p.id);
