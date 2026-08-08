@@ -95,29 +95,23 @@ export function CategoryMarginsPanel({
           <table className="w-full min-w-[640px] text-xs">
             <thead>
               <tr className="bg-[var(--color-navy)] text-left text-white">
-                <th className="px-3 py-2 font-semibold" rowSpan={2}>
-                  Categoria
-                </th>
+                <th className="px-3 py-2 font-semibold">Categoria</th>
                 <th className="w-56 border-r-2 border-white/20 px-2 py-2 text-center font-semibold" colSpan={2}>
                   Impostos
                 </th>
                 {canais.map((canal) => (
-                  <th key={canal.id} className="px-3 py-2 font-semibold" rowSpan={2}>
+                  <th key={canal.id} className="px-3 py-2 font-semibold">
                     {canal.nome} (%)
                   </th>
                 ))}
-                <th className="px-3 py-2" rowSpan={2} />
-              </tr>
-              <tr className="bg-[var(--color-navy)] text-left text-white">
-                <th className="w-28 px-2 py-1.5 text-[11px] font-normal">Estadual</th>
-                <th className="w-28 border-r-2 border-white/20 px-2 py-1.5 text-[11px] font-normal">Interestadual</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
               <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                <td className="border-r-2 border-[var(--color-line)] px-3 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]" colSpan={3}>
-                  Cálculo da margem sugerida
-                </td>
+                <td className="px-3 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Cálculo da margem sugerida</td>
+                <td className="px-2 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Estadual</td>
+                <td className="border-r-2 border-[var(--color-line)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Interestadual</td>
                 {canais.map((canal) => (
                   <td key={canal.id} className="px-3 py-1">
                     <div className="flex flex-col gap-1">
