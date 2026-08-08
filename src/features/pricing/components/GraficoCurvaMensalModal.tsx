@@ -3,7 +3,7 @@ import { Chart } from 'react-chartjs-2';
 import type { ItemAgg } from '@/features/bi/types';
 import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/hooks/useTheme';
-import { chartChrome, palette } from '@/lib/chartSetup';
+import { chartChrome, criarGridVerticalPontilhado, palette } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { construirCurvaMensalProduto, ROTULO_CRITERIO_REPRESENTACAO, type CriterioRepresentacao } from '../historicoBi';
 import type { Produto } from '../types';
@@ -74,6 +74,8 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items }: 
     [c, criterio],
   );
 
+  const chartPlugins = useMemo(() => [criarGridVerticalPontilhado(c.grid)], [c.grid]);
+
   return (
     <Modal open={produto !== null} title={`Curva de venda — ${produto?.nome.replace(/[*_]/g, '') ?? ''}`} onClose={onFechar} widthClassName="max-w-4xl">
       {!curva || curva.tabelas.length === 0 ? (
@@ -88,7 +90,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items }: 
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <Chart type="line" data={chartData as any} options={chartOptions as any} />
+            <Chart type="line" data={chartData as any} options={chartOptions as any} plugins={chartPlugins as any} />
           </div>
         </>
       )}
