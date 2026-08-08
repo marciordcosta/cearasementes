@@ -150,10 +150,38 @@ function mediaValorVendidoUltimasSafras(porSafra: Map<string, HistoricoSafra>): 
   return ordenadas.reduce((s, h) => s + h.valorMedio * h.qtd, 0) / ordenadas.length;
 }
 
+export type ClasseABC = 'A' | 'B' | 'C';
+
+/**
+ * Curva ABC clássica (Pareto: A até 80% acumulado, B até 95%, C no resto) —
+ * mesma regra de classificarABC em bi/calculations.ts, reimplementada aqui
+ * pra trabalhar direto sobre um valor já calculado (em vez de FilteredItemView[]
+ * do módulo BI). O 1º item (maior valor) é SEMPRE Classe A, mesmo que ele
+ * sozinho já ultrapasse 80% acumulado.
+ */
+function classificarABCPorValor(itens: { id: string; valor: number }[]): Map<string, ClasseABC> {
+  const ordenados = [...itens].sort((a, b) => b.valor - a.valor);
+  const total = ordenados.reduce((s, i) => s + i.valor, 0);
+  const resultado = new Map<string, ClasseABC>();
+  let acumulado = 0;
+  ordenados.forEach((item, i) => {
+    acumulado += item.valor;
+    if (i === 0) {
+      resultado.set(item.id, 'A');
+      return;
+    }
+    const pctAcumulado = total > 0 ? acumulado / total : 0;
+    resultado.set(item.id, pctAcumulado <= 0.8 ? 'A' : pctAcumulado <= 0.95 ? 'B' : 'C');
+  });
+  return resultado;
+}
+
 export interface Representatividade {
   pct: number;
   /** Média de quantidade vendida (mesma janela de safras usada no valor) — só pra exibir no tooltip. */
   qtdMedia: number;
+  /** Curva ABC (Pareto) entre os produtos que aparecem nessa mesma lista de Representação. */
+  classe: ClasseABC;
 }
 
 /**
@@ -179,7 +207,44 @@ export function calcularRepresentatividade(produtos: Produto[], historicoPorCodi
   }
   const resultado = new Map<string, Representatividade>();
   if (totalValorMedio <= 0) return resultado;
-  valorMedioPorProduto.forEach(({ valorMedio, qtdMedia }, produtoId) => resultado.set(produtoId, { pct: (valorMedio / totalValorMedio) * 100, qtdMedia }));
+  const classes = classificarABCPorValor(Array.from(valorMedioPorProduto.entries()).map(([id, v]) => ({ id, valor: v.valorMedio })));
+  valorMedioPorProduto.forEach(({ valorMedio, qtdMedia }, produtoId) =>
+    resultado.set(produtoId, { pct: (valorMedio / totalValorMedio) * 100, qtdMedia, classe: classes.get(produtoId)! }),
+  );
+  return resultado;
+}
+
+/**
+ * "Representação Geral" — igual à Representação (%) por Tabela, só que
+ * somando a média de valor vendido de cada produto em TODAS as Tabelas de
+ * Preço (não só uma). Um produto vendido em várias Tabelas tem seu peso
+ * somado entre elas antes de comparar com a soma geral de todo mundo —
+ * mede o quanto aquele produto importa pro negócio inteiro, não só numa
+ * Tabela específica.
+ */
+export function calcularRepresentatividadeGeral(produtos: Produto[], canais: Canal[], items: ItemAgg[]): Map<string, Representatividade> {
+  const acumuladoPorProduto = new Map<string, { valorMedio: number; qtdMedia: number }>();
+  for (const canal of canais) {
+    const historicoPorCodigo = construirHistoricoPorCodigo(items, canal.nome);
+    for (const produto of produtos) {
+      if (!produto.codigo) continue;
+      const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
+      if (!porSafra) continue;
+      const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
+      if (valorMedioProduto <= 0) continue;
+      const acc = acumuladoPorProduto.get(produto.id) ?? { valorMedio: 0, qtdMedia: 0 };
+      acc.valorMedio += valorMedioProduto;
+      acc.qtdMedia += mediaQtdUltimasSafras(porSafra);
+      acumuladoPorProduto.set(produto.id, acc);
+    }
+  }
+  const totalValorMedio = Array.from(acumuladoPorProduto.values()).reduce((s, v) => s + v.valorMedio, 0);
+  const resultado = new Map<string, Representatividade>();
+  if (totalValorMedio <= 0) return resultado;
+  const classes = classificarABCPorValor(Array.from(acumuladoPorProduto.entries()).map(([id, v]) => ({ id, valor: v.valorMedio })));
+  acumuladoPorProduto.forEach(({ valorMedio, qtdMedia }, produtoId) =>
+    resultado.set(produtoId, { pct: (valorMedio / totalValorMedio) * 100, qtdMedia, classe: classes.get(produtoId)! }),
+  );
   return resultado;
 }
 

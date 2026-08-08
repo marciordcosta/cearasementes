@@ -49,7 +49,7 @@ import { FornecedoresPanel } from '@/features/pricing/components/FornecedoresPan
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
-import { calcularMargemAtualProjetada, construirHistoricoPorCodigo } from '@/features/pricing/historicoBi';
+import { calcularMargemAtualProjetada, calcularRepresentatividadeGeral, construirHistoricoPorCodigo } from '@/features/pricing/historicoBi';
 import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
@@ -105,7 +105,7 @@ export function PricingPage() {
   const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores'>('tabelas');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
-  const [mostrarColunaId, setMostrarColunaId] = useState(true);
+  const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(true);
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
@@ -141,6 +141,12 @@ export function PricingPage() {
   const { data: itensBi = [] } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens });
   const itemsAgregadosBi = useMemo(() => agregarItens(vendasBi, itensBi), [vendasBi, itensBi]);
   const canaisPorId = useMemo(() => new Map(canais.map((c) => [c.id, c])), [canais]);
+  // Coluna "Repres. Geral (%)" — soma a média de valor vendido de cada produto em TODAS as
+  // Tabelas (não só uma), então precisa rodar de novo só quando produtos/canais/histórico mudam.
+  const representatividadeGeralPorProduto = useMemo(
+    () => calcularRepresentatividadeGeral(produtos, canais, itemsAgregadosBi),
+    [produtos, canais, itemsAgregadosBi],
+  );
   let margemAtualTotalValor = 0;
   let margemAtualTotalMargem = 0;
   let margemAtualTotalMargemLiquida = 0;
@@ -601,8 +607,13 @@ export function PricingPage() {
                 )}
               </select>
               <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
-                <input type="checkbox" checked={mostrarColunaId} onChange={(e) => setMostrarColunaId(e.target.checked)} className="accent-[var(--color-navy)]" />
-                Exibir coluna ID
+                <input
+                  type="checkbox"
+                  checked={mostrarMaisDetalhes}
+                  onChange={(e) => setMostrarMaisDetalhes(e.target.checked)}
+                  className="accent-[var(--color-navy)]"
+                />
+                Mais detalhes
               </label>
               <div className="flex-1" />
               {margemAtualTotalValor > 0 && (
@@ -636,7 +647,7 @@ export function PricingPage() {
               canalReferencia={canaisVisiveis[0]}
               todosCanais={canais}
               transportadoras={transportadoras}
-              mostrarColunaId={mostrarColunaId}
+              mostrarMaisDetalhes={mostrarMaisDetalhes}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}
@@ -644,6 +655,7 @@ export function PricingPage() {
               onEditarProduto={setProdutoEditandoId}
               onRemoverProduto={onRemoverProduto}
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
+              representatividadeGeralPorProduto={representatividadeGeralPorProduto}
             />
           </Card>
         </div>
@@ -667,7 +679,7 @@ export function PricingPage() {
         canalReferencia={canaisVisiveis[0]}
         todosCanais={canais}
         transportadoras={transportadoras}
-        mostrarColunaId={mostrarColunaId}
+        mostrarMaisDetalhes={mostrarMaisDetalhes}
         onFechar={() => setCanalTelaCheiaId(null)}
         onUpdatePreco={onUpdatePreco}
         onResetPreco={onResetPreco}

@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
+import { Badge } from '@/components/ui/Badge';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
-import type { HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
+import type { ClasseABC, HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
@@ -11,6 +12,9 @@ const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
   warn: 'bg-warn-soft text-[#8A5B10]',
   bad: 'bg-bad-soft text-[#8F2E2E]',
 };
+
+/** Mesmo mapeamento de cor da Curva ABC já usado no módulo BI (CORES_CLASSE em AnaliseProdutosSection.tsx). */
+const CORES_CLASSE_ABC: Record<ClasseABC, 'bom' | 'neutro' | 'ruim'> = { A: 'bom', B: 'neutro', C: 'ruim' };
 
 function fmtR(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -88,7 +92,8 @@ interface PricingTableProps {
   /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência" quando aponta pra um canal oculto. */
   todosCanais: Canal[];
   transportadoras: Transportadora[];
-  mostrarColunaId: boolean;
+  /** "Mais detalhes" na barra de ferramentas — liga/desliga Classe, ID e Representação Geral juntos. */
+  mostrarMaisDetalhes: boolean;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
@@ -105,6 +110,8 @@ interface PricingTableProps {
   margemAgregadaPorSafra?: Map<string, MargemBrutaAgregada>;
   /** produtoId -> % da soma dos valores vendidos médios entre os produtos com Código cadastrado nessa Tabela (soma sempre 100%) — alimenta a coluna "Repres. (%)". */
   representatividadePorProduto?: Map<string, Representatividade>;
+  /** Igual acima, só que somando a média de cada produto em TODAS as Tabelas — alimenta a coluna "Repres. Geral (%)", logo depois de Custo. */
+  representatividadeGeralPorProduto?: Map<string, Representatividade>;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -137,7 +144,7 @@ export function PricingTable({
   canalReferencia,
   todosCanais,
   transportadoras,
-  mostrarColunaId,
+  mostrarMaisDetalhes,
   onUpdatePreco,
   onResetPreco,
   onResetTodosPrecos,
@@ -149,6 +156,7 @@ export function PricingTable({
   historicoPorCodigo,
   margemAgregadaPorSafra,
   representatividadePorProduto,
+  representatividadeGeralPorProduto,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -231,9 +239,10 @@ export function PricingTable({
     'col:encargos': 110,
     'col:mlpct': 90,
     'col:mlvalor': 100,
-    'col:representacao': 90,
+    'col:representacao': 112,
     'col:ajuste': 52,
     'safra:espacador': 10,
+    representacaoGeral: 112,
   };
   const { largura, iniciarArrasto } = useColumnWidths(defaults);
 
@@ -283,23 +292,27 @@ export function PricingTable({
             ),
           } satisfies ColunaDef,
         ]),
-    {
-      chave: 'classe',
-      rotulo: 'Classe',
-      larguraPadrao: defaults.classe,
-      // Cola logo depois de "Excluir"+"Editar" (que só existem fora do modo tela cheia por canal).
-      stickyLeft: larguraExcluirEditar,
-      render: (p) => getCategoria(p.categoriaId).nome,
-    },
-    ...(mostrarColunaId ? [{ chave: 'id', rotulo: 'ID', larguraPadrao: defaults.id, render: (p: Produto) => <span className="num">{p.codigo}</span> } satisfies ColunaDef] : []),
+    ...(mostrarMaisDetalhes
+      ? [
+          {
+            chave: 'classe',
+            rotulo: 'Classe',
+            larguraPadrao: defaults.classe,
+            // Cola logo depois de "Excluir"+"Editar" (que só existem fora do modo tela cheia por canal).
+            stickyLeft: larguraExcluirEditar,
+            render: (p: Produto) => getCategoria(p.categoriaId).nome,
+          } satisfies ColunaDef,
+          { chave: 'id', rotulo: 'ID', larguraPadrao: defaults.id, render: (p: Produto) => <span className="num">{p.codigo}</span> } satisfies ColunaDef,
+        ]
+      : []),
     {
       chave: 'produto',
       rotulo: 'Produto',
       larguraPadrao: defaults.produto,
-      // Fica colado logo depois de "Classe" ao rolar, igual ao original —
-      // o deslocamento acompanha a largura ATUAL de "Excluir"+"Editar"+"Classe" (que agora podem
-      // ser redimensionadas), não um valor fixo.
-      stickyLeft: larguraExcluirEditar + largura('classe'),
+      // Fica colado logo depois de "Classe" ao rolar (quando "Mais detalhes" está ligado — senão,
+      // colado direto depois de "Excluir"+"Editar") — o deslocamento acompanha a largura ATUAL
+      // de "Excluir"+"Editar"+"Classe" (que agora podem ser redimensionadas), não um valor fixo.
+      stickyLeft: larguraExcluirEditar + (mostrarMaisDetalhes ? largura('classe') : 0),
       render: (p) => {
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
@@ -333,6 +346,26 @@ export function PricingTable({
         </div>
       ),
     },
+    ...(mostrarMaisDetalhes && representatividadeGeralPorProduto
+      ? [
+          {
+            chave: 'representacaoGeral',
+            rotulo: 'Repres. Geral (%)',
+            larguraPadrao: defaults.representacaoGeral,
+            render: (p: Produto) => {
+              const repr = representatividadeGeralPorProduto.get(p.id);
+              if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
+              const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades, somando todas as Tabelas`;
+              return (
+                <span className="inline-flex items-center gap-1" title={titulo}>
+                  <span className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700">{fmtP(repr.pct)}%</span>
+                  <Badge tom={CORES_CLASSE_ABC[repr.classe]}>{repr.classe}</Badge>
+                </span>
+              );
+            },
+          } satisfies ColunaDef,
+        ]
+      : []),
     ...canaisVisiveis.flatMap((canal): ColunaDef[] => {
       const cor = gerarCorCanal(canal.corIndice);
       return [
@@ -485,8 +518,9 @@ export function PricingTable({
                 if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
                 const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades`;
                 return (
-                  <span className="num inline-block min-w-[52px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700" title={titulo}>
-                    {fmtP(repr.pct)}%
+                  <span className="inline-flex items-center gap-1" title={titulo}>
+                    <span className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700">{fmtP(repr.pct)}%</span>
+                    <Badge tom={CORES_CLASSE_ABC[repr.classe]}>{repr.classe}</Badge>
                   </span>
                 );
               },
@@ -597,13 +631,18 @@ export function PricingTable({
 
   // Ponto exato (em px) onde termina a última coluna fixa (Excluir + Editar + Classe + Produto) — é ali
   // que a faixa de sombra precisa ficar grudada enquanto rola pro lado.
-  const finalColunasFixas = larguraExcluirEditar + largura('classe') + largura('produto');
+  const finalColunasFixas = larguraExcluirEditar + (mostrarMaisDetalhes ? largura('classe') : 0) + largura('produto');
 
   // "Produto" só termina de grudar na posição final depois que "ID" (a única
   // coluna entre Classe e Produto que não é fixa) escorrega por baixo — até lá,
   // ela ainda está "andando" junto com o scroll, e mostrar sombra nesse
   // meio-tempo é prematuro (nada foi realmente coberto ainda).
-  const limiarComecoCobertura = mostrarColunaId ? largura('id') : 0;
+  const limiarComecoCobertura = mostrarMaisDetalhes ? largura('id') : 0;
+
+  // Quantas colunas fixas (fora dos blocos por canal/safra) existem antes do cabeçalho de canal
+  // começar — Excluir+Editar+Produto+Peso+Custo sempre, + Classe/ID quando "Mais detalhes" está
+  // ligado, + Repres. Geral quando além disso houver dado pra ela.
+  const colSpanColunasFixas = 5 + (mostrarMaisDetalhes ? 2 : 0) + (mostrarMaisDetalhes && representatividadeGeralPorProduto ? 1 : 0);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -617,7 +656,7 @@ export function PricingTable({
         <thead>
           {!somenteCanal && (
             <tr ref={linhaGrupoRef} className="sticky top-0 z-[2]">
-              <th className="bg-[var(--color-navy)] px-2 py-2" colSpan={mostrarColunaId ? 7 : 6} />
+              <th className="bg-[var(--color-navy)] px-2 py-2" colSpan={colSpanColunasFixas} />
               {canaisVisiveis.map((canal) => (
                 <th
                   key={canal.id}

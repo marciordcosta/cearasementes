@@ -31,7 +31,7 @@ interface ChannelFullscreenModalProps {
   /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência". */
   todosCanais: Canal[];
   transportadoras: Transportadora[];
-  mostrarColunaId: boolean;
+  mostrarMaisDetalhes: boolean;
   onFechar: () => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
@@ -48,7 +48,7 @@ export function ChannelFullscreenModal({
   canalReferencia,
   todosCanais,
   transportadoras,
-  mostrarColunaId,
+  mostrarMaisDetalhes,
   onFechar,
   onUpdatePreco,
   onResetPreco,
@@ -166,7 +166,7 @@ export function ChannelFullscreenModal({
             canalReferencia={canalReferencia}
             todosCanais={todosCanais}
             transportadoras={transportadoras}
-            mostrarColunaId={mostrarColunaId}
+            mostrarMaisDetalhes={mostrarMaisDetalhes}
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
