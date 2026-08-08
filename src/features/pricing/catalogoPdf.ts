@@ -308,12 +308,12 @@ export function gerarCatalogoGerenciamentoPDF(
         <tr class="${produtoMudou ? 'divisor' : ''}">
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
           <td class="peso">${Math.round(produto.peso)}kg</td>
-          <td class="valor">R$ ${f(r.preco)}</td>
           <td class="cinza numero">${f(produto.custo)}</td>
           <td class="cinza numero">${f(freteExibido)}</td>
           <td class="cinza numero">${f(r.impostoReais)}</td>
           <td class="cinza numero">${f(r.margemReais)}</td>
-          <td class="numero">${fPct(r.margemPct)}%</td>
+          <td class="cinza numero">${fPct(r.margemPct)}%</td>
+          <td class="valor">R$ ${f(r.preco)}</td>
         </tr>
       `;
     });
@@ -325,12 +325,12 @@ export function gerarCatalogoGerenciamentoPDF(
           <tr>
             <th>Produto</th>
             <th class="peso">Kg</th>
-            <th class="valor">Valor (R$)</th>
             <th class="cinza numero">Custo</th>
             <th class="cinza numero">Frete</th>
             <th class="cinza numero">Encargos</th>
             <th class="cinza numero">Margem</th>
-            <th class="numero">%</th>
+            <th class="cinza numero">%</th>
+            <th class="valor">Valor (R$)</th>
           </tr>
         </thead>
         <tbody>${linhas}</tbody>
