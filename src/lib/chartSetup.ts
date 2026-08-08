@@ -1,4 +1,5 @@
 import {
+  ArcElement,
   BarController,
   BarElement,
   CategoryScale,
@@ -7,6 +8,7 @@ import {
   LinearScale,
   LineController,
   LineElement,
+  PieController,
   PointElement,
   Tooltip,
   type Plugin,
@@ -92,5 +94,5 @@ export function criarGridVerticalPontilhado(color: string): Plugin<'line'> {
 // dentro de um efeito do componente pai chegava tarde demais: o Chart.js
 // tentava montar sem "category"/"linear" ainda registrados, lançava, e sem
 // error boundary isso derrubava a árvore inteira (tela em branco).
-Chart.register(CategoryScale, LinearScale, BarElement, BarController, LineElement, PointElement, LineController, Tooltip, Legend, directLabelPlugin);
+Chart.register(CategoryScale, LinearScale, BarElement, BarController, LineElement, PointElement, LineController, ArcElement, PieController, Tooltip, Legend, directLabelPlugin);
 Chart.defaults.animation = false;

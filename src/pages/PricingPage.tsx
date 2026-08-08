@@ -188,6 +188,25 @@ export function PricingPage() {
       const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
+  // Mesmo filtro de Categoria/Fornecedor da grade, só que ignorando a busca por nome — usado
+  // pra virar o gráfico de Representação Geral em pizza (participação dentro do filtro).
+  const filtroAtivoGrafico = useMemo(() => {
+    if (filtroClasse === 'todas') return null;
+    let rotulo: string | null = null;
+    let idsFiltrados: Produto[] = [];
+    if (filtroClasse.startsWith('cat:')) {
+      const id = filtroClasse.slice(4);
+      rotulo = categorias.find((cat) => cat.id === id)?.nome ?? null;
+      idsFiltrados = produtos.filter((p) => p.categoriaId === id);
+    } else if (filtroClasse.startsWith('forn:')) {
+      const id = filtroClasse.slice(5);
+      rotulo = fornecedores.find((f) => f.id === id)?.nome ?? null;
+      idsFiltrados = produtos.filter((p) => p.fornecedorId === id);
+    }
+    if (!rotulo) return null;
+    return { rotulo, produtoIds: new Set(idsFiltrados.map((p) => p.id)) };
+  }, [filtroClasse, categorias, fornecedores, produtos]);
+
   // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
   const produtosExibidos = !ordenarPorRepresentacao
     ? produtosFiltrados
@@ -697,6 +716,7 @@ export function PricingPage() {
         criterio={criterioRepresentacao}
         produtos={produtos}
         representatividadePorProduto={representatividadeGeralPorProduto}
+        filtroAtivo={filtroAtivoGrafico}
       />
       <GraficoCurvaMensalModal
         produto={produtoGraficoLinha}
