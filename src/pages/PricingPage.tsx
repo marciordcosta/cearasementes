@@ -48,8 +48,15 @@ import { ExportPdfModal } from '@/features/pricing/components/ExportPdfModal';
 import { FornecedoresPanel } from '@/features/pricing/components/FornecedoresPanel';
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
+import { GraficoRepresentacaoModal } from '@/features/pricing/components/GraficoRepresentacaoModal';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
-import { calcularMargemAtualProjetada, calcularRepresentatividadeGeral, construirHistoricoPorCodigo } from '@/features/pricing/historicoBi';
+import { SeletorCriterioRepresentacao } from '@/features/pricing/components/SeletorCriterioRepresentacao';
+import {
+  calcularMargemAtualProjetada,
+  calcularRepresentatividadeGeral,
+  construirHistoricoPorCodigo,
+  type CriterioRepresentacao,
+} from '@/features/pricing/historicoBi';
 import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
@@ -107,6 +114,8 @@ export function PricingPage() {
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
+  const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
+  const [graficoRepresentacaoAberto, setGraficoRepresentacaoAberto] = useState(false);
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
@@ -145,8 +154,8 @@ export function PricingPage() {
   // Coluna "Repres. Geral (%)" — soma a média de valor vendido de cada produto em TODAS as
   // Tabelas (não só uma), então precisa rodar de novo só quando produtos/canais/histórico mudam.
   const representatividadeGeralPorProduto = useMemo(
-    () => calcularRepresentatividadeGeral(produtos, canais, itemsAgregadosBi),
-    [produtos, canais, itemsAgregadosBi],
+    () => calcularRepresentatividadeGeral(produtos, canais, itemsAgregadosBi, criterioRepresentacao),
+    [produtos, canais, itemsAgregadosBi, criterioRepresentacao],
   );
   let margemAtualTotalValor = 0;
   let margemAtualTotalMargem = 0;
@@ -622,14 +631,15 @@ export function PricingPage() {
                 />
                 Mais detalhes
               </label>
-              <button
-                type="button"
-                onClick={() => setOrdenarPorRepresentacao((v) => !v)}
-                title={ordenarPorRepresentacao ? 'Ordenado por Repres. Geral (maior → menor) — clique pra voltar à ordem padrão' : 'Ordenar por Repres. Geral (maior → menor)'}
-                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${ordenarPorRepresentacao ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-navy)] text-white hover:brightness-110'}`}
-              >
-                ⇅ Repres.
-              </button>
+              <SeletorCriterioRepresentacao
+                criterio={criterioRepresentacao}
+                ordenarAtivo={ordenarPorRepresentacao}
+                onEscolher={(c) => {
+                  setCriterioRepresentacao(c);
+                  setOrdenarPorRepresentacao(true);
+                }}
+                onDesativarOrdenacao={() => setOrdenarPorRepresentacao(false)}
+              />
               <div className="flex-1" />
               {margemAtualTotalValor > 0 && (
                 <span
@@ -671,10 +681,20 @@ export function PricingPage() {
               onRemoverProduto={onRemoverProduto}
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
               representatividadeGeralPorProduto={representatividadeGeralPorProduto}
+              onAbrirGraficoRepresentacao={() => setGraficoRepresentacaoAberto(true)}
             />
           </Card>
         </div>
       </div>
+
+      <GraficoRepresentacaoModal
+        open={graficoRepresentacaoAberto}
+        onFechar={() => setGraficoRepresentacaoAberto(false)}
+        titulo="Representação Geral"
+        criterio={criterioRepresentacao}
+        produtos={produtos}
+        representatividadePorProduto={representatividadeGeralPorProduto}
+      />
 
       <EditProductModal
         produto={produtoEditando}

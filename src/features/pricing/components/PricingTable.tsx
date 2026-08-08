@@ -112,6 +112,8 @@ interface PricingTableProps {
   representatividadePorProduto?: Map<string, Representatividade>;
   /** Igual acima, só que somando a média de cada produto em TODAS as Tabelas — alimenta a coluna "Repres. Geral (%)", logo depois de Custo. */
   representatividadeGeralPorProduto?: Map<string, Representatividade>;
+  /** Clicar no cabeçalho "Repres." (qualquer uma das duas colunas) abre o gráfico em colunas — ver GraficoRepresentacaoModal.tsx. */
+  onAbrirGraficoRepresentacao?: () => void;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -157,6 +159,7 @@ export function PricingTable({
   margemAgregadaPorSafra,
   representatividadePorProduto,
   representatividadeGeralPorProduto,
+  onAbrirGraficoRepresentacao,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -350,7 +353,13 @@ export function PricingTable({
       ? [
           {
             chave: 'representacaoGeral',
-            rotulo: 'Repres%',
+            rotulo: onAbrirGraficoRepresentacao ? (
+              <button type="button" onClick={onAbrirGraficoRepresentacao} title="Ver gráfico" className="hover:underline">
+                Repres%
+              </button>
+            ) : (
+              'Repres%'
+            ),
             larguraPadrao: defaults.representacaoGeral,
             render: (p: Produto) => {
               const repr = representatividadeGeralPorProduto.get(p.id);
@@ -509,7 +518,13 @@ export function PricingTable({
         ? [
             {
               chave: `${canal.id}:representacao`,
-              rotulo: 'Repres. (%)',
+              rotulo: onAbrirGraficoRepresentacao ? (
+                <button type="button" onClick={onAbrirGraficoRepresentacao} title="Ver gráfico" className="hover:underline">
+                  Repres. (%)
+                </button>
+              ) : (
+                'Repres. (%)'
+              ),
               larguraPadrao: defaults['col:representacao'],
               larguraChave: 'col:representacao',
               canalId: canal.id,

@@ -10,11 +10,14 @@ import {
   construirHistoricoPorCodigo,
   construirMargemBrutaAgregadaPorSafra,
   listarSafrasDisponiveis,
+  type CriterioRepresentacao,
   type HistoricoSafra,
   type MargemBrutaAgregada,
 } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
+import { GraficoRepresentacaoModal } from './GraficoRepresentacaoModal';
 import { PricingTable } from './PricingTable';
+import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
 function fmtP(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -57,6 +60,8 @@ export function ChannelFullscreenModal({
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
+  const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
+  const [graficoAberto, setGraficoAberto] = useState(false);
 
   // Cada abertura do modal (canal diferente, ou reabrir o mesmo) começa sem
   // busca nem ordenação — não faz sentido herdar isso de uma sessão anterior do modal.
@@ -64,6 +69,7 @@ export function ChannelFullscreenModal({
     if (canal) {
       setBusca('');
       setOrdenarPorRepresentacao(false);
+      setGraficoAberto(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
@@ -91,8 +97,8 @@ export function ChannelFullscreenModal({
     return calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
   }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo]);
   const representatividadePorProduto = useMemo(
-    () => calcularRepresentatividade(produtos, historicoPorCodigo),
-    [produtos, historicoPorCodigo],
+    () => calcularRepresentatividade(produtos, historicoPorCodigo, criterioRepresentacao),
+    [produtos, historicoPorCodigo, criterioRepresentacao],
   );
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
@@ -139,14 +145,18 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setOrdenarPorRepresentacao((v) => !v)}
-            title={ordenarPorRepresentacao ? 'Ordenado por Representação (maior → menor) — clique pra voltar à ordem padrão' : 'Ordenar por Representação (maior → menor)'}
-            className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${ordenarPorRepresentacao ? 'bg-[var(--color-accent)] text-white' : 'bg-white/15 text-white hover:bg-white/25'}`}
-          >
-            ⇅ Repres.
-          </button>
+          <span className="ml-auto">
+            <SeletorCriterioRepresentacao
+              criterio={criterioRepresentacao}
+              ordenarAtivo={ordenarPorRepresentacao}
+              onEscolher={(c) => {
+                setCriterioRepresentacao(c);
+                setOrdenarPorRepresentacao(true);
+              }}
+              onDesativarOrdenacao={() => setOrdenarPorRepresentacao(false)}
+              sobreFundoEscuro
+            />
+          </span>
         </>
       }
       onClose={onFechar}
@@ -175,10 +185,19 @@ export function ChannelFullscreenModal({
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}
             representatividadePorProduto={representatividadePorProduto}
+            onAbrirGraficoRepresentacao={() => setGraficoAberto(true)}
             somenteCanal
           />
         )}
       </div>
+      <GraficoRepresentacaoModal
+        open={graficoAberto}
+        onFechar={() => setGraficoAberto(false)}
+        titulo={`Representação — ${canal?.nome ?? ''}`}
+        criterio={criterioRepresentacao}
+        produtos={produtos}
+        representatividadePorProduto={representatividadePorProduto}
+      />
     </Modal>
   );
 }

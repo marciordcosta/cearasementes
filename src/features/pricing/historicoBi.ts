@@ -141,13 +141,30 @@ function mediaQtdUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
   return ordenadas.reduce((s, h) => s + h.qtd, 0) / ordenadas.length;
 }
 
-/** Média (últimas MAX_SAFRAS_EXIBIDAS safras) do valor vendido TOTAL desse produto — histórico puro, sem projetar pro preço de hoje. */
-function mediaValorVendidoUltimasSafras(porSafra: Map<string, HistoricoSafra>): number {
+/** Base de comparação da Representação (%): Faturamento (valor vendido), Quantidade ou Margem Bruta — mesmos 3 critérios da Curva ABC do BI (ver CriterioABC em bi/calculations.ts), reaproveitados aqui. */
+export type CriterioRepresentacao = 'valor' | 'qtd' | 'margem';
+
+/** Rótulo de cada critério pro seletor — mesmos nomes já usados no Curva ABC do BI. */
+export const ROTULO_CRITERIO_REPRESENTACAO: Record<CriterioRepresentacao, string> = {
+  valor: 'Faturamento',
+  qtd: 'Quantidade',
+  margem: 'Margem Bruta',
+};
+
+/** Valor de UMA safra no critério escolhido — Margem Bruta pode dar negativo (produto vendido no prejuízo naquele ano), de propósito: não filtramos isso fora. */
+function valorCriterioSafra(h: HistoricoSafra, criterio: CriterioRepresentacao): number {
+  if (criterio === 'qtd') return h.qtd;
+  if (criterio === 'margem') return (h.valorMedio - h.custoMedio) * h.qtd;
+  return h.valorMedio * h.qtd;
+}
+
+/** Média (últimas MAX_SAFRAS_EXIBIDAS safras) do critério escolhido pra esse produto — histórico puro, sem projetar pro preço de hoje. */
+function mediaCriterioUltimasSafras(porSafra: Map<string, HistoricoSafra>, criterio: CriterioRepresentacao): number {
   const ordenadas = Array.from(porSafra.values())
     .sort((a, b) => b.key.localeCompare(a.key))
     .slice(0, MAX_SAFRAS_EXIBIDAS);
   if (ordenadas.length === 0) return 0;
-  return ordenadas.reduce((s, h) => s + h.valorMedio * h.qtd, 0) / ordenadas.length;
+  return ordenadas.reduce((s, h) => s + valorCriterioSafra(h, criterio), 0) / ordenadas.length;
 }
 
 export type ClasseABC = 'A' | 'B' | 'C';
@@ -178,72 +195,83 @@ function classificarABCPorValor(itens: { id: string; valor: number }[]): Map<str
 
 export interface Representatividade {
   pct: number;
-  /** Média de quantidade vendida (mesma janela de safras usada no valor) — só pra exibir no tooltip. */
+  /** Média de quantidade vendida (mesma janela de safras) — sempre em unidades, independente do critério escolhido, só pra exibir no tooltip. */
   qtdMedia: number;
-  /** Curva ABC (Pareto) entre os produtos que aparecem nessa mesma lista de Representação. */
+  /** Curva ABC (Pareto) entre os produtos que aparecem nessa mesma lista de Representação, pelo critério escolhido. */
   classe: ClasseABC;
+  /** Valor médio bruto (na unidade do critério: R$ pra Faturamento/Margem, unidades pra Quantidade) que gerou o %. */
+  valorCriterio: number;
 }
 
 /**
- * "Representação (%)" — quanto o valor vendido médio (últimas
- * MAX_SAFRAS_EXIBIDAS safras, cada produto com a sua própria quantidade de
- * safras disponíveis) de cada produto pesa em relação à SOMA dessas médias
- * entre os produtos com Código cadastrado e batendo nessa Tabela. Por
- * construção, a soma das % sempre fecha 100% entre os produtos que
- * aparecem — não compara com o valor vendido real da tabela inteira (que
- * inclui produto sem Código cadastrado, fora da conta aqui de propósito).
+ * "Representação (%)" — quanto o Faturamento/Quantidade/Margem Bruta médio
+ * (últimas MAX_SAFRAS_EXIBIDAS safras, cada produto com a sua própria
+ * quantidade de safras disponíveis) de cada produto pesa em relação à SOMA
+ * desses valores entre os produtos com Código cadastrado e batendo nessa
+ * Tabela. Por construção, a soma das % sempre fecha 100% entre os produtos
+ * que aparecem — não compara com o valor real da tabela inteira (que inclui
+ * produto sem Código cadastrado, fora da conta aqui de propósito).
  */
-export function calcularRepresentatividade(produtos: Produto[], historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>): Map<string, Representatividade> {
-  const valorMedioPorProduto = new Map<string, { valorMedio: number; qtdMedia: number }>();
-  let totalValorMedio = 0;
+export function calcularRepresentatividade(
+  produtos: Produto[],
+  historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
+  criterio: CriterioRepresentacao = 'valor',
+): Map<string, Representatividade> {
+  const porProduto = new Map<string, { valor: number; qtdMedia: number }>();
+  let total = 0;
   for (const produto of produtos) {
     if (!produto.codigo) continue;
     const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
     if (!porSafra) continue;
-    const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
-    if (valorMedioProduto <= 0) continue;
-    valorMedioPorProduto.set(produto.id, { valorMedio: valorMedioProduto, qtdMedia: mediaQtdUltimasSafras(porSafra) });
-    totalValorMedio += valorMedioProduto;
+    const qtdMedia = mediaCriterioUltimasSafras(porSafra, 'qtd');
+    if (qtdMedia <= 0) continue;
+    const valor = mediaCriterioUltimasSafras(porSafra, criterio);
+    porProduto.set(produto.id, { valor, qtdMedia });
+    total += valor;
   }
   const resultado = new Map<string, Representatividade>();
-  if (totalValorMedio <= 0) return resultado;
-  const classes = classificarABCPorValor(Array.from(valorMedioPorProduto.entries()).map(([id, v]) => ({ id, valor: v.valorMedio })));
-  valorMedioPorProduto.forEach(({ valorMedio, qtdMedia }, produtoId) =>
-    resultado.set(produtoId, { pct: (valorMedio / totalValorMedio) * 100, qtdMedia, classe: classes.get(produtoId)! }),
+  if (porProduto.size === 0) return resultado;
+  const classes = classificarABCPorValor(Array.from(porProduto.entries()).map(([id, v]) => ({ id, valor: v.valor })));
+  porProduto.forEach(({ valor, qtdMedia }, produtoId) =>
+    resultado.set(produtoId, { pct: total !== 0 ? (valor / total) * 100 : 0, qtdMedia, classe: classes.get(produtoId)!, valorCriterio: valor }),
   );
   return resultado;
 }
 
 /**
  * "Representação Geral" — igual à Representação (%) por Tabela, só que
- * somando a média de valor vendido de cada produto em TODAS as Tabelas de
- * Preço (não só uma). Um produto vendido em várias Tabelas tem seu peso
- * somado entre elas antes de comparar com a soma geral de todo mundo —
- * mede o quanto aquele produto importa pro negócio inteiro, não só numa
- * Tabela específica.
+ * somando a média de cada produto em TODAS as Tabelas de Preço (não só
+ * uma). Um produto vendido em várias Tabelas tem seu peso somado entre
+ * elas antes de comparar com a soma geral de todo mundo — mede o quanto
+ * aquele produto importa pro negócio inteiro, não só numa Tabela específica.
  */
-export function calcularRepresentatividadeGeral(produtos: Produto[], canais: Canal[], items: ItemAgg[]): Map<string, Representatividade> {
-  const acumuladoPorProduto = new Map<string, { valorMedio: number; qtdMedia: number }>();
+export function calcularRepresentatividadeGeral(
+  produtos: Produto[],
+  canais: Canal[],
+  items: ItemAgg[],
+  criterio: CriterioRepresentacao = 'valor',
+): Map<string, Representatividade> {
+  const acumuladoPorProduto = new Map<string, { valor: number; qtdMedia: number }>();
   for (const canal of canais) {
     const historicoPorCodigo = construirHistoricoPorCodigo(items, canal.nome);
     for (const produto of produtos) {
       if (!produto.codigo) continue;
       const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
       if (!porSafra) continue;
-      const valorMedioProduto = mediaValorVendidoUltimasSafras(porSafra);
-      if (valorMedioProduto <= 0) continue;
-      const acc = acumuladoPorProduto.get(produto.id) ?? { valorMedio: 0, qtdMedia: 0 };
-      acc.valorMedio += valorMedioProduto;
-      acc.qtdMedia += mediaQtdUltimasSafras(porSafra);
+      const qtdMedia = mediaCriterioUltimasSafras(porSafra, 'qtd');
+      if (qtdMedia <= 0) continue;
+      const acc = acumuladoPorProduto.get(produto.id) ?? { valor: 0, qtdMedia: 0 };
+      acc.valor += mediaCriterioUltimasSafras(porSafra, criterio);
+      acc.qtdMedia += qtdMedia;
       acumuladoPorProduto.set(produto.id, acc);
     }
   }
-  const totalValorMedio = Array.from(acumuladoPorProduto.values()).reduce((s, v) => s + v.valorMedio, 0);
+  const total = Array.from(acumuladoPorProduto.values()).reduce((s, v) => s + v.valor, 0);
   const resultado = new Map<string, Representatividade>();
-  if (totalValorMedio <= 0) return resultado;
-  const classes = classificarABCPorValor(Array.from(acumuladoPorProduto.entries()).map(([id, v]) => ({ id, valor: v.valorMedio })));
-  acumuladoPorProduto.forEach(({ valorMedio, qtdMedia }, produtoId) =>
-    resultado.set(produtoId, { pct: (valorMedio / totalValorMedio) * 100, qtdMedia, classe: classes.get(produtoId)! }),
+  if (acumuladoPorProduto.size === 0) return resultado;
+  const classes = classificarABCPorValor(Array.from(acumuladoPorProduto.entries()).map(([id, v]) => ({ id, valor: v.valor })));
+  acumuladoPorProduto.forEach(({ valor, qtdMedia }, produtoId) =>
+    resultado.set(produtoId, { pct: total !== 0 ? (valor / total) * 100 : 0, qtdMedia, classe: classes.get(produtoId)!, valorCriterio: valor }),
   );
   return resultado;
 }
