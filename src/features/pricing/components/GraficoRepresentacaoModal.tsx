@@ -68,7 +68,7 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
         },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: c.text2, maxRotation: 60, minRotation: 60 } },
+        x: { grid: { display: false }, ticks: { color: c.text2, maxRotation: 60, minRotation: 60, font: { size: 10, weight: 300 as const } } },
         y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.text2, callback: (v: number | string) => `${v}%` }, border: { display: false } },
       },
     }),
