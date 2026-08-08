@@ -82,7 +82,8 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
       ) : (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Top {linhas.length} por {ROTULO_CRITERIO_REPRESENTACAO[criterio]}, maior pro menor. Cor da barra = Classe da Curva ABC.
+            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — top {linhas.length}, maior pro menor.
+            Cor da barra = Classe da Curva ABC.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
