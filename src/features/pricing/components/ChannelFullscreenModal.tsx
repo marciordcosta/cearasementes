@@ -15,6 +15,7 @@ import {
   type MargemBrutaAgregada,
 } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
+import { GraficoCurvaMensalModal } from './GraficoCurvaMensalModal';
 import { GraficoRepresentacaoModal } from './GraficoRepresentacaoModal';
 import { PricingTable } from './PricingTable';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
@@ -62,6 +63,7 @@ export function ChannelFullscreenModal({
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoAberto, setGraficoAberto] = useState(false);
+  const [produtoGraficoLinha, setProdutoGraficoLinha] = useState<Produto | null>(null);
 
   // Cada abertura do modal (canal diferente, ou reabrir o mesmo) começa sem
   // busca nem ordenação — não faz sentido herdar isso de uma sessão anterior do modal.
@@ -70,6 +72,7 @@ export function ChannelFullscreenModal({
       setBusca('');
       setOrdenarPorRepresentacao(false);
       setGraficoAberto(false);
+      setProdutoGraficoLinha(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
@@ -186,6 +189,7 @@ export function ChannelFullscreenModal({
             margemAgregadaPorSafra={margemAgregadaPorSafra}
             representatividadePorProduto={representatividadePorProduto}
             onAbrirGraficoRepresentacao={() => setGraficoAberto(true)}
+            onAbrirGraficoProduto={setProdutoGraficoLinha}
             somenteCanal
           />
         )}
@@ -198,6 +202,7 @@ export function ChannelFullscreenModal({
         produtos={produtos}
         representatividadePorProduto={representatividadePorProduto}
       />
+      <GraficoCurvaMensalModal produto={produtoGraficoLinha} onFechar={() => setProdutoGraficoLinha(null)} criterio={criterioRepresentacao} items={itemsAgregados} />
     </Modal>
   );
 }

@@ -114,6 +114,8 @@ interface PricingTableProps {
   representatividadeGeralPorProduto?: Map<string, Representatividade>;
   /** Clicar no cabeçalho "Repres." (qualquer uma das duas colunas) abre o gráfico em colunas — ver GraficoRepresentacaoModal.tsx. */
   onAbrirGraficoRepresentacao?: () => void;
+  /** Clicar no VALOR (não no cabeçalho) de "Repres." abre a curva mensal daquele produto — ver GraficoCurvaMensalModal.tsx. */
+  onAbrirGraficoProduto?: (produto: Produto) => void;
   /**
    * Modo do modal de tela cheia por canal: sem a faixa de cabeçalho com o
    * nome do canal (redundante — o modal já mostra o nome no título) e sem as
@@ -160,6 +162,7 @@ export function PricingTable({
   representatividadePorProduto,
   representatividadeGeralPorProduto,
   onAbrirGraficoRepresentacao,
+  onAbrirGraficoProduto,
   somenteCanal = false,
 }: PricingTableProps) {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
@@ -364,10 +367,23 @@ export function PricingTable({
             render: (p: Produto) => {
               const repr = representatividadeGeralPorProduto.get(p.id);
               if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
-              const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades, somando todas as Tabelas`;
+              const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades, somando todas as Tabelas${onAbrirGraficoProduto ? ' — clique pra ver a curva mensal' : ''}`;
               return (
                 <span className="inline-flex items-center gap-1" title={titulo}>
-                  <span className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700">{fmtP(repr.pct)}%</span>
+                  {onAbrirGraficoProduto ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAbrirGraficoProduto(p);
+                      }}
+                      className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700 hover:brightness-95"
+                    >
+                      {fmtP(repr.pct)}%
+                    </button>
+                  ) : (
+                    <span className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700">{fmtP(repr.pct)}%</span>
+                  )}
                   <Badge tom={CORES_CLASSE_ABC[repr.classe]}>{repr.classe}</Badge>
                 </span>
               );
@@ -531,10 +547,23 @@ export function PricingTable({
               render: (p: Produto) => {
                 const repr = representatividadePorProduto.get(p.id);
                 if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
-                const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades`;
+                const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades${onAbrirGraficoProduto ? ' — clique pra ver a curva mensal' : ''}`;
                 return (
                   <span className="inline-flex items-center gap-1" title={titulo}>
-                    <span className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700">{fmtP(repr.pct)}%</span>
+                    {onAbrirGraficoProduto ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAbrirGraficoProduto(p);
+                        }}
+                        className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700 hover:brightness-95"
+                      >
+                        {fmtP(repr.pct)}%
+                      </button>
+                    ) : (
+                      <span className="num inline-block min-w-[44px] rounded bg-blue-50 px-1.5 py-0.5 text-right text-blue-700">{fmtP(repr.pct)}%</span>
+                    )}
                     <Badge tom={CORES_CLASSE_ABC[repr.classe]}>{repr.classe}</Badge>
                   </span>
                 );

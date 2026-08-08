@@ -3,6 +3,7 @@ import type { PeriodContext } from '@/features/bi/calculations';
 import { getPeriodKeyFor, getPeriodLabel } from '@/features/bi/calculations';
 import type { ItemAgg } from '@/features/bi/types';
 import type { Transportadora } from '@/features/fretes/types';
+import { MESES_PT } from '@/lib/format';
 import { calcularCanal } from './calculations';
 import type { Canal, Categoria, Produto, Subcategoria } from './types';
 
@@ -326,4 +327,65 @@ export function calcularMargemAtualProjetada(
     margemLiquidaProjetada,
     margemLiquidaPct: valorProjetado > 0 ? (margemLiquidaProjetada / valorProjetado) * 100 : 0,
   };
+}
+
+export interface CurvaMensalTabela {
+  tabela: string;
+  /** 12 posições, alinhadas com `meses` do mesmo retorno — média (últimas MAX_SAFRAS_EXIBIDAS safras) do critério escolhido naquele mês, só nessa Tabela. */
+  valores: number[];
+}
+
+export interface CurvaMensalProduto {
+  /** 12 rótulos de mês (só o nome, sem ano) começando em SAFRA_PADRAO.seasonStartMonth — mesma ordem usada nas colunas de Safra. */
+  meses: string[];
+  tabelas: CurvaMensalTabela[];
+}
+
+/**
+ * Curva de venda mensal de UM produto, uma linha por Tabela de Preço — cada
+ * ponto é a MÉDIA (últimas MAX_SAFRAS_EXIBIDAS safras com dado nesse produto,
+ * mesma janela/filosofia da Representação) daquele mês específico do "ano da
+ * safra" (ex.: todo Agosto vira 1 ponto só, com a média dos Agostos das
+ * últimas safras) — sem o ano no eixo, de propósito.
+ */
+export function construirCurvaMensalProduto(
+  items: ItemAgg[],
+  codigoProduto: string,
+  criterio: CriterioRepresentacao,
+  ctx: PeriodContext = SAFRA_PADRAO,
+): CurvaMensalProduto {
+  const meses = Array.from({ length: 12 }, (_, i) => MESES_PT[(ctx.seasonStartMonth - 1 + i) % 12]);
+  const codigo = codigoCanonico(codigoProduto);
+  const item = items.find((i) => i.codInterno === codigo);
+  if (!item) return { meses, tabelas: [] };
+
+  // Últimas (até) MAX_SAFRAS_EXIBIDAS safras com QUALQUER venda desse produto (em qualquer Tabela)
+  // — mesma janela pra todas as Tabelas, pra ficarem comparáveis no mesmo gráfico.
+  const safrasComDado = Array.from(new Set(item.monthly.map((m) => getPeriodKeyFor(ctx, m.year, m.month))))
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, MAX_SAFRAS_EXIBIDAS);
+  const safrasConsideradas = new Set(safrasComDado);
+
+  const porTabela = new Map<string, Map<number, { soma: number; contagem: number }>>();
+  for (const m of item.monthly) {
+    if (!safrasConsideradas.has(getPeriodKeyFor(ctx, m.year, m.month))) continue;
+    const posicao = (m.month - ctx.seasonStartMonth + 12) % 12;
+    const valor = criterio === 'qtd' ? m.qtd : criterio === 'margem' ? m.valorVendido - m.custoTotal : m.valorVendido;
+    const porMes = porTabela.get(m.tabela) ?? new Map<number, { soma: number; contagem: number }>();
+    const acc = porMes.get(posicao) ?? { soma: 0, contagem: 0 };
+    acc.soma += valor;
+    acc.contagem += 1;
+    porMes.set(posicao, acc);
+    porTabela.set(m.tabela, porMes);
+  }
+
+  const tabelas: CurvaMensalTabela[] = Array.from(porTabela.entries()).map(([tabela, porMes]) => ({
+    tabela,
+    valores: Array.from({ length: 12 }, (_, posicao) => {
+      const acc = porMes.get(posicao);
+      return acc && acc.contagem > 0 ? acc.soma / acc.contagem : 0;
+    }),
+  }));
+
+  return { meses, tabelas };
 }

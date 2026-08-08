@@ -48,6 +48,7 @@ import { ExportPdfModal } from '@/features/pricing/components/ExportPdfModal';
 import { FornecedoresPanel } from '@/features/pricing/components/FornecedoresPanel';
 import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
+import { GraficoCurvaMensalModal } from '@/features/pricing/components/GraficoCurvaMensalModal';
 import { GraficoRepresentacaoModal } from '@/features/pricing/components/GraficoRepresentacaoModal';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
 import { SeletorCriterioRepresentacao } from '@/features/pricing/components/SeletorCriterioRepresentacao';
@@ -116,6 +117,7 @@ export function PricingPage() {
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoRepresentacaoAberto, setGraficoRepresentacaoAberto] = useState(false);
+  const [produtoGraficoLinha, setProdutoGraficoLinha] = useState<Produto | null>(null);
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
@@ -682,6 +684,7 @@ export function PricingPage() {
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
               representatividadeGeralPorProduto={representatividadeGeralPorProduto}
               onAbrirGraficoRepresentacao={() => setGraficoRepresentacaoAberto(true)}
+              onAbrirGraficoProduto={setProdutoGraficoLinha}
             />
           </Card>
         </div>
@@ -694,6 +697,12 @@ export function PricingPage() {
         criterio={criterioRepresentacao}
         produtos={produtos}
         representatividadePorProduto={representatividadeGeralPorProduto}
+      />
+      <GraficoCurvaMensalModal
+        produto={produtoGraficoLinha}
+        onFechar={() => setProdutoGraficoLinha(null)}
+        criterio={criterioRepresentacao}
+        items={itemsAgregadosBi}
       />
 
       <EditProductModal
