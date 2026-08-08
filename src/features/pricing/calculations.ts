@@ -108,7 +108,11 @@ export function calcularCanal(
   let precoSugerido: number;
   if (canalReferencia && canalReferencia.id !== canal.id) {
     const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
-    const metaReais = referencia.margemReais * (1 + (canal.margemReferenciaAjustePct || 0) / 100);
+    // Ajuste "por dentro" (mesma convenção do resto do sistema): o % representa uma fração
+    // da PRÓPRIA meta, não da margem de referência — tirando esse % da meta, volta pra
+    // margem da referência. Por isso divide (não multiplica) pelo complemento do %.
+    const divisorAjuste = 1 - (canal.margemReferenciaAjustePct || 0) / 100;
+    const metaReais = divisorAjuste <= 0.01 ? referencia.margemReais / 0.01 : referencia.margemReais / divisorAjuste;
     const pctParaMeta = impostoPct + encargosPct + (freteConsiderado ? fretePctEfetivo : 0);
     const baseParaMeta = freteConsiderado ? custoBase : produto.custo + outrosEncargos + valorDespesaExtra;
     const divisorMeta = 1 - pctParaMeta / 100;
