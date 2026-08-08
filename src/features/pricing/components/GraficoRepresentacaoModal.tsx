@@ -23,6 +23,12 @@ const COR_CLASSE: Record<ClasseABC, string> = { A: '#0B6E52', B: '#94A3B8', C: '
 const COR_OUTROS = '#CBD5E1';
 const ID_OUTROS = '__outros__';
 
+/** Ângulo áureo — espaça os matizes de forma bem distribuída pra qualquer quantidade de fatias, sem repetir cor entre produtos vizinhos. */
+function corPorIndice(i: number, isDark: boolean): string {
+  const matiz = (i * 137.508) % 360;
+  return `hsl(${matiz.toFixed(1)}, 62%, ${isDark ? 58 : 46}%)`;
+}
+
 /** Além disso o gráfico fica ilegível — mesmo limite do gráfico Pareto do BI. */
 const TOP_N_GRAFICO = 20;
 
@@ -130,13 +136,13 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
         {
           type: 'pie' as const,
           data: fatias.map((f) => f.valorCriterio),
-          backgroundColor: fatias.map((f) => (f.produtoId === ID_OUTROS ? COR_OUTROS : COR_CLASSE[f.classe])),
+          backgroundColor: fatias.map((f, i) => (f.produtoId === ID_OUTROS ? COR_OUTROS : corPorIndice(i, isDark))),
           borderColor: c.tooltipBg,
           borderWidth: 2,
         },
       ],
     }),
-    [c, fatias],
+    [c, fatias, isDark],
   );
 
   const chartOptionsPizza = useMemo(
@@ -173,7 +179,7 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
             Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item dentro desse filtro. Critério:{' '}
-            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cor da fatia = Classe da Curva ABC.
+            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cada produto com uma cor própria.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
