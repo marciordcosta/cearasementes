@@ -95,15 +95,22 @@ export function CategoryMarginsPanel({
           <table className="w-full min-w-[640px] text-xs">
             <thead>
               <tr className="bg-[var(--color-navy)] text-left text-white">
-                <th className="px-3 py-2 font-semibold">Categoria</th>
-                <th className="w-28 px-2 py-2 font-semibold">Estadual (%)</th>
-                <th className="w-28 border-r-2 border-white/20 px-2 py-2 font-semibold">Interestadual (%)</th>
+                <th className="px-3 py-2 font-semibold" rowSpan={2}>
+                  Categoria
+                </th>
+                <th className="w-56 border-r-2 border-white/20 px-2 py-2 text-center font-semibold" colSpan={2}>
+                  Impostos
+                </th>
                 {canais.map((canal) => (
-                  <th key={canal.id} className="px-3 py-2 font-semibold">
+                  <th key={canal.id} className="px-3 py-2 font-semibold" rowSpan={2}>
                     {canal.nome} (%)
                   </th>
                 ))}
-                <th className="px-3 py-2" />
+                <th className="px-3 py-2" rowSpan={2} />
+              </tr>
+              <tr className="bg-[var(--color-navy)] text-left text-white">
+                <th className="w-28 px-2 py-1.5 text-[11px] font-normal">Estadual</th>
+                <th className="w-28 border-r-2 border-white/20 px-2 py-1.5 text-[11px] font-normal">Interestadual</th>
               </tr>
             </thead>
             <tbody>
