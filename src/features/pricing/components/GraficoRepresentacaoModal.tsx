@@ -20,17 +20,12 @@ interface GraficoRepresentacaoModalProps {
 
 /** Mesmas cores semânticas A/B/C (good/neutro/bad) já usadas em Badge/tailwind.config.js. */
 const COR_CLASSE: Record<ClasseABC, string> = { A: '#0B6E52', B: '#94A3B8', C: '#C24444' };
-const COR_OUTROS = '#CBD5E1';
-const ID_OUTROS = '__outros__';
 
 /** Ângulo áureo — espaça os matizes de forma bem distribuída pra qualquer quantidade de fatias, sem repetir cor entre produtos vizinhos. */
 function corPorIndice(i: number, isDark: boolean): string {
   const matiz = (i * 137.508) % 360;
   return `hsl(${matiz.toFixed(1)}, 62%, ${isDark ? 58 : 46}%)`;
 }
-
-/** Além disso o gráfico fica ilegível — mesmo limite do gráfico Pareto do BI. */
-const TOP_N_GRAFICO = 20;
 
 interface FatiaPizza {
   nome: string;
@@ -50,43 +45,31 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const nomePorId = useMemo(() => new Map(produtos.map((p) => [p.id, p.nome.replace(/[*_]/g, '')])), [produtos]);
 
+  // Só Classes A e B da Curva ABC — Classe C fica de fora dos dois gráficos (pouco relevante, poluía).
   const linhas = useMemo(() => {
     return Array.from(representatividadePorProduto.entries())
       .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', ...repr }))
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, TOP_N_GRAFICO);
+      .filter((l) => l.classe !== 'C')
+      .sort((a, b) => b.pct - a.pct);
   }, [nomePorId, representatividadePorProduto]);
 
   const emModoPizza = !!filtroAtivo && filtroAtivo.produtoIds.size > 0;
 
-  // Total recalculado só dentro do filtro (não do sortimento inteiro) — as fatias somam 100% entre si.
+  // Total recalculado só dentro do filtro e das Classes A/B (não do sortimento inteiro) — as fatias somam 100% entre si.
   const fatias = useMemo((): FatiaPizza[] => {
     if (!filtroAtivo) return [];
     const doFiltro = Array.from(representatividadePorProduto.entries())
-      .filter(([produtoId]) => filtroAtivo.produtoIds.has(produtoId))
+      .filter(([produtoId, repr]) => filtroAtivo.produtoIds.has(produtoId) && repr.classe !== 'C')
       .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', produtoId, ...repr }))
       .sort((a, b) => b.valorCriterio - a.valorCriterio);
     const totalValor = doFiltro.reduce((soma, l) => soma + l.valorCriterio, 0);
-    const principais = doFiltro.slice(0, TOP_N_GRAFICO);
-    const resto = doFiltro.slice(TOP_N_GRAFICO);
-    const valorResto = resto.reduce((soma, l) => soma + l.valorCriterio, 0);
-    const comPct: FatiaPizza[] = principais.map((l) => ({
+    return doFiltro.map((l) => ({
       nome: l.nome,
       produtoId: l.produtoId,
       classe: l.classe,
       valorCriterio: l.valorCriterio,
       pctFiltro: totalValor > 0 ? (l.valorCriterio / totalValor) * 100 : 0,
     }));
-    if (valorResto > 0) {
-      comPct.push({
-        nome: `Outros (${resto.length})`,
-        produtoId: ID_OUTROS,
-        classe: 'C',
-        valorCriterio: valorResto,
-        pctFiltro: totalValor > 0 ? (valorResto / totalValor) * 100 : 0,
-      });
-    }
-    return comPct;
   }, [filtroAtivo, nomePorId, representatividadePorProduto]);
 
   const chartDataBarras = useMemo(
@@ -136,7 +119,7 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
         {
           type: 'pie' as const,
           data: fatias.map((f) => f.valorCriterio),
-          backgroundColor: fatias.map((f, i) => (f.produtoId === ID_OUTROS ? COR_OUTROS : corPorIndice(i, isDark))),
+          backgroundColor: fatias.map((_f, i) => corPorIndice(i, isDark)),
           borderColor: c.tooltipBg,
           borderWidth: 2,
         },
@@ -156,11 +139,7 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
             label: (ctx: { dataIndex: number }) => {
               const f = fatias[ctx.dataIndex];
               const valorFormatado = criterio === 'qtd' ? `${fmtInt.format(Math.round(f.valorCriterio))} un.` : fmtBRL.format(f.valorCriterio);
-              return [
-                `${f.pctFiltro.toFixed(1)}% do filtro`,
-                `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`,
-                ...(f.produtoId === ID_OUTROS ? [] : [`Classe: ${f.classe}`]),
-              ];
+              return [`${f.pctFiltro.toFixed(1)}% do filtro`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`, `Classe: ${f.classe}`];
             },
           },
         },
@@ -174,12 +153,15 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
   return (
     <Modal open={open} title={titulo} onClose={onFechar} widthClassName="max-w-4xl">
       {semDados ? (
-        <p className="text-sm text-[var(--color-text-soft)]">Sem dado de Representação pra mostrar — nenhum produto com Código cadastrado bateu com o histórico do BI.</p>
+        <p className="text-sm text-[var(--color-text-soft)]">
+          Sem dado de Representação pra mostrar — nenhum produto com Código cadastrado bateu com o histórico do BI, ou só tem Classe C nesse filtro.
+        </p>
       ) : emModoPizza && filtroAtivo ? (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item dentro desse filtro. Critério:{' '}
-            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cada produto com uma cor própria.
+            Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item (Classes A e B da Curva ABC) dentro
+            desse filtro. Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cada produto com uma cor
+            própria.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -189,8 +171,8 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
       ) : (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — top {linhas.length}, maior pro menor.
-            Cor da barra = Classe da Curva ABC.
+            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — Classes A e B da Curva ABC (
+            {linhas.length} produtos), maior pro menor. Cor da barra = Classe da Curva ABC.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
