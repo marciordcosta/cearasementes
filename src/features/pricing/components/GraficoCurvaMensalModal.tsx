@@ -20,19 +20,20 @@ interface GraficoCurvaMensalModalProps {
   produtos: Produto[];
 }
 
-interface Comparacao {
-  produto: Produto;
-  tabela: string;
-}
-
 /**
  * Curva de venda mensal de um produto, uma linha por Tabela de Preço — abre
  * ao clicar no VALOR (não no cabeçalho) da coluna Repres. (%). Eixo X só com
  * o nome do mês (sem ano): cada ponto já é a média das últimas safras nesse
- * mês (ver construirCurvaMensalProduto em historicoBi.ts). O ícone de
- * comparação no título deixa "chamar" outro produto pro mesmo gráfico — pra
- * não multiplicar linhas demais, só entra 1 linha por comparação (o sistema
- * pergunta em qual Tabela desse outro produto, não todas de uma vez).
+ * mês (ver construirCurvaMensalProduto em historicoBi.ts).
+ *
+ * O ícone de comparação no título deixa "chamar" outro produto pro mesmo
+ * gráfico. Assim que a 1ª comparação entra, os DOIS produtos passam a
+ * mostrar só 1 linha cada — a mesma Tabela (`tabelaAtiva`), pra virar uma
+ * comparação de verdade (mesmo canal de venda dos dois lados) em vez de
+ * "todas as Tabelas de A" contra "uma Tabela de B". Essa Tabela ativa pode
+ * ser trocada a qualquer momento (afeta os dois produtos juntos) enquanto
+ * houver pelo menos uma comparação; sem nenhuma, volta a mostrar todas as
+ * Tabelas do produto principal, como antes.
  */
 export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, produtos }: GraficoCurvaMensalModalProps) {
   const { isDark } = useTheme();
@@ -42,7 +43,8 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
   const [mostrarBusca, setMostrarBusca] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState('');
   const [produtoEscolhendoTabela, setProdutoEscolhendoTabela] = useState<Produto | null>(null);
-  const [comparacoes, setComparacoes] = useState<Comparacao[]>([]);
+  const [comparacoes, setComparacoes] = useState<Produto[]>([]);
+  const [tabelaAtiva, setTabelaAtiva] = useState<string | null>(null);
 
   // Cada produto novo aberto (ou o modal fechando) zera qualquer comparação/busca em andamento —
   // não faz sentido herdar isso de uma sessão anterior do modal.
@@ -51,6 +53,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
     setBuscaProduto('');
     setProdutoEscolhendoTabela(null);
     setComparacoes([]);
+    setTabelaAtiva(null);
   }, [produto?.id]);
 
   const curva = useMemo(() => {
@@ -61,46 +64,78 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
   const opcoesBusca = useMemo(() => {
     if (!mostrarBusca) return [];
     const termo = buscaProduto.trim().toLowerCase();
-    const jaComparando = new Set(comparacoes.map((cp) => cp.produto.id));
+    const jaComparando = new Set(comparacoes.map((p) => p.id));
     return produtos
       .filter((p) => p.id !== produto?.id && p.codigo && !jaComparando.has(p.id))
       .filter((p) => !termo || p.nome.toLowerCase().includes(termo))
       .slice(0, 8);
   }, [mostrarBusca, buscaProduto, produtos, produto, comparacoes]);
 
-  const tabelasDoProdutoEscolhendo = useMemo(() => {
-    if (!produtoEscolhendoTabela?.codigo) return [];
-    return construirCurvaMensalProduto(items, produtoEscolhendoTabela.codigo, criterio).tabelas.map((t) => t.tabela);
-  }, [produtoEscolhendoTabela, items, criterio]);
+  // Só a 1ª comparação pergunta a Tabela — pra ficar uma comparação de verdade, mostra
+  // só as Tabelas em que os DOIS produtos (o principal e esse novo) têm dado.
+  const tabelasEmComum = useMemo(() => {
+    if (!produtoEscolhendoTabela?.codigo || !curva) return [];
+    const doNovo = new Set(construirCurvaMensalProduto(items, produtoEscolhendoTabela.codigo, criterio).tabelas.map((t) => t.tabela));
+    return curva.tabelas.map((t) => t.tabela).filter((t) => doNovo.has(t));
+  }, [produtoEscolhendoTabela, curva, items, criterio]);
+
+  // Opções pro seletor de Tabela ativa, uma vez já em modo comparação — união das Tabelas
+  // do produto principal com as de TODOS os produtos já adicionados na comparação.
+  const opcoesTabelaAtiva = useMemo(() => {
+    if (!curva) return [];
+    const nomes = new Set(curva.tabelas.map((t) => t.tabela));
+    comparacoes.forEach((p) => {
+      if (!p.codigo) return;
+      construirCurvaMensalProduto(items, p.codigo, criterio).tabelas.forEach((t) => nomes.add(t.tabela));
+    });
+    return Array.from(nomes).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [curva, comparacoes, items, criterio]);
 
   function escolherProdutoComparacao(p: Produto) {
-    setProdutoEscolhendoTabela(p);
     setMostrarBusca(false);
     setBuscaProduto('');
+    // Já tem uma Tabela ativa (não é a 1ª comparação) — entra direto nela, sem perguntar de novo.
+    if (tabelaAtiva) {
+      setComparacoes((prev) => [...prev, p]);
+    } else {
+      setProdutoEscolhendoTabela(p);
+    }
   }
 
   function confirmarTabelaComparacao(tabela: string) {
     if (!produtoEscolhendoTabela) return;
-    setComparacoes((prev) => [...prev, { produto: produtoEscolhendoTabela, tabela }]);
+    setTabelaAtiva(tabela);
+    setComparacoes((prev) => [...prev, produtoEscolhendoTabela]);
     setProdutoEscolhendoTabela(null);
   }
 
   function removerComparacao(produtoId: string) {
-    setComparacoes((prev) => prev.filter((cp) => cp.produto.id !== produtoId));
+    setComparacoes((prev) => {
+      const restantes = prev.filter((p) => p.id !== produtoId);
+      if (restantes.length === 0) setTabelaAtiva(null);
+      return restantes;
+    });
   }
 
-  const curvasComparacao = useMemo(
-    () =>
-      comparacoes.map((cp) => ({
-        ...cp,
-        valores: construirCurvaMensalProduto(items, cp.produto.codigo!, criterio).tabelas.find((t) => t.tabela === cp.tabela)?.valores ?? Array(12).fill(0),
-      })),
-    [comparacoes, items, criterio],
-  );
+  const curvasComparacao = useMemo(() => {
+    if (!tabelaAtiva) return [];
+    return comparacoes.map((p) => ({
+      produto: p,
+      valores: p.codigo ? (construirCurvaMensalProduto(items, p.codigo, criterio).tabelas.find((t) => t.tabela === tabelaAtiva)?.valores ?? Array(12).fill(0)) : Array(12).fill(0),
+    }));
+  }, [comparacoes, tabelaAtiva, items, criterio]);
+
+  // Sem comparação nenhuma: todas as Tabelas do produto principal (como sempre foi). Com
+  // comparação: só a Tabela ativa — os dois lados (principal e comparações) ficam alinhados.
+  const tabelasPrincipaisExibidas = useMemo(() => {
+    if (!curva) return [];
+    if (!tabelaAtiva) return curva.tabelas;
+    return curva.tabelas.filter((t) => t.tabela === tabelaAtiva);
+  }, [curva, tabelaAtiva]);
 
   const chartData = useMemo(() => {
     if (!curva) return null;
-    const principais = curva.tabelas.map((t, i) => ({
+    const principais = tabelasPrincipaisExibidas.map((t, i) => ({
       type: 'line' as const,
       label: t.tabela,
       data: t.valores,
@@ -111,10 +146,10 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
     }));
     // Linha pontilhada — visualmente distingue "outro produto" das linhas do produto principal (que são cheias).
     const comparacoesDatasets = curvasComparacao.map((cp, i) => {
-      const cor = colors[(curva.tabelas.length + i) % colors.length];
+      const cor = colors[(tabelasPrincipaisExibidas.length + i) % colors.length];
       return {
         type: 'line' as const,
-        label: `${cp.produto.nome.replace(/[*_]/g, '')} — ${cp.tabela}`,
+        label: cp.produto.nome.replace(/[*_]/g, ''),
         data: cp.valores,
         borderColor: cor,
         backgroundColor: cor,
@@ -124,7 +159,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
       };
     });
     return { labels: curva.meses, datasets: [...principais, ...comparacoesDatasets] };
-  }, [curva, colors, curvasComparacao]);
+  }, [curva, colors, tabelasPrincipaisExibidas, curvasComparacao]);
 
   const chartOptions = useMemo(
     () => ({
@@ -204,13 +239,13 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
       {produtoEscolhendoTabela && (
         <div className="mb-3 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-3">
           <p className="mb-1.5 text-xs font-semibold text-[var(--color-text-soft)]">
-            Comparar <NomeComDestaque nome={produtoEscolhendoTabela.nome} /> em qual Tabela?
+            Comparar <NomeComDestaque nome={produtoEscolhendoTabela.nome} /> em qual Tabela? (os dois produtos passam a mostrar só essa)
           </p>
-          {tabelasDoProdutoEscolhendo.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-soft)]">Sem histórico de vendas no BI pra esse produto.</p>
+          {tabelasEmComum.length === 0 ? (
+            <p className="text-sm text-[var(--color-text-soft)]">Esses dois produtos não têm nenhuma Tabela de Preço em comum no histórico do BI.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {tabelasDoProdutoEscolhendo.map((tabela) => (
+              {tabelasEmComum.map((tabela) => (
                 <button
                   key={tabela}
                   type="button"
@@ -228,15 +263,24 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
         </div>
       )}
 
-      {comparacoes.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {comparacoes.map((cp) => (
-            <span
-              key={cp.produto.id}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]"
-            >
-              {cp.produto.nome.replace(/[*_]/g, '')} — {cp.tabela}
-              <button type="button" onClick={() => removerComparacao(cp.produto.id)} title="Remover comparação" className="hover:text-bad">
+      {tabelaAtiva && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-[var(--color-text-soft)]">Comparando na Tabela:</span>
+          <select
+            value={tabelaAtiva}
+            onChange={(e) => setTabelaAtiva(e.target.value)}
+            className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
+          >
+            {opcoesTabelaAtiva.map((tabela) => (
+              <option key={tabela} value={tabela}>
+                {tabela}
+              </option>
+            ))}
+          </select>
+          {comparacoes.map((p) => (
+            <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]">
+              {p.nome.replace(/[*_]/g, '')}
+              <button type="button" onClick={() => removerComparacao(p.id)} title="Remover comparação" className="hover:text-bad">
                 ✕
               </button>
             </span>
@@ -252,7 +296,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
             Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — cada ponto é a média
-            daquele mês nas últimas safras. Uma linha por Tabela de Preço.
+            daquele mês nas últimas safras. {tabelaAtiva ? 'Uma linha por produto, nessa Tabela.' : 'Uma linha por Tabela de Preço.'}
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
