@@ -354,12 +354,12 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   }
 
   /** Ignora NF em branco ou volumes ≤ 0 — não precisa validar antes, só não gera etiqueta pra linha vazia. */
-  function imprimirEtiquetas() {
+  async function imprimirEtiquetas() {
     const grupos = cidades
       .map((cidade) => ({ cidade, notas: notasDaCidade(cidade).filter((n) => n.nf.trim() && n.volumes > 0) }))
       .filter((g) => g.notas.length > 0);
     if (grupos.length === 0) return;
-    gerarEtiquetaFretePdf(grupos);
+    await gerarEtiquetaFretePdf(grupos);
   }
 
   return (

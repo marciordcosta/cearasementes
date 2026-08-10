@@ -1,3 +1,7 @@
+// Import só de tipo — jsPDF (que arrasta html2canvas/dompurify junto, uns 350kb) só entra
+// no bundle de verdade na hora do clique (import dinâmico lá embaixo), não no carregamento
+// inicial do app pra quem nunca usa "Imprimir Etiquetas".
+import type { jsPDF } from 'jspdf';
 import type { NotaEtiqueta } from './types';
 
 /** Uma cidade da cotação com as NFs (uma ou mais) a etiquetar pra ela. */
@@ -7,9 +11,15 @@ export interface GrupoEtiquetaFrete {
   notas: NotaEtiqueta[];
 }
 
-function escapeHtml(texto: string): string {
-  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+const LARGURA_MM = 100;
+const ALTURA_MM = 30;
+const MARGEM_X = 4;
+const MARGEM_Y = 3;
+const FONTE_ROTULO = 7;
+const FONTE_VALOR_MAX = 20;
+const FONTE_VALOR_MIN = 10;
+/** Largura reservada pro valor da DIREITA (UF/VOL) — mais estreita, evita disputa de espaço com o da esquerda. */
+const LARGURA_DIREITA = 22;
 
 /** "Fortaleza, CE" -> { cidade: "Fortaleza", uf: "CE" }; sem vírgula, UF fica vazia. */
 function separarCidadeUf(cidadeCompleta: string): { cidade: string; uf: string } {
@@ -19,15 +29,71 @@ function separarCidadeUf(cidadeCompleta: string): { cidade: string; uf: string }
 }
 
 /**
- * Gera as etiquetas de expedição (via janela de impressão do navegador) —
- * uma etiqueta física por VOLUME: uma NF com 50 volumes vira 50 etiquetas
- * "1/50", "2/50"... "50/50". Mesmo padrão de gerarEtiquetaPdf
- * (features/arquivos/etiquetaPdf.ts): HTML puro em `window.print()`, sem lib
- * de PDF. Etiqueta física padrão de frete: 100mm (largura) x 30mm (altura) —
- * bem mais larga que alta, por isso os campos ficam em 2 linhas, cada uma
- * com um par lado a lado (Cidade+UF, depois NF+VOL), não empilhados.
+ * Reduz o tamanho da fonte até o texto caber em `larguraMax` (nunca abaixo de
+ * FONTE_VALOR_MIN); se mesmo assim não couber, corta com "…". Evita que um
+ * nome de cidade comprido invada a coluna do valor vizinho (mesmo espírito do
+ * `text-overflow:ellipsis` que a versão em HTML/print usava).
  */
-export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
+function ajustarParaCaber(doc: jsPDF, texto: string, larguraMax: number): { texto: string; fonte: number } {
+  let fonte = FONTE_VALOR_MAX;
+  doc.setFontSize(fonte);
+  while (fonte > FONTE_VALOR_MIN && doc.getTextWidth(texto) > larguraMax) {
+    fonte -= 1;
+    doc.setFontSize(fonte);
+  }
+  if (doc.getTextWidth(texto) <= larguraMax) return { texto, fonte };
+  let cortado = texto;
+  while (cortado.length > 1 && doc.getTextWidth(`${cortado}…`) > larguraMax) {
+    cortado = cortado.slice(0, -1);
+  }
+  return { texto: `${cortado}…`, fonte };
+}
+
+function desenharEtiqueta(
+  doc: jsPDF,
+  etiqueta: { cidade: string; uf: string; nf: string; volumeAtual: number; volumeTotal: number },
+): void {
+  const larguraEsquerda = LARGURA_MM - MARGEM_X * 2 - LARGURA_DIREITA - 3;
+  const xEsquerda = MARGEM_X;
+  const xDireita = LARGURA_MM - MARGEM_X;
+  const yRotulo1 = MARGEM_Y + 3;
+  const yValor1 = yRotulo1 + 6.5;
+  const yRotulo2 = ALTURA_MM - MARGEM_Y - 8;
+  const yValor2 = yRotulo2 + 6.5;
+
+  doc.setFont('helvetica', 'bold');
+
+  doc.setFontSize(FONTE_ROTULO);
+  doc.text('Cidade:', xEsquerda, yRotulo1);
+  doc.text('UF:', xDireita, yRotulo1, { align: 'right' });
+  doc.text('NF:', xEsquerda, yRotulo2);
+  doc.text('VOL:', xDireita, yRotulo2, { align: 'right' });
+
+  const cidadeAjustada = ajustarParaCaber(doc, etiqueta.cidade, larguraEsquerda);
+  doc.setFontSize(cidadeAjustada.fonte);
+  doc.text(cidadeAjustada.texto, xEsquerda, yValor1);
+
+  const nfAjustado = ajustarParaCaber(doc, etiqueta.nf, larguraEsquerda);
+  doc.setFontSize(nfAjustado.fonte);
+  doc.text(nfAjustado.texto, xEsquerda, yValor2);
+
+  doc.setFontSize(FONTE_VALOR_MAX);
+  doc.text(etiqueta.uf, xDireita, yValor1, { align: 'right' });
+  doc.text(`${etiqueta.volumeAtual}/${etiqueta.volumeTotal}`, xDireita, yValor2, { align: 'right' });
+}
+
+/**
+ * Gera as etiquetas de expedição como um PDF de verdade (jsPDF), aberto numa
+ * nova aba — troca a técnica antiga (janela de impressão HTML via
+ * `window.print()`) porque o navegador só oferece, no diálogo de impressão,
+ * os tamanhos de papel que o DRIVER da impressora já tem cadastrados; um PDF
+ * real carrega o tamanho da página embutido no próprio arquivo, então
+ * imprime certo mesmo sem esse tamanho custom estar configurado no driver.
+ * Uma etiqueta física por VOLUME: uma NF com 50 volumes vira 50 páginas
+ * "1/50", "2/50"... "50/50". Etiqueta física padrão de frete: 100mm
+ * (largura) x 30mm (altura).
+ */
+export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promise<void> {
   const etiquetas = grupos.flatMap(({ cidade, notas }) => {
     const { cidade: nomeCidade, uf } = separarCidadeUf(cidade);
     return notas.flatMap((nota) =>
@@ -41,70 +107,18 @@ export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
     );
   });
 
-  const corpoHtml = etiquetas
-    .map(
-      (e) => `
-        <div class="etiqueta">
-          <div class="grupo">
-            <div class="campo"><span class="rotulo">Cidade:</span> <span class="valor">${escapeHtml(e.cidade)}</span></div>
-            <div class="campo"><span class="rotulo">UF:</span> <span class="valor">${escapeHtml(e.uf)}</span></div>
-          </div>
-          <div class="grupo">
-            <div class="campo"><span class="rotulo">NF:</span> <span class="valor">${escapeHtml(e.nf)}</span></div>
-            <div class="campo"><span class="rotulo">VOL:</span> <span class="valor">${e.volumeAtual}/${e.volumeTotal}</span></div>
-          </div>
-        </div>
-      `,
-    )
-    .join('');
+  if (etiquetas.length === 0) return;
 
-  const htmlCompleto = `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title></title>
-      <style>
-        @page{ size:100mm 30mm; margin:0; }
-        *{ box-sizing:border-box; }
-        html,body{ width:100mm; height:30mm; margin:0; padding:0; font-family:Arial,Helvetica,sans-serif; color:#000000; background:#FFFFFF; }
-        .etiqueta{
-          width:100mm; height:30mm; padding:2mm 4mm;
-          display:flex; flex-direction:column; justify-content:center; gap:1.5mm;
-          page-break-after:always;
-        }
-        .etiqueta:last-child{ page-break-after:auto; }
-        .grupo{ display:flex; flex-direction:row; align-items:flex-end; gap:4mm; }
-        .campo{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .campo:first-child{ flex:1 1 auto; min-width:0; }
-        .campo:last-child{ flex:0 0 auto; }
-        .rotulo{ font-size:2.2mm; font-weight:700; }
-        .valor{ font-size:6.5mm; font-weight:700; display:block; line-height:1.05; }
-      </style>
-    </head>
-    <body>
-      ${corpoHtml}
-    </body>
-    </html>
-  `;
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [LARGURA_MM, ALTURA_MM] });
+  etiquetas.forEach((etiqueta, indice) => {
+    if (indice > 0) doc.addPage([LARGURA_MM, ALTURA_MM], 'landscape');
+    desenharEtiqueta(doc, etiqueta);
+  });
 
-  const janela = window.open('', '_blank', 'width=500,height=400');
+  const url = URL.createObjectURL(doc.output('blob'));
+  const janela = window.open(url, '_blank');
   if (!janela) {
-    alert('O navegador bloqueou a abertura da janela de impressão. Permita pop-ups para este site e tente novamente.');
-    return;
+    alert('O navegador bloqueou a abertura da aba com o PDF. Permita pop-ups para este site e tente novamente.');
   }
-  janela.document.open();
-  janela.document.write(htmlCompleto);
-  janela.document.close();
-  // onload E o setTimeout de fallback (pra navegadores que não disparam onload de forma
-  // confiável em document.write) podem disparar os dois — a flag garante só 1 diálogo de impressão.
-  let impresso = false;
-  const imprimirUmaVez = () => {
-    if (impresso) return;
-    impresso = true;
-    janela.focus();
-    janela.print();
-  };
-  janela.onload = imprimirUmaVez;
-  setTimeout(imprimirUmaVez, 400);
 }
