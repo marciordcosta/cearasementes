@@ -82,13 +82,6 @@ interface PricingTableProps {
   subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
   canaisVisiveis: Canal[];
-  /**
-   * Canal usado como referência nos tooltips de comparação (Preço/Margem) —
-   * sempre a primeira tabela GERAL (não a primeira das colunas exibidas
-   * aqui), pra continuar valendo também dentro do modal de tela cheia por
-   * canal (que só mostra 1 canal em `canaisVisiveis`, sem outro pra comparar).
-   */
-  canalReferencia?: Canal;
   /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência" quando aponta pra um canal oculto. */
   todosCanais: Canal[];
   transportadoras: Transportadora[];
@@ -149,7 +142,6 @@ export function PricingTable({
   subcategorias,
   fornecedores,
   canaisVisiveis,
-  canalReferencia,
   todosCanais,
   transportadoras,
   mostrarMaisDetalhes,
@@ -176,7 +168,6 @@ export function PricingTable({
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
   const transportadoraPorId = useMemo(() => new Map(transportadoras.map((t) => [t.id, t])), [transportadoras]);
   const canaisPorId = useMemo(() => new Map(todosCanais.map((c) => [c.id, c])), [todosCanais]);
-  const referencia = canalReferencia ?? canaisVisiveis[0];
   // Focar num campo de custo/preço (ou clicar na linha) destaca a linha inteira — igual ao original.
   const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
   // Clicar fora da tabela inteira limpa o destaque — ouve o documento (não só onBlur) porque
@@ -432,16 +423,8 @@ export function PricingTable({
           const subcategoria = getSubcategoria(p.subcategoriaId);
           const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
           const manual = p.precos[canal.id]?.manual ?? false;
-          // Não faz sentido comparar a referência com ela mesma.
-          const ehReferencia = referencia !== undefined && canal.id === referencia.id;
-          const partesTooltip: string[] = [];
-          if (referencia !== undefined && !ehReferencia) {
-            const rReferencia = calcularCanal(p, referencia, categoria, subcategoria, transportadoraPorId, canaisPorId);
-            partesTooltip.push(`Padrão: R$ ${fmtR(rReferencia.preco)}`);
-          }
-          if (manual) partesTooltip.push(`Sugestão: R$ ${fmtR(r.precoSugerido)}`);
           return (
-            <div className="flex items-center gap-1" title={partesTooltip.length > 0 ? partesTooltip.join('\n') : undefined}>
+            <div className="flex items-center gap-1" title={manual ? `Sugestão: R$ ${fmtR(r.precoSugerido)}` : undefined}>
               <NumeroSincronizado
                 valor={r.preco}
                 onFocus={() => setLinhaDestacada(p.id)}

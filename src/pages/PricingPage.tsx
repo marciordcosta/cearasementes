@@ -683,7 +683,6 @@ export function PricingPage() {
               subcategorias={subcategorias}
               fornecedores={fornecedores}
               canaisVisiveis={canaisVisiveis}
-              canalReferencia={canaisVisiveis[0]}
               todosCanais={canais}
               transportadoras={transportadoras}
               mostrarMaisDetalhes={mostrarMaisDetalhes}
@@ -740,7 +739,6 @@ export function PricingPage() {
         categorias={categorias}
         subcategorias={subcategorias}
         fornecedores={fornecedores}
-        canalReferencia={canaisVisiveis[0]}
         todosCanais={canais}
         transportadoras={transportadoras}
         onFechar={() => setCanalTelaCheiaId(null)}
