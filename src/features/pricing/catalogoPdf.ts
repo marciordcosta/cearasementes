@@ -51,7 +51,7 @@ function nomeComDestaqueHtml(nome: string): string {
 }
 
 /** Abre a janela de impressão e dispara o diálogo — mesmo fluxo pro catálogo padrão e pro de gerenciamento. */
-function abrirEImprimir(html: string): void {
+export function abrirEImprimir(html: string): void {
   const janela = window.open('', '_blank', 'width=900,height=1000');
   if (!janela) {
     alert('O navegador bloqueou a abertura da janela de impressão. Permita pop-ups para este site e tente novamente.');

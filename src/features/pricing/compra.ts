@@ -32,7 +32,8 @@ export function calcularNecessidadeCompra(
       const porMes = qtdMensalTotalProduto(items, produto.codigo!);
       const qtdProjetada = mesesSelecionados.reduce((soma, i) => soma + (porMes[i] ?? 0), 0);
       const estoqueAtual = estoquePorProduto[produto.id] ?? 0;
-      const qtdComprar = Math.max(0, qtdProjetada - estoqueAtual);
+      // Sempre saco cheio — arredonda pra cima o que falta, nunca fração de unidade.
+      const qtdComprar = Math.ceil(Math.max(0, qtdProjetada - estoqueAtual));
       return { produto, qtdProjetada, estoqueAtual, qtdComprar, pesoUnitario: produto.peso, pesoTotal: qtdComprar * produto.peso };
     })
     .filter((item) => item.qtdProjetada > 0)
@@ -87,4 +88,34 @@ export function dividirEmCaminhoes(itens: ItemNecessidadeCompra[], capacidadeKg:
   }
 
   return caminhoes;
+}
+
+/**
+ * Depois de editar manualmente a quantidade de um item (idxEditado) num
+ * caminhão, garante que o peso total não ultrapasse `capacidadeKg` — tira
+ * (nunca aumenta) dos últimos itens da lista, os menos relevantes já que
+ * `itens` vem ordenado por peso decrescente, até caber.
+ */
+export function reequilibrarCaminhao(itens: ItemCaminhao[], idxEditado: number, capacidadeKg: number): ItemCaminhao[] {
+  const novosItens = itens.map((it) => ({ ...it }));
+  let pesoTotal = novosItens.reduce((soma, it) => soma + it.qtd * it.produto.peso, 0);
+  let j = novosItens.length - 1;
+
+  while (pesoTotal > capacidadeKg + 0.001 && j >= 0) {
+    if (j === idxEditado) {
+      j -= 1;
+      continue;
+    }
+    const pesoUnit = novosItens[j].produto.peso;
+    const excedenteKg = pesoTotal - capacidadeKg;
+    const reduzir = Math.min(novosItens[j].qtd, Math.ceil(excedenteKg / pesoUnit));
+    novosItens[j].qtd -= reduzir;
+    pesoTotal -= reduzir * pesoUnit;
+    if (novosItens[j].qtd <= 0) j -= 1;
+  }
+
+  novosItens.forEach((it) => {
+    it.peso = it.qtd * it.produto.peso;
+  });
+  return novosItens;
 }

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { Printer } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { ItemAgg } from '@/features/bi/types';
 import { fmtInt } from '@/lib/format';
-import { calcularNecessidadeCompra, dividirEmCaminhoes } from '../compra';
+import { calcularNecessidadeCompra, dividirEmCaminhoes, reequilibrarCaminhao, type CaminhaoPedido } from '../compra';
+import { gerarPedidoCompraPdf } from '../compraPdf';
 import { mesesSafraPadrao } from '../historicoBi';
 import type { Fornecedor, Produto } from '../types';
 
@@ -37,6 +39,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
   const [estoqueTexto, setEstoqueTexto] = useState<Record<string, string>>({});
   const [mostrarPedido, setMostrarPedido] = useState(false);
   const [pesoCaminhaoTexto, setPesoCaminhaoTexto] = useState('');
+  const [produtosExcluidos, setProdutosExcluidos] = useState<Set<string>>(new Set());
 
   const produtosFornecedor = useMemo(() => produtos.filter((p) => p.fornecedorId === fornecedorId), [produtos, fornecedorId]);
 
@@ -49,10 +52,20 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
     return mapa;
   }, [estoqueTexto]);
 
-  const necessidade = useMemo(() => {
+  const necessidadeCompleta = useMemo(() => {
     if (!fornecedorId || mesesSelecionados.size === 0) return [];
     return calcularNecessidadeCompra(produtosFornecedor, items, Array.from(mesesSelecionados), estoquePorProduto);
   }, [produtosFornecedor, items, mesesSelecionados, estoquePorProduto, fornecedorId]);
+
+  const necessidade = useMemo(
+    () => necessidadeCompleta.filter((item) => !produtosExcluidos.has(item.produto.id)),
+    [necessidadeCompleta, produtosExcluidos],
+  );
+
+  const itensExcluidos = useMemo(
+    () => necessidadeCompleta.filter((item) => produtosExcluidos.has(item.produto.id)),
+    [necessidadeCompleta, produtosExcluidos],
+  );
 
   const pesoTotalNecessario = necessidade.reduce((soma, i) => soma + i.pesoTotal, 0);
 
@@ -61,6 +74,30 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
     if (!mostrarPedido || !capacidade || capacidade <= 0) return [];
     return dividirEmCaminhoes(necessidade, capacidade);
   }, [mostrarPedido, pesoCaminhaoTexto, necessidade]);
+
+  // Cópia editável — o usuário pode ajustar a quantidade de cada item por caminhão
+  // (reequilibrando os últimos itens pra nunca ultrapassar a capacidade); some recálculo
+  // acima (novo peso do caminhão, nova necessidade) descarta os ajustes manuais e recomeça daqui.
+  const [caminhoesEditados, setCaminhoesEditados] = useState<CaminhaoPedido[]>([]);
+  useEffect(() => {
+    setCaminhoesEditados(caminhoes.map((c) => ({ ...c, itens: c.itens.map((it) => ({ ...it })) })));
+  }, [caminhoes]);
+
+  function editarQtdCaminhao(caminhaoIdx: number, itemIdx: number, texto: string) {
+    const capacidade = parseFloat(pesoCaminhaoTexto);
+    if (!capacidade || capacidade <= 0) return;
+    setCaminhoesEditados((prev) => {
+      const copia = prev.map((c) => ({ ...c, itens: c.itens.map((it) => ({ ...it })) }));
+      const item = copia[caminhaoIdx].itens[itemIdx];
+      const novaQtd = Math.max(0, Math.round(parseFloat(texto) || 0));
+      item.qtd = novaQtd;
+      item.peso = novaQtd * item.produto.peso;
+      const itensReequilibrados = reequilibrarCaminhao(copia[caminhaoIdx].itens, itemIdx, capacidade);
+      copia[caminhaoIdx].itens = itensReequilibrados;
+      copia[caminhaoIdx].pesoTotal = itensReequilibrados.reduce((soma, it) => soma + it.peso, 0);
+      return copia;
+    });
+  }
 
   function toggleMes(i: number) {
     setMesesSelecionados((prev) => {
@@ -79,10 +116,42 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
     setEstoqueTexto({});
     setMostrarPedido(false);
     setPesoCaminhaoTexto('');
+    setProdutosExcluidos(new Set());
   }
 
+  const fornecedorSelecionado = fornecedores.find((f) => f.id === fornecedorId);
+  const mesesLabelsSelecionados = Array.from(mesesSelecionados)
+    .sort((a, b) => a - b)
+    .map((i) => MESES[i]);
+
   return (
-    <Modal open={open} onClose={fechar} title="Planejamento de Compra" widthClassName="max-w-4xl">
+    <Modal
+      open={open}
+      onClose={fechar}
+      title={
+        <>
+          <span>Planejamento de Compra</span>
+          {mostrarPedido && caminhoesEditados.length > 0 && fornecedorSelecionado && (
+            <button
+              type="button"
+              onClick={() =>
+                gerarPedidoCompraPdf(
+                  fornecedorSelecionado,
+                  mesesLabelsSelecionados,
+                  caminhoesEditados,
+                  itensExcluidos.map((item) => item.produto.nome.replace(/[*_]/g, '')),
+                )
+              }
+              title="Imprimir pedido"
+              className="ml-auto shrink-0 rounded-md p-1.5 text-white/80 hover:bg-white/12 hover:text-white"
+            >
+              <Printer size={16} />
+            </button>
+          )}
+        </>
+      }
+      widthClassName="max-w-4xl"
+    >
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Fornecedor</label>
@@ -91,6 +160,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
             onChange={(e) => {
               setFornecedorId(e.target.value);
               setMostrarPedido(false);
+              setProdutosExcluidos(new Set());
             }}
             className="w-full max-w-xs rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]"
           >
@@ -140,6 +210,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                       <th className="px-3 py-2 text-right font-semibold">Estoque Atual</th>
                       <th className="px-3 py-2 text-right font-semibold">Qtd a Comprar</th>
                       <th className="px-3 py-2 text-right font-semibold">Peso (kg)</th>
+                      <th className="px-3 py-2" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-line)]">
@@ -160,8 +231,21 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                             className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                           />
                         </td>
-                        <td className="num px-3 py-1.5 text-right font-semibold text-[var(--color-text)]">{fmtInt.format(Math.round(item.qtdComprar))}</td>
+                        <td className="num px-3 py-1.5 text-right font-semibold text-[var(--color-text)]">{fmtInt.format(item.qtdComprar)}</td>
                         <td className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]">{fmtKg(item.pesoTotal)}</td>
+                        <td className="px-3 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProdutosExcluidos((prev) => new Set(prev).add(item.produto.id));
+                              setMostrarPedido(false);
+                            }}
+                            title="Desconsiderar produto"
+                            className="text-[var(--color-text-soft)] hover:text-bad"
+                          >
+                            ✕
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -171,10 +255,36 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                         Total a comprar
                       </td>
                       <td className="num px-3 py-2 text-right">{fmtKg(pesoTotalNecessario)} kg</td>
+                      <td className="px-3 py-2" />
                     </tr>
                   </tfoot>
                 </table>
               </div>
+
+              {itensExcluidos.length > 0 && (
+                <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-2.5 text-xs">
+                  <p className="mb-1 font-semibold text-[var(--color-text-soft)]">Desconsiderados desse pedido</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {itensExcluidos.map((item) => (
+                      <button
+                        key={item.produto.id}
+                        type="button"
+                        onClick={() =>
+                          setProdutosExcluidos((prev) => {
+                            const novo = new Set(prev);
+                            novo.delete(item.produto.id);
+                            return novo;
+                          })
+                        }
+                        title="Reincluir produto"
+                        className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1 text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                      >
+                        {item.produto.nome.replace(/[*_]/g, '')} ✕
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {!mostrarPedido ? (
                 <Button variant="primary" onClick={() => setMostrarPedido(true)} disabled={pesoTotalNecessario <= 0}>
@@ -194,21 +304,28 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                     />
                   </div>
 
-                  {caminhoes.length > 0 && (
+                  {caminhoesEditados.length > 0 && (
                     <div className="space-y-3">
-                      {caminhoes.map((caminhao) => (
+                      {caminhoesEditados.map((caminhao, caminhaoIdx) => (
                         <div key={caminhao.numero} className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-3">
                           <p className="mb-2 text-xs font-semibold text-[var(--color-text)]">
                             Caminhão {caminhao.numero}
-                            {caminhoes.length > 1 && caminhao.numero === caminhoes.length ? ' (complemento)' : ''} —{' '}
+                            {caminhoesEditados.length > 1 && caminhao.numero === caminhoesEditados.length ? ' (complemento)' : ''} —{' '}
                             <span className="font-normal text-[var(--color-text-soft)]">{fmtKg(caminhao.pesoTotal)} kg</span>
                           </p>
                           <div className="space-y-1">
-                            {caminhao.itens.map((it) => (
-                              <div key={it.produto.id} className="flex items-center justify-between text-xs">
+                            {caminhao.itens.map((it, itemIdx) => (
+                              <div key={it.produto.id} className="flex items-center justify-between gap-2 text-xs">
                                 <span className="text-[var(--color-text)]">{it.produto.nome.replace(/[*_]/g, '')}</span>
-                                <span className="num text-[var(--color-text-soft)]">
-                                  {fmtInt.format(it.qtd)} un. — {fmtKg(it.peso)} kg
+                                <span className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={it.qtd}
+                                    onChange={(e) => editarQtdCaminhao(caminhaoIdx, itemIdx, e.target.value)}
+                                    className="num w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-1.5 py-0.5 text-right text-[var(--color-text)]"
+                                  />
+                                  <span className="num text-[var(--color-text-soft)]">un. — {fmtKg(it.peso)} kg</span>
                                 </span>
                               </div>
                             ))}
