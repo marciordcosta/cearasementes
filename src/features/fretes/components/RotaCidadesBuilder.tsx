@@ -9,6 +9,8 @@ interface RotaCidadesBuilderProps {
   onChangeCidades: (cidades: string[]) => void;
   transportadoras: Transportadora[];
   cidadesCache: string[];
+  /** Modo Etiquetas não usa ordem de rota (não calcula km) — esconde as setas ▲▼, mantém só adicionar/remover. */
+  esconderOrdenar?: boolean;
 }
 
 const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
@@ -21,7 +23,7 @@ const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var
  * por quem usa este componente). Peso, valor e cálculo ficam com quem usa
  * (mesma coluna 2 de Direta/Orçamento).
  */
-export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, transportadoras, cidadesCache }: RotaCidadesBuilderProps) {
+export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, transportadoras, cidadesCache, esconderOrdenar }: RotaCidadesBuilderProps) {
   const [buscaCidade, setBuscaCidade] = useState('');
   const ehRota = cidades.length > 1;
 
@@ -69,7 +71,6 @@ export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, tra
             onChangeTexto={setBuscaCidade}
             opcoes={opcoesCidades}
             onSelecionar={adicionarCidade}
-            placeholder='Ex.: "Sobral, CE"'
             className={campoClasse}
           />
         </div>
@@ -91,7 +92,7 @@ export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, tra
             <div key={`${cidade}_${i}`} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-2.5 py-1.5 text-sm">
               <span className="w-5 shrink-0 text-xs text-[var(--color-text-soft)]">{i + 1}.</span>
               <span className="flex-1 truncate text-[var(--color-text)]">{cidade}</span>
-              {ehRota && (
+              {ehRota && !esconderOrdenar && (
                 <>
                   <button type="button" onClick={() => moverCidade(i, -1)} disabled={i === 0} title="Mover pra cima" className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30">
                     ▲

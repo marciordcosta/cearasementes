@@ -375,6 +375,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             onChangeCidades={setCidades}
             transportadoras={transportadoras}
             cidadesCache={cidadesRotaCache}
+            esconderOrdenar={modo === 'etiquetas'}
           />
 
           {!ehRota && transportadorasCidade !== null && (
@@ -396,7 +397,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {ehRota && (
+          {ehRota && modo !== 'etiquetas' && (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={sugerirRota} disabled={sugerindoRota || rotaCalculando}>
                 {sugerindoRota ? 'Sugerindo…' : 'Sugerir Rota'}
