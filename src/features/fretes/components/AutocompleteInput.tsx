@@ -78,7 +78,7 @@ export function AutocompleteInput({
         className={className}
       />
       {aberto && filtradas.length > 0 && (
-        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)]/90 shadow-lg backdrop-blur-sm">
+        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] shadow-lg">
           {filtradas.map((op) => (
             <button
               key={op.valor}

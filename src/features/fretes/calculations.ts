@@ -140,3 +140,8 @@ export function normalizarCidade(cidade: string): string {
     .trim()
     .toLowerCase();
 }
+
+/** "Fortaleza, CE" -> "Fortaleza" (só o nome, sem UF) — "Fortaleza" (sem vírgula) volta como está. */
+export function apenasNomeCidade(cidade: string): string {
+  return cidade.split(',')[0].trim();
+}

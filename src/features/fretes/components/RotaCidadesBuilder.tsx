@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { cidadesDasTransportadoras, normalizarCidade } from '../calculations';
+import { apenasNomeCidade, cidadesDasTransportadoras, normalizarCidade } from '../calculations';
 import type { Transportadora } from '../types';
 import { AutocompleteInput, type OpcaoAutocomplete } from './AutocompleteInput';
 
@@ -26,10 +26,13 @@ export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, tra
   const ehRota = cidades.length > 1;
 
   // Sugestões de autocomplete: cidades das transportadoras (com UF) + cidades já usadas em rotas anteriores (cacheadas na primeira vez que foram calculadas).
+  // O cache guarda "Cidade, UF" (texto completo salvo em `cidades`) — compara só a PARTE do nome
+  // contra as transportadoras (que não têm vírgula), senão "Iguatu" (transportadora) e "Iguatu, CE"
+  // (cache) passam como cidades diferentes e a sugestão aparece duplicada.
   const opcoesCidades = useMemo<OpcaoAutocomplete[]>(() => {
     const dasTransportadoras = cidadesDasTransportadoras(transportadoras);
     const jaIncluidas = new Set(dasTransportadoras.map((o) => normalizarCidade(o.valor)));
-    const doCache = cidadesCache.filter((c) => !jaIncluidas.has(normalizarCidade(c))).map((c) => ({ valor: c }));
+    const doCache = cidadesCache.filter((c) => !jaIncluidas.has(normalizarCidade(apenasNomeCidade(c)))).map((c) => ({ valor: c }));
     return [...dasTransportadoras, ...doCache].sort((a, b) => a.valor.localeCompare(b.valor, 'pt-BR'));
   }, [transportadoras, cidadesCache]);
 
