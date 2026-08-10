@@ -87,6 +87,13 @@ function desenharEtiqueta(doc: jsPDF, etiqueta: ItemEtiqueta): void {
   doc.text(`${etiqueta.volumeAtual}/${etiqueta.volumeTotal}`, xDireita, yValor2, { align: 'right' });
 }
 
+/** Etiqueta separadora entre uma NF e a próxima — só esse texto pequeno, centralizado, o resto em branco. */
+function desenharSeparador(doc: jsPDF): void {
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('--- Nova nota ---', LARGURA_MM / 2, ALTURA_MM / 2, { align: 'center', baseline: 'middle' });
+}
+
 /**
  * Gera as etiquetas de expedição como um PDF de verdade (jsPDF), aberto numa
  * nova aba — troca a técnica antiga (janela de impressão HTML via
@@ -96,9 +103,10 @@ function desenharEtiqueta(doc: jsPDF, etiqueta: ItemEtiqueta): void {
  * imprime certo mesmo sem esse tamanho custom estar configurado no driver.
  * Uma etiqueta física por VOLUME: uma NF com 50 volumes vira 50 páginas
  * "1/50", "2/50"... "50/50". Entre uma NF e a próxima (mesma cidade ou não),
- * entra uma etiqueta EM BRANCO como separador físico — ajuda a achar onde
- * uma nota termina e a próxima começa na pilha impressa. Etiqueta física
- * padrão de frete: 100mm (largura) x 30mm (altura).
+ * entra uma etiqueta separadora (só "--- Nova nota ---" pequeno e centralizado,
+ * resto em branco) — ajuda a achar onde uma nota termina e a próxima começa na
+ * pilha impressa. Etiqueta física padrão de frete: 100mm (largura) x 30mm
+ * (altura).
  */
 export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promise<void> {
   const blocosPorNota = grupos.flatMap(({ cidade, notas }) => {
@@ -134,6 +142,7 @@ export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promi
   paginas.forEach((pagina, indice) => {
     if (indice > 0) doc.addPage([LARGURA_MM, ALTURA_MM], 'landscape');
     if (pagina) desenharEtiqueta(doc, pagina);
+    else desenharSeparador(doc);
   });
 
   const url = URL.createObjectURL(doc.output('blob'));
