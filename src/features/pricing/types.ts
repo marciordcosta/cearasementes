@@ -111,7 +111,9 @@ export interface ResultadoCalculo {
   margemReais: number;
   margemPct: number;
   margemAlvo: number;
-  /** Pontos percentuais em volta de margemAlvo — undefined = sem alerta configurado (ou canal "por referência", onde isso não se aplica). */
+  /** Base do alerta de tolerância: igual a margemAlvo em canal "por categoria"; em "por referência", é o ML% REAL que a tabela referenciada está aplicando pra esse produto agora (não a % sugerida da categoria) — é isso que esse canal está espelhando. */
+  margemAlvoTolerancia: number;
+  /** Pontos percentuais em volta de margemAlvoTolerancia — undefined = sem alerta configurado pra essa categoria+canal. */
   toleranciaPct: number | undefined;
   impostoPct: number;
   encargosPct: number;

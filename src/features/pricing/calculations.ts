@@ -105,10 +105,13 @@ export function calcularCanal(
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
 
   const canalReferencia = permitirReferencia && canal.margemReferenciaCanalId ? canaisPorId.get(canal.margemReferenciaCanalId) : undefined;
-  // Vale também "por referência": mesmo o preço vindo de espelhar outro canal, a margem
-  // alvo (%) e a tolerância continuam configuradas por categoria+canal, iguais às de
-  // "por categoria" — o alerta compara o ML% que RESULTOU do vínculo contra essa própria meta.
   const toleranciaPct = categoria.tolerancias[canal.id];
+  // Base do alerta de tolerância: "por categoria" é a % sugerida de sempre (margemAlvo). "Por
+  // referência" é diferente — a tabela "mãe" pode ter sido ajustada manualmente (preço bem
+  // diferente do sugerido), e é ESSE valor real que esse canal está espelhando, não a % sugerida
+  // da categoria. Por isso a tolerância aqui compara contra a margem R$ real da referência
+  // (convertida pra %, pra esse mesmo produto), não margemAlvo.
+  let margemAlvoTolerancia = margemAlvo;
   let precoSugerido: number;
   if (canalReferencia && canalReferencia.id !== canal.id) {
     const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
@@ -121,6 +124,7 @@ export function calcularCanal(
     const baseParaMeta = freteConsiderado ? custoBase : produto.custo + outrosEncargos + valorDespesaExtra;
     const divisorMeta = 1 - pctParaMeta / 100;
     precoSugerido = Math.round(divisorMeta <= 0.01 ? (metaReais + baseParaMeta) / 0.01 : (metaReais + baseParaMeta) / divisorMeta);
+    margemAlvoTolerancia = referencia.margemPct;
   } else {
     const divisor = 1 - totalPct / 100;
     precoSugerido = Math.round(divisor <= 0.01 ? custoBase / 0.01 : custoBase / divisor);
@@ -143,6 +147,7 @@ export function calcularCanal(
     margemReais,
     margemPct,
     margemAlvo,
+    margemAlvoTolerancia,
     toleranciaPct,
     impostoPct,
     encargosPct,

@@ -475,15 +475,15 @@ export function PricingTable({
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
-          const alerta = alertaTolerancia(r.margemPct, r.margemAlvo, r.toleranciaPct);
+          const alerta = alertaTolerancia(r.margemPct, r.margemAlvoTolerancia, r.toleranciaPct);
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
           // No modo Resumo a coluna ML ($) some — o tooltip passa a mostrar esse valor em R$ em vez do % bruto.
           const partesTitulo = [modoResumo ? `ML: R$ ${fmtR(r.margemReais)}` : `(${fmtP(margemBrutaPct)}%)`];
           if (alerta) {
             partesTitulo.push(
               alerta === 'inferior'
-                ? `Abaixo da tolerância (meta ${fmtP(r.margemAlvo)}% ± ${fmtP(r.toleranciaPct!)}pp)`
-                : `Acima da tolerância (meta ${fmtP(r.margemAlvo)}% ± ${fmtP(r.toleranciaPct!)}pp)`,
+                ? `Abaixo da tolerância (meta ${fmtP(r.margemAlvoTolerancia)}% ± ${fmtP(r.toleranciaPct!)}pp)`
+                : `Acima da tolerância (meta ${fmtP(r.margemAlvoTolerancia)}% ± ${fmtP(r.toleranciaPct!)}pp)`,
             );
           }
           return (
