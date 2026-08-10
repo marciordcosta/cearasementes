@@ -64,10 +64,10 @@ export function CustosPersonalizadosPanel({ custos, totalVendas, onAdicionarCust
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-bold text-[var(--color-text)]">Custos Personalizados</p>
+      <p className="text-sm font-bold text-[var(--color-text)]">Despesas Fixas (Anual)</p>
       <p className="text-xs text-[var(--color-text-soft)]">
-        Só informativo — não entra no cálculo do preço sugerido. "% das vendas" usa a média de venda das últimas safras, somando todas as Tabelas
-        (mesma conta do selo "MB atual").
+        Só informativo — não entra no cálculo do preço sugerido. Use o valor ANUAL de cada despesa (a base de comparação também é anual). "% das
+        vendas" usa a média de venda das últimas safras, somando todas as Tabelas (mesma conta do selo "MB atual").
       </p>
       <Card className="overflow-hidden">
         {custos.length > 0 && (
@@ -127,7 +127,7 @@ export function CustosPersonalizadosPanel({ custos, totalVendas, onAdicionarCust
                       <button
                         type="button"
                         onClick={() => onRemoverCusto(custo.id)}
-                        title="Deletar custo"
+                        title="Deletar despesa"
                         className="text-[var(--color-text-soft)] hover:text-bad"
                       >
                         🗑
@@ -151,10 +151,10 @@ export function CustosPersonalizadosPanel({ custos, totalVendas, onAdicionarCust
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] bg-[var(--color-page)] px-4 py-3">
-          <span className="text-xs font-semibold text-[var(--color-text-soft)]">Novo custo:</span>
+          <span className="text-xs font-semibold text-[var(--color-text-soft)]">Nova despesa:</span>
           <input
             type="text"
-            placeholder="Descrição (ex.: Aluguel do galpão)"
+            placeholder="Descrição (ex.: Aluguel do galpão — valor ANUAL)"
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submeter()}
@@ -178,7 +178,7 @@ export function CustosPersonalizadosPanel({ custos, totalVendas, onAdicionarCust
             className="num w-24 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-right text-xs text-[var(--color-text)]"
           />
           <Button variant="primary" onClick={submeter}>
-            + Adicionar custo
+            + Adicionar despesa
           </Button>
         </div>
       </Card>

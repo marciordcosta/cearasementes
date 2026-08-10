@@ -169,15 +169,23 @@ export function PricingPage() {
   let margemAtualTotalValor = 0;
   let margemAtualTotalMargem = 0;
   let margemAtualTotalMargemLiquida = 0;
+  let margemAtualTotalFrete = 0;
+  let margemAtualTotalEncargos = 0;
+  let margemAtualTotalDesconto = 0;
   for (const canal of canaisVisiveis) {
     const historicoPorCodigo = construirHistoricoPorCodigo(itemsAgregadosBi, canal.nome);
     const r = calcularMargemAtualProjetada(produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, historicoPorCodigo);
     margemAtualTotalValor += r.valorProjetado;
     margemAtualTotalMargem += r.margemProjetada;
     margemAtualTotalMargemLiquida += r.margemLiquidaProjetada;
+    margemAtualTotalFrete += r.freteProjetado;
+    margemAtualTotalEncargos += r.encargosProjetado;
+    margemAtualTotalDesconto += r.descontoProjetado;
   }
   const margemAtualTotalPct = margemAtualTotalValor > 0 ? (margemAtualTotalMargem / margemAtualTotalValor) * 100 : 0;
   const margemAtualTotalLiquidaPct = margemAtualTotalValor > 0 ? (margemAtualTotalMargemLiquida / margemAtualTotalValor) * 100 : 0;
+  // Fornecedor (custo do produto) = Valor - Margem Bruta — mesma relação usada em todo o resto (r.margemReais etc.). Base do DRE no MargemResumoModal.
+  const margemAtualTotalFornecedor = margemAtualTotalValor - margemAtualTotalMargem;
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
@@ -736,6 +744,10 @@ export function PricingPage() {
         margemLiquidaPct={margemAtualTotalLiquidaPct}
         custos={custos}
         totalVendas={margemAtualTotalValor}
+        totalFornecedor={margemAtualTotalFornecedor}
+        totalFrete={margemAtualTotalFrete}
+        totalEncargos={margemAtualTotalEncargos - margemAtualTotalDesconto}
+        totalDesconto={margemAtualTotalDesconto}
       />
 
       <GraficoRepresentacaoModal

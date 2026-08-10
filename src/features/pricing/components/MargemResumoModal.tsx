@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { calcularTotalCustosPersonalizados } from '../custosPersonalizados';
 import type { CustoPersonalizado } from '../types';
@@ -12,8 +13,16 @@ interface MargemResumoModalProps {
   margemAtualPct: number;
   margemLiquidaPct: number;
   custos: CustoPersonalizado[];
-  /** Total de vendas (média das últimas safras, somando todas as Tabelas) — mesma base usada pra margemAtualPct/margemLiquidaPct. */
+  /** Total de vendas (média das últimas safras, somando todas as Tabelas) — mesma base usada pra margemAtualPct/margemLiquidaPct e pro detalhamento. */
   totalVendas: number;
+  /** Custo do produto (Fornecedor) projetado, em R$ — mesma base de vendas acima. */
+  totalFornecedor: number;
+  /** Frete projetado, em R$ (só o que entra na margem — canais com "Frete Incluso" desligado não somam aqui). */
+  totalFrete: number;
+  /** Encargos projetado, em R$ — imposto + comissão/cartão + outros encargos (Desconto já vem à parte, ver totalDesconto). */
+  totalEncargos: number;
+  /** Desconto projetado, em R$ — parcela do Encargos referente só ao campo Desconto (%) de cada canal. */
+  totalDesconto: number;
 }
 
 /** Um bloco de métrica — número grande + rótulo curto, com a explicação completa só no tooltip (hover). */
@@ -29,9 +38,33 @@ function BlocoMetrica({ valorPct, rotulo, titulo, corValor }: { valorPct: number
 }
 
 /** Modal discreto com o resumo de margens que antes ficava em selos fixos na barra de ferramentas. */
-export function MargemResumoModal({ open, onFechar, margemAtualPct, margemLiquidaPct, custos, totalVendas }: MargemResumoModalProps) {
+export function MargemResumoModal({
+  open,
+  onFechar,
+  margemAtualPct,
+  margemLiquidaPct,
+  custos,
+  totalVendas,
+  totalFornecedor,
+  totalFrete,
+  totalEncargos,
+  totalDesconto,
+}: MargemResumoModalProps) {
+  const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const { pctDasVendas: custosPct } = calcularTotalCustosPersonalizados(custos, totalVendas);
   const margemLiquidaFinalPct = margemLiquidaPct - custosPct;
+
+  // Detalhamento em % do que compõe o Preço — Fornecedor+Encargos+Frete+Descontos+Custos
+  // Fixos+Margem Líquida Final soma 100% (mesma relação de custo+impostoReais+freteReais+
+  // margemReais = preço, já usada em todo o resto do sistema).
+  const pctDoValor = (v: number) => (totalVendas > 0 ? (v / totalVendas) * 100 : 0);
+  const linhasDetalhe = [
+    { rotulo: 'Fornecedor', valorPct: pctDoValor(totalFornecedor) },
+    { rotulo: 'Encargos', valorPct: pctDoValor(totalEncargos) },
+    { rotulo: 'Frete', valorPct: pctDoValor(totalFrete) },
+    { rotulo: 'Descontos', valorPct: pctDoValor(totalDesconto) },
+    { rotulo: 'Despesas Fixas', valorPct: custosPct },
+  ];
 
   return (
     <Modal open={open} onClose={onFechar} title="Margens — visão geral" widthClassName="max-w-sm">
@@ -48,15 +81,31 @@ export function MargemResumoModal({ open, onFechar, margemAtualPct, margemLiquid
         />
         <BlocoMetrica
           valorPct={custosPct}
-          rotulo="Custos personalizados"
-          titulo="Soma de todos os Custos Personalizados (aba Custos, em Parametrização), como % do total das vendas."
+          rotulo="Despesas fixas (anual)"
+          titulo="Soma de todas as Despesas Fixas (aba Custos, em Parametrização — valores anuais), como % do total das vendas."
         />
-        <BlocoMetrica
-          valorPct={margemLiquidaFinalPct}
-          rotulo="Margem líquida final (M.C − Custos)"
-          titulo="M.C prevista menos os Custos Personalizados — o que sobra de fato depois desses custos extras."
-          corValor={margemLiquidaFinalPct >= 0 ? 'text-good' : 'text-bad'}
-        />
+        <div className="border-t border-[var(--color-line)] pt-4">
+          <button type="button" onClick={() => setMostrarDetalhes((v) => !v)} className="block w-full text-left">
+            <p className={`text-2xl font-bold ${margemLiquidaFinalPct >= 0 ? 'text-good' : 'text-bad'}`}>{fmtP(margemLiquidaFinalPct)}%</p>
+            <p
+              className="flex items-center gap-1 text-xs font-semibold text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+              title="M.C prevista menos as Despesas Fixas — o que sobra de fato depois desses custos extras. Clique pra ver o detalhamento."
+            >
+              Margem líquida final (M.C − Despesas)
+              <span className="text-[10px]">{mostrarDetalhes ? '▲' : '▼'}</span>
+            </p>
+          </button>
+          {mostrarDetalhes && (
+            <div className="mt-3 space-y-1.5 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-3">
+              {linhasDetalhe.map((l) => (
+                <div key={l.rotulo} className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--color-text-soft)]">{l.rotulo}</span>
+                  <span className="num font-semibold text-[var(--color-text)]">{fmtP(l.valorPct)}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </Modal>
   );

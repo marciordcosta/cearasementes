@@ -284,6 +284,12 @@ export interface MargemAtualProjetada {
   margemLiquidaProjetada: number;
   /** "M.C. prevista" — margem líquida (ML $, já com imposto/encargos/frete) projetada, em % do valor projetado. */
   margemLiquidaPct: number;
+  /** Frete projetado (R$) — só quando o canal considera frete na margem (freteIncluso !== false), igual à conta de margemLiquidaProjetada. Usado no DRE (ver MargemResumoModal.tsx). */
+  freteProjetado: number;
+  /** Encargos projetado (R$) — imposto + desconto/comissão/cartão + outros encargos, mesma soma da coluna "Encargos (R$)" da grade. Usado no DRE (ali, Descontos é mostrado à parte — ver descontoProjetado). */
+  encargosProjetado: number;
+  /** Só a parcela de Desconto (canal.desconto) dentro de encargosProjetado — separada pro DRE mostrar como linha própria. */
+  descontoProjetado: number;
 }
 
 /**
@@ -304,9 +310,13 @@ export function calcularMargemAtualProjetada(
   canaisPorId: Map<string, Canal>,
   historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
 ): MargemAtualProjetada {
+  const freteConsiderado = canal.freteIncluso !== false;
   let valorProjetado = 0;
   let margemProjetada = 0;
   let margemLiquidaProjetada = 0;
+  let freteProjetado = 0;
+  let encargosProjetado = 0;
+  let descontoProjetado = 0;
   for (const produto of produtos) {
     if (!produto.codigo) continue;
     const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
@@ -319,6 +329,9 @@ export function calcularMargemAtualProjetada(
     valorProjetado += r.preco * qtdMedia;
     margemProjetada += (r.preco - produto.custo) * qtdMedia;
     margemLiquidaProjetada += r.margemReais * qtdMedia;
+    if (freteConsiderado) freteProjetado += r.freteReais * qtdMedia;
+    encargosProjetado += r.impostoReais * qtdMedia;
+    descontoProjetado += ((r.preco * canal.desconto) / 100) * qtdMedia;
   }
   return {
     valorProjetado,
@@ -326,6 +339,9 @@ export function calcularMargemAtualProjetada(
     margemBrutaPct: valorProjetado > 0 ? (margemProjetada / valorProjetado) * 100 : 0,
     margemLiquidaProjetada,
     margemLiquidaPct: valorProjetado > 0 ? (margemLiquidaProjetada / valorProjetado) * 100 : 0,
+    freteProjetado,
+    encargosProjetado,
+    descontoProjetado,
   };
 }
 
