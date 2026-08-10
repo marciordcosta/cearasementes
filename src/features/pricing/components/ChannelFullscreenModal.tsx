@@ -35,7 +35,6 @@ interface ChannelFullscreenModalProps {
   /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência". */
   todosCanais: Canal[];
   transportadoras: Transportadora[];
-  mostrarMaisDetalhes: boolean;
   onFechar: () => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
@@ -52,7 +51,6 @@ export function ChannelFullscreenModal({
   canalReferencia,
   todosCanais,
   transportadoras,
-  mostrarMaisDetalhes,
   onFechar,
   onUpdatePreco,
   onResetPreco,
@@ -179,7 +177,10 @@ export function ChannelFullscreenModal({
             canalReferencia={canalReferencia}
             todosCanais={todosCanais}
             transportadoras={transportadoras}
-            mostrarMaisDetalhes={mostrarMaisDetalhes}
+            // Sempre "Mais detalhes" aqui — é a tela cheia de UMA Tabela, tem espaço de sobra
+            // e o usuário já veio pra examinar essa Tabela a fundo (o toggle da barra de
+            // ferramentas principal segue só valendo pra grade compacta com várias Tabelas lado a lado).
+            mostrarMaisDetalhes
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}

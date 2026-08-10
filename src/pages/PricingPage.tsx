@@ -743,7 +743,6 @@ export function PricingPage() {
         canalReferencia={canaisVisiveis[0]}
         todosCanais={canais}
         transportadoras={transportadoras}
-        mostrarMaisDetalhes={mostrarMaisDetalhes}
         onFechar={() => setCanalTelaCheiaId(null)}
         onUpdatePreco={onUpdatePreco}
         onResetPreco={onResetPreco}
