@@ -63,7 +63,7 @@ export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
-      <title>Etiquetas de Expedição</title>
+      <title></title>
       <style>
         @page{ size:100mm 30mm; margin:0; }
         *{ box-sizing:border-box; }
