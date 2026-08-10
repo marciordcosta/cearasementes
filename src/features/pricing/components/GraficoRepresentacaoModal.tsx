@@ -37,10 +37,25 @@ interface FatiaPizza {
   pctFiltro: number;
 }
 
+/** Acima disso, Classes A e B (a C pouco relevante só teria poluído); com poucos candidatos, mostra todo mundo (até esse limite) — senão o filtro de classe podia sobrar quase vazio, tipo 1-2 produtos, mesmo tendo mais gente pra comparar. */
+const LIMITE_TOP_OU_CLASSE = 10;
+
+/** Já ordenado (maior pro menor) — decide entre "só Classes A/B" ou "Top N" conforme o tamanho do grupo. */
+function selecionarClasseOuTop<T extends { classe: ClasseABC }>(ordenados: T[]): { itens: T[]; porClasse: boolean } {
+  if (ordenados.length > LIMITE_TOP_OU_CLASSE) {
+    return { itens: ordenados.filter((i) => i.classe !== 'C'), porClasse: true };
+  }
+  return { itens: ordenados.slice(0, LIMITE_TOP_OU_CLASSE), porClasse: false };
+}
+
 /**
  * Representação (%) — em colunas (maior pro menor, todo o sortimento) por padrão.
- * Quando a grade está com o "Filtrar:" (Categoria/Fornecedor) ativo, vira pizza
- * com só os itens daquele filtro, participação recalculada dentro dele mesmo.
+ * Quando a grade está com o "Filtrar:" (Categoria/Fornecedor) e/ou a busca por nome
+ * ativos, vira pizza com só os itens que aparecem na grade, participação recalculada
+ * dentro desse grupo. Nos dois formatos: com mais de LIMITE_TOP_OU_CLASSE candidatos,
+ * mostra só Classes A e B da Curva ABC; com poucos candidatos (grupo já pequeno, ex.
+ * filtro/busca estreitos), mostra Top N direto, sem filtrar classe — senão o filtro de
+ * classe podia sobrar quase vazio mesmo tendo mais produtos pra comparar.
  */
 export function GraficoRepresentacaoModal({
   open,
@@ -56,31 +71,36 @@ export function GraficoRepresentacaoModal({
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const nomePorId = useMemo(() => new Map(produtos.map((p) => [p.id, p.nome.replace(/[*_]/g, '')])), [produtos]);
 
-  // Só Classes A e B da Curva ABC — Classe C fica de fora dos dois gráficos (pouco relevante, poluía).
-  const linhas = useMemo(() => {
-    return Array.from(representatividadePorProduto.entries())
+  // Mais de LIMITE_TOP_OU_CLASSE candidatos: só Classes A e B (a C pouco relevante só poluía).
+  // Até esse limite: Top N mesmo, sem filtrar classe (senão sobrava quase vazio com poucos itens).
+  const { itens: linhas, porClasse: linhasPorClasse } = useMemo(() => {
+    const ordenados = Array.from(representatividadePorProduto.entries())
       .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', ...repr }))
-      .filter((l) => l.classe !== 'C')
       .sort((a, b) => b.pct - a.pct);
+    return selecionarClasseOuTop(ordenados);
   }, [nomePorId, representatividadePorProduto]);
 
   const emModoPizza = !!filtroAtivo && filtroAtivo.produtoIds.size > 0;
 
-  // Total recalculado só dentro do filtro e das Classes A/B (não do sortimento inteiro) — as fatias somam 100% entre si.
-  const fatias = useMemo((): FatiaPizza[] => {
-    if (!filtroAtivo) return [];
+  // Total recalculado só dentro do filtro (não do sortimento inteiro) — as fatias somam 100% entre si.
+  const { itens: fatias, porClasse: fatiasPorClasse } = useMemo((): { itens: FatiaPizza[]; porClasse: boolean } => {
+    if (!filtroAtivo) return { itens: [], porClasse: true };
     const doFiltro = Array.from(representatividadePorProduto.entries())
-      .filter(([produtoId, repr]) => filtroAtivo.produtoIds.has(produtoId) && repr.classe !== 'C')
+      .filter(([produtoId]) => filtroAtivo.produtoIds.has(produtoId))
       .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', produtoId, ...repr }))
       .sort((a, b) => b.valorCriterio - a.valorCriterio);
-    const totalValor = doFiltro.reduce((soma, l) => soma + l.valorCriterio, 0);
-    return doFiltro.map((l) => ({
-      nome: l.nome,
-      produtoId: l.produtoId,
-      classe: l.classe,
-      valorCriterio: l.valorCriterio,
-      pctFiltro: totalValor > 0 ? (l.valorCriterio / totalValor) * 100 : 0,
-    }));
+    const { itens: selecionados, porClasse } = selecionarClasseOuTop(doFiltro);
+    const totalValor = selecionados.reduce((soma, l) => soma + l.valorCriterio, 0);
+    return {
+      porClasse,
+      itens: selecionados.map((l) => ({
+        nome: l.nome,
+        produtoId: l.produtoId,
+        classe: l.classe,
+        valorCriterio: l.valorCriterio,
+        pctFiltro: totalValor > 0 ? (l.valorCriterio / totalValor) * 100 : 0,
+      })),
+    };
   }, [filtroAtivo, nomePorId, representatividadePorProduto]);
 
   const chartDataBarras = useMemo(
@@ -182,9 +202,9 @@ export function GraficoRepresentacaoModal({
       ) : emModoPizza && filtroAtivo ? (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item (Classes A e B da Curva ABC) dentro
-            desse filtro. Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cada produto com uma cor
-            própria.
+            Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item (
+            {fatiasPorClasse ? 'Classes A e B da Curva ABC' : `Top ${fatias.length}`}) dentro desse filtro. Critério:{' '}
+            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cada produto com uma cor própria.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -194,8 +214,9 @@ export function GraficoRepresentacaoModal({
       ) : (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — Classes A e B da Curva ABC (
-            {linhas.length} produtos), maior pro menor. Cor da barra = Classe da Curva ABC.
+            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> —{' '}
+            {linhasPorClasse ? `Classes A e B da Curva ABC (${linhas.length} produtos)` : `Top ${linhas.length} produtos`}, maior pro menor. Cor da barra =
+            Classe da Curva ABC.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
