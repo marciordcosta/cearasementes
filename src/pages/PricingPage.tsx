@@ -734,6 +734,8 @@ export function PricingPage() {
         onFechar={() => setModalMargemAberto(false)}
         margemAtualPct={margemAtualTotalPct}
         margemLiquidaPct={margemAtualTotalLiquidaPct}
+        custos={custos}
+        totalVendas={margemAtualTotalValor}
       />
 
       <GraficoRepresentacaoModal

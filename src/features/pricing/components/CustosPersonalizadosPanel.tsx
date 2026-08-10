@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { calcularTotalCustosPersonalizados, valorReaisCustoPersonalizado } from '../custosPersonalizados';
 import type { CustoPersonalizado, TipoCustoPersonalizado } from '../types';
 
 interface CustosPersonalizadosPanelProps {
@@ -39,23 +40,19 @@ export function CustosPersonalizadosPanel({ custos, totalVendas, onAdicionarCust
   const [tipo, setTipo] = useState<TipoCustoPersonalizado>('reais');
   const [valor, setValor] = useState('');
 
-  const linhas = useMemo((): LinhaCusto[] => {
-    const comValor = custos.map((custo) => ({
-      custo,
-      // 'percentual' já é a resposta de "% das vendas" — o valor em R$ é derivado
-      // aplicando esse % sobre o total de vendas, não o contrário.
-      valorReais: custo.tipo === 'percentual' ? (totalVendas * custo.valor) / 100 : custo.valor,
-    }));
-    const totalCustos = comValor.reduce((soma, l) => soma + l.valorReais, 0);
-    return comValor.map((l) => ({
-      ...l,
-      pctDoTotalCustos: totalCustos > 0 ? (l.valorReais / totalCustos) * 100 : 0,
-      pctDasVendas: l.custo.tipo === 'percentual' ? l.custo.valor : totalVendas > 0 ? (l.valorReais / totalVendas) * 100 : 0,
-    }));
-  }, [custos, totalVendas]);
+  const { totalReais: totalCustosReais, pctDasVendas: totalPctDasVendas } = calcularTotalCustosPersonalizados(custos, totalVendas);
 
-  const totalCustosReais = linhas.reduce((soma, l) => soma + l.valorReais, 0);
-  const totalPctDasVendas = totalVendas > 0 ? (totalCustosReais / totalVendas) * 100 : 0;
+  const linhas = useMemo((): LinhaCusto[] => {
+    return custos.map((custo) => {
+      const valorReais = valorReaisCustoPersonalizado(custo, totalVendas);
+      return {
+        custo,
+        valorReais,
+        pctDoTotalCustos: totalCustosReais > 0 ? (valorReais / totalCustosReais) * 100 : 0,
+        pctDasVendas: custo.tipo === 'percentual' ? custo.valor : totalVendas > 0 ? (valorReais / totalVendas) * 100 : 0,
+      };
+    });
+  }, [custos, totalVendas, totalCustosReais]);
 
   function submeter() {
     if (!descricao.trim()) return;
