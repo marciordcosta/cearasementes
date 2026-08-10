@@ -109,6 +109,16 @@ export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promi
 
   if (etiquetas.length === 0) return;
 
+  // Abre a aba JÁ aqui, ainda de forma síncrona dentro do clique do usuário — se isso
+  // rodasse só depois do `await import('jspdf')`, o navegador não reconhece mais o
+  // window.open() como consequência direta do clique e bloqueia a aba silenciosamente
+  // (sem disparar o aviso de pop-up bloqueado, e sem abrir nada).
+  const janela = window.open('', '_blank');
+  if (!janela) {
+    alert('O navegador bloqueou a abertura da aba com o PDF. Permita pop-ups para este site e tente novamente.');
+    return;
+  }
+
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [LARGURA_MM, ALTURA_MM] });
   etiquetas.forEach((etiqueta, indice) => {
@@ -117,8 +127,5 @@ export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promi
   });
 
   const url = URL.createObjectURL(doc.output('blob'));
-  const janela = window.open(url, '_blank');
-  if (!janela) {
-    alert('O navegador bloqueou a abertura da aba com o PDF. Permita pop-ups para este site e tente novamente.');
-  }
+  janela.location.href = url;
 }
