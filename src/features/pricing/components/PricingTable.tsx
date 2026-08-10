@@ -516,8 +516,10 @@ export function PricingTable({
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
+          // No modo Resumo a coluna ML ($) some — o tooltip passa a mostrar esse valor em R$ em vez do % bruto.
+          const titulo = modoResumo ? `ML: R$ ${fmtR(r.margemReais)}` : `(${fmtP(margemBrutaPct)}%)`;
           return (
-            <span className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[classe]}`} title={`(${fmtP(margemBrutaPct)}%)`}>
+            <span className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[classe]}`} title={titulo}>
               {fmtP(r.margemPct)}%
             </span>
           );
