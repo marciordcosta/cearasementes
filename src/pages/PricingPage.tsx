@@ -12,6 +12,7 @@ import { aplicarTransportadoraNoCanal, fetchTransportadoras } from '@/features/f
 import {
   apagarCanal,
   apagarCategoria,
+  apagarCustoPersonalizado,
   apagarFornecedor,
   apagarProduto,
   apagarSubcategoria,
@@ -19,17 +20,20 @@ import {
   apagarTodosProdutos,
   atualizarCanal,
   atualizarCategoria,
+  atualizarCustoPersonalizado,
   atualizarFornecedor,
   atualizarPrecisaAjuste,
   atualizarProduto,
   atualizarSubcategoria,
   fetchCanais,
   fetchCategorias,
+  fetchCustosPersonalizados,
   fetchFornecedores,
   fetchProdutos,
   fetchSubcategorias,
   inserirCanal,
   inserirCategoria,
+  inserirCustoPersonalizado,
   inserirFornecedor,
   inserirProduto,
   inserirSubcategoria,
@@ -43,6 +47,7 @@ import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
 import { ChannelsPanel, type NovoCanalInput } from '@/features/pricing/components/ChannelsPanel';
+import { CustosPersonalizadosPanel } from '@/features/pricing/components/CustosPersonalizadosPanel';
 import { EditProductModal } from '@/features/pricing/components/EditProductModal';
 import { ExportDropdown } from '@/features/pricing/components/ExportDropdown';
 import { ExportPdfModal } from '@/features/pricing/components/ExportPdfModal';
@@ -60,7 +65,7 @@ import {
   construirHistoricoPorCodigo,
   type CriterioRepresentacao,
 } from '@/features/pricing/historicoBi';
-import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
+import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
 type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
@@ -84,6 +89,7 @@ export function PricingPage() {
   const { data: subcategoriasData } = useQuery({ queryKey: ['pricing', 'subcategorias'], queryFn: fetchSubcategorias });
   const { data: produtosData } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
   const { data: fornecedoresData } = useQuery({ queryKey: ['pricing', 'fornecedores'], queryFn: fetchFornecedores });
+  const { data: custosData } = useQuery({ queryKey: ['pricing', 'custos'], queryFn: fetchCustosPersonalizados });
 
   // Estado local "espelha" o Supabase uma única vez ao carregar (feito pra
   // edição instantânea, tipo planilha) — depois disso, a fonte da verdade
@@ -96,19 +102,21 @@ export function PricingPage() {
   const [subcategorias, setSubcategorias] = useState<Subcategoria[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+  const [custos, setCustos] = useState<CustoPersonalizado[]>([]);
 
   useEffect(() => {
-    if (seeded.current || !canaisData || !categoriasData || !subcategoriasData || !produtosData || !fornecedoresData) return;
+    if (seeded.current || !canaisData || !categoriasData || !subcategoriasData || !produtosData || !fornecedoresData || !custosData) return;
     setCanais(canaisData);
     setCategorias(categoriasData);
     setSubcategorias(subcategoriasData);
     setProdutos(ordenarProdutos(produtosData, categoriasData));
     setFornecedores(fornecedoresData);
+    setCustos(custosData);
     seeded.current = true;
-  }, [canaisData, categoriasData, subcategoriasData, produtosData, fornecedoresData]);
+  }, [canaisData, categoriasData, subcategoriasData, produtosData, fornecedoresData, custosData]);
 
   const [modalParametrizacaoAberto, setModalParametrizacaoAberto] = useState(false);
-  const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores'>('tabelas');
+  const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores' | 'custos'>('tabelas');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
@@ -539,6 +547,26 @@ export function PricingPage() {
     salvarAgora(() => apagarFornecedor(id));
   }
 
+  // ---------- Custos Personalizados ----------
+  async function onAdicionarCusto(input: { descricao: string; tipo: 'reais' | 'percentual'; valor: number }) {
+    try {
+      const custo = await inserirCustoPersonalizado({ ...input, ordem: custos.length });
+      setCustos((prev) => [...prev, custo]);
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Falha ao adicionar custo.'));
+    }
+  }
+
+  function onAtualizarCusto(id: string, patch: Partial<Pick<CustoPersonalizado, 'descricao' | 'tipo' | 'valor'>>) {
+    setCustos((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    salvarAgora(() => atualizarCustoPersonalizado(id, patch));
+  }
+
+  function onRemoverCusto(id: string) {
+    setCustos((prev) => prev.filter((c) => c.id !== id));
+    salvarAgora(() => apagarCustoPersonalizado(id));
+  }
+
   function onSalvarOrdemCategorias(novaOrdem: Categoria[]) {
     const comOrdem = novaOrdem.map((c, i) => ({ ...c, ordem: i }));
     setCategorias(comOrdem);
@@ -814,6 +842,7 @@ export function PricingPage() {
               { valor: 'tabelas', rotulo: 'Tabelas' },
               { valor: 'categorias', rotulo: 'Categorias' },
               { valor: 'fornecedores', rotulo: 'Fornecedores' },
+              { valor: 'custos', rotulo: 'Custos' },
             ] as const
           ).map((aba) => (
             <button
@@ -868,6 +897,15 @@ export function PricingPage() {
             onAdicionarFornecedor={onAdicionarFornecedor}
             onRenomearFornecedor={onRenomearFornecedor}
             onRemoverFornecedor={onRemoverFornecedor}
+          />
+        )}
+        {abaParametrizacao === 'custos' && (
+          <CustosPersonalizadosPanel
+            custos={custos}
+            totalVendas={margemAtualTotalValor}
+            onAdicionarCusto={onAdicionarCusto}
+            onAtualizarCusto={onAtualizarCusto}
+            onRemoverCusto={onRemoverCusto}
           />
         )}
       </Modal>

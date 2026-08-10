@@ -230,6 +230,14 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['produto_precos']['Row']>;
         Relationships: [];
       };
+      // Lista global de custos personalizados (Parametrização de Custos > aba "Custos") — só
+      // informativo, não entra no cálculo de preço (ver CustosPersonalizadosPanel.tsx).
+      custos_personalizados: {
+        Row: { id: string; descricao: string; tipo: 'reais' | 'percentual'; valor: number; ordem: number; criado_em: string };
+        Insert: Omit<Database['public']['Tables']['custos_personalizados']['Row'], 'id' | 'criado_em'>;
+        Update: Partial<Database['public']['Tables']['custos_personalizados']['Insert']>;
+        Relationships: [];
+      };
 
       // ---------------------------------------------------------------
       // Módulo Gestão de Fretes

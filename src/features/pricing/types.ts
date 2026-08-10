@@ -59,6 +59,23 @@ export interface Fornecedor {
   ordem: number;
 }
 
+/** 'reais' = valor fixo em R$ (ex.: aluguel); 'percentual' = já expresso como % das vendas (ex.: taxa de plataforma). */
+export type TipoCustoPersonalizado = 'reais' | 'percentual';
+
+/**
+ * Custo Personalizado (Parametrização de Custos > aba "Custos") — lista global de
+ * custos da empresa, puramente informativa: NÃO entra no cálculo do preço sugerido.
+ * A tela mostra, ao lado de cada um, quanto representa do total desses custos e do
+ * total das vendas (média das últimas safras) — ver CustosPersonalizadosPanel.tsx.
+ */
+export interface CustoPersonalizado {
+  id: string;
+  descricao: string;
+  tipo: TipoCustoPersonalizado;
+  valor: number;
+  ordem: number;
+}
+
 export interface Produto {
   id: string;
   nome: string;

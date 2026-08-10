@@ -2,13 +2,14 @@ import { fetchAllRows } from '@/lib/fetchAll';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { inferirNomeCategoriaDoNome, inferirPesoDoNome } from './produtoInferencia';
-import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from './types';
+import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from './types';
 
 type CanalRow = Database['public']['Tables']['canais_preco']['Row'];
 type CategoriaRow = Database['public']['Tables']['categorias']['Row'];
 type ProdutoRow = Database['public']['Tables']['produtos']['Row'];
 type FornecedorRow = Database['public']['Tables']['fornecedores']['Row'];
 type SubcategoriaRow = Database['public']['Tables']['subcategorias']['Row'];
+type CustoPersonalizadoRow = Database['public']['Tables']['custos_personalizados']['Row'];
 
 function canalFromRow(row: CanalRow): Canal {
   return {
@@ -281,6 +282,34 @@ export async function atualizarFornecedor(id: string, patch: Partial<Pick<Fornec
 
 export async function apagarFornecedor(id: string): Promise<void> {
   const { error } = await supabase.from('fornecedores').delete().eq('id', id);
+  if (error) throw error;
+}
+
+function custoPersonalizadoFromRow(row: CustoPersonalizadoRow): CustoPersonalizado {
+  return { id: row.id, descricao: row.descricao, tipo: row.tipo, valor: row.valor, ordem: row.ordem };
+}
+
+export async function fetchCustosPersonalizados(): Promise<CustoPersonalizado[]> {
+  const rows = await fetchAllRows<CustoPersonalizadoRow>((from, to) => supabase.from('custos_personalizados').select('*').order('ordem').range(from, to));
+  return rows.map(custoPersonalizadoFromRow);
+}
+
+export async function inserirCustoPersonalizado(input: { descricao: string; tipo: 'reais' | 'percentual'; valor: number; ordem: number }): Promise<CustoPersonalizado> {
+  const { data, error } = await supabase.from('custos_personalizados').insert(input).select('*').single();
+  if (error) throw error;
+  return custoPersonalizadoFromRow(data);
+}
+
+export async function atualizarCustoPersonalizado(
+  id: string,
+  patch: Partial<Pick<CustoPersonalizadoRow, 'descricao' | 'tipo' | 'valor' | 'ordem'>>,
+): Promise<void> {
+  const { error } = await supabase.from('custos_personalizados').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function apagarCustoPersonalizado(id: string): Promise<void> {
+  const { error } = await supabase.from('custos_personalizados').delete().eq('id', id);
   if (error) throw error;
 }
 
