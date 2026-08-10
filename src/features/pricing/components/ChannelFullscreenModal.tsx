@@ -196,6 +196,7 @@ export function ChannelFullscreenModal({
         onFechar={() => setGraficoAberto(false)}
         titulo={`Representação — ${canal?.nome ?? ''}`}
         criterio={criterioRepresentacao}
+        onEscolherCriterio={setCriterioRepresentacao}
         produtos={produtos}
         representatividadePorProduto={representatividadePorProduto}
       />

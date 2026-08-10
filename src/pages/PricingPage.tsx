@@ -755,6 +755,7 @@ export function PricingPage() {
         onFechar={() => setGraficoRepresentacaoAberto(false)}
         titulo="Representação Geral"
         criterio={criterioRepresentacao}
+        onEscolherCriterio={setCriterioRepresentacao}
         produtos={produtos}
         representatividadePorProduto={representatividadeGeralPorProduto}
         filtroAtivo={filtroAtivoGrafico}

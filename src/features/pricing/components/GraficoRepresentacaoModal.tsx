@@ -6,12 +6,14 @@ import { chartChrome } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { ROTULO_CRITERIO_REPRESENTACAO, type ClasseABC, type CriterioRepresentacao, type Representatividade } from '../historicoBi';
 import type { Produto } from '../types';
+import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
 interface GraficoRepresentacaoModalProps {
   open: boolean;
   onFechar: () => void;
   titulo: string;
   criterio: CriterioRepresentacao;
+  onEscolherCriterio: (criterio: CriterioRepresentacao) => void;
   produtos: Produto[];
   representatividadePorProduto: Map<string, Representatividade>;
   /** Quando o "Filtrar:" (Categoria/Fornecedor) da grade está ativo — troca o gráfico pra pizza, só com os itens desse filtro. */
@@ -40,7 +42,16 @@ interface FatiaPizza {
  * Quando a grade está com o "Filtrar:" (Categoria/Fornecedor) ativo, vira pizza
  * com só os itens daquele filtro, participação recalculada dentro dele mesmo.
  */
-export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, produtos, representatividadePorProduto, filtroAtivo }: GraficoRepresentacaoModalProps) {
+export function GraficoRepresentacaoModal({
+  open,
+  onFechar,
+  titulo,
+  criterio,
+  onEscolherCriterio,
+  produtos,
+  representatividadePorProduto,
+  filtroAtivo,
+}: GraficoRepresentacaoModalProps) {
   const { isDark } = useTheme();
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const nomePorId = useMemo(() => new Map(produtos.map((p) => [p.id, p.nome.replace(/[*_]/g, '')])), [produtos]);
@@ -151,7 +162,19 @@ export function GraficoRepresentacaoModal({ open, onFechar, titulo, criterio, pr
   const semDados = emModoPizza ? fatias.length === 0 : linhas.length === 0;
 
   return (
-    <Modal open={open} title={titulo} onClose={onFechar} widthClassName="max-w-4xl">
+    <Modal
+      open={open}
+      title={
+        <span className="flex w-full min-w-0 items-center gap-2">
+          <span className="truncate">{titulo}</span>
+          <span className="ml-auto shrink-0">
+            <SeletorCriterioRepresentacao criterio={criterio} ordenarAtivo onEscolher={onEscolherCriterio} semOpcaoPadrao sobreFundoEscuro />
+          </span>
+        </span>
+      }
+      onClose={onFechar}
+      widthClassName="max-w-4xl"
+    >
       {semDados ? (
         <p className="text-sm text-[var(--color-text-soft)]">
           Sem dado de Representação pra mostrar — nenhum produto com Código cadastrado bateu com o histórico do BI, ou só tem Classe C nesse filtro.
