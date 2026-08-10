@@ -5,9 +5,11 @@ interface SeletorCriterioRepresentacaoProps {
   criterio: CriterioRepresentacao;
   ordenarAtivo: boolean;
   onEscolher: (criterio: CriterioRepresentacao) => void;
-  onDesativarOrdenacao: () => void;
+  onDesativarOrdenacao?: () => void;
   /** true = botão sobre fundo escuro (navy), ex. cabeçalho do modal — troca as cores pro botão continuar legível. */
   sobreFundoEscuro?: boolean;
+  /** Esconde "Ordem padrão (sem ordenar)" — usa onde não existe "sem critério" (ex.: eixo Y de um gráfico, que sempre mostra algum critério). */
+  semOpcaoPadrao?: boolean;
 }
 
 const CRITERIOS: CriterioRepresentacao[] = ['valor', 'qtd', 'margem'];
@@ -18,7 +20,14 @@ const CRITERIOS: CriterioRepresentacao[] = ['valor', 'qtd', 'margem'];
  * por ele — reaproveitado tanto na tela cheia por canal quanto na barra de
  * ferramentas principal (ver ChannelFullscreenModal.tsx e PricingPage.tsx).
  */
-export function SeletorCriterioRepresentacao({ criterio, ordenarAtivo, onEscolher, onDesativarOrdenacao, sobreFundoEscuro }: SeletorCriterioRepresentacaoProps) {
+export function SeletorCriterioRepresentacao({
+  criterio,
+  ordenarAtivo,
+  onEscolher,
+  onDesativarOrdenacao,
+  sobreFundoEscuro,
+  semOpcaoPadrao,
+}: SeletorCriterioRepresentacaoProps) {
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -65,16 +74,18 @@ export function SeletorCriterioRepresentacao({ criterio, ordenarAtivo, onEscolhe
               {ROTULO_CRITERIO_REPRESENTACAO[c]}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => {
-              setAberto(false);
-              onDesativarOrdenacao();
-            }}
-            className="block w-full border-t border-[var(--color-line)] px-3.5 py-2.5 text-left text-sm text-[var(--color-text-soft)] hover:bg-[var(--color-page)]"
-          >
-            Ordem padrão (sem ordenar)
-          </button>
+          {!semOpcaoPadrao && (
+            <button
+              type="button"
+              onClick={() => {
+                setAberto(false);
+                onDesativarOrdenacao?.();
+              }}
+              className="block w-full border-t border-[var(--color-line)] px-3.5 py-2.5 text-left text-sm text-[var(--color-text-soft)] hover:bg-[var(--color-page)]"
+            >
+              Ordem padrão (sem ordenar)
+            </button>
+          )}
         </div>
       )}
     </div>

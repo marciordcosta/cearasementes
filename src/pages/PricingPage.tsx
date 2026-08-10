@@ -763,6 +763,7 @@ export function PricingPage() {
         produto={produtoGraficoLinha}
         onFechar={() => setProdutoGraficoLinha(null)}
         criterio={criterioRepresentacao}
+        onEscolherCriterio={setCriterioRepresentacao}
         items={itemsAgregadosBi}
         produtos={produtos}
       />

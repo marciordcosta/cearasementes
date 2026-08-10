@@ -9,12 +9,14 @@ import { chartChrome, criarGridVerticalPontilhado, palette } from '@/lib/chartSe
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { construirCurvaMensalProduto, ROTULO_CRITERIO_REPRESENTACAO, type CriterioRepresentacao } from '../historicoBi';
 import type { Produto } from '../types';
+import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
 interface GraficoCurvaMensalModalProps {
   /** null = fechado (padrão pra "qual produto está aberto agora", igual produtoEditandoId em PricingPage.tsx). */
   produto: Produto | null;
   onFechar: () => void;
   criterio: CriterioRepresentacao;
+  onEscolherCriterio: (criterio: CriterioRepresentacao) => void;
   items: ItemAgg[];
   /** Lista completa de produtos — só usada pra buscar quem comparar (ícone de comparação no título). */
   produtos: Produto[];
@@ -35,7 +37,7 @@ interface GraficoCurvaMensalModalProps {
  * houver pelo menos uma comparação; sem nenhuma, volta a mostrar todas as
  * Tabelas do produto principal, como antes.
  */
-export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, produtos }: GraficoCurvaMensalModalProps) {
+export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolherCriterio, items, produtos }: GraficoCurvaMensalModalProps) {
   const { isDark } = useTheme();
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const colors = useMemo(() => palette(isDark), [isDark]);
@@ -195,14 +197,17 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, items, pr
       title={
         <span className="flex w-full min-w-0 items-center gap-2">
           <span className="truncate">Curva de venda — {produto?.nome.replace(/[*_]/g, '') ?? ''}</span>
-          <button
-            type="button"
-            onClick={() => setMostrarBusca((v) => !v)}
-            title="Comparar com outro produto"
-            className="ml-auto shrink-0 rounded-full bg-white/15 p-1.5 text-white hover:bg-white/25"
-          >
-            <GitCompare size={16} />
-          </button>
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            <SeletorCriterioRepresentacao criterio={criterio} ordenarAtivo onEscolher={onEscolherCriterio} semOpcaoPadrao sobreFundoEscuro />
+            <button
+              type="button"
+              onClick={() => setMostrarBusca((v) => !v)}
+              title="Comparar com outro produto"
+              className="shrink-0 rounded-full bg-white/15 p-1.5 text-white hover:bg-white/25"
+            >
+              <GitCompare size={16} />
+            </button>
+          </span>
         </span>
       }
       onClose={onFechar}

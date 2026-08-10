@@ -203,6 +203,7 @@ export function ChannelFullscreenModal({
         produto={produtoGraficoLinha}
         onFechar={() => setProdutoGraficoLinha(null)}
         criterio={criterioRepresentacao}
+        onEscolherCriterio={setCriterioRepresentacao}
         items={itemsAgregados}
         produtos={produtos}
       />
