@@ -204,24 +204,24 @@ export function PricingPage() {
       const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
-  // Mesmo filtro de Categoria/Fornecedor da grade, só que ignorando a busca por nome — usado
-  // pra virar o gráfico de Representação Geral em pizza (participação dentro do filtro).
+  // Filtro Categoria/Fornecedor E/OU busca por nome, os dois juntos — qualquer um dos dois ativo já
+  // vira o gráfico de Representação Geral em pizza (participação dentro do que está filtrado/buscado
+  // na grade); sem nenhum dos dois, volta pro formato em colunas (todo o sortimento).
   const filtroAtivoGrafico = useMemo(() => {
-    if (filtroClasse === 'todas') return null;
-    let rotulo: string | null = null;
-    let idsFiltrados: Produto[] = [];
+    const buscaAtiva = buscaProduto.trim().length > 0;
+    if (filtroClasse === 'todas' && !buscaAtiva) return null;
+
+    let rotuloFiltro: string | null = null;
     if (filtroClasse.startsWith('cat:')) {
-      const id = filtroClasse.slice(4);
-      rotulo = categorias.find((cat) => cat.id === id)?.nome ?? null;
-      idsFiltrados = produtos.filter((p) => p.categoriaId === id);
+      rotuloFiltro = categorias.find((cat) => cat.id === filtroClasse.slice(4))?.nome ?? null;
     } else if (filtroClasse.startsWith('forn:')) {
-      const id = filtroClasse.slice(5);
-      rotulo = fornecedores.find((f) => f.id === id)?.nome ?? null;
-      idsFiltrados = produtos.filter((p) => p.fornecedorId === id);
+      rotuloFiltro = fornecedores.find((f) => f.id === filtroClasse.slice(5))?.nome ?? null;
     }
-    if (!rotulo) return null;
-    return { rotulo, produtoIds: new Set(idsFiltrados.map((p) => p.id)) };
-  }, [filtroClasse, categorias, fornecedores, produtos]);
+    const partesRotulo = [rotuloFiltro, buscaAtiva ? `"${buscaProduto.trim()}"` : null].filter((parte): parte is string => parte !== null);
+    if (partesRotulo.length === 0) return null;
+
+    return { rotulo: partesRotulo.join(' + '), produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
+  }, [filtroClasse, buscaProduto, categorias, fornecedores, produtosFiltrados]);
 
   // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
   const produtosExibidos = !ordenarPorRepresentacao
