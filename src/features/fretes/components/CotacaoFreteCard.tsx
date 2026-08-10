@@ -39,6 +39,11 @@ function fmtPct1(valor: number): string {
   return `${valor.toFixed(1).replace('.', ',')}%`;
 }
 
+/** No modo Orçamento cada item já tem uma quantidade (volumes/sacos) — troca R$/kg por R$/saco (total do frete / total de itens). */
+function fmtCustoPorSaco(totalFrete: number, totalItens: number): string {
+  return `${fmtBRL.format(totalItens > 0 ? totalFrete / totalItens : 0)}/saco`;
+}
+
 /**
  * kmTotal já é ida+volta (o cálculo do custo continua usando esse total) —
  * pra exibição, mostra só a ida: kmTotal menos o último trecho (que é sempre
@@ -422,7 +427,8 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                         <span className="num text-lg font-bold text-[var(--color-navy)]">{fmtBRL.format(r.total)}</span>
                       </div>
                       <div className="mt-1 text-xs text-[var(--color-navy)] opacity-80">
-                        {fmtPct1(r.pctValorCarga)} do valor da carga · {fmtBRL.format(r.custoPorKg)}/kg
+                        {fmtPct1(r.pctValorCarga)} do valor da carga ·{' '}
+                        {modo === 'orcamento' ? fmtCustoPorSaco(r.total, resumoOrcamento.totalItens) : `${fmtBRL.format(r.custoPorKg)}/kg`}
                       </div>
                     </div>
                   ) : (
@@ -437,7 +443,8 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                         <span className="num font-semibold text-[var(--color-text)]">{fmtBRL.format(r.total)}</span>
                       </div>
                       <div className="mt-1 text-xs text-[var(--color-text-soft)]">
-                        {fmtPct1(r.pctValorCarga)} do valor da carga · {fmtBRL.format(r.custoPorKg)}/kg
+                        {fmtPct1(r.pctValorCarga)} do valor da carga ·{' '}
+                        {modo === 'orcamento' ? fmtCustoPorSaco(r.total, resumoOrcamento.totalItens) : `${fmtBRL.format(r.custoPorKg)}/kg`}
                       </div>
                     </div>
                   ),
@@ -469,7 +476,8 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                     <span className="num font-semibold text-[var(--color-text)]">{fmtBRL.format(comparativoFrota.valorFrete)}</span>
                   </div>
                   <div className="mt-1 text-xs text-[var(--color-text-soft)]">
-                    {fmtPct1(comparativoFrota.pctValorCarga)} do valor da carga · {fmtBRL.format(comparativoFrota.custoPorKg)}/kg
+                    {fmtPct1(comparativoFrota.pctValorCarga)} do valor da carga ·{' '}
+                    {modo === 'orcamento' ? fmtCustoPorSaco(comparativoFrota.valorFrete, resumoOrcamento.totalItens) : `${fmtBRL.format(comparativoFrota.custoPorKg)}/kg`}
                     {resultado && resultado.length > 0 && (
                       <>
                         {' · '}
@@ -500,7 +508,9 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                   <span className="num text-lg font-bold text-[var(--color-navy)]">{fmtBRL.format(rotaResultado.valorFrete)}</span>
                 </div>
                 <div className="mt-1 text-xs text-[var(--color-navy)] opacity-80">
-                  {fmtPct1(rotaResultado.pctValorCarga)} do valor da carga · {fmtBRL.format(rotaResultado.custoPorKg)}/kg · saída às {parametrosRota.horarioInicio}
+                  {fmtPct1(rotaResultado.pctValorCarga)} do valor da carga ·{' '}
+                  {modo === 'orcamento' ? fmtCustoPorSaco(rotaResultado.valorFrete, resumoOrcamento.totalItens) : `${fmtBRL.format(rotaResultado.custoPorKg)}/kg`} · saída às{' '}
+                  {parametrosRota.horarioInicio}
                 </div>
               </div>
 
