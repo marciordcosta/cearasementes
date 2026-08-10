@@ -643,6 +643,10 @@ export function PricingPage() {
                   </optgroup>
                 )}
               </select>
+              <ReorderDropdown
+                onEscolherCategorias={() => setModalOrdemTipo('categorias')}
+                onEscolherCanais={() => setModalOrdemTipo('canais')}
+              />
               <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
                 <input
                   type="checkbox"
@@ -661,6 +665,7 @@ export function PricingPage() {
                 />
                 Resumo
               </label>
+              <div className="flex-1" />
               <SeletorCriterioRepresentacao
                 criterio={criterioRepresentacao}
                 ordenarAtivo={ordenarPorRepresentacao}
@@ -670,7 +675,6 @@ export function PricingPage() {
                 }}
                 onDesativarOrdenacao={() => setOrdenarPorRepresentacao(false)}
               />
-              <div className="flex-1" />
               {margemAtualTotalValor > 0 && (
                 <button
                   type="button"
@@ -681,10 +685,6 @@ export function PricingPage() {
                   <Gauge size={16} />
                 </button>
               )}
-              <ReorderDropdown
-                onEscolherCategorias={() => setModalOrdemTipo('categorias')}
-                onEscolherCanais={() => setModalOrdemTipo('canais')}
-              />
             </div>
 
             <PricingTable

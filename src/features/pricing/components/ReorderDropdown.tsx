@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@/components/ui/Button';
 
 interface ReorderDropdownProps {
   onEscolherCategorias: () => void;
@@ -22,9 +21,14 @@ export function ReorderDropdown({ onEscolherCategorias, onEscolherCanais }: Reor
 
   return (
     <div ref={ref} className="relative">
-      <Button variant="action" onClick={() => setAberto((v) => !v)} title="Defina livremente a ordem de categorias ou tabelas">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        title="Defina livremente a ordem de categorias ou tabelas"
+        className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-semibold whitespace-nowrap text-[var(--color-text)] hover:bg-[var(--color-page)]"
+      >
         ↕ Ordem Personalizada ▾
-      </Button>
+      </button>
       {aberto && (
         <div className="absolute top-[calc(100%+6px)] right-0 z-[70] min-w-[170px] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl">
           <button
