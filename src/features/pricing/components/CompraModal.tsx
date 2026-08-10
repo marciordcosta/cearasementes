@@ -79,11 +79,21 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
   // (reequilibrando os últimos itens pra nunca ultrapassar a capacidade); some recálculo
   // acima (novo peso do caminhão, nova necessidade) descarta os ajustes manuais e recomeça daqui.
   const [caminhoesEditados, setCaminhoesEditados] = useState<CaminhaoPedido[]>([]);
+  // Texto do campo sendo digitado agora (não confirmado ainda) — o reequilíbrio só roda
+  // quando o campo perde o foco, nunca a cada tecla. Reequilibrar por tecla (ex.: "1" → "13"
+  // → "133") faz cada dígito digitado disparar um reequilíbrio EM CIMA do reequilíbrio
+  // anterior, indo zerando os últimos itens em cascata a cada tecla — daí o bug.
+  const [edicaoQtd, setEdicaoQtd] = useState<{ caminhaoIdx: number; itemIdx: number; texto: string } | null>(null);
+
   useEffect(() => {
     setCaminhoesEditados(caminhoes.map((c) => ({ ...c, itens: c.itens.map((it) => ({ ...it })) })));
+    setEdicaoQtd(null);
   }, [caminhoes]);
 
-  function editarQtdCaminhao(caminhaoIdx: number, itemIdx: number, texto: string) {
+  function confirmarEdicaoQtd() {
+    if (!edicaoQtd) return;
+    const { caminhaoIdx, itemIdx, texto } = edicaoQtd;
+    setEdicaoQtd(null);
     const capacidade = parseFloat(pesoCaminhaoTexto);
     if (!capacidade || capacidade <= 0) return;
     setCaminhoesEditados((prev) => {
@@ -321,8 +331,16 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                                   <input
                                     type="number"
                                     min="0"
-                                    value={it.qtd}
-                                    onChange={(e) => editarQtdCaminhao(caminhaoIdx, itemIdx, e.target.value)}
+                                    value={
+                                      edicaoQtd && edicaoQtd.caminhaoIdx === caminhaoIdx && edicaoQtd.itemIdx === itemIdx
+                                        ? edicaoQtd.texto
+                                        : it.qtd
+                                    }
+                                    onChange={(e) => setEdicaoQtd({ caminhaoIdx, itemIdx, texto: e.target.value })}
+                                    onBlur={confirmarEdicaoQtd}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                    }}
                                     className="num w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-1.5 py-0.5 text-right text-[var(--color-text)]"
                                   />
                                   <span className="num text-[var(--color-text-soft)]">un. — {fmtKg(it.peso)} kg</span>
