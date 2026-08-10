@@ -92,26 +92,39 @@ export function dividirEmCaminhoes(itens: ItemNecessidadeCompra[], capacidadeKg:
 
 /**
  * Depois de editar manualmente a quantidade de um item (idxEditado) num
- * caminhão, garante que o peso total não ultrapasse `capacidadeKg` — tira
- * (nunca aumenta) dos últimos itens da lista, os menos relevantes já que
- * `itens` vem ordenado por peso decrescente, até caber.
+ * caminhão, reequilibra pelos últimos itens da lista (os menos relevantes,
+ * já que `itens` vem ordenado por peso decrescente) pra manter o caminhão o
+ * mais próximo possível de `capacidadeKg`: tira deles se a edição estourou o
+ * limite, completa neles se a edição sobrou espaço. Quem controla "quero
+ * levar menos peso" é o campo de capacidade do caminhão, não reduzir um item
+ * — reduzir um item só realoca o peso liberado pros últimos.
  */
 export function reequilibrarCaminhao(itens: ItemCaminhao[], idxEditado: number, capacidadeKg: number): ItemCaminhao[] {
   const novosItens = itens.map((it) => ({ ...it }));
-  let pesoTotal = novosItens.reduce((soma, it) => soma + it.qtd * it.produto.peso, 0);
+  const pesoTotal = novosItens.reduce((soma, it) => soma + it.qtd * it.produto.peso, 0);
+  let diferenca = pesoTotal - capacidadeKg; // > 0: excedente (precisa tirar) — < 0: sobra (precisa completar)
   let j = novosItens.length - 1;
+  let guard = 0;
 
-  while (pesoTotal > capacidadeKg + 0.001 && j >= 0) {
+  while (Math.abs(diferenca) > 0.001 && j >= 0 && guard++ < 1000) {
     if (j === idxEditado) {
       j -= 1;
       continue;
     }
     const pesoUnit = novosItens[j].produto.peso;
-    const excedenteKg = pesoTotal - capacidadeKg;
-    const reduzir = Math.min(novosItens[j].qtd, Math.ceil(excedenteKg / pesoUnit));
-    novosItens[j].qtd -= reduzir;
-    pesoTotal -= reduzir * pesoUnit;
-    if (novosItens[j].qtd <= 0) j -= 1;
+    if (diferenca > 0) {
+      const reduzir = Math.min(novosItens[j].qtd, Math.ceil(diferenca / pesoUnit));
+      novosItens[j].qtd -= reduzir;
+      diferenca -= reduzir * pesoUnit;
+      if (novosItens[j].qtd <= 0) j -= 1;
+    } else {
+      // Só dá pra completar em saco cheio — o resto (menor que 1 saco desse item) fica sem
+      // preencher, o próximo item da lista (peso unitário menor) tenta cobrir o que sobrou.
+      const completar = Math.floor(-diferenca / pesoUnit);
+      novosItens[j].qtd += completar;
+      diferenca += completar * pesoUnit;
+      j -= 1;
+    }
   }
 
   novosItens.forEach((it) => {
