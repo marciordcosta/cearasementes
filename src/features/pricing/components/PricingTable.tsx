@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useColumnWidths } from '@/hooks/useColumnWidths';
 import { Badge } from '@/components/ui/Badge';
+import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
 import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
@@ -21,35 +22,6 @@ function fmtR(v: number): string {
 }
 function fmtP(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-
-/**
- * Nome do produto com marcação estilo WhatsApp, digitada no próprio campo
- * "Produto" do EditProductModal (não afeta o que é salvo, só a exibição
- * aqui na tabela): `*palavra*` sai em negrito, `_palavra_` sai em itálico,
- * o resto do nome em peso 300 (fino).
- */
-function NomeComDestaque({ nome }: { nome: string }) {
-  const regex = /\*(.+?)\*|_(.+?)_/g;
-  const partes: { texto: string; estilo: 'normal' | 'negrito' | 'italico' }[] = [];
-  let ultimoIndice = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(nome)) !== null) {
-    if (match.index > ultimoIndice) partes.push({ texto: nome.slice(ultimoIndice, match.index), estilo: 'normal' });
-    partes.push({ texto: (match[1] ?? match[2])!, estilo: match[1] !== undefined ? 'negrito' : 'italico' });
-    ultimoIndice = regex.lastIndex;
-  }
-  if (ultimoIndice < nome.length) partes.push({ texto: nome.slice(ultimoIndice), estilo: 'normal' });
-
-  return (
-    <>
-      {partes.map((p, i) => (
-        <span key={i} className={p.estilo === 'negrito' ? 'font-bold' : p.estilo === 'italico' ? 'font-light italic' : 'font-light'}>
-          {p.texto}
-        </span>
-      ))}
-    </>
-  );
 }
 
 interface ColunaDef {

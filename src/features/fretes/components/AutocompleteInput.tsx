@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 
 function normalizarBusca(texto: string): string {
   return texto
@@ -86,7 +87,9 @@ export function AutocompleteInput({
               onClick={() => selecionar(op.valor)}
               className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-accent)]/15"
             >
-              <span>{op.valor}</span>
+              <span>
+                <NomeComDestaque nome={op.valor} />
+              </span>
               {op.meta && <span className="text-xs text-[var(--color-text-soft)]">{op.meta}</span>}
             </button>
           ))}
