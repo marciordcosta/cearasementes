@@ -84,7 +84,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const [notasPorCidade, setNotasPorCidade] = useState<Record<string, NotaEtiqueta[]>>({});
   const [cidadeEditandoNotas, setCidadeEditandoNotas] = useState<string | null>(null);
   const [modalImpressaoAberto, setModalImpressaoAberto] = useState(false);
-  const [cidadesParaImprimir, setCidadesParaImprimir] = useState<Set<string>>(new Set());
+  const [notasParaImprimir, setNotasParaImprimir] = useState<Set<string>>(new Set());
 
   // ---- Rota (Frota Própria) — peso/valor vêm do mesmo Direta/Orçamento acima, só o cálculo (km via API) e o resultado são específicos daqui ----
   const [rotaCalculando, setRotaCalculando] = useState(false);
@@ -299,7 +299,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     setNotasPorCidade({});
     setCidadeEditandoNotas(null);
     setModalImpressaoAberto(false);
-    setCidadesParaImprimir(new Set());
+    setNotasParaImprimir(new Set());
     setRotaResultado(null);
     setRotaErro(null);
     comparativoChaveRef.current = null;
@@ -369,22 +369,30 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     return { notas: validas.length, volumes: validas.reduce((soma, n) => soma + n.volumes, 0) };
   }
 
-  const cidadesComNotas = useMemo(
-    () => cidades.filter((c) => (notasPorCidade[c] ?? []).some((n) => n.nf.trim() && n.volumes > 0)),
+  /** `chave` = "cidade::nf" — identifica uma NF de forma única mesmo se o mesmo número de NF aparecer em duas cidades diferentes. */
+  const notasParaImprimirLista = useMemo(
+    () =>
+      cidades.flatMap((cidade) =>
+        (notasPorCidade[cidade] ?? [])
+          .filter((n) => n.nf.trim() && n.volumes > 0)
+          .map((n) => ({ chave: `${cidade}::${n.nf}`, cidade, nf: n.nf, volumes: n.volumes })),
+      ),
     [cidades, notasPorCidade],
   );
 
-  /** Abre o modal de seleção já com todas as cidades (que têm NF) marcadas — "Gerar Etiquetas" sem mexer em nada imprime tudo, como antes. */
+  /** Abre o modal de seleção já com todas as NFs marcadas — "Gerar Etiquetas" sem mexer em nada imprime tudo, como antes. */
   function abrirModalImpressao() {
-    setCidadesParaImprimir(new Set(cidadesComNotas));
+    setNotasParaImprimir(new Set(notasParaImprimirLista.map((n) => n.chave)));
     setModalImpressaoAberto(true);
   }
 
-  /** Ignora NF em branco ou volumes ≤ 0 — não precisa validar antes, só não gera etiqueta pra linha vazia. */
+  /** Ignora NF em branco ou volumes ≤ 0 (e agora também a que ficou desmarcada no modal) — não precisa validar antes, só não gera etiqueta pra linha vazia. */
   async function confirmarImpressao() {
     const grupos = cidades
-      .filter((cidade) => cidadesParaImprimir.has(cidade))
-      .map((cidade) => ({ cidade, notas: notasDaCidade(cidade).filter((n) => n.nf.trim() && n.volumes > 0) }))
+      .map((cidade) => ({
+        cidade,
+        notas: notasDaCidade(cidade).filter((n) => n.nf.trim() && n.volumes > 0 && notasParaImprimir.has(`${cidade}::${n.nf}`)),
+      }))
       .filter((g) => g.notas.length > 0);
     if (grupos.length === 0) return;
     setModalImpressaoAberto(false);
@@ -702,7 +710,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                 Clique numa cidade (à esquerda) pra informar a(s) NF(s) e a quantidade de volumes dela — sai 1 etiqueta por volume (ex.: 50 volumes =
                 etiquetas "1/50" a "50/50").
               </p>
-              <Button variant="primary" onClick={abrirModalImpressao} disabled={cidadesComNotas.length === 0}>
+              <Button variant="primary" onClick={abrirModalImpressao} disabled={notasParaImprimirLista.length === 0}>
                 🏷️ Imprimir Etiquetas
               </Button>
             </div>
@@ -759,48 +767,43 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
         title="Imprimir Etiquetas"
         widthClassName="max-w-sm"
         footer={
-          <Button variant="primary" onClick={confirmarImpressao} disabled={cidadesParaImprimir.size === 0}>
+          <Button variant="primary" onClick={confirmarImpressao} disabled={notasParaImprimir.size === 0}>
             Gerar Etiquetas
           </Button>
         }
       >
         <div className="space-y-2">
-          <p className="mb-1 text-xs text-[var(--color-text-soft)]">Escolha quais cidades entram nessa impressão:</p>
+          <p className="mb-1 text-xs text-[var(--color-text-soft)]">Escolha quais NFs entram nessa impressão:</p>
           <label className="flex items-center gap-2 border-b border-[var(--color-line)] pb-2 text-sm font-semibold text-[var(--color-text)]">
             <input
               type="checkbox"
-              checked={cidadesParaImprimir.size === cidadesComNotas.length}
-              onChange={(e) => setCidadesParaImprimir(e.target.checked ? new Set(cidadesComNotas) : new Set())}
+              checked={notasParaImprimir.size === notasParaImprimirLista.length}
+              onChange={(e) => setNotasParaImprimir(e.target.checked ? new Set(notasParaImprimirLista.map((n) => n.chave)) : new Set())}
             />
             Todas
           </label>
-          {cidadesComNotas.map((cidade) => {
-            const resumo = resumoNotasCidade(cidade);
-            return (
-              <label key={cidade} className="flex items-center justify-between gap-2 text-sm text-[var(--color-text)]">
-                <span className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={cidadesParaImprimir.has(cidade)}
-                    onChange={(e) =>
-                      setCidadesParaImprimir((prev) => {
-                        const novo = new Set(prev);
-                        if (e.target.checked) novo.add(cidade);
-                        else novo.delete(cidade);
-                        return novo;
-                      })
-                    }
-                  />
-                  {cidade}
+          {notasParaImprimirLista.map((nota) => (
+            <label key={nota.chave} className="flex items-center justify-between gap-2 text-sm text-[var(--color-text)]">
+              <span className="flex items-center gap-2 truncate">
+                <input
+                  type="checkbox"
+                  checked={notasParaImprimir.has(nota.chave)}
+                  onChange={(e) =>
+                    setNotasParaImprimir((prev) => {
+                      const novo = new Set(prev);
+                      if (e.target.checked) novo.add(nota.chave);
+                      else novo.delete(nota.chave);
+                      return novo;
+                    })
+                  }
+                />
+                <span className="truncate">
+                  {nota.cidade} — NF {nota.nf}
                 </span>
-                {resumo && (
-                  <span className="text-xs text-[var(--color-text-soft)]">
-                    {resumo.notas} NF · {resumo.volumes} vol.
-                  </span>
-                )}
-              </label>
-            );
-          })}
+              </span>
+              <span className="shrink-0 text-xs text-[var(--color-text-soft)]">{nota.volumes} vol.</span>
+            </label>
+          ))}
         </div>
       </Modal>
     </div>
