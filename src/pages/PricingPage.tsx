@@ -764,6 +764,7 @@ export function PricingPage() {
         onFechar={() => setProdutoGraficoLinha(null)}
         criterio={criterioRepresentacao}
         items={itemsAgregadosBi}
+        produtos={produtos}
       />
 
       <EditProductModal

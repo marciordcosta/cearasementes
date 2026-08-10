@@ -199,7 +199,13 @@ export function ChannelFullscreenModal({
         produtos={produtos}
         representatividadePorProduto={representatividadePorProduto}
       />
-      <GraficoCurvaMensalModal produto={produtoGraficoLinha} onFechar={() => setProdutoGraficoLinha(null)} criterio={criterioRepresentacao} items={itemsAgregados} />
+      <GraficoCurvaMensalModal
+        produto={produtoGraficoLinha}
+        onFechar={() => setProdutoGraficoLinha(null)}
+        criterio={criterioRepresentacao}
+        items={itemsAgregados}
+        produtos={produtos}
+      />
     </Modal>
   );
 }
