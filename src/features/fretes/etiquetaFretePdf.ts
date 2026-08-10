@@ -49,10 +49,15 @@ function ajustarParaCaber(doc: jsPDF, texto: string, larguraMax: number): { text
   return { texto: `${cortado}…`, fonte };
 }
 
-function desenharEtiqueta(
-  doc: jsPDF,
-  etiqueta: { cidade: string; uf: string; nf: string; volumeAtual: number; volumeTotal: number },
-): void {
+interface ItemEtiqueta {
+  cidade: string;
+  uf: string;
+  nf: string;
+  volumeAtual: number;
+  volumeTotal: number;
+}
+
+function desenharEtiqueta(doc: jsPDF, etiqueta: ItemEtiqueta): void {
   const larguraEsquerda = LARGURA_MM - MARGEM_X * 2 - LARGURA_DIREITA - 3;
   const xEsquerda = MARGEM_X;
   const xDireita = LARGURA_MM - MARGEM_X;
@@ -90,24 +95,29 @@ function desenharEtiqueta(
  * real carrega o tamanho da página embutido no próprio arquivo, então
  * imprime certo mesmo sem esse tamanho custom estar configurado no driver.
  * Uma etiqueta física por VOLUME: uma NF com 50 volumes vira 50 páginas
- * "1/50", "2/50"... "50/50". Etiqueta física padrão de frete: 100mm
- * (largura) x 30mm (altura).
+ * "1/50", "2/50"... "50/50". Entre uma NF e a próxima (mesma cidade ou não),
+ * entra uma etiqueta EM BRANCO como separador físico — ajuda a achar onde
+ * uma nota termina e a próxima começa na pilha impressa. Etiqueta física
+ * padrão de frete: 100mm (largura) x 30mm (altura).
  */
 export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promise<void> {
-  const etiquetas = grupos.flatMap(({ cidade, notas }) => {
+  const blocosPorNota = grupos.flatMap(({ cidade, notas }) => {
     const { cidade: nomeCidade, uf } = separarCidadeUf(cidade);
-    return notas.flatMap((nota) =>
-      Array.from({ length: nota.volumes }, (_, i) => ({
-        cidade: nomeCidade,
-        uf,
-        nf: nota.nf,
-        volumeAtual: i + 1,
-        volumeTotal: nota.volumes,
-      })),
-    );
+    return notas.map((nota) => ({
+      cidade: nomeCidade,
+      uf,
+      nf: nota.nf,
+      volumes: Array.from({ length: nota.volumes }, (_, i) => ({ volumeAtual: i + 1, volumeTotal: nota.volumes })),
+    }));
   });
 
-  if (etiquetas.length === 0) return;
+  // `null` = etiqueta em branco (separador) — uma antes de cada NF, exceto a primeira.
+  const paginas: (ItemEtiqueta | null)[] = blocosPorNota.flatMap((bloco, indice) => [
+    ...(indice > 0 ? [null] : []),
+    ...bloco.volumes.map((v): ItemEtiqueta => ({ cidade: bloco.cidade, uf: bloco.uf, nf: bloco.nf, ...v })),
+  ]);
+
+  if (paginas.length === 0) return;
 
   // Abre a aba JÁ aqui, ainda de forma síncrona dentro do clique do usuário — se isso
   // rodasse só depois do `await import('jspdf')`, o navegador não reconhece mais o
@@ -121,9 +131,9 @@ export async function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): Promi
 
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [LARGURA_MM, ALTURA_MM] });
-  etiquetas.forEach((etiqueta, indice) => {
+  paginas.forEach((pagina, indice) => {
     if (indice > 0) doc.addPage([LARGURA_MM, ALTURA_MM], 'landscape');
-    desenharEtiqueta(doc, etiqueta);
+    if (pagina) desenharEtiqueta(doc, pagina);
   });
 
   const url = URL.createObjectURL(doc.output('blob'));
