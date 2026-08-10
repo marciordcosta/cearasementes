@@ -105,6 +105,9 @@ export function calcularCanal(
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
 
   const canalReferencia = permitirReferencia && canal.margemReferenciaCanalId ? canaisPorId.get(canal.margemReferenciaCanalId) : undefined;
+  // Tolerância só faz sentido "por categoria" — em modo "por referência" a meta não vem
+  // da % da categoria, então não há uma faixa fixa em volta dela pra comparar.
+  const toleranciaPct = canalReferencia ? undefined : categoria.tolerancias[canal.id];
   let precoSugerido: number;
   if (canalReferencia && canalReferencia.id !== canal.id) {
     const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
@@ -139,6 +142,7 @@ export function calcularCanal(
     margemReais,
     margemPct,
     margemAlvo,
+    toleranciaPct,
     impostoPct,
     encargosPct,
     outrosEncargos,
@@ -154,6 +158,19 @@ export function margemClasse(margemPct: number, alvo: number): 'good' | 'warn' |
   if (margemPct < 0) return 'bad';
   if (margemPct < alvo * 0.6) return 'warn';
   return 'good';
+}
+
+/**
+ * Fora da faixa [margemAlvo - toleranciaPct, margemAlvo + toleranciaPct]? — 'inferior' (abaixo,
+ * risco de prejuízo) ou 'superior' (acima, fora do padrão) sobrepõem a cor normal do ML% (ver
+ * margemClasse) na Tabela de Preços; null = dentro da faixa, ou sem tolerância configurada
+ * (sempre o caso em canal "por referência").
+ */
+export function alertaTolerancia(margemPct: number, margemAlvo: number, toleranciaPct: number | undefined): 'inferior' | 'superior' | null {
+  if (toleranciaPct === undefined) return null;
+  if (margemPct < margemAlvo - toleranciaPct) return 'inferior';
+  if (margemPct > margemAlvo + toleranciaPct) return 'superior';
+  return null;
 }
 
 export function montarTituloFrete(r: ResultadoCalculo, freteIncluso: boolean): string {

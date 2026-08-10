@@ -38,6 +38,7 @@ import {
   inserirProduto,
   inserirSubcategoria,
   upsertCategoriaMargem,
+  upsertCategoriaMargemTolerancia,
   upsertProdutoPreco,
   upsertSubcategoriaMargem,
 } from '@/features/pricing/api';
@@ -444,6 +445,20 @@ export function PricingPage() {
   function onAtualizarMargem(categoriaId: string, canalId: string, valor: number) {
     setCategorias((prev) => prev.map((c) => (c.id === categoriaId ? { ...c, margens: { ...c.margens, [canalId]: valor } } : c)));
     debounced(`margem-${categoriaId}-${canalId}`, () => upsertCategoriaMargem(categoriaId, canalId, valor));
+  }
+
+  /** valor null = apaga a tolerância (sem alerta pra essa categoria+canal). */
+  function onAtualizarTolerancia(categoriaId: string, canalId: string, valor: number | null) {
+    setCategorias((prev) =>
+      prev.map((c) => {
+        if (c.id !== categoriaId) return c;
+        const tolerancias = { ...c.tolerancias };
+        if (valor === null) delete tolerancias[canalId];
+        else tolerancias[canalId] = valor;
+        return { ...c, tolerancias };
+      }),
+    );
+    debounced(`tolerancia-${categoriaId}-${canalId}`, () => upsertCategoriaMargemTolerancia(categoriaId, canalId, valor));
   }
 
   /** null = volta a calcular por categoria; um canalId = passa a mirar o mesmo Margem R$ desse outro canal. */
@@ -898,6 +913,7 @@ export function PricingPage() {
             canais={canais}
             onAtualizarCategoria={onAtualizarCategoria}
             onAtualizarMargem={onAtualizarMargem}
+            onAtualizarTolerancia={onAtualizarTolerancia}
             onRemoverCategoria={onRemoverCategoria}
             onAdicionarCategoria={onAdicionarCategoria}
             onAdicionarSubcategoria={onAdicionarSubcategoria}

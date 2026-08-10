@@ -168,8 +168,14 @@ export interface Database {
         Relationships: [];
       };
       categoria_margens: {
-        Row: { categoria_id: string; canal_id: string; margem_pct: number };
-        Insert: Database['public']['Tables']['categoria_margens']['Row'];
+        // tolerancia_pct: pontos percentuais em volta da margem sugerida — null = sem alerta configurado pra essa categoria+canal.
+        // margem_pct e tolerancia_pct são opcionais no Insert (cada um tem seu próprio upsert, só
+        // atualizando a coluna que mudou — a outra já existe na linha, ou usa o default do banco).
+        Row: { categoria_id: string; canal_id: string; margem_pct: number; tolerancia_pct: number | null };
+        Insert: Omit<Database['public']['Tables']['categoria_margens']['Row'], 'margem_pct' | 'tolerancia_pct'> & {
+          margem_pct?: number;
+          tolerancia_pct?: number | null;
+        };
         Update: Partial<Database['public']['Tables']['categoria_margens']['Row']>;
         Relationships: [];
       };

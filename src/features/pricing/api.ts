@@ -157,12 +157,20 @@ export async function apagarCanal(id: string): Promise<void> {
 export async function fetchCategorias(): Promise<Categoria[]> {
   const [categoriasRows, margensRows] = await Promise.all([
     fetchAllRows<CategoriaRow>((from, to) => supabase.from('categorias').select('*').order('ordem').range(from, to)),
-    fetchAllRows<{ categoria_id: string; canal_id: string; margem_pct: number }>((from, to) => supabase.from('categoria_margens').select('*').range(from, to)),
+    fetchAllRows<{ categoria_id: string; canal_id: string; margem_pct: number; tolerancia_pct: number | null }>((from, to) =>
+      supabase.from('categoria_margens').select('*').range(from, to),
+    ),
   ]);
 
   return categoriasRows.map((row) => {
     const margens: Record<string, number> = {};
-    margensRows.filter((m) => m.categoria_id === row.id).forEach((m) => (margens[m.canal_id] = m.margem_pct));
+    const tolerancias: Record<string, number> = {};
+    margensRows
+      .filter((m) => m.categoria_id === row.id)
+      .forEach((m) => {
+        margens[m.canal_id] = m.margem_pct;
+        if (m.tolerancia_pct !== null) tolerancias[m.canal_id] = m.tolerancia_pct;
+      });
     return {
       id: row.id,
       nome: row.nome,
@@ -170,6 +178,7 @@ export async function fetchCategorias(): Promise<Categoria[]> {
       interestadual: row.interestadual,
       ordem: row.ordem,
       margens,
+      tolerancias,
     };
   });
 }
@@ -191,7 +200,7 @@ export async function inserirCategoria(input: { nome: string; estadual: number; 
     canais.forEach((c) => (margens[c.id] = 20));
   }
 
-  return { id: data.id, nome: data.nome, estadual: data.estadual, interestadual: data.interestadual, ordem: data.ordem, margens };
+  return { id: data.id, nome: data.nome, estadual: data.estadual, interestadual: data.interestadual, ordem: data.ordem, margens, tolerancias: {} };
 }
 
 export async function atualizarCategoria(id: string, patch: Partial<Pick<CategoriaRow, 'nome' | 'estadual' | 'interestadual' | 'ordem'>>): Promise<void> {
@@ -208,6 +217,14 @@ export async function upsertCategoriaMargem(categoriaId: string, canalId: string
   const { error } = await supabase
     .from('categoria_margens')
     .upsert({ categoria_id: categoriaId, canal_id: canalId, margem_pct: margemPct });
+  if (error) throw error;
+}
+
+/** valor null = apaga a tolerância configurada (volta a não ter alerta pra essa categoria+canal). */
+export async function upsertCategoriaMargemTolerancia(categoriaId: string, canalId: string, valor: number | null): Promise<void> {
+  const { error } = await supabase
+    .from('categoria_margens')
+    .upsert({ categoria_id: categoriaId, canal_id: canalId, tolerancia_pct: valor });
   if (error) throw error;
 }
 

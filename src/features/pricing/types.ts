@@ -33,6 +33,8 @@ export interface Categoria {
   ordem: number;
   /** canalId -> margem alvo (%) */
   margens: Record<string, number>;
+  /** canalId -> tolerância (pontos percentuais) em volta da margem alvo — chave ausente = sem alerta configurado. Só vale quando o canal calcula "por categoria" (não "por referência"). */
+  tolerancias: Record<string, number>;
 }
 
 /** Subcategoria (Parametrização) — não tem alíquota própria (imposto sempre vem da categoria pai). */
@@ -109,6 +111,8 @@ export interface ResultadoCalculo {
   margemReais: number;
   margemPct: number;
   margemAlvo: number;
+  /** Pontos percentuais em volta de margemAlvo — undefined = sem alerta configurado (ou canal "por referência", onde isso não se aplica). */
+  toleranciaPct: number | undefined;
   impostoPct: number;
   encargosPct: number;
   outrosEncargos: number;

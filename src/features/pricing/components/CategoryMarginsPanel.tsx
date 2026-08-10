@@ -9,6 +9,8 @@ interface CategoryMarginsPanelProps {
   canais: Canal[];
   onAtualizarCategoria: (categoriaId: string, campo: 'estadual' | 'interestadual', valor: number) => void;
   onAtualizarMargem: (categoriaId: string, canalId: string, valor: number) => void;
+  /** valor null = apaga a tolerância (sem alerta pra essa categoria+canal). Só se aplica no modo "Por categoria". */
+  onAtualizarTolerancia: (categoriaId: string, canalId: string, valor: number | null) => void;
   onRemoverCategoria: (categoriaId: string) => void;
   onAdicionarCategoria: (input: { nome: string; estadual: number; interestadual: number }) => void;
   onAdicionarSubcategoria: (categoriaId: string, nome: string) => void;
@@ -28,6 +30,7 @@ export function CategoryMarginsPanel({
   canais,
   onAtualizarCategoria,
   onAtualizarMargem,
+  onAtualizarTolerancia,
   onRemoverCategoria,
   onAdicionarCategoria,
   onAdicionarSubcategoria,
@@ -210,14 +213,29 @@ export function CategoryMarginsPanel({
                                 {referencia}
                               </div>
                             ) : (
-                              <input
-                                type="number"
-                                step="0.1"
-                                min="0"
-                                defaultValue={cat.margens[canal.id] ?? 20}
-                                onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
-                                className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
-                              />
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  defaultValue={cat.margens[canal.id] ?? 20}
+                                  onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
+                                  className="num w-16 min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
+                                />
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  title="Tolerância (pontos percentuais) — abaixo ou acima da faixa, o ML% do produto fica destacado (vermelho/azul) na Tabela de Preços"
+                                  placeholder="tol."
+                                  defaultValue={cat.tolerancias[canal.id] ?? ''}
+                                  onBlur={(e) => {
+                                    const texto = e.target.value.trim();
+                                    onAtualizarTolerancia(cat.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
+                                  }}
+                                  className="num w-11 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-right text-[var(--color-text)] placeholder:text-[9px]"
+                                />
+                              </div>
                             )}
                           </td>
                         );

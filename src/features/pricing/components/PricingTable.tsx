@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
+import { alertaTolerancia, calcularCanal, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete, primeirasDuasPalavras } from '../calculations';
 import type { ClasseABC, HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
@@ -12,6 +12,8 @@ const MARGEM_CLASSE_CLASSNAME: Record<string, string> = {
   good: 'bg-good-soft text-good',
   warn: 'bg-warn-soft text-[#8A5B10]',
   bad: 'bg-bad-soft text-[#8F2E2E]',
+  // Fora da tolerância (Parametrização > Categorias) por CIMA da faixa — vermelho (bad) já é usado pra "abaixo".
+  superior: 'bg-blue-50 text-blue-700',
 };
 
 /** Mesmo mapeamento de cor da Curva ABC já usado no módulo BI (CORES_CLASSE em AnaliseProdutosSection.tsx). */
@@ -473,11 +475,22 @@ export function PricingTable({
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
+          const alerta = alertaTolerancia(r.margemPct, r.margemAlvo, r.toleranciaPct);
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
           // No modo Resumo a coluna ML ($) some — o tooltip passa a mostrar esse valor em R$ em vez do % bruto.
-          const titulo = modoResumo ? `ML: R$ ${fmtR(r.margemReais)}` : `(${fmtP(margemBrutaPct)}%)`;
+          const partesTitulo = [modoResumo ? `ML: R$ ${fmtR(r.margemReais)}` : `(${fmtP(margemBrutaPct)}%)`];
+          if (alerta) {
+            partesTitulo.push(
+              alerta === 'inferior'
+                ? `Abaixo da tolerância (meta ${fmtP(r.margemAlvo)}% ± ${fmtP(r.toleranciaPct!)}pp)`
+                : `Acima da tolerância (meta ${fmtP(r.margemAlvo)}% ± ${fmtP(r.toleranciaPct!)}pp)`,
+            );
+          }
           return (
-            <span className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[classe]}`} title={titulo}>
+            <span
+              className={`num inline-block min-w-[52px] rounded px-1.5 py-0.5 text-right ${MARGEM_CLASSE_CLASSNAME[alerta === 'inferior' ? 'bad' : alerta === 'superior' ? 'superior' : classe]}`}
+              title={partesTitulo.join(' — ')}
+            >
               {fmtP(r.margemPct)}%
             </span>
           );
