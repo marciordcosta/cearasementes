@@ -11,6 +11,17 @@ import { construirCurvaMensalProduto, ROTULO_CRITERIO_REPRESENTACAO, type Criter
 import type { Produto } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
+/** Valor sentinela pra "somar todas as Tabelas" no lugar de uma Tabela específica — nunca bate com um nome de Tabela de verdade. */
+const TODAS_TABELAS = '__todas__';
+const ROTULO_TODAS_TABELAS = 'Todas as Tabelas';
+
+/** Soma, mês a mês, as 12 posições de todas as Tabelas de um produto — 1 linha só por produto em vez de 1 por Tabela. */
+function somarTodasTabelas(tabelas: { valores: number[] }[]): number[] {
+  const soma = Array(12).fill(0);
+  tabelas.forEach((t) => t.valores.forEach((v, i) => (soma[i] += v)));
+  return soma;
+}
+
 interface GraficoCurvaMensalModalProps {
   /** null = fechado (padrão pra "qual produto está aberto agora", igual produtoEditandoId em PricingPage.tsx). */
   produto: Produto | null;
@@ -121,17 +132,21 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
 
   const curvasComparacao = useMemo(() => {
     if (!tabelaAtiva) return [];
-    return comparacoes.map((p) => ({
-      produto: p,
-      valores: p.codigo ? (construirCurvaMensalProduto(items, p.codigo, criterio).tabelas.find((t) => t.tabela === tabelaAtiva)?.valores ?? Array(12).fill(0)) : Array(12).fill(0),
-    }));
+    return comparacoes.map((p) => {
+      if (!p.codigo) return { produto: p, valores: Array(12).fill(0) };
+      const tabelasProduto = construirCurvaMensalProduto(items, p.codigo, criterio).tabelas;
+      const valores = tabelaAtiva === TODAS_TABELAS ? somarTodasTabelas(tabelasProduto) : (tabelasProduto.find((t) => t.tabela === tabelaAtiva)?.valores ?? Array(12).fill(0));
+      return { produto: p, valores };
+    });
   }, [comparacoes, tabelaAtiva, items, criterio]);
 
   // Sem comparação nenhuma: todas as Tabelas do produto principal (como sempre foi). Com
-  // comparação: só a Tabela ativa — os dois lados (principal e comparações) ficam alinhados.
+  // comparação: só a Tabela ativa (ou a soma de todas) — os dois lados (principal e
+  // comparações) ficam alinhados.
   const tabelasPrincipaisExibidas = useMemo(() => {
     if (!curva) return [];
     if (!tabelaAtiva) return curva.tabelas;
+    if (tabelaAtiva === TODAS_TABELAS) return [{ tabela: ROTULO_TODAS_TABELAS, valores: somarTodasTabelas(curva.tabelas) }];
     return curva.tabelas.filter((t) => t.tabela === tabelaAtiva);
   }, [curva, tabelaAtiva]);
 
@@ -246,21 +261,27 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
           <p className="mb-1.5 text-xs font-semibold text-[var(--color-text-soft)]">
             Comparar <NomeComDestaque nome={produtoEscolhendoTabela.nome} /> em qual Tabela? (os dois produtos passam a mostrar só essa)
           </p>
-          {tabelasEmComum.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-soft)]">Esses dois produtos não têm nenhuma Tabela de Preço em comum no histórico do BI.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {tabelasEmComum.map((tabela) => (
-                <button
-                  key={tabela}
-                  type="button"
-                  onClick={() => confirmarTabelaComparacao(tabela)}
-                  className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-accent)]/10"
-                >
-                  {tabela}
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => confirmarTabelaComparacao(TODAS_TABELAS)}
+              className="rounded-full border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-3 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20"
+            >
+              {ROTULO_TODAS_TABELAS}
+            </button>
+            {tabelasEmComum.map((tabela) => (
+              <button
+                key={tabela}
+                type="button"
+                onClick={() => confirmarTabelaComparacao(tabela)}
+                className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold text-[var(--color-text)] hover:bg-[var(--color-accent)]/10"
+              >
+                {tabela}
+              </button>
+            ))}
+          </div>
+          {tabelasEmComum.length === 0 && (
+            <p className="mt-1.5 text-xs text-[var(--color-text-soft)]">Esses dois produtos não têm nenhuma Tabela específica em comum — mas dá pra comparar somando "Todas as Tabelas".</p>
           )}
           <button type="button" onClick={() => setProdutoEscolhendoTabela(null)} className="mt-2 text-xs text-[var(--color-text-soft)] hover:text-[var(--color-text)]">
             Cancelar
@@ -276,6 +297,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
             onChange={(e) => setTabelaAtiva(e.target.value)}
             className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text)]"
           >
+            <option value={TODAS_TABELAS}>{ROTULO_TODAS_TABELAS}</option>
             {opcoesTabelaAtiva.map((tabela) => (
               <option key={tabela} value={tabela}>
                 {tabela}
@@ -301,7 +323,12 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
             Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — cada ponto é a média
-            daquele mês nas últimas safras. {tabelaAtiva ? 'Uma linha por produto, nessa Tabela.' : 'Uma linha por Tabela de Preço.'}
+            daquele mês nas últimas safras.{' '}
+            {tabelaAtiva === TODAS_TABELAS
+              ? 'Uma linha por produto, somando todas as Tabelas.'
+              : tabelaAtiva
+                ? 'Uma linha por produto, nessa Tabela.'
+                : 'Uma linha por Tabela de Preço.'}
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
