@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Gauge } from 'lucide-react';
+import { Gauge, Truck } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -48,6 +48,7 @@ import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
 import { ChannelsPanel, type NovoCanalInput } from '@/features/pricing/components/ChannelsPanel';
+import { CompraModal } from '@/features/pricing/components/CompraModal';
 import { CustosPersonalizadosPanel } from '@/features/pricing/components/CustosPersonalizadosPanel';
 import { EditProductModal } from '@/features/pricing/components/EditProductModal';
 import { ExportDropdown } from '@/features/pricing/components/ExportDropdown';
@@ -122,6 +123,7 @@ export function PricingPage() {
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
   const [modalMargemAberto, setModalMargemAberto] = useState(false);
+  const [modalCompraAberto, setModalCompraAberto] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoRepresentacaoAberto, setGraficoRepresentacaoAberto] = useState(false);
@@ -648,6 +650,12 @@ export function PricingPage() {
               setModalPdfAberto(true);
             }}
           />
+          <Button variant="navy" onClick={() => setModalCompraAberto(true)} title="Planejamento de Compra por Fornecedor">
+            <span className="inline-flex items-center gap-1.5">
+              <Truck size={16} />
+              Compra
+            </span>
+          </Button>
           <Button variant="danger" onClick={() => setModalLimparAberto(true)} title="Apaga todos os produtos da Tabela de Preços">
             Limpar Tabela
           </Button>
@@ -763,6 +771,14 @@ export function PricingPage() {
         totalFrete={margemAtualTotalFrete}
         totalEncargos={margemAtualTotalEncargos - margemAtualTotalDesconto}
         totalDesconto={margemAtualTotalDesconto}
+      />
+
+      <CompraModal
+        open={modalCompraAberto}
+        onFechar={() => setModalCompraAberto(false)}
+        produtos={produtos}
+        fornecedores={fornecedores}
+        items={itemsAgregadosBi}
       />
 
       <GraficoRepresentacaoModal

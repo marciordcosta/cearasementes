@@ -357,6 +357,11 @@ export interface CurvaMensalProduto {
   tabelas: CurvaMensalTabela[];
 }
 
+/** 12 rótulos de mês (só o nome, sem ano), começando em `ctx.seasonStartMonth` — mesma ordem usada nas colunas de Safra e na Curva Mensal. */
+export function mesesSafraPadrao(ctx: PeriodContext = SAFRA_PADRAO): string[] {
+  return Array.from({ length: 12 }, (_, i) => MESES_PT[(ctx.seasonStartMonth - 1 + i) % 12]);
+}
+
 /**
  * Curva de venda mensal de UM produto, uma linha por Tabela de Preço — cada
  * ponto é a MÉDIA (últimas MAX_SAFRAS_EXIBIDAS safras com dado nesse produto,
@@ -370,7 +375,7 @@ export function construirCurvaMensalProduto(
   criterio: CriterioRepresentacao,
   ctx: PeriodContext = SAFRA_PADRAO,
 ): CurvaMensalProduto {
-  const meses = Array.from({ length: 12 }, (_, i) => MESES_PT[(ctx.seasonStartMonth - 1 + i) % 12]);
+  const meses = mesesSafraPadrao(ctx);
   const codigo = codigoCanonico(codigoProduto);
   const item = items.find((i) => i.codInterno === codigo);
   if (!item) return { meses, tabelas: [] };
@@ -404,4 +409,16 @@ export function construirCurvaMensalProduto(
   }));
 
   return { meses, tabelas };
+}
+
+/**
+ * Quantidade média mensal (últimas safras) de UM produto, SOMANDO todas as
+ * Tabelas — usado no Planejamento de Compra (uma compra abastece o estoque
+ * geral, não uma Tabela específica). 12 posições, mesma ordem de
+ * mesesSafraPadrao(). Reaproveita construirCurvaMensalProduto (critério
+ * 'qtd') em vez de duplicar a lógica de média por safra/mês.
+ */
+export function qtdMensalTotalProduto(items: ItemAgg[], codigoProduto: string, ctx: PeriodContext = SAFRA_PADRAO): number[] {
+  const curva = construirCurvaMensalProduto(items, codigoProduto, 'qtd', ctx);
+  return curva.meses.map((_, posicao) => curva.tabelas.reduce((soma, t) => soma + t.valores[posicao], 0));
 }
