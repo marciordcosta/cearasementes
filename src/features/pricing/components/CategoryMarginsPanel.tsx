@@ -3,6 +3,31 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { Canal, Categoria, Subcategoria } from '../types';
 
+/** Campo de tolerância (pontos percentuais) reaproveitado nos dois modos (Por categoria e Por referência) da linha de uma categoria. */
+function CampoTolerancia({
+  valor,
+  onAtualizar,
+}: {
+  valor: number | undefined;
+  onAtualizar: (valor: number | null) => void;
+}) {
+  return (
+    <input
+      type="number"
+      step="0.1"
+      min="0"
+      title="Tolerância (pontos percentuais) sobre a margem alvo dessa categoria+Tabela — fora da faixa, o ML% do produto fica destacado (vermelho/azul) na Tabela de Preços"
+      placeholder="tol."
+      defaultValue={valor ?? ''}
+      onBlur={(e) => {
+        const texto = e.target.value.trim();
+        onAtualizar(texto === '' ? null : parseFloat(texto) || 0);
+      }}
+      className="num w-11 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-right text-[var(--color-text)] placeholder:text-[9px]"
+    />
+  );
+}
+
 interface CategoryMarginsPanelProps {
   categorias: Categoria[];
   subcategorias: Subcategoria[];
@@ -209,8 +234,14 @@ export function CategoryMarginsPanel({
                         return (
                           <td key={canal.id} className="px-3 py-1">
                             {referencia ? (
-                              <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text)]">
-                                {referencia}
+                              <div className="flex items-center gap-1">
+                                <div className="min-w-0 flex-1 rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text)]">
+                                  {referencia}
+                                </div>
+                                <CampoTolerancia
+                                  valor={cat.tolerancias[canal.id]}
+                                  onAtualizar={(valor) => onAtualizarTolerancia(cat.id, canal.id, valor)}
+                                />
                               </div>
                             ) : (
                               <div className="flex items-center gap-1">
@@ -222,18 +253,9 @@ export function CategoryMarginsPanel({
                                   onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
                                   className="num w-16 min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                                 />
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  title="Tolerância (pontos percentuais) — abaixo ou acima da faixa, o ML% do produto fica destacado (vermelho/azul) na Tabela de Preços"
-                                  placeholder="tol."
-                                  defaultValue={cat.tolerancias[canal.id] ?? ''}
-                                  onBlur={(e) => {
-                                    const texto = e.target.value.trim();
-                                    onAtualizarTolerancia(cat.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
-                                  }}
-                                  className="num w-11 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-right text-[var(--color-text)] placeholder:text-[9px]"
+                                <CampoTolerancia
+                                  valor={cat.tolerancias[canal.id]}
+                                  onAtualizar={(valor) => onAtualizarTolerancia(cat.id, canal.id, valor)}
                                 />
                               </div>
                             )}

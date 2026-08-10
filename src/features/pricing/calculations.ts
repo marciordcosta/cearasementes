@@ -105,9 +105,10 @@ export function calcularCanal(
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
 
   const canalReferencia = permitirReferencia && canal.margemReferenciaCanalId ? canaisPorId.get(canal.margemReferenciaCanalId) : undefined;
-  // Tolerância só faz sentido "por categoria" — em modo "por referência" a meta não vem
-  // da % da categoria, então não há uma faixa fixa em volta dela pra comparar.
-  const toleranciaPct = canalReferencia ? undefined : categoria.tolerancias[canal.id];
+  // Vale também "por referência": mesmo o preço vindo de espelhar outro canal, a margem
+  // alvo (%) e a tolerância continuam configuradas por categoria+canal, iguais às de
+  // "por categoria" — o alerta compara o ML% que RESULTOU do vínculo contra essa própria meta.
+  const toleranciaPct = categoria.tolerancias[canal.id];
   let precoSugerido: number;
   if (canalReferencia && canalReferencia.id !== canal.id) {
     const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
