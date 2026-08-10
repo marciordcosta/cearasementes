@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Gauge } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -50,6 +51,7 @@ import { OrderModal } from '@/features/pricing/components/OrderModal';
 import { PricingTable } from '@/features/pricing/components/PricingTable';
 import { GraficoCurvaMensalModal } from '@/features/pricing/components/GraficoCurvaMensalModal';
 import { GraficoRepresentacaoModal } from '@/features/pricing/components/GraficoRepresentacaoModal';
+import { MargemResumoModal } from '@/features/pricing/components/MargemResumoModal';
 import { ReorderDropdown } from '@/features/pricing/components/ReorderDropdown';
 import { SeletorCriterioRepresentacao } from '@/features/pricing/components/SeletorCriterioRepresentacao';
 import {
@@ -62,10 +64,6 @@ import type { Canal, Categoria, Fornecedor, FreteAdicionalTipo, Produto, Subcate
 import { mensagemDeErro } from '@/lib/errors';
 
 type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
-
-function fmtP(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
 
 const CAMPO_PARA_COLUNA: Record<CampoNumericoCanal, string> = {
   desconto: 'desconto',
@@ -114,6 +112,8 @@ export function PricingPage() {
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
+  const [modoResumo, setModoResumo] = useState(false);
+  const [modalMargemAberto, setModalMargemAberto] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoRepresentacaoAberto, setGraficoRepresentacaoAberto] = useState(false);
@@ -652,6 +652,15 @@ export function PricingPage() {
                 />
                 Mais detalhes
               </label>
+              <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
+                <input
+                  type="checkbox"
+                  checked={modoResumo}
+                  onChange={(e) => setModoResumo(e.target.checked)}
+                  className="accent-[var(--color-navy)]"
+                />
+                Resumo
+              </label>
               <SeletorCriterioRepresentacao
                 criterio={criterioRepresentacao}
                 ordenarAtivo={ordenarPorRepresentacao}
@@ -663,20 +672,14 @@ export function PricingPage() {
               />
               <div className="flex-1" />
               {margemAtualTotalValor > 0 && (
-                <span
-                  className="shrink-0 rounded-full bg-[var(--color-navy)] px-2.5 py-1 text-xs font-normal whitespace-nowrap text-white"
-                  title="Margem bruta de hoje (preço e custo atuais) somando TODAS as Tabelas visíveis, ponderada pela média de quantidade vendida nas últimas safras de cada produto — estimativa de volume, já que a safra atual ainda não fechou."
+                <button
+                  type="button"
+                  onClick={() => setModalMargemAberto(true)}
+                  title="Ver margens (MB atual / M.C prevista)"
+                  className="shrink-0 rounded-full bg-[var(--color-navy)] p-1.5 text-white hover:brightness-110"
                 >
-                  MB atual: {fmtP(margemAtualTotalPct)}%
-                </span>
-              )}
-              {margemAtualTotalValor > 0 && (
-                <span
-                  className="shrink-0 rounded-full bg-[var(--color-navy)] px-2.5 py-1 text-xs font-normal whitespace-nowrap text-white"
-                  title="Margem líquida (a mesma já informada por produto — ML $, com imposto/encargos/frete) de hoje somando TODAS as Tabelas visíveis, ponderada pela média de quantidade vendida nas últimas safras de cada produto."
-                >
-                  M.C prevista: {fmtP(margemAtualTotalLiquidaPct)}%
-                </span>
+                  <Gauge size={16} />
+                </button>
               )}
               <ReorderDropdown
                 onEscolherCategorias={() => setModalOrdemTipo('categorias')}
@@ -694,6 +697,7 @@ export function PricingPage() {
               todosCanais={canais}
               transportadoras={transportadoras}
               mostrarMaisDetalhes={mostrarMaisDetalhes}
+              modoResumo={modoResumo}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}
@@ -708,6 +712,13 @@ export function PricingPage() {
           </Card>
         </div>
       </div>
+
+      <MargemResumoModal
+        open={modalMargemAberto}
+        onFechar={() => setModalMargemAberto(false)}
+        margemAtualPct={margemAtualTotalPct}
+        margemLiquidaPct={margemAtualTotalLiquidaPct}
+      />
 
       <GraficoRepresentacaoModal
         open={graficoRepresentacaoAberto}

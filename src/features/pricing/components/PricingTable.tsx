@@ -94,6 +94,8 @@ interface PricingTableProps {
   transportadoras: Transportadora[];
   /** "Mais detalhes" na barra de ferramentas — liga/desliga Classe, ID e Representação Geral juntos. */
   mostrarMaisDetalhes: boolean;
+  /** "Resumo" na barra de ferramentas — em cada Tabela de Preço, mostra só Preço e ML (%) (esconde Frete/Encargos/ML $/Repres./Ajuste). */
+  modoResumo?: boolean;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
@@ -149,6 +151,7 @@ export function PricingTable({
   todosCanais,
   transportadoras,
   mostrarMaisDetalhes,
+  modoResumo = false,
   onUpdatePreco,
   onResetPreco,
   onResetTodosPrecos,
@@ -461,41 +464,45 @@ export function PricingTable({
           );
         },
       },
-      {
-        chave: `${canal.id}:frete`,
-        rotulo: 'Frete (R$)',
-        larguraPadrao: defaults['col:frete'],
-        larguraChave: 'col:frete',
-        canalId: canal.id,
-        render: (p) => {
-          if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
-          const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
-          const freteIncluso = canal.freteIncluso !== false;
-          return (
-            <span className={`num ${freteIncluso ? '' : 'text-[var(--color-text-soft)] line-through opacity-80'}`} title={montarTituloFrete(r, freteIncluso)}>
-              R$ {fmtR(r.freteReais)}
-            </span>
-          );
-        },
-      },
-      {
-        chave: `${canal.id}:encargos`,
-        rotulo: 'Encargos (R$)',
-        larguraPadrao: defaults['col:encargos'],
-        larguraChave: 'col:encargos',
-        canalId: canal.id,
-        render: (p) => {
-          if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
-          const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
-          return (
-            <span className="num" title={montarTituloEncargos(canal, r)}>
-              R$ {fmtR(r.impostoReais)}
-            </span>
-          );
-        },
-      },
+      ...(modoResumo
+        ? []
+        : [
+            {
+              chave: `${canal.id}:frete`,
+              rotulo: 'Frete (R$)',
+              larguraPadrao: defaults['col:frete'],
+              larguraChave: 'col:frete',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
+                const categoria = getCategoria(p.categoriaId);
+                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
+                const freteIncluso = canal.freteIncluso !== false;
+                return (
+                  <span className={`num ${freteIncluso ? '' : 'text-[var(--color-text-soft)] line-through opacity-80'}`} title={montarTituloFrete(r, freteIncluso)}>
+                    R$ {fmtR(r.freteReais)}
+                  </span>
+                );
+              },
+            } satisfies ColunaDef,
+            {
+              chave: `${canal.id}:encargos`,
+              rotulo: 'Encargos (R$)',
+              larguraPadrao: defaults['col:encargos'],
+              larguraChave: 'col:encargos',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
+                const categoria = getCategoria(p.categoriaId);
+                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
+                return (
+                  <span className="num" title={montarTituloEncargos(canal, r)}>
+                    R$ {fmtR(r.impostoReais)}
+                  </span>
+                );
+              },
+            } satisfies ColunaDef,
+          ]),
       {
         chave: `${canal.id}:mlpct`,
         rotulo: 'ML (%)',
@@ -516,21 +523,25 @@ export function PricingTable({
           );
         },
       },
-      {
-        chave: `${canal.id}:mlvalor`,
-        rotulo: 'ML ($)',
-        larguraPadrao: defaults['col:mlvalor'],
-        larguraChave: 'col:mlvalor',
-        canalId: canal.id,
-        render: (p) => {
-          if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
-          const categoria = getCategoria(p.categoriaId);
-          const subcategoria = getSubcategoria(p.subcategoriaId);
-          const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
-          return <span className="num">R$ {fmtR(r.margemReais)}</span>;
-        },
-      },
-      ...(representatividadePorProduto
+      ...(modoResumo
+        ? []
+        : [
+            {
+              chave: `${canal.id}:mlvalor`,
+              rotulo: 'ML ($)',
+              larguraPadrao: defaults['col:mlvalor'],
+              larguraChave: 'col:mlvalor',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
+                const categoria = getCategoria(p.categoriaId);
+                const subcategoria = getSubcategoria(p.subcategoriaId);
+                const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
+                return <span className="num">R$ {fmtR(r.margemReais)}</span>;
+              },
+            } satisfies ColunaDef,
+          ]),
+      ...(!modoResumo && representatividadePorProduto
         ? [
             {
               chave: `${canal.id}:representacao`,
@@ -571,30 +582,34 @@ export function PricingTable({
             } satisfies ColunaDef,
           ]
         : []),
-      {
-        chave: `${canal.id}:ajuste`,
-        rotulo: '',
-        larguraPadrao: defaults['col:ajuste'],
-        larguraChave: 'col:ajuste',
-        canalId: canal.id,
-        render: (p) => {
-          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
-          return (
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
-              }}
-              title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
-            >
-              ✕
-            </button>
-          );
-        },
-      },
+      ...(modoResumo
+        ? []
+        : [
+            {
+              chave: `${canal.id}:ajuste`,
+              rotulo: '',
+              larguraPadrao: defaults['col:ajuste'],
+              larguraChave: 'col:ajuste',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+                return (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
+                    }}
+                    title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
+                    className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+                  >
+                    ✕
+                  </button>
+                );
+              },
+            } satisfies ColunaDef,
+          ]),
     ];
     }),
     ...(historicoSafras && historicoSafras.length > 0 && historicoPorCodigo
@@ -687,6 +702,8 @@ export function PricingTable({
   // começar — Excluir+Editar+Produto+Peso+Custo sempre, + Classe/ID quando "Mais detalhes" está
   // ligado, + Repres. Geral quando além disso houver dado pra ela.
   const colSpanColunasFixas = 5 + (mostrarMaisDetalhes ? 2 : 0) + (mostrarMaisDetalhes && representatividadeGeralPorProduto ? 1 : 0);
+  // Preço+Frete+Encargos+ML%+ML$+Ajuste (6) e mais Repres. quando essa coluna existir — no modo Resumo, só Preço+ML%.
+  const colSpanPorCanal = modoResumo ? 2 : 6 + (representatividadePorProduto ? 1 : 0);
 
   return (
     <div className="relative" ref={containerRef}>
@@ -704,7 +721,7 @@ export function PricingTable({
               {canaisVisiveis.map((canal) => (
                 <th
                   key={canal.id}
-                  colSpan={6}
+                  colSpan={colSpanPorCanal}
                   onClick={() => onAbrirCanalTelaCheia?.(canal)}
                   title="Clique para abrir esta tabela em tela cheia"
                   className="cursor-pointer px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-white hover:brightness-125"
