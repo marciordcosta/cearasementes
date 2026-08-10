@@ -23,9 +23,9 @@ function separarCidadeUf(cidadeCompleta: string): { cidade: string; uf: string }
  * uma etiqueta física por VOLUME: uma NF com 50 volumes vira 50 etiquetas
  * "1/50", "2/50"... "50/50". Mesmo padrão de gerarEtiquetaPdf
  * (features/arquivos/etiquetaPdf.ts): HTML puro em `window.print()`, sem lib
- * de PDF. Etiqueta física de 100mm (largura) x 300mm (altura) — bem mais
- * alta que larga, por isso cada campo fica na sua própria linha (empilhado),
- * em vez de par a par lado a lado.
+ * de PDF. Etiqueta física padrão de frete: 100mm (largura) x 30mm (altura) —
+ * bem mais larga que alta, por isso os campos ficam em 2 linhas, cada uma
+ * com um par lado a lado (Cidade+UF, depois NF+VOL), não empilhados.
  */
 export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
   const etiquetas = grupos.flatMap(({ cidade, notas }) => {
@@ -65,19 +65,21 @@ export function gerarEtiquetaFretePdf(grupos: GrupoEtiquetaFrete[]): void {
       <meta charset="UTF-8">
       <title>Etiquetas de Expedição</title>
       <style>
-        @page{ size:100mm 300mm; margin:0; }
+        @page{ size:100mm 30mm; margin:0; }
         *{ box-sizing:border-box; }
-        html,body{ width:100mm; height:300mm; margin:0; padding:0; font-family:Arial,Helvetica,sans-serif; color:#000000; background:#FFFFFF; }
+        html,body{ width:100mm; height:30mm; margin:0; padding:0; font-family:Arial,Helvetica,sans-serif; color:#000000; background:#FFFFFF; }
         .etiqueta{
-          width:100mm; height:300mm; padding:10mm 6mm;
-          display:flex; flex-direction:column; justify-content:center; gap:24mm;
+          width:100mm; height:30mm; padding:2mm 4mm;
+          display:flex; flex-direction:column; justify-content:center; gap:1.5mm;
           page-break-after:always;
         }
         .etiqueta:last-child{ page-break-after:auto; }
-        .grupo{ display:flex; flex-direction:column; gap:6mm; }
+        .grupo{ display:flex; flex-direction:row; align-items:flex-end; gap:4mm; }
         .campo{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .rotulo{ font-size:6mm; font-weight:700; }
-        .valor{ font-size:14mm; font-weight:700; display:block; line-height:1.1; }
+        .campo:first-child{ flex:1 1 auto; min-width:0; }
+        .campo:last-child{ flex:0 0 auto; }
+        .rotulo{ font-size:2.2mm; font-weight:700; }
+        .valor{ font-size:6.5mm; font-weight:700; display:block; line-height:1.05; }
       </style>
     </head>
     <body>
