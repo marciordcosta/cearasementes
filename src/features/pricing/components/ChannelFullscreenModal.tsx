@@ -115,6 +115,15 @@ export function ChannelFullscreenModal({
     return [...filtrados].sort((a, b) => (representatividadePorProduto.get(b.id)?.pct ?? -1) - (representatividadePorProduto.get(a.id)?.pct ?? -1));
   }, [produtos, busca, fornecedorPorId, ordenarPorRepresentacao, representatividadePorProduto]);
 
+  // Mesma regra da grade principal (PricingPage.tsx): busca ativa vira o gráfico de
+  // Representação em pizza, só com os produtos que aparecem filtrados aqui na tela cheia
+  // (não tem "Filtrar:" Categoria/Fornecedor aqui, só a busca por nome).
+  const filtroAtivoGrafico = useMemo(() => {
+    const buscaAtiva = busca.trim().length > 0;
+    if (!buscaAtiva) return null;
+    return { rotulo: `"${busca.trim()}"`, produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
+  }, [busca, produtosFiltrados]);
+
   return (
     <Modal
       open={canal !== null}
@@ -199,6 +208,7 @@ export function ChannelFullscreenModal({
         onEscolherCriterio={setCriterioRepresentacao}
         produtos={produtos}
         representatividadePorProduto={representatividadePorProduto}
+        filtroAtivo={filtroAtivoGrafico}
       />
       <GraficoCurvaMensalModal
         produto={produtoGraficoLinha}
