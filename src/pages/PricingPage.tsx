@@ -112,7 +112,6 @@ export function PricingPage() {
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
   const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
-  const [modoResumo, setModoResumo] = useState(false);
   const [modalMargemAberto, setModalMargemAberto] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
@@ -656,15 +655,6 @@ export function PricingPage() {
                 />
                 Mais detalhes
               </label>
-              <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
-                <input
-                  type="checkbox"
-                  checked={modoResumo}
-                  onChange={(e) => setModoResumo(e.target.checked)}
-                  className="accent-[var(--color-navy)]"
-                />
-                Resumo
-              </label>
               <div className="flex-1" />
               <SeletorCriterioRepresentacao
                 criterio={criterioRepresentacao}
@@ -697,7 +687,6 @@ export function PricingPage() {
               todosCanais={canais}
               transportadoras={transportadoras}
               mostrarMaisDetalhes={mostrarMaisDetalhes}
-              modoResumo={modoResumo}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}

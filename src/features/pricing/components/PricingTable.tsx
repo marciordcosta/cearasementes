@@ -92,10 +92,12 @@ interface PricingTableProps {
   /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência" quando aponta pra um canal oculto. */
   todosCanais: Canal[];
   transportadoras: Transportadora[];
-  /** "Mais detalhes" na barra de ferramentas — liga/desliga Classe, ID e Representação Geral juntos. */
+  /**
+   * "Mais detalhes" na barra de ferramentas — liga/desliga Classe, ID e Representação Geral,
+   * e também Frete/Encargos/ML ($)/Repres. (por canal)/Ajuste em cada Tabela de Preço (por
+   * padrão, ou seja com essa flag desligada, cada Tabela mostra só Preço e ML (%)).
+   */
   mostrarMaisDetalhes: boolean;
-  /** "Resumo" na barra de ferramentas — em cada Tabela de Preço, mostra só Preço e ML (%) (esconde Frete/Encargos/ML $/Repres./Ajuste). */
-  modoResumo?: boolean;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
@@ -151,7 +153,6 @@ export function PricingTable({
   todosCanais,
   transportadoras,
   mostrarMaisDetalhes,
-  modoResumo = false,
   onUpdatePreco,
   onResetPreco,
   onResetTodosPrecos,
@@ -168,6 +169,8 @@ export function PricingTable({
   onAbrirGraficoProduto,
   somenteCanal = false,
 }: PricingTableProps) {
+  // Modo compacto (só Preço + ML (%) em cada Tabela) é o padrão — "Mais detalhes" ligado mostra tudo.
+  const modoResumo = !mostrarMaisDetalhes;
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
