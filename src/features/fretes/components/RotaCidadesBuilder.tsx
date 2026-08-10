@@ -9,8 +9,15 @@ interface RotaCidadesBuilderProps {
   onChangeCidades: (cidades: string[]) => void;
   transportadoras: Transportadora[];
   cidadesCache: string[];
-  /** Modo Etiquetas não usa ordem de rota (não calcula km) — esconde as setas ▲▼, mantém só adicionar/remover. */
-  esconderOrdenar?: boolean;
+  /**
+   * Modo Etiquetas não usa ordem de rota (não calcula km) — esconde as setas ▲▼ e a
+   * linha "Rota: ...", e cada cidade vira clicável (abre o modal de NFs daquela
+   * cidade, via onAbrirCidade) com um resumo de notas/volumes ao lado do nome.
+   */
+  modoEtiquetas?: boolean;
+  /** Só usado com modoEtiquetas — null = cidade ainda sem NF cadastrada (sem resumo pra mostrar). */
+  resumoPorCidade?: (cidade: string) => { notas: number; volumes: number } | null;
+  onAbrirCidade?: (cidade: string) => void;
 }
 
 const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
@@ -23,7 +30,16 @@ const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var
  * por quem usa este componente). Peso, valor e cálculo ficam com quem usa
  * (mesma coluna 2 de Direta/Orçamento).
  */
-export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, transportadoras, cidadesCache, esconderOrdenar }: RotaCidadesBuilderProps) {
+export function RotaCidadesBuilder({
+  cidadeInicio,
+  cidades,
+  onChangeCidades,
+  transportadoras,
+  cidadesCache,
+  modoEtiquetas,
+  resumoPorCidade,
+  onAbrirCidade,
+}: RotaCidadesBuilderProps) {
   const [buscaCidade, setBuscaCidade] = useState('');
   const ehRota = cidades.length > 1;
 
@@ -83,36 +99,56 @@ export function RotaCidadesBuilder({ cidadeInicio, cidades, onChangeCidades, tra
 
       {cidades.length > 0 && (
         <div className="space-y-1.5">
-          {ehRota && (
+          {ehRota && !modoEtiquetas && (
             <p className="text-xs font-semibold text-[var(--color-text-soft)]">
               Rota: {cidadeInicio || 'Base'} → {cidades.join(' → ')} → {cidadeInicio || 'Base'}
             </p>
           )}
-          {cidades.map((cidade, i) => (
-            <div key={`${cidade}_${i}`} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-2.5 py-1.5 text-sm">
-              <span className="w-5 shrink-0 text-xs text-[var(--color-text-soft)]">{i + 1}.</span>
-              <span className="flex-1 truncate text-[var(--color-text)]">{cidade}</span>
-              {ehRota && !esconderOrdenar && (
-                <>
-                  <button type="button" onClick={() => moverCidade(i, -1)} disabled={i === 0} title="Mover pra cima" className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30">
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moverCidade(i, 1)}
-                    disabled={i === cidades.length - 1}
-                    title="Mover pra baixo"
-                    className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30"
-                  >
-                    ▼
-                  </button>
-                </>
-              )}
-              <button type="button" onClick={() => removerCidade(i)} title="Remover" className="text-[var(--color-text-soft)] hover:text-bad">
-                ✕
-              </button>
-            </div>
-          ))}
+          {cidades.map((cidade, i) => {
+            const resumo = modoEtiquetas ? (resumoPorCidade?.(cidade) ?? null) : null;
+            return (
+              <div
+                key={`${cidade}_${i}`}
+                onClick={modoEtiquetas ? () => onAbrirCidade?.(cidade) : undefined}
+                className={`flex items-center gap-2 rounded-md bg-[var(--color-page)] px-2.5 py-1.5 text-sm ${modoEtiquetas ? 'cursor-pointer hover:bg-[var(--color-line)]/40' : ''}`}
+              >
+                <span className="w-5 shrink-0 text-xs text-[var(--color-text-soft)]">{i + 1}.</span>
+                <span className="flex-1 truncate text-[var(--color-text)]">{cidade}</span>
+                {resumo && (
+                  <span className="shrink-0 rounded-full bg-[var(--color-accent)]/15 px-2 py-0.5 text-xs font-semibold text-[var(--color-accent)]">
+                    {resumo.notas} NF · {resumo.volumes} vol.
+                  </span>
+                )}
+                {ehRota && !modoEtiquetas && (
+                  <>
+                    <button type="button" onClick={() => moverCidade(i, -1)} disabled={i === 0} title="Mover pra cima" className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30">
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moverCidade(i, 1)}
+                      disabled={i === cidades.length - 1}
+                      title="Mover pra baixo"
+                      className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30"
+                    >
+                      ▼
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removerCidade(i);
+                  }}
+                  title="Remover"
+                  className="text-[var(--color-text-soft)] hover:text-bad"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

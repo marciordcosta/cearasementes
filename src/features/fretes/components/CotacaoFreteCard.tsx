@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Modal } from '@/components/ui/Modal';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import { TabToggle } from '@/components/ui/TabToggle';
 import { calcularCanal, calcularPesoCubado, calcularPesoEfetivo } from '@/features/pricing/calculations';
@@ -77,8 +78,13 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const [buscaProduto, setBuscaProduto] = useState('');
 
   // ---- Modo Etiquetas — NF(s) + volumes por cidade da lista acima; chaveado pelo texto da cidade
-  // (não por índice) pra não perder os dados se a lista for reordenada nas setas ▲▼. ----
+  // (não por índice) pra não perder os dados se a lista for reordenada nas setas ▲▼. Cada cidade é
+  // editada num modal próprio (cidadeEditandoNotas = qual está aberta agora); antes de imprimir, um
+  // segundo modal deixa escolher quais cidades entram nessa impressão (todas, uma, ou um grupo). ----
   const [notasPorCidade, setNotasPorCidade] = useState<Record<string, NotaEtiqueta[]>>({});
+  const [cidadeEditandoNotas, setCidadeEditandoNotas] = useState<string | null>(null);
+  const [modalImpressaoAberto, setModalImpressaoAberto] = useState(false);
+  const [cidadesParaImprimir, setCidadesParaImprimir] = useState<Set<string>>(new Set());
 
   // ---- Rota (Frota Própria) — peso/valor vêm do mesmo Direta/Orçamento acima, só o cálculo (km via API) e o resultado são específicos daqui ----
   const [rotaCalculando, setRotaCalculando] = useState(false);
@@ -291,6 +297,9 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     setItens([]);
     setBuscaProduto('');
     setNotasPorCidade({});
+    setCidadeEditandoNotas(null);
+    setModalImpressaoAberto(false);
+    setCidadesParaImprimir(new Set());
     setRotaResultado(null);
     setRotaErro(null);
     comparativoChaveRef.current = null;
@@ -353,12 +362,32 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     });
   }
 
+  /** null = cidade ainda sem NF válida (nem aparece como opção pra imprimir). */
+  function resumoNotasCidade(cidade: string): { notas: number; volumes: number } | null {
+    const validas = (notasPorCidade[cidade] ?? []).filter((n) => n.nf.trim() && n.volumes > 0);
+    if (validas.length === 0) return null;
+    return { notas: validas.length, volumes: validas.reduce((soma, n) => soma + n.volumes, 0) };
+  }
+
+  const cidadesComNotas = useMemo(
+    () => cidades.filter((c) => (notasPorCidade[c] ?? []).some((n) => n.nf.trim() && n.volumes > 0)),
+    [cidades, notasPorCidade],
+  );
+
+  /** Abre o modal de seleção já com todas as cidades (que têm NF) marcadas — "Gerar Etiquetas" sem mexer em nada imprime tudo, como antes. */
+  function abrirModalImpressao() {
+    setCidadesParaImprimir(new Set(cidadesComNotas));
+    setModalImpressaoAberto(true);
+  }
+
   /** Ignora NF em branco ou volumes ≤ 0 — não precisa validar antes, só não gera etiqueta pra linha vazia. */
-  async function imprimirEtiquetas() {
+  async function confirmarImpressao() {
     const grupos = cidades
+      .filter((cidade) => cidadesParaImprimir.has(cidade))
       .map((cidade) => ({ cidade, notas: notasDaCidade(cidade).filter((n) => n.nf.trim() && n.volumes > 0) }))
       .filter((g) => g.notas.length > 0);
     if (grupos.length === 0) return;
+    setModalImpressaoAberto(false);
     await gerarEtiquetaFretePdf(grupos);
   }
 
@@ -375,7 +404,9 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             onChangeCidades={setCidades}
             transportadoras={transportadoras}
             cidadesCache={cidadesRotaCache}
-            esconderOrdenar={modo === 'etiquetas'}
+            modoEtiquetas={modo === 'etiquetas'}
+            resumoPorCidade={resumoNotasCidade}
+            onAbrirCidade={setCidadeEditandoNotas}
           />
 
           {!ehRota && transportadorasCidade !== null && (
@@ -668,55 +699,110 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
           {modo === 'etiquetas' && cidades.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs text-[var(--color-text-soft)]">
-                Pra cada cidade, informe a(s) NF(s) e a quantidade de volumes — sai 1 etiqueta por volume (ex.: 50 volumes = etiquetas "1/50" a "50/50").
+                Clique numa cidade (à esquerda) pra informar a(s) NF(s) e a quantidade de volumes dela — sai 1 etiqueta por volume (ex.: 50 volumes =
+                etiquetas "1/50" a "50/50").
               </p>
-              {cidades.map((cidade, indiceCidade) => (
-                <div key={`${cidade}_${indiceCidade}`} className="space-y-2 rounded-md border border-[var(--color-line)] p-3">
-                  <p className="text-sm font-semibold text-[var(--color-text)]">
-                    {indiceCidade + 1}. {cidade}
-                  </p>
-                  <div className="space-y-1.5">
-                    {notasDaCidade(cidade).map((nota, indiceNota) => (
-                      <div key={indiceNota} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          placeholder="NF"
-                          value={nota.nf}
-                          onChange={(e) => atualizarNota(cidade, indiceNota, { nf: e.target.value })}
-                          className={`max-w-[160px] ${campoClasse}`}
-                        />
-                        <input
-                          type="number"
-                          min={1}
-                          placeholder="Volumes"
-                          value={nota.volumes || ''}
-                          onChange={(e) => atualizarNota(cidade, indiceNota, { volumes: parseInt(e.target.value, 10) || 0 })}
-                          title="Quantidade de volumes"
-                          className={`w-24 ${campoPequenoClasse}`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removerNota(cidade, indiceNota)}
-                          title="Remover NF"
-                          className="shrink-0 text-[var(--color-text-soft)] hover:text-bad"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button variant="outline" onClick={() => adicionarNota(cidade)}>
-                    + Adicionar NF
-                  </Button>
-                </div>
-              ))}
-              <Button variant="primary" onClick={imprimirEtiquetas}>
+              <Button variant="primary" onClick={abrirModalImpressao} disabled={cidadesComNotas.length === 0}>
                 🏷️ Imprimir Etiquetas
               </Button>
             </div>
           )}
         </Card>
       </div>
+
+      <Modal open={cidadeEditandoNotas !== null} onClose={() => setCidadeEditandoNotas(null)} title={cidadeEditandoNotas ?? ''} widthClassName="max-w-md">
+        {cidadeEditandoNotas && (
+          <div className="space-y-3">
+            <p className="text-xs text-[var(--color-text-soft)]">
+              Informe a(s) NF(s) e a quantidade de volumes — sai 1 etiqueta por volume (ex.: 50 volumes = etiquetas "1/50" a "50/50").
+            </p>
+            <div className="space-y-1.5">
+              {notasDaCidade(cidadeEditandoNotas).map((nota, indiceNota) => (
+                <div key={indiceNota} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="NF"
+                    value={nota.nf}
+                    onChange={(e) => atualizarNota(cidadeEditandoNotas, indiceNota, { nf: e.target.value })}
+                    className={`max-w-[160px] ${campoClasse}`}
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="Volumes"
+                    value={nota.volumes || ''}
+                    onChange={(e) => atualizarNota(cidadeEditandoNotas, indiceNota, { volumes: parseInt(e.target.value, 10) || 0 })}
+                    title="Quantidade de volumes"
+                    className={`w-24 ${campoPequenoClasse}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removerNota(cidadeEditandoNotas, indiceNota)}
+                    title="Remover NF"
+                    className="shrink-0 text-[var(--color-text-soft)] hover:text-bad"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" onClick={() => adicionarNota(cidadeEditandoNotas)}>
+              + Adicionar NF
+            </Button>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={modalImpressaoAberto}
+        onClose={() => setModalImpressaoAberto(false)}
+        title="Imprimir Etiquetas"
+        widthClassName="max-w-sm"
+        footer={
+          <Button variant="primary" onClick={confirmarImpressao} disabled={cidadesParaImprimir.size === 0}>
+            Gerar Etiquetas
+          </Button>
+        }
+      >
+        <div className="space-y-2">
+          <p className="mb-1 text-xs text-[var(--color-text-soft)]">Escolha quais cidades entram nessa impressão:</p>
+          <label className="flex items-center gap-2 border-b border-[var(--color-line)] pb-2 text-sm font-semibold text-[var(--color-text)]">
+            <input
+              type="checkbox"
+              checked={cidadesParaImprimir.size === cidadesComNotas.length}
+              onChange={(e) => setCidadesParaImprimir(e.target.checked ? new Set(cidadesComNotas) : new Set())}
+            />
+            Todas
+          </label>
+          {cidadesComNotas.map((cidade) => {
+            const resumo = resumoNotasCidade(cidade);
+            return (
+              <label key={cidade} className="flex items-center justify-between gap-2 text-sm text-[var(--color-text)]">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={cidadesParaImprimir.has(cidade)}
+                    onChange={(e) =>
+                      setCidadesParaImprimir((prev) => {
+                        const novo = new Set(prev);
+                        if (e.target.checked) novo.add(cidade);
+                        else novo.delete(cidade);
+                        return novo;
+                      })
+                    }
+                  />
+                  {cidade}
+                </span>
+                {resumo && (
+                  <span className="text-xs text-[var(--color-text-soft)]">
+                    {resumo.notas} NF · {resumo.volumes} vol.
+                  </span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      </Modal>
     </div>
   );
 });
