@@ -307,7 +307,7 @@ export async function apagarSubcategoriaMargem(subcategoriaId: string, canalId: 
 }
 
 function fornecedorFromRow(row: FornecedorRow): Fornecedor {
-  return { id: row.id, nome: row.nome, ordem: row.ordem };
+  return { id: row.id, nome: row.nome, ordem: row.ordem, visivelGrade: row.visivel_grade, visivelPdf: row.visivel_pdf };
 }
 
 export async function fetchFornecedores(): Promise<Fornecedor[]> {
@@ -321,7 +321,7 @@ export async function inserirFornecedor(input: { nome: string; ordem: number }):
   return fornecedorFromRow(data);
 }
 
-export async function atualizarFornecedor(id: string, patch: Partial<Pick<FornecedorRow, 'nome' | 'ordem'>>): Promise<void> {
+export async function atualizarFornecedor(id: string, patch: Partial<Pick<FornecedorRow, 'nome' | 'ordem' | 'visivel_grade' | 'visivel_pdf'>>): Promise<void> {
   const { error } = await supabase.from('fornecedores').update(patch).eq('id', id);
   if (error) throw error;
 }

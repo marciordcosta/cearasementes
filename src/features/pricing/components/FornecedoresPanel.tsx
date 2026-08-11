@@ -8,10 +8,18 @@ interface FornecedoresPanelProps {
   onAdicionarFornecedor: (nome: string) => void;
   onRenomearFornecedor: (id: string, nome: string) => void;
   onRemoverFornecedor: (id: string) => void;
+  /** campo 'visivelGrade' desmarcado já esconde da grade E do PDF; 'visivelPdf' desmarcado esconde só do PDF. */
+  onAtualizarFornecedorVisibilidade: (id: string, campo: 'visivelGrade' | 'visivelPdf', valor: boolean) => void;
 }
 
 /** Cadastro de Fornecedor — o campo "Fornecedor" do Editar Produto puxa essa lista (não é mais texto livre). */
-export function FornecedoresPanel({ fornecedores, onAdicionarFornecedor, onRenomearFornecedor, onRemoverFornecedor }: FornecedoresPanelProps) {
+export function FornecedoresPanel({
+  fornecedores,
+  onAdicionarFornecedor,
+  onRenomearFornecedor,
+  onRemoverFornecedor,
+  onAtualizarFornecedorVisibilidade,
+}: FornecedoresPanelProps) {
   const [nome, setNome] = useState('');
 
   function submeter() {
@@ -26,6 +34,12 @@ export function FornecedoresPanel({ fornecedores, onAdicionarFornecedor, onRenom
       <Card className="overflow-hidden">
         {fornecedores.length > 0 && (
           <div className="divide-y divide-[var(--color-line)]">
+            <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-semibold tracking-wide text-[var(--color-text-soft)] uppercase">
+              <span className="flex-1" />
+              <span className="w-14 text-center">Grade</span>
+              <span className="w-14 text-center">PDF</span>
+              <span className="w-5" />
+            </div>
             {fornecedores.map((f) => (
               <div key={f.id} className="flex items-center gap-2 px-3 py-2">
                 <input
@@ -38,6 +52,21 @@ export function FornecedoresPanel({ fornecedores, onAdicionarFornecedor, onRenom
                   }}
                   className="flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)]"
                 />
+                <label className="flex w-14 items-center justify-center" title="Aparece na grade da Tabela de Preços (desmarcar esconde da grade e do PDF)">
+                  <input
+                    type="checkbox"
+                    checked={f.visivelGrade}
+                    onChange={(e) => onAtualizarFornecedorVisibilidade(f.id, 'visivelGrade', e.target.checked)}
+                  />
+                </label>
+                <label className="flex w-14 items-center justify-center" title="Aparece no PDF (Exportar)">
+                  <input
+                    type="checkbox"
+                    checked={f.visivelPdf}
+                    disabled={!f.visivelGrade}
+                    onChange={(e) => onAtualizarFornecedorVisibilidade(f.id, 'visivelPdf', e.target.checked)}
+                  />
+                </label>
                 <button type="button" onClick={() => onRemoverFornecedor(f.id)} title="Deletar fornecedor" className="text-[var(--color-text-soft)] hover:text-bad">
                   🗑
                 </button>

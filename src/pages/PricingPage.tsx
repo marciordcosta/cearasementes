@@ -205,6 +205,8 @@ export function PricingPage() {
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
   const produtosFiltrados = produtos
+    // Fornecedor com "Grade" desmarcada some da Tabela de Preços inteira (e, por consequência, do PDF também).
+    .filter((p) => (p.fornecedorId ? (fornecedorPorId.get(p.fornecedorId)?.visivelGrade ?? true) : true))
     .filter((p) => {
       if (filtroClasse === 'todas') return true;
       if (filtroClasse.startsWith('cat:')) return p.categoriaId === filtroClasse.slice(4);
@@ -600,6 +602,12 @@ export function PricingPage() {
   function onRenomearFornecedor(id: string, nome: string) {
     setFornecedores((prev) => prev.map((f) => (f.id === id ? { ...f, nome } : f)));
     salvarAgora(() => atualizarFornecedor(id, { nome }));
+  }
+
+  /** 'visivelGrade' desmarcado já esconde os produtos desse fornecedor da grade E do PDF; 'visivelPdf' desmarcado esconde só do PDF. */
+  function onAtualizarFornecedorVisibilidade(id: string, campo: 'visivelGrade' | 'visivelPdf', valor: boolean) {
+    setFornecedores((prev) => prev.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
+    salvarAgora(() => atualizarFornecedor(id, { [campo === 'visivelGrade' ? 'visivel_grade' : 'visivel_pdf']: valor }));
   }
 
   /** Sem confirmação/bloqueio: fornecedor_id é opcional (on delete set null) — produtos que usavam esse fornecedor só ficam sem fornecedor. */
@@ -999,6 +1007,7 @@ export function PricingPage() {
             onAdicionarFornecedor={onAdicionarFornecedor}
             onRenomearFornecedor={onRenomearFornecedor}
             onRemoverFornecedor={onRemoverFornecedor}
+            onAtualizarFornecedorVisibilidade={onAtualizarFornecedorVisibilidade}
           />
         )}
         {abaParametrizacao === 'custos' && (

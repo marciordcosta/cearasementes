@@ -93,8 +93,11 @@ export function gerarCatalogoPDF(
   const canaisPorId = new Map(todosCanais.map((c) => [c.id, c]));
 
   // "Imprimir" desmarcado no Editar Produto tira o produto de todo catálogo — continua normal em todo o resto do sistema.
-  // "Precisa de ajuste" (✓) é por canal — some só do PDF DESSE canal específico.
-  const produtosParaImprimir = produtosFiltrados.filter((p) => p.imprimir && !(p.precos[canal.id]?.precisaAjuste ?? false));
+  // "Precisa de ajuste" (✓) é por canal — some só do PDF DESSE canal específico. "PDF" desmarcado
+  // no Fornecedor (Parametrização) tira todos os produtos dele só do PDF, continuam na grade.
+  const produtosParaImprimir = produtosFiltrados.filter(
+    (p) => p.imprimir && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedor(p.fornecedorId)?.visivelPdf ?? true),
+  );
 
   const categoriasPresentes = new Map<string, Produto[]>();
   produtosParaImprimir.forEach((p) => {

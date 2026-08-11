@@ -61,6 +61,10 @@ export interface Fornecedor {
   id: string;
   nome: string;
   ordem: number;
+  /** false = produtos desse fornecedor somem da grade da Tabela de Preços (e, por consequência, do PDF também). Padrão true. */
+  visivelGrade: boolean;
+  /** false = produtos desse fornecedor somem só do PDF (Exportar), continuam normais na grade. Sem efeito se visivelGrade já for false. Padrão true. */
+  visivelPdf: boolean;
 }
 
 /** 'reais' = valor fixo em R$ (ex.: aluguel); 'percentual' = já expresso como % das vendas (ex.: taxa de plataforma). */

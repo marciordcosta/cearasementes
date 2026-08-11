@@ -218,8 +218,12 @@ export interface Database {
         Relationships: [];
       };
       fornecedores: {
-        Row: { id: string; nome: string; ordem: number };
-        Insert: Omit<Database['public']['Tables']['fornecedores']['Row'], 'id'>;
+        // visivel_grade/visivel_pdf têm default true no banco — opcionais no Insert.
+        Row: { id: string; nome: string; ordem: number; visivel_grade: boolean; visivel_pdf: boolean };
+        Insert: Omit<Database['public']['Tables']['fornecedores']['Row'], 'id' | 'visivel_grade' | 'visivel_pdf'> & {
+          visivel_grade?: boolean;
+          visivel_pdf?: boolean;
+        };
         Update: Partial<Omit<Database['public']['Tables']['fornecedores']['Row'], 'id'>>;
         Relationships: [];
       };
