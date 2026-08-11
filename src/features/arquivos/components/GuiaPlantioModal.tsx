@@ -37,7 +37,12 @@ interface ItemGuia {
    * editar um dos 2 espaçamentos recalcula o outro sozinho. */
   cova: string;
   corredor: string;
-  /** Sempre manual — nunca recalculado sozinho. Só aceita número inteiro ≥ 1; enquanto inválido, os espaçamentos ficam bloqueados. */
+  /**
+   * Sempre manual — nunca recalculado sozinho. Guarda Sementes/cova (número inteiro ≥ 1) OU Peso (g) de
+   * sementes/cova (decimal > 0), conforme o Processo do laudo (ver precisaPesoPorCova) — sementes
+   * Tradicionais (soltas, pequenas) não dá pra contar uma a uma pra plantar, só pesar; Incrustadas
+   * (peletizadas) são grandes o bastante pra contar. Enquanto inválido, os espaçamentos ficam bloqueados.
+   */
   sementesCova: string;
   /** Qual dos 2 espaçamentos foi editado por último — o outro é recalculado. */
   ultimoCampoEspacamento: CampoEspacamento;
@@ -78,10 +83,29 @@ function arredondarSacos(quociente: number, margemFracao: number): number {
   return quociente > 0 ? Math.max(sacos, 1) : 0;
 }
 
-/** Sementes/cova é sempre digitada manualmente — só é válida como número inteiro ≥ 1 (sem casas decimais). Enquanto inválida, os espaçamentos ficam bloqueados. */
-function sementesCovaValida(valorTexto: string): number | null {
+/** Sementes Tradicionais (soltas, pequenas) não dá pra catar uma a uma pra colocar na cova — só pesar; Incrustadas (peletizadas) são grandes o bastante pra contar. Decide qual campo o card mostra: "Sementes/cova" (Incrustado e demais) ou "Peso/cova (g)" (Tradicional). */
+function precisaPesoPorCova(laudo: Pick<ArquivoLaudo, 'processo'>): boolean {
+  return (laudo.processo ?? '').toLowerCase().includes('tradicional');
+}
+
+/** Valor digitado em Sementes/cova (Incrustado, inteiro ≥ 1) ou Peso/cova (Tradicional, decimal > 0) — sempre manual. Enquanto inválido, os espaçamentos ficam bloqueados. */
+function valorCovaValido(laudo: Pick<ArquivoLaudo, 'processo'>, valorTexto: string): number | null {
   const n = paraNumero(valorTexto);
-  return n !== null && n >= 1 && Number.isInteger(n) ? n : null;
+  if (n === null || n <= 0) return null;
+  if (precisaPesoPorCova(laudo)) return n;
+  return Number.isInteger(n) ? n : null;
+}
+
+/**
+ * Converte o valor digitado (Sementes/cova OU Peso/cova, conforme o Processo do laudo — ver
+ * precisaPesoPorCova) pro equivalente em Sementes/cova, que é o que entra na fórmula do espaçamento (ver
+ * derivarEspacamento): Peso (g) ÷ PMS (peso de 1.000 sementes, em g) × 1.000. Sem PMS resolvido (nem por
+ * lote, nem base da Parametrização), não dá pra converter — null.
+ */
+function sementesEquivalentePorCova(laudo: Pick<ArquivoLaudo, 'processo'>, valorDigitado: number, pms: number | null): number | null {
+  if (!precisaPesoPorCova(laudo)) return valorDigitado;
+  if (pms === null || pms <= 0) return null;
+  return (valorDigitado * 1000) / pms;
 }
 
 /**
@@ -117,6 +141,11 @@ function validadeParaOrdenacao(validade: string | null): number {
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
 function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): string | null {
   return laudo.pms || resolverPmsBaseTexto(laudo.nomeProduto, produtos);
+}
+
+/** Igual pmsDoLaudo, já convertido pra número — usado pra converter Peso/cova em Sementes/cova (ver sementesEquivalentePorCova). */
+function pmsNumericoDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(pmsDoLaudo(laudo, produtos));
 }
 
 /**
@@ -203,6 +232,14 @@ export function GuiaPlantioModal({
       const sementesPorM2Inicial = calcularSementesPorM2(a, produtos, fatorModo, fatorCondicao);
       const covasPorM2Inicial = calcularCovasPorM2(50, 50);
       const sementesCovaInicial = calcularSementesPorCova(sementesPorM2Inicial, covasPorM2Inicial);
+      // Sementes/cova é sempre o cálculo de partida; Peso/cova (Tradicional) converte esse alvo pra
+      // gramas via PMS pra já sugerir um valor — sem PMS cadastrado ainda, fica em branco (bloqueado até
+      // o operador digitar manualmente).
+      let valorCovaInicial: number | null = sementesCovaInicial;
+      if (sementesCovaInicial !== null && precisaPesoPorCova(a)) {
+        const pms = pmsNumericoDoLaudo(a, produtos);
+        valorCovaInicial = pms !== null && pms > 0 ? (sementesCovaInicial * pms) / 1000 : null;
+      }
       return [
         ...prev,
         {
@@ -214,7 +251,7 @@ export function GuiaPlantioModal({
           modo: modoPadrao,
           cova: '50',
           corredor: '50',
-          sementesCova: sementesCovaInicial === null ? '' : String(Math.round(sementesCovaInicial)),
+          sementesCova: valorCovaInicial === null ? '' : precisaPesoPorCova(a) ? formatarCovas(valorCovaInicial) : String(Math.round(valorCovaInicial)),
           ultimoCampoEspacamento: 'corredor',
         },
       ];
@@ -244,14 +281,15 @@ export function GuiaPlantioModal({
    */
   function atualizarEspacamento(laudo: ArquivoLaudo, item: ItemGuia, campo: CampoEspacamento, valorTexto: string) {
     const patch: Partial<ItemGuia> = { [campo]: valorTexto, ultimoCampoEspacamento: campo };
-    const sementesCova = sementesCovaValida(item.sementesCova);
-    if (sementesCova !== null) {
+    const valorCova = valorCovaValido(laudo, item.sementesCova);
+    const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+    if (sementesEquiv !== null) {
       const fatorModo = fatorDe(fatores, item.modo);
       const fatorCondicaoItem = fatorCondicao;
       const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
       if (sementesPorM2 !== null && sementesPorM2 > 0) {
         const itemAtualizado = { ...item, [campo]: valorTexto, ultimoCampoEspacamento: campo };
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesCova, itemAtualizado);
+        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, itemAtualizado);
         if (derivadoPatch) Object.assign(patch, derivadoPatch);
       }
     }
@@ -284,17 +322,18 @@ export function GuiaPlantioModal({
     atualizarItem(item.laudoId, { area: areaNova > 0 ? String(Math.round(areaNova * 100) / 100) : '' });
   }
 
-  /** Sementes/cova é sempre manual — nunca recalculada sozinha; só dispara o recálculo do espaçamento que já estava "de fora". Só aceita dígitos (número inteiro). */
+  /** Sementes/cova (Incrustado) ou Peso/cova (Tradicional) é sempre manual — nunca recalculado sozinho; só dispara o recálculo do espaçamento que já estava "de fora". Sementes só aceita dígitos (inteiro); Peso aceita vírgula/ponto (decimal). */
   function atualizarSementesCova(laudo: ArquivoLaudo, item: ItemGuia, valorTexto: string) {
-    const valorLimpo = valorTexto.replace(/\D/g, '');
+    const valorLimpo = precisaPesoPorCova(laudo) ? valorTexto.replace(/[^\d.,]/g, '') : valorTexto.replace(/\D/g, '');
     const patch: Partial<ItemGuia> = { sementesCova: valorLimpo };
-    const sementesCova = sementesCovaValida(valorLimpo);
-    if (sementesCova !== null) {
+    const valorCova = valorCovaValido(laudo, valorLimpo);
+    const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+    if (sementesEquiv !== null) {
       const fatorModo = fatorDe(fatores, item.modo);
       const fatorCondicaoItem = fatorCondicao;
       const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
       if (sementesPorM2 !== null && sementesPorM2 > 0) {
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesCova, item);
+        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
         if (derivadoPatch) Object.assign(patch, derivadoPatch);
       }
     }
@@ -304,13 +343,14 @@ export function GuiaPlantioModal({
   /** Trocar o modo (A Lanço ⇄ Covas) também muda o alvo de Sementes/m² (fator de perda diferente) — recalcula o espaçamento derivado na hora, junto com a troca. */
   function mudarModo(laudo: ArquivoLaudo, item: ItemGuia, modo: Modo) {
     const patch: Partial<ItemGuia> = { modo };
-    const sementesCova = sementesCovaValida(item.sementesCova);
-    if (modo === 'linha_cova' && sementesCova !== null) {
+    const valorCova = valorCovaValido(laudo, item.sementesCova);
+    const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+    if (modo === 'linha_cova' && sementesEquiv !== null) {
       const fatorModo = fatorDe(fatores, modo);
       const fatorCondicaoItem = fatorCondicao;
       const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
       if (sementesPorM2 !== null && sementesPorM2 > 0) {
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesCova, item);
+        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
         if (derivadoPatch) Object.assign(patch, derivadoPatch);
       }
     }
@@ -325,14 +365,15 @@ export function GuiaPlantioModal({
       let mudou = false;
       const proximos = prev.map((item) => {
         if (item.modo !== 'linha_cova') return item;
-        const sementesCova = sementesCovaValida(item.sementesCova);
-        if (sementesCova === null) return item;
         const laudo = arquivos.find((a) => a.id === item.laudoId);
         if (!laudo) return item;
+        const valorCova = valorCovaValido(laudo, item.sementesCova);
+        const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+        if (sementesEquiv === null) return item;
         const fatorModo = fatorDe(fatores, item.modo);
         const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicao);
         if (sementesPorM2 === null || sementesPorM2 <= 0) return item;
-        const patch = derivarEspacamento(sementesPorM2, sementesCova, item);
+        const patch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
         if (!patch) return item;
         const chave = Object.keys(patch)[0] as keyof ItemGuia;
         if (patch[chave] === item[chave]) return item;
@@ -370,8 +411,7 @@ export function GuiaPlantioModal({
     // "Total previsto/necessário" (teórico, continuo) porque só dá pra comprar saco inteiro.
     const pesoTotalReal = sacos !== null && pesoSaco !== null ? sacos * pesoSaco : null;
     const covasPorM2 = item.modo === 'linha_cova' ? calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor)) : null;
-    const sementesPorCova = calcularSementesPorCova(sementesPorM2, covasPorM2);
-    return { kgPorHa, pesoTotal, pesoTotalReal, pesoSaco, sacos, sementesPorCova, sementesPorM2, covasPorM2 };
+    return { kgPorHa, pesoTotal, pesoTotalReal, pesoSaco, sacos, sementesPorM2, covasPorM2 };
   }
 
   /** Taxa de Semeadura (kg/ha) nas outras 2 condições (não a selecionada agora) — só informativo, pra comparar sem precisar trocar a condição global. */
@@ -419,7 +459,15 @@ export function GuiaPlantioModal({
           sementesOuCovasLabel: item.modo === 'linha_cova' ? 'Covas/m²' : null,
           sementesOuCovasValor: item.modo === 'linha_cova' ? (r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)) : null,
           espacamento: item.modo === 'linha_cova' ? `${item.cova || '—'}×${item.corredor || '—'} cm` : null,
-          sementesPorCova: item.modo === 'linha_cova' ? (r.sementesPorCova === null ? '—' : String(Math.round(r.sementesPorCova))) : null,
+          sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sementes/cova') : null,
+          sementesPorCovaValor:
+            item.modo === 'linha_cova'
+              ? (() => {
+                  const valorCova = valorCovaValido(laudo, item.sementesCova);
+                  if (valorCova === null) return '—';
+                  return precisaPesoPorCova(laudo) ? formatarCovas(valorCova) : String(Math.round(valorCova));
+                })()
+              : null,
         },
       ];
     });
@@ -626,7 +674,13 @@ export function GuiaPlantioModal({
                   {/* Coluna 2: Espaçamento — só existe em modo Covas, some (não só esconde) em A Lanço pra deixar o card mais baixo */}
                   {item.modo === 'linha_cova' &&
                     (() => {
-                      const espacamentoBloqueado = sementesCovaValida(item.sementesCova) === null;
+                      const pesoPorCova = precisaPesoPorCova(laudo);
+                      const pms = pmsNumericoDoLaudo(laudo, produtos);
+                      const semPmsParaPeso = pesoPorCova && pms === null;
+                      const espacamentoBloqueado = valorCovaValido(laudo, item.sementesCova) === null || semPmsParaPeso;
+                      const tituloEspacamento = semPmsParaPeso
+                        ? 'Sem PMS cadastrado — não dá pra converter Peso/cova em sementes'
+                        : `Informe ${pesoPorCova ? 'o peso (g) de sementes' : 'a quantidade de sementes (número inteiro ≥ 1)'} por cova pra liberar o espaçamento`;
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -637,7 +691,7 @@ export function GuiaPlantioModal({
                                 onChange={(e) => atualizarEspacamento(laudo, item, 'cova', e.target.value)}
                                 disabled={espacamentoBloqueado}
                                 inputMode="decimal"
-                                title={espacamentoBloqueado ? 'Informe a quantidade de sementes por cova (número inteiro ≥ 1) pra liberar o espaçamento' : 'Ligado com Corredor — editar um recalcula o outro'}
+                                title={espacamentoBloqueado ? tituloEspacamento : 'Ligado com Corredor — editar um recalcula o outro'}
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
                               />
                             </div>
@@ -648,19 +702,24 @@ export function GuiaPlantioModal({
                                 onChange={(e) => atualizarEspacamento(laudo, item, 'corredor', e.target.value)}
                                 disabled={espacamentoBloqueado}
                                 inputMode="decimal"
-                                title={espacamentoBloqueado ? 'Informe a quantidade de sementes por cova (número inteiro ≥ 1) pra liberar o espaçamento' : 'Ligado com Cova — editar um recalcula o outro'}
+                                title={espacamentoBloqueado ? tituloEspacamento : 'Ligado com Cova — editar um recalcula o outro'}
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
                               />
                             </div>
                             <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Sementes/cova</p>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sementes/cova'}</p>
                               <input
                                 value={item.sementesCova}
                                 onChange={(e) => atualizarSementesCova(laudo, item, e.target.value)}
-                                inputMode="numeric"
-                                title="Quantidade de sementes por cova (número inteiro ≥ 1) — sempre digitada manualmente; os espaçamentos se ajustam sozinhos"
+                                inputMode={pesoPorCova ? 'decimal' : 'numeric'}
+                                title={
+                                  pesoPorCova
+                                    ? 'Peso (g) de sementes por cova — sementes soltas não dá pra contar uma a uma, só pesar; sempre digitado manualmente, os espaçamentos se ajustam sozinhos'
+                                    : 'Quantidade de sementes por cova (número inteiro ≥ 1) — sempre digitada manualmente; os espaçamentos se ajustam sozinhos'
+                                }
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
+                              {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>

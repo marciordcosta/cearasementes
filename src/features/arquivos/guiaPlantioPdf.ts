@@ -15,8 +15,9 @@ export interface LinhaGuiaPlantioPdf {
   sementesOuCovasValor: string | null;
   /** "50×50 cm" — só quando o modo é Covas. */
   espacamento: string | null;
-  /** Só quando o modo é Covas. */
-  sementesPorCova: string | null;
+  /** "Sementes/cova" ou "Peso/cova (g)" (produto Tradicional, sementes soltas só dá pra pesar) — só quando o modo é Covas. */
+  sementesPorCovaLabel: string | null;
+  sementesPorCovaValor: string | null;
 }
 
 export interface ResumoGuiaPlantioPdf {
@@ -65,7 +66,7 @@ function infoAdicionalHtml(l: LinhaGuiaPlantioPdf): string {
   ];
   if (l.sementesOuCovasLabel !== null && l.sementesOuCovasValor !== null) itens.push({ rotulo: l.sementesOuCovasLabel, valor: l.sementesOuCovasValor });
   if (l.espacamento !== null) itens.push({ rotulo: 'Espaçamento', valor: l.espacamento });
-  if (l.sementesPorCova !== null) itens.push({ rotulo: 'Sementes/cova', valor: l.sementesPorCova });
+  if (l.sementesPorCovaLabel !== null && l.sementesPorCovaValor !== null) itens.push({ rotulo: l.sementesPorCovaLabel, valor: l.sementesPorCovaValor });
   return `<div class="info-linha">${itens.map((i) => `<div class="info-item"><div class="info-rotulo">${i.rotulo}</div><div class="info-valor">${i.valor}</div></div>`).join('')}</div>`;
 }
 
