@@ -1,4 +1,4 @@
-import { GitCompare } from 'lucide-react';
+import { GitCompare, PieChart } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Chart } from 'react-chartjs-2';
 import { Modal } from '@/components/ui/Modal';
@@ -60,6 +60,8 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
   const [tabelaAtiva, setTabelaAtiva] = useState<string | null>(null);
   // null = média (últimas safras, padrão); preenchido = mostra só aquela safra específica.
   const [safraSelecionada, setSafraSelecionada] = useState<string | null>(null);
+  // Alterna entre a curva mensal (linha) e a participação de cada Tabela no total (pizza).
+  const [modoPizza, setModoPizza] = useState(false);
 
   // Cada produto novo aberto (ou o modal fechando) zera qualquer comparação/busca em andamento —
   // não faz sentido herdar isso de uma sessão anterior do modal.
@@ -70,6 +72,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
     setComparacoes([]);
     setTabelaAtiva(null);
     setSafraSelecionada(null);
+    setModoPizza(false);
   }, [produto?.id]);
 
   const safrasDisponiveis = useMemo(() => {
@@ -216,6 +219,56 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
 
   const chartPlugins = useMemo(() => [criarGridVerticalPontilhado(c.grid)], [c.grid]);
 
+  // Participação de cada Tabela no total desse produto (soma os 12 meses de cada uma) — sempre
+  // TODAS as Tabelas do produto principal, independente de tabelaAtiva/comparações (que só valem
+  // pro modo linha).
+  const dadosPizza = useMemo(() => {
+    if (!curva) return [];
+    return curva.tabelas
+      .map((t) => ({ tabela: t.tabela, total: t.valores.reduce((soma, v) => soma + v, 0) }))
+      .filter((t) => t.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [curva]);
+
+  const totalGeralPizza = dadosPizza.reduce((soma, t) => soma + t.total, 0);
+
+  const chartDataPizza = useMemo(
+    () => ({
+      labels: dadosPizza.map((t) => t.tabela),
+      datasets: [
+        {
+          type: 'pie' as const,
+          data: dadosPizza.map((t) => t.total),
+          backgroundColor: dadosPizza.map((_t, i) => colors[i % colors.length]),
+          borderColor: c.tooltipBg,
+          borderWidth: 2,
+        },
+      ],
+    }),
+    [dadosPizza, colors, c],
+  );
+
+  const chartOptionsPizza = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' as const, labels: { color: c.text2, boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx: { dataIndex: number }) => {
+              const t = dadosPizza[ctx.dataIndex];
+              const pct = totalGeralPizza > 0 ? (t.total / totalGeralPizza) * 100 : 0;
+              const valorFormatado = criterio === 'qtd' ? `${fmtInt.format(Math.round(t.total))} un.` : fmtBRL.format(t.total);
+              return [`${pct.toFixed(1)}%`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`];
+            },
+          },
+        },
+      },
+    }),
+    [c, criterio, dadosPizza, totalGeralPizza],
+  );
+
   return (
     <Modal
       open={produto !== null}
@@ -243,12 +296,22 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
             <SeletorCriterioRepresentacao criterio={criterio} ordenarAtivo onEscolher={onEscolherCriterio} semOpcaoPadrao sobreFundoEscuro />
             <button
               type="button"
-              onClick={() => setMostrarBusca((v) => !v)}
-              title="Comparar com outro produto"
-              className="shrink-0 rounded-full bg-white/15 p-1.5 text-white hover:bg-white/25"
+              onClick={() => setModoPizza((v) => !v)}
+              title={modoPizza ? 'Ver como curva mensal' : 'Ver participação de cada Tabela no total'}
+              className={`shrink-0 rounded-full p-1.5 text-white ${modoPizza ? 'bg-[var(--color-accent)]' : 'bg-white/15 hover:bg-white/25'}`}
             >
-              <GitCompare size={16} />
+              <PieChart size={16} />
             </button>
+            {!modoPizza && (
+              <button
+                type="button"
+                onClick={() => setMostrarBusca((v) => !v)}
+                title="Comparar com outro produto"
+                className="shrink-0 rounded-full bg-white/15 p-1.5 text-white hover:bg-white/25"
+              >
+                <GitCompare size={16} />
+              </button>
+            )}
           </span>
         </span>
       }
@@ -283,7 +346,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
         </div>
       )}
 
-      {produtoEscolhendoTabela && (
+      {produtoEscolhendoTabela && !modoPizza && (
         <div className="mb-3 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-3">
           <p className="mb-1.5 text-xs font-semibold text-[var(--color-text-soft)]">
             Comparar <NomeComDestaque nome={produtoEscolhendoTabela.nome} /> em qual Tabela? (os dois produtos passam a mostrar só essa)
@@ -316,7 +379,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
         </div>
       )}
 
-      {tabelaAtiva && (
+      {tabelaAtiva && !modoPizza && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-[var(--color-text-soft)]">Comparando na Tabela:</span>
           <select
@@ -346,6 +409,24 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
         <p className="text-sm text-[var(--color-text-soft)]">
           {produto?.codigo ? 'Sem histórico de vendas no BI pra esse produto.' : 'Esse produto não tem Código cadastrado — sem como cruzar com o BI.'}
         </p>
+      ) : modoPizza ? (
+        dadosPizza.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-soft)]">Sem dado de participação pra mostrar.</p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-[var(--color-text-soft)]">
+              Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — participação de
+              cada Tabela no total desse produto,{' '}
+              {safraSelecionada
+                ? `na safra ${safrasDisponiveis.find((s) => s.key === safraSelecionada)?.label ?? ''}.`
+                : 'média das últimas safras.'}
+            </p>
+            <div className="h-96">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <Chart type="pie" data={chartDataPizza as any} options={chartOptionsPizza as any} />
+            </div>
+          </>
+        )
       ) : (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
