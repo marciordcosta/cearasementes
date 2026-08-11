@@ -88,6 +88,32 @@ export function criarGridVerticalPontilhado(color: string): Plugin<'line'> {
   };
 }
 
+// Fronteira sólida entre grupos (ex.: Categoria) numa pizza cujas fatias internas (ex.: Classe/
+// Subcategoria) já usam borda tracejada — desenha uma linha reta do centro até a borda no ângulo
+// de início de cada índice marcado, por cima dos arcos já desenhados. Passado por instância via
+// prop `plugins` do react-chartjs-2 (não precisa Chart.register).
+export function criarLinhasDivisoriaPizza(indicesFronteira: Set<number>, color: string, largura = 3): Plugin<'pie'> {
+  return {
+    id: 'linhasDivisoriaPizza',
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      const { ctx } = chart;
+      indicesFronteira.forEach((indice) => {
+        const arco = meta.data[indice] as unknown as { x: number; y: number; outerRadius: number; startAngle: number } | undefined;
+        if (!arco) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = largura;
+        ctx.beginPath();
+        ctx.moveTo(arco.x, arco.y);
+        ctx.lineTo(arco.x + Math.cos(arco.startAngle) * arco.outerRadius, arco.y + Math.sin(arco.startAngle) * arco.outerRadius);
+        ctx.stroke();
+        ctx.restore();
+      });
+    },
+  };
+}
+
 // Registrado no carregamento do módulo (não dentro de um useEffect!). O
 // <Bar> do react-chartjs-2 cria o gráfico no PRÓPRIO useEffect dele, que —
 // por ser filho — dispara ANTES do efeito do componente pai. Registrar aqui

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Chart } from 'react-chartjs-2';
 import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/hooks/useTheme';
-import { chartChrome } from '@/lib/chartSetup';
+import { chartChrome, criarLinhasDivisoriaPizza } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { chaveComparacaoProduto } from '../calculations';
 import {
@@ -14,7 +14,7 @@ import {
   type Representatividade,
   type RepresentatividadePorCanal,
 } from '../historicoBi';
-import type { Produto } from '../types';
+import type { Categoria, Produto, Subcategoria } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
 interface GraficoRepresentacaoModalProps {
@@ -40,6 +40,11 @@ interface GraficoRepresentacaoModalProps {
   onEscolherSafra?: (safra: string | null) => void;
   /** Participação de cada Tabela (canal) nas vendas dos itens em vista (já recortada pelo mesmo filtroAtivo/safra) — omitido esconde o ícone de alternar pra essa visão. */
   representatividadePorCanal?: RepresentatividadePorCanal[];
+  /** Com os dois passados E sem filtro ativo, a pizza "por Produto" vira agrupada por Categoria
+   * mãe — uma fatia por Categoria, subdividida (mesma cor, borda tracejada) por Subcategoria.
+   * Com filtro ativo, ignorado — mantém a regra padrão (pizza por produto) de sempre. */
+  categorias?: Categoria[];
+  subcategorias?: Subcategoria[];
 }
 
 /** Ângulo áureo — espaça os matizes de forma bem distribuída pra qualquer quantidade de fatias, sem repetir cor entre produtos vizinhos. */
@@ -140,6 +145,8 @@ export function GraficoRepresentacaoModal({
   safraSelecionada,
   onEscolherSafra,
   representatividadePorCanal,
+  categorias,
+  subcategorias,
 }: GraficoRepresentacaoModalProps) {
   const { isDark } = useTheme();
   const c = useMemo(() => chartChrome(isDark), [isDark]);
@@ -169,6 +176,133 @@ export function GraficoRepresentacaoModal({
       })),
     };
   }, [filtroAtivo, nomePorId, representatividadePorProduto, agruparPorNomeEClasse, produtoPorId]);
+
+  // Sem filtro ativo E com categorias/subcategorias disponíveis: a pizza "por Produto" vira
+  // agrupada por Categoria mãe — uma fatia por Categoria (soma de tudo dela), subdividida por
+  // Subcategoria (mesma cor da Categoria, só a borda tracejada marcando onde uma Subcategoria
+  // termina e outra começa). Com filtro ativo, isso é ignorado (mantém a regra de sempre).
+  const emModoCategorias = !filtroAtivo && !!categorias && !!subcategorias;
+
+  interface SegmentoCategoria {
+    categoriaId: string;
+    categoriaNome: string;
+    rotulo: string;
+    valorCriterio: number;
+    novoGrupo: boolean;
+  }
+
+  const segmentosCategoria = useMemo((): SegmentoCategoria[] => {
+    if (!emModoCategorias || !categorias || !subcategorias) return [];
+    const categoriaPorId = new Map(categorias.map((cat) => [cat.id, cat]));
+    const subcategoriaPorId = new Map(subcategorias.map((sub) => [sub.id, sub]));
+    // categoriaId -> (subcategoriaId ?? '') -> soma
+    const acumulado = new Map<string, Map<string, number>>();
+    representatividadePorProduto.forEach((repr, produtoId) => {
+      const produto = produtoPorId.get(produtoId);
+      if (!produto) return;
+      const subChave = produto.subcategoriaId ?? '';
+      const porSub = acumulado.get(produto.categoriaId) ?? new Map<string, number>();
+      porSub.set(subChave, (porSub.get(subChave) ?? 0) + repr.valorCriterio);
+      acumulado.set(produto.categoriaId, porSub);
+    });
+
+    const categoriasComTotal = Array.from(acumulado.entries())
+      .map(([categoriaId, porSub]) => ({
+        categoriaId,
+        categoriaNome: categoriaPorId.get(categoriaId)?.nome ?? '—',
+        total: Array.from(porSub.values()).reduce((soma, v) => soma + v, 0),
+        porSub,
+      }))
+      .filter((cat) => cat.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    const segmentos: SegmentoCategoria[] = [];
+    categoriasComTotal.forEach(({ categoriaId, categoriaNome, porSub }) => {
+      Array.from(porSub.entries())
+        .filter(([, valor]) => valor > 0)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([subChave, valorCriterio], i) => {
+          const rotulo = subChave ? (subcategoriaPorId.get(subChave)?.nome ?? categoriaNome) : categoriaNome;
+          segmentos.push({ categoriaId, categoriaNome, rotulo, valorCriterio, novoGrupo: i === 0 });
+        });
+    });
+    return segmentos;
+  }, [emModoCategorias, categorias, subcategorias, representatividadePorProduto, produtoPorId]);
+
+  const corPorCategoriaId = useMemo(() => {
+    const mapa = new Map<string, string>();
+    let indice = 0;
+    segmentosCategoria.forEach((s) => {
+      if (!mapa.has(s.categoriaId)) mapa.set(s.categoriaId, corPorIndice(indice++, isDark));
+    });
+    return mapa;
+  }, [segmentosCategoria, isDark]);
+
+  // Legenda customizada (só Categorias, não uma entrada por Subcategoria) — a legenda nativa do
+  // Chart.js segue 1:1 com as fatias, então some por completo pra essa visão e usa essa lista à parte.
+  const legendaCategorias = useMemo(() => {
+    const totalGeral = segmentosCategoria.reduce((soma, s) => soma + s.valorCriterio, 0);
+    const totalPorCategoria = new Map<string, number>();
+    segmentosCategoria.forEach((s) => totalPorCategoria.set(s.categoriaId, (totalPorCategoria.get(s.categoriaId) ?? 0) + s.valorCriterio));
+    const vistos = new Set<string>();
+    return segmentosCategoria
+      .filter((s) => (vistos.has(s.categoriaId) ? false : (vistos.add(s.categoriaId), true)))
+      .map((s) => ({
+        categoriaId: s.categoriaId,
+        nome: s.categoriaNome,
+        pct: totalGeral > 0 ? ((totalPorCategoria.get(s.categoriaId) ?? 0) / totalGeral) * 100 : 0,
+      }));
+  }, [segmentosCategoria]);
+
+  const chartDataCategorias = useMemo(
+    () => ({
+      labels: segmentosCategoria.map((s) => s.rotulo),
+      datasets: [
+        {
+          type: 'pie' as const,
+          data: segmentosCategoria.map((s) => s.valorCriterio),
+          backgroundColor: segmentosCategoria.map((s) => corPorCategoriaId.get(s.categoriaId) ?? '#999'),
+          borderColor: c.tooltipBg,
+          borderWidth: 1,
+          borderDash: [3, 2],
+        },
+      ],
+    }),
+    [c, segmentosCategoria, corPorCategoriaId],
+  );
+
+  const chartOptionsCategorias = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx: { dataIndex: number }) => {
+              const s = segmentosCategoria[ctx.dataIndex];
+              const totalGeral = segmentosCategoria.reduce((soma, i) => soma + i.valorCriterio, 0);
+              const pct = totalGeral > 0 ? (s.valorCriterio / totalGeral) * 100 : 0;
+              const valorFormatado = criterio === 'qtd' ? `${fmtInt.format(Math.round(s.valorCriterio))} un.` : fmtBRL.format(s.valorCriterio);
+              const titulo = s.rotulo === s.categoriaNome ? s.categoriaNome : `${s.categoriaNome} — ${s.rotulo}`;
+              return [titulo, `${pct.toFixed(1)}%`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`];
+            },
+          },
+        },
+      },
+    }),
+    [criterio, segmentosCategoria],
+  );
+
+  const fronteirasCategoria = useMemo(() => {
+    const indices = new Set<number>();
+    segmentosCategoria.forEach((s, i) => {
+      if (s.novoGrupo && i > 0) indices.add(i);
+    });
+    return indices;
+  }, [segmentosCategoria]);
+
+  const pluginsPizzaCategorias = useMemo(() => [criarLinhasDivisoriaPizza(fronteirasCategoria, c.tooltipBg)], [fronteirasCategoria, c.tooltipBg]);
 
   const chartDataPizza = useMemo(
     () => ({
@@ -243,7 +377,7 @@ export function GraficoRepresentacaoModal({
     [c, criterio, porCanal],
   );
 
-  const semDados = modoPorTabela ? porCanal.length === 0 : fatias.length === 0;
+  const semDados = modoPorTabela ? porCanal.length === 0 : emModoCategorias ? segmentosCategoria.length === 0 : fatias.length === 0;
   const rotuloSafra = safraSelecionada ? historicoSafras?.find((s) => s.key === safraSelecionada)?.label : null;
   const trechoSafra = rotuloSafra ? `só a safra ${rotuloSafra}` : 'média das últimas safras';
   const trechoEscopo = filtroAtivo ? (
@@ -308,6 +442,28 @@ export function GraficoRepresentacaoModal({
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Chart type="pie" data={chartDataPizzaCanal as any} options={chartOptionsPizzaCanal as any} />
+          </div>
+        </>
+      ) : emModoCategorias ? (
+        <>
+          <p className="mb-3 text-xs text-[var(--color-text-soft)]">
+            Todo o sortimento — participação de cada Categoria (borda tracejada = Subcategoria, mesma cor da Categoria). Critério:{' '}
+            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>, {trechoSafra}.
+          </p>
+          <div className="flex h-96 items-center gap-4">
+            <div className="h-full min-w-0 flex-1">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <Chart type="pie" data={chartDataCategorias as any} options={chartOptionsCategorias as any} plugins={pluginsPizzaCategorias as any} />
+            </div>
+            <div className="flex w-44 shrink-0 flex-col gap-1.5 text-xs">
+              {legendaCategorias.map((l) => (
+                <span key={l.categoriaId} className="flex items-center gap-1.5 text-[var(--color-text)]">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: corPorCategoriaId.get(l.categoriaId) }} />
+                  <span className="min-w-0 flex-1 truncate">{l.nome}</span>
+                  <span className="num shrink-0 text-[var(--color-text-soft)]">{l.pct.toFixed(1)}%</span>
+                </span>
+              ))}
+            </div>
           </div>
         </>
       ) : (

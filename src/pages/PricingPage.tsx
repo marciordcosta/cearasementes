@@ -876,6 +876,8 @@ export function PricingPage() {
         safraSelecionada={safraSelecionadaGrafico}
         onEscolherSafra={setSafraSelecionadaGrafico}
         representatividadePorCanal={representatividadePorCanalGrafico}
+        categorias={categorias}
+        subcategorias={subcategorias}
       />
       <GraficoCurvaMensalModal
         produto={produtoGraficoLinha}
