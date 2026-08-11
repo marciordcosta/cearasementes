@@ -322,8 +322,8 @@ export function PricingTable({
       // o ícone ✎ libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
       chave: 'custo',
       rotulo: (
-        <span className="inline-flex items-center gap-1">
-          Custo (R$){edicaoCustoLote && <span className="text-[9px] font-normal whitespace-nowrap opacity-75">editando Vlr Kg</span>}
+        <span className="inline-flex items-center gap-1" title={edicaoCustoLote ? 'Editando Valor Kg' : undefined}>
+          {edicaoCustoLote ? 'Editando' : 'Custo (R$)'}
           {onAtualizarValorKg && (
             <button
               type="button"
