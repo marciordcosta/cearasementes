@@ -51,6 +51,17 @@ export function chaveComparacaoNome(nome: string): string {
   return primeirasDuasPalavras(nome);
 }
 
+/**
+ * Chave "mesmo produto entre fornecedores" pronta pra agrupar (Map/objeto) — nome destacado +
+ * Classe (subcategoria). Único lugar que monta essa chave; compra.ts, compraComparacao.ts e
+ * GraficoRepresentacaoModal.tsx reaproveitam em vez de remontar a mesma string cada um por conta
+ * própria (o critério já mudou de ideia 2x nessa mesma sessão — ter 1 lugar só evita esquecer de
+ * atualizar algum dos três da próxima vez).
+ */
+export function chaveComparacaoProduto(produto: { nome: string; subcategoriaId: string | null }): string {
+  return `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}`;
+}
+
 
 /**
  * Markup "por dentro": o preço é o custo dividido por (1 - soma de todos os

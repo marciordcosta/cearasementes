@@ -223,7 +223,7 @@ export type ClasseABC = 'A' | 'B' | 'C';
  * do módulo BI). O 1º item (maior valor) é SEMPRE Classe A, mesmo que ele
  * sozinho já ultrapasse 80% acumulado.
  */
-function classificarABCPorValor(itens: { id: string; valor: number }[]): Map<string, ClasseABC> {
+export function classificarABCPorValor(itens: { id: string; valor: number }[]): Map<string, ClasseABC> {
   const ordenados = [...itens].sort((a, b) => b.valor - a.valor);
   const total = ordenados.reduce((s, i) => s + i.valor, 0);
   const resultado = new Map<string, ClasseABC>();

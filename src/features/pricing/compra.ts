@@ -1,5 +1,5 @@
 import type { ItemAgg } from '@/features/bi/types';
-import { chaveComparacaoNome } from './calculations';
+import { chaveComparacaoProduto } from './calculations';
 import { qtdMensalTotalProduto } from './historicoBi';
 import type { Fornecedor, Produto } from './types';
 
@@ -54,14 +54,9 @@ export function calcularNecessidadeCompra(
   return produtosFornecedor
     .filter((p) => p.codigo)
     .map((produto) => {
-      const grupoNome = chaveComparacaoNome(produto.nome);
+      const grupoChave = chaveComparacaoProduto(produto);
       const outrosDoGrupo = todosProdutos.filter(
-        (p) =>
-          p.id !== produto.id &&
-          p.codigo &&
-          p.fornecedorId !== produto.fornecedorId &&
-          chaveComparacaoNome(p.nome) === grupoNome &&
-          p.subcategoriaId === produto.subcategoriaId,
+        (p) => p.id !== produto.id && p.codigo && p.fornecedorId !== produto.fornecedorId && chaveComparacaoProduto(p) === grupoChave,
       );
 
       const porFornecedor: FornecedorMensal[] = [

@@ -4,8 +4,8 @@ import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/hooks/useTheme';
 import { chartChrome } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
-import { chaveComparacaoNome } from '../calculations';
-import { ROTULO_CRITERIO_REPRESENTACAO, type ClasseABC, type CriterioRepresentacao, type Representatividade } from '../historicoBi';
+import { chaveComparacaoProduto } from '../calculations';
+import { classificarABCPorValor, ROTULO_CRITERIO_REPRESENTACAO, type ClasseABC, type CriterioRepresentacao, type Representatividade } from '../historicoBi';
 import type { Produto } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
@@ -81,27 +81,32 @@ interface ItemRepresentatividadeNomeado {
  * Junta, dentro do filtro ativo, produtos com o mesmo nome "destacado" no cadastro e mesma
  * Classe (subcategoria) — mesmo critério da busca inteligente de fornecedores no Planejamento
  * de Compra (ver chaveComparacaoNome em calculations.ts e compra.ts) — numa fatia só, somando os
- * valores. Nome/Classe exibidos vêm do item de maior valor do grupo (o "principal"); produto sem
- * match em `produtoPorId` fica sozinho.
+ * valores. Nome exibido vem do item de maior valor do grupo (o "principal"); produto sem match em
+ * `produtoPorId` fica sozinho. A Classe é RECALCULADA sobre o total já somado de cada grupo (não
+ * herdada do principal) — um grupo pode juntar vários fornecedores individualmente Classe C e
+ * ainda assim somar mais que muita Classe A/B sozinha; herdar do principal escondia esse grupo
+ * inteiro da fatia "Classes A e B" por engano.
  */
 function agruparPorNomeClasse(itens: ItemRepresentatividadeNomeado[], produtoPorId: Map<string, Produto>): ItemRepresentatividadeNomeado[] {
   const grupos = new Map<string, ItemRepresentatividadeNomeado>();
   for (const item of itens) {
     const produto = produtoPorId.get(item.produtoId);
-    const chave = produto ? `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}` : item.produtoId;
+    const chave = produto ? chaveComparacaoProduto(produto) : item.produtoId;
     const existente = grupos.get(chave);
     const valorCriterio = (existente?.valorCriterio ?? 0) + item.valorCriterio;
     const qtdMedia = (existente?.qtdMedia ?? 0) + item.qtdMedia;
     const pct = (existente?.pct ?? 0) + item.pct;
     if (!existente || item.valorCriterio > existente.valorCriterio) {
-      // Ainda não existe, ou esse item é o novo "principal" (maior valor) — nome/classe passam
-      // a vir dele, mas os totais já acumulados no grupo continuam somados.
+      // Ainda não existe, ou esse item é o novo "principal" (maior valor) — nome passa a vir
+      // dele, mas os totais já acumulados no grupo continuam somados.
       grupos.set(chave, { ...item, valorCriterio, qtdMedia, pct });
     } else {
       grupos.set(chave, { ...existente, valorCriterio, qtdMedia, pct });
     }
   }
-  return Array.from(grupos.values());
+  const agrupados = Array.from(grupos.values());
+  const classes = classificarABCPorValor(agrupados.map((i) => ({ id: i.produtoId, valor: i.valorCriterio })));
+  return agrupados.map((i) => ({ ...i, classe: classes.get(i.produtoId) ?? i.classe }));
 }
 
 /**

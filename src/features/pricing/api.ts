@@ -85,12 +85,10 @@ export async function inserirCanal(input: {
     .single();
   if (error) throw error;
 
-  const [{ data: categoriasIds, error: errCat }, { data: produtosIds, error: errProd }] = await Promise.all([
-    supabase.from('categorias').select('id'),
-    supabase.from('produtos').select('id'),
+  const [categoriasIds, produtosIds] = await Promise.all([
+    fetchAllRows<{ id: string }>((from, to) => supabase.from('categorias').select('id').range(from, to)),
+    fetchAllRows<{ id: string }>((from, to) => supabase.from('produtos').select('id').range(from, to)),
   ]);
-  if (errCat) throw errCat;
-  if (errProd) throw errProd;
 
   if (categoriasIds.length > 0) {
     const { error: errMargens } = await supabase
@@ -123,22 +121,24 @@ export async function garantirCanaisPreco(nomes: string[]): Promise<number> {
   const nomesExistentesLower = new Set(canaisExistentes.map((c) => c.nome.toLowerCase()));
   const faltantes = nomesUnicos.filter((nome) => !nomesExistentesLower.has(nome.toLowerCase()));
 
-  let ordem = canaisExistentes.length;
-  for (const nome of faltantes) {
-    await inserirCanal({
-      nome,
-      desconto: 0,
-      comissao: 0,
-      cartao: 0,
-      outrosEncargos: 0,
-      freteKg: 0,
-      fretePct: 0,
-      freteAdicionalTipo: 'fixo',
-      freteAdicionalValor: 0,
-      tipoImposto: 'estadual',
-      ordem: ordem++,
-    });
-  }
+  // Cada Tabela nova é independente das outras (canal_id próprio em categoria_margens/produto_precos) — sem risco em paralelo.
+  await Promise.all(
+    faltantes.map((nome, i) =>
+      inserirCanal({
+        nome,
+        desconto: 0,
+        comissao: 0,
+        cartao: 0,
+        outrosEncargos: 0,
+        freteKg: 0,
+        fretePct: 0,
+        freteAdicionalTipo: 'fixo',
+        freteAdicionalValor: 0,
+        tipoImposto: 'estadual',
+        ordem: canaisExistentes.length + i,
+      }),
+    ),
+  );
   return faltantes.length;
 }
 

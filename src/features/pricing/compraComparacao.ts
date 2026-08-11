@@ -1,4 +1,4 @@
-import { chaveComparacaoNome } from './calculations';
+import { chaveComparacaoProduto } from './calculations';
 import type { Fornecedor, Produto } from './types';
 
 export interface ItemComparacaoFornecedor {
@@ -34,7 +34,7 @@ export function calcularComparacaoFornecedores(produtos: Produto[], fornecedores
     const fornecedor = fornecedorPorId.get(produto.fornecedorId);
     if (!fornecedor) continue;
     const nomeLimpo = produto.nome.replace(/[*_]/g, '');
-    const chave = `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}`;
+    const chave = chaveComparacaoProduto(produto);
     const grupo = grupos.get(chave) ?? { nomeGrupo: nomeLimpo, itens: [] };
     grupo.itens.push({ fornecedorNome: fornecedor.nome, produtoNome: produto.nome, valorKg: produto.valorKg, valorSaco: produto.custo });
     grupos.set(chave, grupo);
