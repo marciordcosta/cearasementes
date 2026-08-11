@@ -276,7 +276,11 @@ export function GuiaPlantioModal({
     }
     if (kgPorHa === null || kgPorHa <= 0 || pesoSaco === null || pesoSaco <= 0) return;
     const sacosDigitados = parseInt(valorLimpo, 10);
-    const areaNova = (sacosDigitados * pesoSaco) / kgPorHa;
+    // Precisa usar o MESMO kg/ha arredondado pra cima que calcularResultado usa pra ir de
+    // Área -> Peso total (linha ~358) — senão o round-trip Sacos -> Área -> Sacos não bate e o
+    // campo "trava" num número diferente do que foi digitado sempre que a Taxa de Semeadura
+    // (kg/ha) não é um inteiro exato.
+    const areaNova = (sacosDigitados * pesoSaco) / Math.ceil(kgPorHa);
     atualizarItem(item.laudoId, { area: areaNova > 0 ? String(Math.round(areaNova * 100) / 100) : '' });
   }
 
