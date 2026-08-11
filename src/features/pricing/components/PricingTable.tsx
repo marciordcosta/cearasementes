@@ -85,6 +85,10 @@ interface PricingTableProps {
   representatividadePorProduto?: Map<string, Representatividade>;
   /** Igual acima, só que somando a média de cada produto em TODAS as Tabelas — alimenta a coluna "Repres. Geral (%)", logo depois de Custo. */
   representatividadeGeralPorProduto?: Map<string, Representatividade>;
+  /** true quando `produtos` já vem ordenado por Representação (ABC) — a divisória verde entre
+   * grupos passa a marcar troca de Classe (A/B/C) em vez de troca de Categoria, já que a lista
+   * não está mais agrupada por categoria nesse modo. */
+  ordenadoPorRepresentacao?: boolean;
   /** Clicar no cabeçalho "Repres." (qualquer uma das duas colunas) abre o gráfico em colunas — ver GraficoRepresentacaoModal.tsx. */
   onAbrirGraficoRepresentacao?: () => void;
   /** Clicar no VALOR (não no cabeçalho) de "Repres." abre a curva mensal daquele produto — ver GraficoCurvaMensalModal.tsx. */
@@ -134,6 +138,7 @@ export function PricingTable({
   margemAgregadaPorSafra,
   representatividadePorProduto,
   representatividadeGeralPorProduto,
+  ordenadoPorRepresentacao = false,
   onAbrirGraficoRepresentacao,
   onAbrirGraficoProduto,
   somenteCanal = false,
@@ -763,18 +768,26 @@ export function PricingTable({
           ) : (
             produtos.map((produto, indice) => {
               const anterior = indice > 0 ? produtos[indice - 1] : null;
-              const categoriaMudou = anterior !== null && produto.categoriaId !== anterior.categoriaId;
-              // Produto "diferente" do anterior (mesmo dentro da mesma categoria) — mesma
-              // linha divisória espessa usada entre categorias, só que verde quando a
-              // categoria TAMBÉM mudou.
+              // Ordenado por Representação (ABC): a lista não está mais agrupada por categoria,
+              // então a divisória verde passa a marcar troca de Classe (A/B/C) em vez de troca de
+              // Categoria — usa qualquer que seja a representatividade relevante aqui (Geral na
+              // grade principal, por Tabela na tela cheia por canal).
+              const mapaClasse = representatividadeGeralPorProduto ?? representatividadePorProduto;
+              const divisorPrincipalMudou =
+                anterior !== null &&
+                (ordenadoPorRepresentacao
+                  ? mapaClasse?.get(produto.id)?.classe !== mapaClasse?.get(anterior.id)?.classe
+                  : produto.categoriaId !== anterior.categoriaId);
+              // Produto "diferente" do anterior (mesmo dentro do mesmo grupo) — mesma linha
+              // divisória espessa usada entre grupos, só que verde quando o grupo TAMBÉM mudou.
               const produtoMudou = anterior !== null && chaveComparacaoNome(produto.nome) !== chaveComparacaoNome(anterior.nome);
-              const linhaEspessa = categoriaMudou || produtoMudou;
+              const linhaEspessa = divisorPrincipalMudou || produtoMudou;
               const destacada = produto.id === linhaDestacada;
               return (
                 <tr
                   key={produto.id}
                   onClick={() => setLinhaDestacada(produto.id)}
-                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? (categoriaMudou ? 'border-t-2 border-t-good' : 'border-t-2 border-t-[var(--color-line)]') : ''}`}
+                  className={`border-b border-[var(--color-line)] ${linhaEspessa ? (divisorPrincipalMudou ? 'border-t-2 border-t-good' : 'border-t-2 border-t-[var(--color-line)]') : ''}`}
                 >
                   {colunas.map((coluna) => {
                     const precisaAjuste = coluna.canalId !== undefined && (produto.precos[coluna.canalId]?.precisaAjuste ?? false);

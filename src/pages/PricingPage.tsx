@@ -832,6 +832,7 @@ export function PricingPage() {
               onRemoverProduto={onRemoverProduto}
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
               representatividadeGeralPorProduto={representatividadeGeralPorProduto}
+              ordenadoPorRepresentacao={ordenarPorRepresentacao}
               onAbrirGraficoRepresentacao={() => setGraficoRepresentacaoAberto(true)}
               onAbrirGraficoProduto={setProdutoGraficoLinha}
             />

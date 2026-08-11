@@ -219,6 +219,7 @@ export function ChannelFullscreenModal({
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}
             representatividadePorProduto={representatividadePorProduto}
+            ordenadoPorRepresentacao={ordenarPorRepresentacao}
             onAbrirGraficoRepresentacao={() => setGraficoAberto(true)}
             onAbrirGraficoProduto={setProdutoGraficoLinha}
             somenteCanal
