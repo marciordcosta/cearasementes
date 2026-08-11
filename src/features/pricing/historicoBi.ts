@@ -333,11 +333,15 @@ export interface RepresentatividadePorCanal {
 }
 
 /**
- * Participação de cada Tabela (canal) nas vendas totais dos produtos informados — soma o
- * critério escolhido (média das últimas safras, ou uma safra específica) de cada produto NESSE
- * canal, por canal. Sem `produtoIds`, considera todo o sortimento (com Código cadastrado); com
- * `produtoIds`, só esses (mesmo recorte do filtro/busca já aplicado na grade). Não filtra por
- * Curva ABC — o número de Tabelas já costuma ser pequeno o bastante pra mostrar todas.
+ * Participação de cada Tabela nas vendas totais dos produtos informados — soma o critério
+ * escolhido (média das últimas safras, ou uma safra específica) de cada produto NESSA Tabela, por
+ * Tabela. As Tabelas vêm do próprio histórico do BI (todo `tabela` visto nos relatórios), não só
+ * das Tabelas de Preço cadastradas em Parametrização — um nome que aparece nas vendas mas nunca
+ * foi cadastrado como Canal (ex.: um "Vendedor" à parte) ainda soma aqui, só usando o nome cru do
+ * relatório; nome que bate com um Canal cadastrado usa o nome "oficial" dele. Sem `produtoIds`,
+ * considera todo o sortimento (com Código cadastrado); com `produtoIds`, só esses (mesmo recorte
+ * do filtro/busca já aplicado na grade). Não filtra por Curva ABC — o número de Tabelas já
+ * costuma ser pequeno o bastante pra mostrar todas.
  */
 export function calcularRepresentatividadePorCanal(
   produtos: Produto[],
@@ -347,8 +351,21 @@ export function calcularRepresentatividadePorCanal(
   produtoIds?: Set<string>,
   safraEspecifica?: string,
 ): RepresentatividadePorCanal[] {
-  const porCanal = canais.map((canal) => {
-    const historicoPorCodigo = construirHistoricoPorCodigo(items, canal.nome);
+  const canalPorNomeNormalizado = new Map(canais.map((canal) => [canal.nome.trim().toLowerCase(), canal]));
+  // chave normalizada (trim + minúsculo) -> nome como apareceu no relatório, só pra ter um rótulo
+  // de exibição quando a Tabela não bate com nenhum Canal cadastrado.
+  const tabelaVistaPorChave = new Map<string, string>();
+  items.forEach((item) =>
+    item.monthly.forEach((m) => {
+      const nome = m.tabela.trim();
+      if (!nome) return;
+      const chave = nome.toLowerCase();
+      if (!tabelaVistaPorChave.has(chave)) tabelaVistaPorChave.set(chave, nome);
+    }),
+  );
+
+  const porCanal = Array.from(tabelaVistaPorChave.entries()).map(([chave, nomeVisto]) => {
+    const historicoPorCodigo = construirHistoricoPorCodigo(items, nomeVisto);
     let valorCriterio = 0;
     for (const produto of produtos) {
       if (!produto.codigo || (produtoIds && !produtoIds.has(produto.id))) continue;
@@ -356,7 +373,8 @@ export function calcularRepresentatividadePorCanal(
       if (!porSafra) continue;
       valorCriterio += mediaCriterioUltimasSafras(porSafra, criterio, safraEspecifica);
     }
-    return { canalId: canal.id, canalNome: canal.nome, valorCriterio };
+    const canalRegistrado = canalPorNomeNormalizado.get(chave);
+    return { canalId: canalRegistrado?.id ?? chave, canalNome: canalRegistrado?.nome ?? nomeVisto, valorCriterio };
   });
   const total = porCanal.reduce((s, c) => s + c.valorCriterio, 0);
   return porCanal
