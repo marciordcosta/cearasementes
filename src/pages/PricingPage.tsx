@@ -822,6 +822,7 @@ export function PricingPage() {
         open={modalCompraAberto}
         onFechar={() => setModalCompraAberto(false)}
         produtos={produtos}
+        produtosFiltrados={produtosExibidos}
         fornecedores={fornecedores}
         items={itemsAgregadosBi}
       />

@@ -13,7 +13,10 @@ import type { Fornecedor, Produto } from '../types';
 interface CompraModalProps {
   open: boolean;
   onFechar: () => void;
+  /** Catálogo inteiro — usado na necessidade por Fornecedor (a busca inteligente por nome+Classe precisa ver todo mundo, não só o que está filtrado na grade). */
   produtos: Produto[];
+  /** Já filtrado pelo "Filtrar:"/busca da grade principal — só o ícone de comparação de fornecedores usa esse (pra dar mais controle sobre o que entra no PDF). */
+  produtosFiltrados: Produto[];
   fornecedores: Fornecedor[];
   items: ItemAgg[];
 }
@@ -62,7 +65,7 @@ function tooltipMensal(porFornecedor: FornecedorMensal[], mesesSelecionados: Set
  * Pedido, que o usuário preenche/ajusta manualmente linha a linha; a divisão
  * por caminhão fica de fora do sistema, é feita manualmente por fora.
  */
-export function CompraModal({ open, onFechar, produtos, fornecedores, items }: CompraModalProps) {
+export function CompraModal({ open, onFechar, produtos, produtosFiltrados, fornecedores, items }: CompraModalProps) {
   const [fornecedorId, setFornecedorId] = useState('');
   const [mesesSelecionados, setMesesSelecionados] = useState<Set<number>>(new Set());
   const [estoqueTexto, setEstoqueTexto] = useState<Record<string, string>>({});
@@ -71,9 +74,13 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
 
   const produtosFornecedor = useMemo(() => produtos.filter((p) => p.fornecedorId === fornecedorId), [produtos, fornecedorId]);
 
-  // Comparação de preço entre fornecedores — independe do Fornecedor selecionado acima, olha o
-  // catálogo inteiro (mesma regra de nome+Classe da busca inteligente da necessidade, ver compra.ts).
-  const comparacaoFornecedores = useMemo(() => calcularComparacaoFornecedores(produtos, fornecedores), [produtos, fornecedores]);
+  // Comparação de preço entre fornecedores — independe do Fornecedor selecionado acima, mas
+  // respeita o "Filtrar:"/busca já aplicado na grade principal (dá mais controle sobre o que
+  // entra no PDF); mesma regra de nome+Classe da busca inteligente da necessidade (ver compra.ts).
+  const comparacaoFornecedores = useMemo(
+    () => calcularComparacaoFornecedores(produtosFiltrados, fornecedores),
+    [produtosFiltrados, fornecedores],
+  );
 
   const estoquePorProduto = useMemo(() => {
     const mapa: Record<string, number> = {};
