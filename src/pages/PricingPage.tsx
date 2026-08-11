@@ -39,6 +39,8 @@ import {
   inserirSubcategoria,
   upsertCategoriaMargem,
   upsertCategoriaMargemTolerancia,
+  upsertCategoriaReferencia,
+  upsertCategoriaReferenciaAjuste,
   upsertProdutoPreco,
   upsertSubcategoriaMargem,
 } from '@/features/pricing/api';
@@ -217,26 +219,25 @@ export function PricingPage() {
       const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
+  // Só o rótulo do "Filtrar:" (Categoria/Subcategoria/Fornecedor) — sem a busca por nome. Reaproveitado
+  // no gráfico da grade principal E passado pra tela cheia por Tabela, pra ela saber que um filtro
+  // "de fora" (não só a busca dela mesma) já está recortando os produtos que ela recebeu.
+  const rotuloFiltroClasse = useMemo(() => {
+    if (filtroClasse.startsWith('cat:')) return categorias.find((cat) => cat.id === filtroClasse.slice(4))?.nome ?? null;
+    if (filtroClasse.startsWith('forn:')) return fornecedores.find((f) => f.id === filtroClasse.slice(5))?.nome ?? null;
+    if (filtroClasse.startsWith('sub:')) return subcategorias.find((s) => s.id === filtroClasse.slice(4))?.nome ?? null;
+    return null;
+  }, [filtroClasse, categorias, subcategorias, fornecedores]);
+
   // Filtro Categoria/Fornecedor E/OU busca por nome, os dois juntos — qualquer um dos dois ativo já
   // vira o gráfico de Representação Geral em pizza (participação dentro do que está filtrado/buscado
   // na grade); sem nenhum dos dois, volta pro formato em colunas (todo o sortimento).
   const filtroAtivoGrafico = useMemo(() => {
     const buscaAtiva = buscaProduto.trim().length > 0;
-    if (filtroClasse === 'todas' && !buscaAtiva) return null;
-
-    let rotuloFiltro: string | null = null;
-    if (filtroClasse.startsWith('cat:')) {
-      rotuloFiltro = categorias.find((cat) => cat.id === filtroClasse.slice(4))?.nome ?? null;
-    } else if (filtroClasse.startsWith('forn:')) {
-      rotuloFiltro = fornecedores.find((f) => f.id === filtroClasse.slice(5))?.nome ?? null;
-    } else if (filtroClasse.startsWith('sub:')) {
-      rotuloFiltro = subcategorias.find((s) => s.id === filtroClasse.slice(4))?.nome ?? null;
-    }
-    const partesRotulo = [rotuloFiltro, buscaAtiva ? `"${buscaProduto.trim()}"` : null].filter((parte): parte is string => parte !== null);
-    if (partesRotulo.length === 0) return null;
-
+    if (!rotuloFiltroClasse && !buscaAtiva) return null;
+    const partesRotulo = [rotuloFiltroClasse, buscaAtiva ? `"${buscaProduto.trim()}"` : null].filter((parte): parte is string => parte !== null);
     return { rotulo: partesRotulo.join(' + '), produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
-  }, [filtroClasse, buscaProduto, categorias, subcategorias, fornecedores, produtosFiltrados]);
+  }, [rotuloFiltroClasse, buscaProduto, produtosFiltrados]);
 
   // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
   const produtosExibidos = !ordenarPorRepresentacao
@@ -415,14 +416,21 @@ export function PricingPage() {
       setErro('É necessário manter ao menos uma Tabela de Preço ativa no sistema.');
       return;
     }
-    setCanais((prev) =>
-      prev.filter((c) => c.id !== canalId).map((c) => (c.margemReferenciaCanalId === canalId ? { ...c, margemReferenciaCanalId: null } : c)),
+    setCanais((prev) => prev.filter((c) => c.id !== canalId));
+    setCategorias((prev) =>
+      prev.map((cat) => {
+        const margens = { ...cat.margens };
+        delete margens[canalId];
+        const referenciaCanalId = { ...cat.referenciaCanalId };
+        delete referenciaCanalId[canalId];
+        Object.keys(referenciaCanalId).forEach((cId) => {
+          if (referenciaCanalId[cId] === canalId) delete referenciaCanalId[cId];
+        });
+        const referenciaAjustePct = { ...cat.referenciaAjustePct };
+        delete referenciaAjustePct[canalId];
+        return { ...cat, margens, referenciaCanalId, referenciaAjustePct };
+      }),
     );
-    setCategorias((prev) => prev.map((cat) => {
-      const margens = { ...cat.margens };
-      delete margens[canalId];
-      return { ...cat, margens };
-    }));
     setSubcategorias((prev) => prev.map((sub) => {
       const margens = { ...sub.margens };
       delete margens[canalId];
@@ -476,16 +484,32 @@ export function PricingPage() {
     debounced(`tolerancia-${categoriaId}-${canalId}`, () => upsertCategoriaMargemTolerancia(categoriaId, canalId, valor));
   }
 
-  /** null = volta a calcular por categoria; um canalId = passa a mirar o mesmo Margem R$ desse outro canal. */
-  function onAtualizarMargemReferencia(canalId: string, valor: string | null) {
-    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, margemReferenciaCanalId: valor } : c)));
-    salvarAgora(() => atualizarCanal(canalId, { margem_referencia_canal_id: valor }));
+  /** true = essa Tabela inteira passa a operar "por referência" (a Tabela referenciada em si é escolhida por Categoria, ver onAtualizarCategoriaReferencia). false = volta a calcular por categoria/subcategoria normal. */
+  function onAtualizarCanalModoMargem(canalId: string, porReferencia: boolean) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, margemPorReferencia: porReferencia } : c)));
+    salvarAgora(() => atualizarCanal(canalId, { margem_por_referencia: porReferencia }));
+  }
+
+  /** null = essa categoria ainda não escolheu (ou volta a não ter) referência pra esse canal. */
+  function onAtualizarCategoriaReferencia(categoriaId: string, canalId: string, valor: string | null) {
+    setCategorias((prev) =>
+      prev.map((c) => {
+        if (c.id !== categoriaId) return c;
+        const referenciaCanalId = { ...c.referenciaCanalId };
+        if (valor === null) delete referenciaCanalId[canalId];
+        else referenciaCanalId[canalId] = valor;
+        return { ...c, referenciaCanalId };
+      }),
+    );
+    salvarAgora(() => upsertCategoriaReferencia(categoriaId, canalId, valor));
   }
 
   /** 0 = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor antes de virar a meta. */
-  function onAtualizarMargemReferenciaAjuste(canalId: string, valor: number) {
-    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, margemReferenciaAjustePct: valor } : c)));
-    salvarAgora(() => atualizarCanal(canalId, { margem_referencia_ajuste_pct: valor }));
+  function onAtualizarCategoriaReferenciaAjuste(categoriaId: string, canalId: string, valor: number) {
+    setCategorias((prev) =>
+      prev.map((c) => (c.id === categoriaId ? { ...c, referenciaAjustePct: { ...c.referenciaAjustePct, [canalId]: valor } } : c)),
+    );
+    debounced(`referencia-ajuste-${categoriaId}-${canalId}`, () => upsertCategoriaReferenciaAjuste(categoriaId, canalId, valor));
   }
 
   function onRemoverCategoria(categoriaId: string) {
@@ -842,6 +866,8 @@ export function PricingPage() {
         fornecedores={fornecedores}
         todosCanais={canais}
         transportadoras={transportadoras}
+        filtroExternoRotulo={rotuloFiltroClasse}
+        agruparPorNomeEClasse={filtroClasse.startsWith('cat:')}
         onFechar={() => setCanalTelaCheiaId(null)}
         onUpdatePreco={onUpdatePreco}
         onResetPreco={onResetPreco}
@@ -961,8 +987,9 @@ export function PricingPage() {
             onRenomearSubcategoria={onRenomearSubcategoria}
             onRemoverSubcategoria={onRemoverSubcategoria}
             onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}
-            onAtualizarMargemReferencia={onAtualizarMargemReferencia}
-            onAtualizarMargemReferenciaAjuste={onAtualizarMargemReferenciaAjuste}
+            onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}
+            onAtualizarCategoriaReferencia={onAtualizarCategoriaReferencia}
+            onAtualizarCategoriaReferenciaAjuste={onAtualizarCategoriaReferenciaAjuste}
           />
         )}
         {abaParametrizacao === 'fornecedores' && (

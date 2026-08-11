@@ -53,13 +53,17 @@ export function primeirasDuasPalavras(nome: string): string {
  * pra esse canal, ele sobrepõe o da categoria pai — senão, usa o da
  * categoria (imposto nunca vem da subcategoria, só a margem).
  *
- * Sugestão de Margem por referência: se o canal tiver `margemReferenciaCanalId`,
- * o preço sugerido IGNORA margemAlvo (%) e passa a mirar o mesmo Margem R$
- * que o canal referenciado calcula pra esse produto — usando os
- * encargos/frete/imposto DESTE canal pra resolver o preço. `permitirReferencia`
- * (default true) existe só pra impedir encadeamento: ao resolver a meta,
- * a chamada recursiva pro canal de referência sempre usa `false`, ignorando
- * a própria referência DELE (nunca uma cadeia A→B→C, só 1 nível).
+ * Sugestão de Margem por referência: se o canal tiver `margemPorReferencia` E a
+ * categoria do produto tiver escolhido uma Tabela pra esse canal
+ * (`categoria.referenciaCanalId[canal.id]`), o preço sugerido IGNORA margemAlvo
+ * (%) e passa a mirar o mesmo Margem R$ que a Tabela referenciada calcula pra
+ * esse produto — usando os encargos/frete/imposto DESTE canal pra resolver o
+ * preço. A referência é escolhida POR CATEGORIA (não pra Tabela inteira): a
+ * mesma Tabela pode mirar Tabelas diferentes conforme a categoria do produto.
+ * `permitirReferencia` (default true) existe só pra impedir encadeamento: ao
+ * resolver a meta, a chamada recursiva pra Tabela de referência sempre usa
+ * `false`, ignorando a própria referência DELA (nunca uma cadeia A→B→C, só 1
+ * nível).
  */
 export function calcularCanal(
   produto: Produto,
@@ -104,7 +108,8 @@ export function calcularCanal(
   const custoBase = Math.max(0, produto.custo + freteKgComponente + outrosEncargos + valorDespesaExtra - freteAdicionalReais);
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
 
-  const canalReferencia = permitirReferencia && canal.margemReferenciaCanalId ? canaisPorId.get(canal.margemReferenciaCanalId) : undefined;
+  const referenciaCanalId = canal.margemPorReferencia ? categoria.referenciaCanalId[canal.id] : undefined;
+  const canalReferencia = permitirReferencia && referenciaCanalId ? canaisPorId.get(referenciaCanalId) : undefined;
   const toleranciaPct = categoria.tolerancias[canal.id];
   // Base do alerta de tolerância: "por categoria" é a % sugerida de sempre (margemAlvo). "Por
   // referência" é diferente — a tabela "mãe" pode ter sido ajustada manualmente (preço bem
@@ -118,7 +123,7 @@ export function calcularCanal(
     // Ajuste "por dentro" (mesma convenção do resto do sistema): o % representa uma fração
     // da PRÓPRIA meta, não da margem de referência — tirando esse % da meta, volta pra
     // margem da referência. Por isso divide (não multiplica) pelo complemento do %.
-    const divisorAjuste = 1 - (canal.margemReferenciaAjustePct || 0) / 100;
+    const divisorAjuste = 1 - (categoria.referenciaAjustePct[canal.id] || 0) / 100;
     const metaReais = divisorAjuste <= 0.01 ? referencia.margemReais / 0.01 : referencia.margemReais / divisorAjuste;
     const pctParaMeta = impostoPct + encargosPct + (freteConsiderado ? fretePctEfetivo : 0);
     const baseParaMeta = freteConsiderado ? custoBase : produto.custo + outrosEncargos + valorDespesaExtra;

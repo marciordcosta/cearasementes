@@ -144,10 +144,8 @@ export interface Database {
           ordem: number;
           /** Transportadora+Região (tabela `transportadoras`) usada pra alimentar frete_kg/frete_pct automaticamente */
           transportadora_id: string | null;
-          /** Preenchido, ignora a margem % da categoria/subcategoria — mira o mesmo Margem R$ desse outro canal. */
-          margem_referencia_canal_id: string | null;
-          /** 0 (padrão) = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor. */
-          margem_referencia_ajuste_pct: number;
+          /** true = essa Tabela ignora a margem % da categoria/subcategoria — mira o mesmo Margem R$ de outra Tabela, escolhida por Categoria (ver categoria_margens.referencia_canal_id). */
+          margem_por_referencia: boolean;
           criado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em'>;
@@ -169,12 +167,23 @@ export interface Database {
       };
       categoria_margens: {
         // tolerancia_pct: pontos percentuais em volta da margem sugerida — null = sem alerta configurado pra essa categoria+canal.
-        // margem_pct e tolerancia_pct são opcionais no Insert (cada um tem seu próprio upsert, só
-        // atualizando a coluna que mudou — a outra já existe na linha, ou usa o default do banco).
-        Row: { categoria_id: string; canal_id: string; margem_pct: number; tolerancia_pct: number | null };
-        Insert: Omit<Database['public']['Tables']['categoria_margens']['Row'], 'margem_pct' | 'tolerancia_pct'> & {
+        // referencia_canal_id/referencia_ajuste_pct: só valem quando a Tabela (canais_preco.margem_por_referencia)
+        // está em "por referência" — cada Categoria escolhe a SUA própria Tabela de referência por canal.
+        // Todos são opcionais no Insert (cada um tem seu próprio upsert, só atualizando a coluna que
+        // mudou — as outras já existem na linha, ou usam o default do banco).
+        Row: {
+          categoria_id: string;
+          canal_id: string;
+          margem_pct: number;
+          tolerancia_pct: number | null;
+          referencia_canal_id: string | null;
+          referencia_ajuste_pct: number;
+        };
+        Insert: Omit<Database['public']['Tables']['categoria_margens']['Row'], 'margem_pct' | 'tolerancia_pct' | 'referencia_canal_id' | 'referencia_ajuste_pct'> & {
           margem_pct?: number;
           tolerancia_pct?: number | null;
+          referencia_canal_id?: string | null;
+          referencia_ajuste_pct?: number;
         };
         Update: Partial<Database['public']['Tables']['categoria_margens']['Row']>;
         Relationships: [];

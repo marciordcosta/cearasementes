@@ -19,10 +19,8 @@ export interface Canal {
   ordem: number;
   /** Transportadora+Região (módulo Fretes) que alimentou frete_kg/frete_pct — null se preenchido manualmente */
   transportadoraId: string | null;
-  /** Preenchido, a margem alvo (%) da categoria/subcategoria é ignorada — o preço sugerido mira o mesmo valor de Margem R$ que ESSE outro canal calcula, usando os encargos/frete/imposto DESTE canal. */
-  margemReferenciaCanalId: string | null;
-  /** 0 (padrão) = mira a Margem R$ da referência sem alteração; positivo/negativo = ajusta esse % sobre o valor antes de virar a meta (ex.: -5 tira 5% da margem da referência). Só vale com margemReferenciaCanalId preenchido. */
-  margemReferenciaAjustePct: number;
+  /** true = a margem alvo (%) da categoria/subcategoria é ignorada — o preço sugerido mira o mesmo valor de Margem R$ que OUTRA Tabela calcula, usando os encargos/frete/imposto DESTE canal. Qual Tabela referenciar (e o ajuste %) é escolhido por Categoria — ver Categoria.referenciaCanalId/referenciaAjustePct. */
+  margemPorReferencia: boolean;
 }
 
 export interface Categoria {
@@ -35,6 +33,10 @@ export interface Categoria {
   margens: Record<string, number>;
   /** canalId -> tolerância (pontos percentuais) em volta da margem alvo — chave ausente = sem alerta configurado. Só vale quando o canal calcula "por categoria" (não "por referência"). */
   tolerancias: Record<string, number>;
+  /** canalId -> id de OUTRA Tabela a referenciar — só lido quando esse canal está em "por referência" (Canal.margemPorReferencia). Cada Categoria escolhe a sua própria referência por Tabela (ex.: Capim mira Revenda PI na Revenda CE, Milho mira Padrão na mesma Revenda CE). Chave ausente = essa categoria ainda não escolheu. */
+  referenciaCanalId: Record<string, string>;
+  /** canalId -> ajuste (%) sobre a Margem R$ da referência dessa categoria — positivo/negativo, 0 = sem ajuste (padrão). Só vale com referenciaCanalId preenchido pra esse canal. */
+  referenciaAjustePct: Record<string, number>;
 }
 
 /** Subcategoria (Parametrização) — não tem alíquota própria (imposto sempre vem da categoria pai). */

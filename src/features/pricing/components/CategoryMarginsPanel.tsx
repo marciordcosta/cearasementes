@@ -43,10 +43,12 @@ interface CategoryMarginsPanelProps {
   onRemoverSubcategoria: (id: string) => void;
   /** valor null = apaga o override, volta a herdar a margem da categoria pai. */
   onAtualizarMargemSubcategoria: (subcategoriaId: string, canalId: string, valor: number | null) => void;
-  /** valor null = volta a calcular por categoria; um canalId = passa a mirar o mesmo Margem R$ desse outro canal. */
-  onAtualizarMargemReferencia: (canalId: string, valor: string | null) => void;
+  /** true = essa Tabela inteira passa a operar "por referência" (a Tabela referenciada em si é escolhida por Categoria); false = volta a "por categoria". */
+  onAtualizarCanalModoMargem: (canalId: string, porReferencia: boolean) => void;
+  /** null = essa categoria ainda não escolheu (ou volta a não ter) referência pra esse canal. */
+  onAtualizarCategoriaReferencia: (categoriaId: string, canalId: string, valor: string | null) => void;
   /** 0 = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor antes de virar a meta. */
-  onAtualizarMargemReferenciaAjuste: (canalId: string, valor: number) => void;
+  onAtualizarCategoriaReferenciaAjuste: (categoriaId: string, canalId: string, valor: number) => void;
 }
 
 export function CategoryMarginsPanel({
@@ -62,8 +64,9 @@ export function CategoryMarginsPanel({
   onRenomearSubcategoria,
   onRemoverSubcategoria,
   onAtualizarMargemSubcategoria,
-  onAtualizarMargemReferencia,
-  onAtualizarMargemReferenciaAjuste,
+  onAtualizarCanalModoMargem,
+  onAtualizarCategoriaReferencia,
+  onAtualizarCategoriaReferenciaAjuste,
 }: CategoryMarginsPanelProps) {
   const [nome, setNome] = useState('');
   const [estadual, setEstadual] = useState('');
@@ -90,27 +93,22 @@ export function CategoryMarginsPanel({
     setAdicionandoSubDe(null);
   }
 
-  function nomeReferencia(canal: Canal): string | undefined {
-    return canal.margemReferenciaCanalId ? canais.find((c) => c.id === canal.margemReferenciaCanalId)?.nome : undefined;
-  }
-
   /**
-   * Escolher `candidatoId` como referência de `canalId` criaria um ciclo (ex.:
-   * Revenda PI já referencia Revenda CE — deixar a Revenda CE referenciar a
-   * Revenda PI de volta é confuso, já que cada uma passaria a mirar a % "crua"
-   * de Categoria da outra, não o que aparece de verdade na tela dela — ver
-   * calculations.ts, `permitirReferencia`). Segue a cadeia de referências a
-   * partir do candidato; se ela chegar de volta em `canalId`, bloqueia.
+   * Escolher `candidatoId` como referência de `canalId` PARA ESSA CATEGORIA criaria um ciclo
+   * (ex.: nessa categoria, Revenda PI já referencia Revenda CE — deixar a Revenda CE referenciar
+   * a Revenda PI de volta é confuso, já que cada uma passaria a mirar a % "crua" de Categoria da
+   * outra, não o que aparece de verdade na tela dela — ver calculations.ts, `permitirReferencia`).
+   * Cada categoria tem sua própria cadeia de referências (categoria.referenciaCanalId), então o
+   * mesmo par de Tabelas pode ser cíclico numa categoria e não ser em outra.
    */
-  function criariCiclo(canalId: string, candidatoId: string): boolean {
-    const porId = new Map(canais.map((c) => [c.id, c]));
+  function criariCiclo(categoria: Categoria, canalId: string, candidatoId: string): boolean {
     let atual: string | null = candidatoId;
     const visitados = new Set<string>();
     while (atual) {
       if (atual === canalId) return true;
       if (visitados.has(atual)) return false;
       visitados.add(atual);
-      atual = porId.get(atual)?.margemReferenciaCanalId ?? null;
+      atual = categoria.referenciaCanalId[atual] ?? null;
     }
     return false;
   }
@@ -142,51 +140,14 @@ export function CategoryMarginsPanel({
                 <td className="border-r-2 border-[var(--color-line)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Interestadual</td>
                 {canais.map((canal) => (
                   <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1">
-                    <div className="flex flex-col gap-1">
-                      <select
-                        value={canal.margemReferenciaCanalId ? 'referencia' : 'categoria'}
-                        onChange={(e) => {
-                          if (e.target.value === 'categoria') {
-                            onAtualizarMargemReferencia(canal.id, null);
-                          } else {
-                            const outro = canais.find((c) => c.id !== canal.id && !criariCiclo(canal.id, c.id));
-                            if (outro) onAtualizarMargemReferencia(canal.id, outro.id);
-                          }
-                        }}
-                        className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
-                      >
-                        <option value="categoria">Por categoria</option>
-                        <option value="referencia">Por referência</option>
-                      </select>
-                      {canal.margemReferenciaCanalId && (
-                        <div className="flex gap-1">
-                          <select
-                            value={canal.margemReferenciaCanalId}
-                            onChange={(e) => onAtualizarMargemReferencia(canal.id, e.target.value)}
-                            className="min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
-                          >
-                            {canais
-                              // Mantém a opção já selecionada na lista mesmo que ela hoje "criasse" um ciclo
-                              // (ex.: as duas pontas de uma referência cruzada já configurada antes dessa
-                              // trava existir) — só barra escolher uma NOVA opção que geraria confusão.
-                              .filter((c) => c.id !== canal.id && (c.id === canal.margemReferenciaCanalId || !criariCiclo(canal.id, c.id)))
-                              .map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.nome}
-                                </option>
-                              ))}
-                          </select>
-                          <input
-                            type="number"
-                            title="Ajuste (%) sobre a Margem R$ da referência — positivo ou negativo"
-                            placeholder="0%"
-                            value={canal.margemReferenciaAjustePct || ''}
-                            onChange={(e) => onAtualizarMargemReferenciaAjuste(canal.id, parseFloat(e.target.value) || 0)}
-                            className="w-12 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-[11px] text-[var(--color-text)]"
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <select
+                      value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
+                      onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
+                      className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
+                    >
+                      <option value="categoria">Por categoria</option>
+                      <option value="referencia">Por referência</option>
+                    </select>
                   </td>
                 ))}
                 <td className="px-3 py-1" />
@@ -229,39 +190,58 @@ export function CategoryMarginsPanel({
                           className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                         />
                       </td>
-                      {canais.map((canal) => {
-                        const referencia = nomeReferencia(canal);
-                        return (
-                          <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1">
-                            {referencia ? (
-                              <div className="flex items-center gap-1">
-                                <div className="min-w-0 flex-1 rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text)]">
-                                  {referencia}
-                                </div>
-                                <CampoTolerancia
-                                  valor={cat.tolerancias[canal.id]}
-                                  onAtualizar={(valor) => onAtualizarTolerancia(cat.id, canal.id, valor)}
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  defaultValue={cat.margens[canal.id] ?? 20}
-                                  onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
-                                  className="num w-16 min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
-                                />
-                                <CampoTolerancia
-                                  valor={cat.tolerancias[canal.id]}
-                                  onAtualizar={(valor) => onAtualizarTolerancia(cat.id, canal.id, valor)}
-                                />
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
+                      {canais.map((canal) => (
+                        <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1">
+                          {canal.margemPorReferencia ? (
+                            <div className="flex items-center gap-1">
+                              <select
+                                value={cat.referenciaCanalId[canal.id] ?? ''}
+                                onChange={(e) => onAtualizarCategoriaReferencia(cat.id, canal.id, e.target.value || null)}
+                                className="min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
+                              >
+                                <option value="">— selecione —</option>
+                                {canais
+                                  // Mantém a opção já selecionada na lista mesmo que ela hoje "criasse" um ciclo
+                                  // (ex.: as duas pontas de uma referência cruzada já configurada antes dessa
+                                  // trava existir) — só barra escolher uma NOVA opção que geraria confusão.
+                                  .filter((c) => c.id !== canal.id && (c.id === cat.referenciaCanalId[canal.id] || !criariCiclo(cat, canal.id, c.id)))
+                                  .map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.nome}
+                                    </option>
+                                  ))}
+                              </select>
+                              <input
+                                type="number"
+                                title="Ajuste (%) sobre a Margem R$ da referência — positivo ou negativo"
+                                placeholder="0%"
+                                defaultValue={cat.referenciaAjustePct[canal.id] || ''}
+                                onBlur={(e) => onAtualizarCategoriaReferenciaAjuste(cat.id, canal.id, parseFloat(e.target.value) || 0)}
+                                className="w-12 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-[11px] text-[var(--color-text)]"
+                              />
+                              <CampoTolerancia
+                                valor={cat.tolerancias[canal.id]}
+                                onAtualizar={(valor) => onAtualizarTolerancia(cat.id, canal.id, valor)}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                defaultValue={cat.margens[canal.id] ?? 20}
+                                onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
+                                className="num w-16 min-w-0 flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
+                              />
+                              <CampoTolerancia
+                                valor={cat.tolerancias[canal.id]}
+                                onAtualizar={(valor) => onAtualizarTolerancia(cat.id, canal.id, valor)}
+                              />
+                            </div>
+                          )}
+                        </td>
+                      ))}
                       <td className="px-3 py-1">
                         <button type="button" onClick={() => onRemoverCategoria(cat.id)} title="Deletar categoria" className="text-[var(--color-text-soft)] hover:text-bad">
                           🗑
@@ -284,31 +264,27 @@ export function CategoryMarginsPanel({
                         </td>
                         <td className="px-3 py-1 text-center text-[var(--color-text-soft)]">—</td>
                         <td className="border-r-2 border-[var(--color-line)] px-3 py-1 text-center text-[var(--color-text-soft)]">—</td>
-                        {canais.map((canal) => {
-                          const referencia = nomeReferencia(canal);
-                          return (
-                            <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1">
-                              {referencia ? (
-                                <div className="rounded-md border border-dashed border-[var(--color-line)] px-2 py-1 text-center text-[11px] font-semibold text-[var(--color-text)]">
-                                  {referencia}
-                                </div>
-                              ) : (
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  placeholder={String(cat.margens[canal.id] ?? 20)}
-                                  defaultValue={sub.margens[canal.id] ?? ''}
-                                  onBlur={(e) => {
-                                    const texto = e.target.value.trim();
-                                    onAtualizarMargemSubcategoria(sub.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
-                                  }}
-                                  className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)] placeholder:text-[var(--color-text-soft)]"
-                                />
-                              )}
-                            </td>
-                          );
-                        })}
+                        {canais.map((canal) => (
+                          <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1">
+                            {canal.margemPorReferencia ? (
+                              // Segue a referência escolhida pela categoria mãe — nada pra configurar aqui.
+                              <div className="px-2 py-1 text-center text-[var(--color-text-soft)]">—</div>
+                            ) : (
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                placeholder={String(cat.margens[canal.id] ?? 20)}
+                                defaultValue={sub.margens[canal.id] ?? ''}
+                                onBlur={(e) => {
+                                  const texto = e.target.value.trim();
+                                  onAtualizarMargemSubcategoria(sub.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
+                                }}
+                                className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)] placeholder:text-[var(--color-text-soft)]"
+                              />
+                            )}
+                          </td>
+                        ))}
                         <td className="px-3 py-1">
                           <button type="button" onClick={() => onRemoverSubcategoria(sub.id)} title="Deletar subcategoria" className="text-[var(--color-text-soft)] hover:text-bad">
                             🗑

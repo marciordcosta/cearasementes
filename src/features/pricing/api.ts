@@ -29,8 +29,7 @@ function canalFromRow(row: CanalRow): Canal {
     corIndice: row.cor_indice,
     ordem: row.ordem,
     transportadoraId: row.transportadora_id,
-    margemReferenciaCanalId: row.margem_referencia_canal_id,
-    margemReferenciaAjustePct: row.margem_referencia_ajuste_pct,
+    margemPorReferencia: row.margem_por_referencia,
   };
 }
 
@@ -80,8 +79,7 @@ export async function inserirCanal(input: {
       cor_indice: input.ordem,
       ordem: input.ordem,
       transportadora_id: input.transportadoraId ?? null,
-      margem_referencia_canal_id: null,
-      margem_referencia_ajuste_pct: 0,
+      margem_por_referencia: false,
     })
     .select('*')
     .single();
@@ -157,7 +155,7 @@ export async function apagarCanal(id: string): Promise<void> {
 export async function fetchCategorias(): Promise<Categoria[]> {
   const [categoriasRows, margensRows] = await Promise.all([
     fetchAllRows<CategoriaRow>((from, to) => supabase.from('categorias').select('*').order('ordem').range(from, to)),
-    fetchAllRows<{ categoria_id: string; canal_id: string; margem_pct: number; tolerancia_pct: number | null }>((from, to) =>
+    fetchAllRows<Database['public']['Tables']['categoria_margens']['Row']>((from, to) =>
       supabase.from('categoria_margens').select('*').range(from, to),
     ),
   ]);
@@ -165,11 +163,15 @@ export async function fetchCategorias(): Promise<Categoria[]> {
   return categoriasRows.map((row) => {
     const margens: Record<string, number> = {};
     const tolerancias: Record<string, number> = {};
+    const referenciaCanalId: Record<string, string> = {};
+    const referenciaAjustePct: Record<string, number> = {};
     margensRows
       .filter((m) => m.categoria_id === row.id)
       .forEach((m) => {
         margens[m.canal_id] = m.margem_pct;
         if (m.tolerancia_pct !== null) tolerancias[m.canal_id] = m.tolerancia_pct;
+        if (m.referencia_canal_id !== null) referenciaCanalId[m.canal_id] = m.referencia_canal_id;
+        if (m.referencia_ajuste_pct) referenciaAjustePct[m.canal_id] = m.referencia_ajuste_pct;
       });
     return {
       id: row.id,
@@ -179,6 +181,8 @@ export async function fetchCategorias(): Promise<Categoria[]> {
       ordem: row.ordem,
       margens,
       tolerancias,
+      referenciaCanalId,
+      referenciaAjustePct,
     };
   });
 }
@@ -200,7 +204,17 @@ export async function inserirCategoria(input: { nome: string; estadual: number; 
     canais.forEach((c) => (margens[c.id] = 20));
   }
 
-  return { id: data.id, nome: data.nome, estadual: data.estadual, interestadual: data.interestadual, ordem: data.ordem, margens, tolerancias: {} };
+  return {
+    id: data.id,
+    nome: data.nome,
+    estadual: data.estadual,
+    interestadual: data.interestadual,
+    ordem: data.ordem,
+    margens,
+    tolerancias: {},
+    referenciaCanalId: {},
+    referenciaAjustePct: {},
+  };
 }
 
 export async function atualizarCategoria(id: string, patch: Partial<Pick<CategoriaRow, 'nome' | 'estadual' | 'interestadual' | 'ordem'>>): Promise<void> {
@@ -225,6 +239,21 @@ export async function upsertCategoriaMargemTolerancia(categoriaId: string, canal
   const { error } = await supabase
     .from('categoria_margens')
     .upsert({ categoria_id: categoriaId, canal_id: canalId, tolerancia_pct: valor });
+  if (error) throw error;
+}
+
+/** valor null = essa categoria volta a não ter referência escolhida pra esse canal (só importa se o canal estiver em "por referência"). */
+export async function upsertCategoriaReferencia(categoriaId: string, canalId: string, valor: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('categoria_margens')
+    .upsert({ categoria_id: categoriaId, canal_id: canalId, referencia_canal_id: valor });
+  if (error) throw error;
+}
+
+export async function upsertCategoriaReferenciaAjuste(categoriaId: string, canalId: string, valor: number): Promise<void> {
+  const { error } = await supabase
+    .from('categoria_margens')
+    .upsert({ categoria_id: categoriaId, canal_id: canalId, referencia_ajuste_pct: valor });
   if (error) throw error;
 }
 

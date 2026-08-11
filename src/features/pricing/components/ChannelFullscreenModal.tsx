@@ -34,6 +34,13 @@ interface ChannelFullscreenModalProps {
   /** TODOS os canais (não só os visíveis) — usado só pra resolver "Sugestão de Margem por referência". */
   todosCanais: Canal[];
   transportadoras: Transportadora[];
+  /** Rótulo do "Filtrar:" (Categoria/Subcategoria/Fornecedor) já aplicado na grade principal, se algum —
+   * `produtos` já vem recortado por ele; isso só avisa o gráfico de Representação daqui pra também
+   * virar pizza (mesma regra da grade: qualquer filtro ativo, de fora ou a busca local, vira pizza). */
+  filtroExternoRotulo?: string | null;
+  /** Mesma regra da grade principal — true quando o filtro de fora é a Categoria mãe (geral): o
+   * gráfico de Representação daqui também junta por nome base + Classe entre fornecedores. */
+  agruparPorNomeEClasse?: boolean;
   onFechar: () => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
@@ -49,6 +56,8 @@ export function ChannelFullscreenModal({
   fornecedores,
   todosCanais,
   transportadoras,
+  filtroExternoRotulo,
+  agruparPorNomeEClasse,
   onFechar,
   onUpdatePreco,
   onResetPreco,
@@ -127,14 +136,15 @@ export function ChannelFullscreenModal({
     return [...filtrados].sort((a, b) => (representatividadePorProduto.get(b.id)?.pct ?? -1) - (representatividadePorProduto.get(a.id)?.pct ?? -1));
   }, [produtos, busca, fornecedorPorId, ordenarPorRepresentacao, representatividadePorProduto]);
 
-  // Mesma regra da grade principal (PricingPage.tsx): busca ativa vira o gráfico de
-  // Representação em pizza, só com os produtos que aparecem filtrados aqui na tela cheia
-  // (não tem "Filtrar:" Categoria/Fornecedor aqui, só a busca por nome).
+  // Mesma regra da grade principal (PricingPage.tsx): filtro ativo (de fora, via "Filtrar:" na
+  // grade — `produtos` já vem recortado por ele — E/OU a busca local aqui) vira o gráfico de
+  // Representação em pizza; sem nenhum dos dois, fica em colunas (todo o sortimento visível).
   const filtroAtivoGrafico = useMemo(() => {
     const buscaAtiva = busca.trim().length > 0;
-    if (!buscaAtiva) return null;
-    return { rotulo: `"${busca.trim()}"`, produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
-  }, [busca, produtosFiltrados]);
+    if (!filtroExternoRotulo && !buscaAtiva) return null;
+    const partesRotulo = [filtroExternoRotulo, buscaAtiva ? `"${busca.trim()}"` : null].filter((parte): parte is string => !!parte);
+    return { rotulo: partesRotulo.join(' + '), produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
+  }, [busca, filtroExternoRotulo, produtosFiltrados]);
 
   return (
     <Modal
@@ -221,6 +231,7 @@ export function ChannelFullscreenModal({
         produtos={produtos}
         representatividadePorProduto={representatividadeGraficoPorProduto}
         filtroAtivo={filtroAtivoGrafico}
+        agruparPorNomeEClasse={agruparPorNomeEClasse}
         historicoSafras={todasSafrasDisponiveis}
         safraSelecionada={safraSelecionadaGrafico}
         onEscolherSafra={setSafraSelecionadaGrafico}
