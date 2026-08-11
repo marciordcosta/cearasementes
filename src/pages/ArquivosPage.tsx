@@ -309,6 +309,7 @@ export function ArquivosPage() {
         <FormularioUpload aberto={uploadAberto} onFechar={() => setUploadAberto(false)} enviando={enviando} onEnviar={onEnviar} />
         <ListaArquivos
           arquivos={arquivos}
+          produtos={produtos}
           busca={busca}
           onChangeBusca={setBusca}
           onApagar={setParaApagar}
@@ -354,6 +355,7 @@ export function ArquivosPage() {
       <EditarLaudoModal laudo={paraEditar} onFechar={() => setParaEditar(null)} onSalvar={onSalvarEdicao} />
       <TesteModal
         laudo={paraTeste}
+        produtos={produtos}
         onFechar={() => setParaTeste(null)}
         onSalvar={onSalvarTeste}
         onAdicionarFoto={enviarFotoTeste}

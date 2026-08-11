@@ -29,19 +29,46 @@ export function statusTeste(a: Pick<ArquivoLaudo, 'testeForma' | 'testeGerminada
   return 'resultado';
 }
 
-/** % de germinação do teste de campo, sem formatação — só o modo "sementes" tem fórmula pronta hoje; "peso" ainda não (null); germinadas ainda não contadas (Em análise) também é null, não 0. Usado tanto pra exibir quanto pra entrar na conta de kg/ha (ver calculoSemeadura.ts). */
-export function resultadoTesteNumero(a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas'>): number | null {
-  if (a.testeForma !== 'sementes' || !a.testePlantadas || a.testeGerminadas == null) return null;
-  return (a.testeGerminadas / a.testePlantadas) * 100;
+/**
+ * % de germinação do teste de campo, sem formatação — germinadas ainda não
+ * contadas (Em análise) é null, não 0. Usado tanto pra exibir quanto pra
+ * entrar na conta de kg/ha (ver calculoSemeadura.ts).
+ *
+ * Modo "sementes": Germinadas ÷ Plantadas direto.
+ * Modo "peso": não dá pra contar as sementes plantadas, só pesá-las — por
+ * isso precisa do PMS (Peso de Mil Sementes, em g) do lote pra converter
+ * Peso plantado (g) em nº de sementes (Peso ÷ PMS × 1000), e só então dividir
+ * pelas Germinadas. Sem PMS resolvido (nem por lote, nem base da
+ * Parametrização — ver resolverPmsDoLaudo em parametrizacaoProdutos.ts),
+ * fica pendente (null), igual ao kg/ha do Guia de Plantio nesse mesmo caso.
+ */
+export function resultadoTesteNumero(
+  a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'testePesoPlantado'>,
+  pms: number | null = null,
+): number | null {
+  if (a.testeGerminadas == null) return null;
+  if (a.testeForma === 'sementes') {
+    if (!a.testePlantadas) return null;
+    return (a.testeGerminadas / a.testePlantadas) * 100;
+  }
+  if (a.testeForma === 'peso') {
+    if (!a.testePesoPlantado || pms === null || pms <= 0) return null;
+    const sementesPlantadas = (a.testePesoPlantado * 1000) / pms;
+    return sementesPlantadas > 0 ? (a.testeGerminadas / sementesPlantadas) * 100 : null;
+  }
+  return null;
 }
 
-/** Resultado do Teste de Germinação de Campo — "Em análise" (Plantio feito, Resultado pendente), % pronto (sementes), "Aguardando fórmula" (peso, ainda sem regra definida) ou "—" (sem teste nenhum). */
-export function resultadoTeste(a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas'>): string {
+/** Resultado do Teste de Germinação de Campo — "Em análise" (Plantio feito, Resultado pendente), % pronto ou "—"/"Sem PMS cadastrado" (sem teste, ou modo peso sem PMS pra converter). */
+export function resultadoTeste(
+  a: Pick<ArquivoLaudo, 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'testePesoPlantado'>,
+  pms: number | null = null,
+): string {
   const status = statusTeste(a);
   if (status === 'sem_teste') return '—';
   if (status === 'em_analise') return 'Em análise';
-  const numero = resultadoTesteNumero(a);
+  const numero = resultadoTesteNumero(a, pms);
   if (numero !== null) return `${Math.round(numero)}%`;
-  if (a.testeForma === 'peso') return 'Aguardando fórmula';
+  if (a.testeForma === 'peso') return 'Sem PMS cadastrado';
   return '—';
 }

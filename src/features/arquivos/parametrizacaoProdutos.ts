@@ -1,6 +1,6 @@
 import type { Produto } from '@/features/pricing/types';
 import { paraNumero } from './metricas';
-import type { ProdutoParametrizacao } from './types';
+import type { ArquivoLaudo, ProdutoParametrizacao } from './types';
 
 /**
  * Compara nomes de produto ignorando acento, caixa e espaçamento — usado em
@@ -49,6 +49,11 @@ export function resolverPmsBaseTexto(nomeProduto: string, produtos: ProdutoParam
 /** PMS base do produto, já convertido pra número (pra entrar na conta de kg/ha). */
 export function resolverPmsBase(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
   return paraNumero(resolverPmsBaseTexto(nomeProduto, produtos));
+}
+
+/** PMS do lote (digitado em EditarLaudoModal/TesteModal) ou, em branco, o PMS base do produto na Parametrização — já como número, pronto pra conta (ver calculoSemeadura.ts e resultadoTesteNumero em testeGerminacao.ts). */
+export function resolverPmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(laudo.pms) ?? resolverPmsBase(laudo.nomeProduto, produtos);
 }
 
 /** Densidade base do produto, como texto cru — não é editável por lote, então isso é sempre o que a grade mostra. */

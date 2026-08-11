@@ -4,11 +4,14 @@ import { Modal } from '@/components/ui/Modal';
 import { uuidParaCurto } from '@/lib/idCurto';
 import type { PatchTeste } from '../api';
 import { redimensionarImagem } from '../fotoTeste';
+import { resolverPmsDoLaudo } from '../parametrizacaoProdutos';
 import { diasDesdeTeste, formatarDiasTeste, resultadoTeste, statusTeste } from '../testeGerminacao';
-import type { ArquivoLaudo } from '../types';
+import type { ArquivoLaudo, ProdutoParametrizacao } from '../types';
 
 interface TesteModalProps {
   laudo: ArquivoLaudo | null;
+  /** PMS por lote/base — precisa pra calcular o resultado do teste em modo "Peso" (converte Peso plantado em nº de sementes). */
+  produtos: ProdutoParametrizacao[];
   onFechar: () => void;
   onSalvar: (id: string, patch: PatchTeste) => void;
   /** Sobe a foto e devolve a URL pública — chamado na hora (não espera o "Salvar"), pra não perder foto já tirada no campo se o usuário fechar o modal sem salvar o resto. */
@@ -57,7 +60,7 @@ function Cartao({ titulo, selo, children }: { titulo: string; selo?: React.React
 }
 
 /** Teste de germinação de campo (nosso, feito com frequência) — separado do EditarLaudoModal porque é aberto clicando no próprio valor da coluna "Teste", não no ✎ de editar metadados. */
-export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemoverFoto, onSalvarFotos, onFotosAlteradas }: TesteModalProps) {
+export function TesteModal({ laudo, produtos, onFechar, onSalvar, onAdicionarFoto, onRemoverFoto, onSalvarFotos, onFotosAlteradas }: TesteModalProps) {
   const [forma, setForma] = useState<'sementes' | 'peso'>('sementes');
   const [data, setData] = useState('');
   const [plantadas, setPlantadas] = useState('');
@@ -137,6 +140,7 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
   }
 
   const plantadasNum = Number(plantadas.replace(',', '.')) || 0;
+  const pesoPlantadoNum = Number(pesoPlantado.replace(',', '.')) || 0;
   // null (não 0) enquanto "Germinadas" não foi preenchido — é o que distingue "Em análise" de "resultado 0%" (ver statusTeste).
   const germinadasNum = germinadas.trim() ? Number(germinadas.replace(',', '.')) || 0 : null;
   // `forma` sempre tem um valor local ('sementes' por padrão, mesmo num laudo sem teste nenhum — é só o toggle
@@ -144,7 +148,11 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
   // mostraria "Em análise" só de abrir o modal, antes de preencher ou salvar qualquer coisa.
   const testeIniciado = laudo?.testeForma != null || data.trim() !== '' || plantadas.trim() !== '' || pesoPlantado.trim() !== '';
   const status = testeIniciado ? statusTeste({ testeForma: forma, testeGerminadas: germinadasNum }) : 'sem_teste';
-  const resultado = testeIniciado ? resultadoTeste({ testeForma: forma, testePlantadas: plantadasNum, testeGerminadas: germinadasNum }) : '—';
+  // Modo "Peso" precisa do PMS do lote (ou base da Parametrização) pra converter Peso plantado em nº de sementes.
+  const pms = laudo ? resolverPmsDoLaudo({ nomeProduto: laudo.nomeProduto, pms: laudo.pms }, produtos) : null;
+  const resultado = testeIniciado
+    ? resultadoTeste({ testeForma: forma, testePlantadas: plantadasNum, testeGerminadas: germinadasNum, testePesoPlantado: pesoPlantadoNum }, pms)
+    : '—';
   const diasPlantio = data ? diasDesdeTeste(data) : null;
   const diasResultado = dataResultado ? diasDesdeTeste(dataResultado) : null;
 
@@ -263,6 +271,12 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
             <LinhaCampo label="Peso plantado (g)">
               <input type="number" min={0} value={pesoPlantado} onChange={(e) => setPesoPlantado(e.target.value)} className={valorNumeroClasse} />
             </LinhaCampo>
+          )}
+          {forma === 'peso' && pms === null && (
+            <p className="px-3 py-2 text-[11px] text-bad">Sem PMS cadastrado pra esse produto (lote ou Parametrização) — o resultado (%) não dá pra calcular sem ele.</p>
+          )}
+          {forma === 'peso' && pms !== null && (
+            <p className="px-3 py-2 text-[11px] text-[var(--color-text-soft)]">PMS usado na conta: {pms}g por 1.000 sementes.</p>
           )}
           {status === 'em_analise' && diasPlantio !== null && (
             <p className="px-3 py-2 text-[11px] text-[var(--color-text-soft)]">{formatarDiasTeste(diasPlantio)} desde o plantio — aguardando resultado.</p>

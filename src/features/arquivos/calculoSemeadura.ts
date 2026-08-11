@@ -1,9 +1,12 @@
 import { calcularVCNumero, paraNumero } from './metricas';
-import { resolverDensidadeBase, resolverIndiceSobrevivencia, resolverPmsBase } from './parametrizacaoProdutos';
+import { resolverDensidadeBase, resolverIndiceSobrevivencia, resolverPmsBase, resolverPmsDoLaudo } from './parametrizacaoProdutos';
 import { resultadoTesteNumero } from './testeGerminacao';
 import type { ArquivoLaudo, ProdutoParametrizacao } from './types';
 
-type LaudoParaSemeadura = Pick<ArquivoLaudo, 'nomeProduto' | 'pms' | 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'pureza' | 'germinacao'>;
+type LaudoParaSemeadura = Pick<
+  ArquivoLaudo,
+  'nomeProduto' | 'pms' | 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'testePesoPlantado' | 'pureza' | 'germinacao'
+>;
 
 /**
  * % "de germinação usada" na conta de semeadura — na prática, a taxa geral
@@ -18,7 +21,7 @@ type LaudoParaSemeadura = Pick<ArquivoLaudo, 'nomeProduto' | 'pms' | 'testeForma
  *   por isso a correção só entra aqui, nunca em cima do teste de campo.
  */
 export function germinacaoParaSemeadura(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
-  const doTeste = resultadoTesteNumero(a);
+  const doTeste = resultadoTesteNumero(a, resolverPmsDoLaudo(a, produtos));
   if (doTeste !== null) return doTeste;
   const vc = calcularVCNumero(a);
   if (vc === null) return null;

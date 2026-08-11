@@ -3,12 +3,15 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { filtrarArquivos } from '../filtrarArquivos';
 import { calcularVC } from '../metricas';
+import { resolverPmsDoLaudo } from '../parametrizacaoProdutos';
 import { resultadoTeste, statusTeste } from '../testeGerminacao';
-import type { ArquivoLaudo } from '../types';
+import type { ArquivoLaudo, ProdutoParametrizacao } from '../types';
 import { montarUrlVisualizacao } from '../visualizacaoArquivo';
 
 interface ListaArquivosProps {
   arquivos: ArquivoLaudo[];
+  /** PMS por lote/base — precisa pro resultado do Teste de Campo em modo "Peso" (ver TesteModal). */
+  produtos: ProdutoParametrizacao[];
   busca: string;
   onChangeBusca: (busca: string) => void;
   onApagar: (arquivos: ArquivoLaudo[]) => void;
@@ -53,7 +56,7 @@ function imprimir(arquivo: ArquivoLaudo) {
   window.open(montarUrlVisualizacao(arquivo, 'aba'), '_blank');
 }
 
-export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, onAbrirGuiaPlantio, onImprimirEtiqueta, onGerarGuiaTeste }: ListaArquivosProps) {
+export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, onAbrirGuiaPlantio, onImprimirEtiqueta, onGerarGuiaTeste }: ListaArquivosProps) {
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
@@ -172,7 +175,9 @@ export function ListaArquivos({ arquivos, busca, onChangeBusca, onApagar, onVisu
                       statusTeste(a) === 'resultado' ? 'text-good' : statusTeste(a) === 'em_analise' ? 'text-[#8A5B10]' : 'text-[var(--color-text-soft)]'
                     }`}
                   >
-                    {statusTeste(a) === 'sem_teste' ? '🧪' : <span className="underline decoration-dotted underline-offset-2">{resultadoTeste(a)}</span>}
+                    {statusTeste(a) === 'sem_teste' ? '🧪' : (
+                      <span className="underline decoration-dotted underline-offset-2">{resultadoTeste(a, resolverPmsDoLaudo(a, produtos))}</span>
+                    )}
                   </button>
                 </td>
                 <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{new Date(a.enviadoEm).toLocaleDateString('pt-BR')}</td>

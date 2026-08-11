@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apagarFotoTeste, atualizarFotosTeste, atualizarTeste, enviarFotoTeste, fetchArquivosLaudos, type PatchTeste } from '@/features/arquivos/api';
+import {
+  apagarFotoTeste,
+  atualizarFotosTeste,
+  atualizarTeste,
+  enviarFotoTeste,
+  fetchArquivosLaudos,
+  fetchParametrizacaoProdutos,
+  type PatchTeste,
+} from '@/features/arquivos/api';
 import { TesteModal } from '@/features/arquivos/components/TesteModal';
 import { filtrarArquivos } from '@/features/arquivos/filtrarArquivos';
+import { resolverPmsDoLaudo } from '@/features/arquivos/parametrizacaoProdutos';
 import { resultadoTeste, statusTeste } from '@/features/arquivos/testeGerminacao';
 import type { ArquivoLaudo } from '@/features/arquivos/types';
 import { mensagemDeErro } from '@/lib/errors';
@@ -20,6 +29,7 @@ import { curtoParaUuid } from '@/lib/idCurto';
 export function TesteCampoPage() {
   const queryClient = useQueryClient();
   const { data: arquivos = [] } = useQuery({ queryKey: ['arquivos_laudos'], queryFn: fetchArquivosLaudos });
+  const { data: produtos = [] } = useQuery({ queryKey: ['arquivos_parametrizacao_produtos'], queryFn: fetchParametrizacaoProdutos });
   const [busca, setBusca] = useState('');
   const [paraTeste, setParaTeste] = useState<ArquivoLaudo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -96,7 +106,7 @@ export function TesteCampoPage() {
                     statusTeste(a) === 'resultado' ? 'text-good' : statusTeste(a) === 'em_analise' ? 'text-[#8A5B10]' : ''
                   }`}
                 >
-                  {statusTeste(a) === 'sem_teste' ? '🧪' : resultadoTeste(a)}
+                  {statusTeste(a) === 'sem_teste' ? '🧪' : resultadoTeste(a, resolverPmsDoLaudo(a, produtos))}
                 </span>
               </span>
             </button>
@@ -106,6 +116,7 @@ export function TesteCampoPage() {
 
       <TesteModal
         laudo={paraTeste}
+        produtos={produtos}
         onFechar={() => setParaTeste(null)}
         onSalvar={onSalvarTeste}
         onAdicionarFoto={enviarFotoTeste}
