@@ -1,5 +1,5 @@
 import type { ItemAgg } from '@/features/bi/types';
-import { primeirasDuasPalavras } from './calculations';
+import { chaveComparacaoNome } from './calculations';
 import { qtdMensalTotalProduto } from './historicoBi';
 import type { Fornecedor, Produto } from './types';
 
@@ -27,12 +27,13 @@ export interface ItemNecessidadeCompra {
  * Necessidade de compra de um Fornecedor pros meses escolhidos — pra cada
  * produto dele (com Código cadastrado), projeta a quantidade média
  * (últimas safras, somando todas as Tabelas) nesses meses. Além da venda do
- * próprio produto, busca em OUTROS fornecedores produtos com o mesmo "nome
- * base" (2 primeiras palavras — mesmo critério da divisória na Tabela de
- * Preços) E a mesma Classe (subcategoriaId, campo "Classe" do Editar
- * Produto) e soma a venda deles também, já que costuma ser a mesma semente
- * vendida por fornecedor diferente. A Classe entra no critério porque "nome
- * base" sozinho não separa tratamento (ex.: Panicum Mombaça tem
+ * próprio produto, busca em OUTROS fornecedores produtos com o mesmo nome
+ * "destacado" no cadastro (o trecho entre *asteriscos* — ver
+ * chaveComparacaoNome em calculations.ts; sem destaque marcado, cai pras 2
+ * primeiras palavras) E a mesma Classe (subcategoriaId, campo "Classe" do
+ * Editar Produto) e soma a venda deles também, já que costuma ser a mesma
+ * semente vendida por fornecedor diferente. A Classe entra no critério
+ * porque o nome sozinho não separa tratamento (ex.: Panicum Mombaça tem
  * Incrustado/Integra/Nutre — mesma Classe "Incrustada" entre si — e
  * Tradicional, Classe diferente); Classe diferente indica categoria
  * diferente, não entra na soma. Desconta o estoque atual informado.
@@ -53,13 +54,13 @@ export function calcularNecessidadeCompra(
   return produtosFornecedor
     .filter((p) => p.codigo)
     .map((produto) => {
-      const grupoNome = primeirasDuasPalavras(produto.nome);
+      const grupoNome = chaveComparacaoNome(produto.nome);
       const outrosDoGrupo = todosProdutos.filter(
         (p) =>
           p.id !== produto.id &&
           p.codigo &&
           p.fornecedorId !== produto.fornecedorId &&
-          primeirasDuasPalavras(p.nome) === grupoNome &&
+          chaveComparacaoNome(p.nome) === grupoNome &&
           p.subcategoriaId === produto.subcategoriaId,
       );
 

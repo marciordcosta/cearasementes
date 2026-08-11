@@ -36,6 +36,22 @@ export function primeirasDuasPalavras(nome: string): string {
 }
 
 /**
+ * Nome "destacado" do produto — o trecho entre os primeiros *asteriscos* do
+ * cadastro (mesma marcação de negrito do NomeComDestaque.tsx) — critério
+ * preferido pra identificar "o mesmo produto" entre fornecedores/tratamentos
+ * (busca inteligente do Planejamento de Compra, comparação de fornecedores,
+ * agrupamento do gráfico de Representação por Categoria mãe): bem mais
+ * preciso que primeirasDuasPalavras, que dá falso positivo/negativo
+ * dependendo de como o nome foi digitado. Produto sem nenhum *destaque*
+ * marcado cai pra primeirasDuasPalavras como fallback.
+ */
+export function chaveComparacaoNome(nome: string): string {
+  const destaque = /\*(.+?)\*/.exec(nome);
+  if (destaque) return destaque[1].trim().toUpperCase();
+  return primeirasDuasPalavras(nome);
+}
+
+/**
  * Markup "por dentro": o preço é o custo dividido por (1 - soma de todos os
  * percentuais), não multiplicado — assim imposto/encargos/frete/margem são
  * garantidos sobre o PREÇO final, não sobre o custo. Portado 1:1 do

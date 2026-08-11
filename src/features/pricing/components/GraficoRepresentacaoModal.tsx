@@ -4,7 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/hooks/useTheme';
 import { chartChrome } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
-import { primeirasDuasPalavras } from '../calculations';
+import { chaveComparacaoNome } from '../calculations';
 import { ROTULO_CRITERIO_REPRESENTACAO, type ClasseABC, type CriterioRepresentacao, type Representatividade } from '../historicoBi';
 import type { Produto } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
@@ -78,16 +78,17 @@ interface ItemRepresentatividadeNomeado {
 }
 
 /**
- * Junta, dentro do filtro ativo, produtos com o mesmo nome base (2 primeiras palavras) e mesma
+ * Junta, dentro do filtro ativo, produtos com o mesmo nome "destacado" no cadastro e mesma
  * Classe (subcategoria) — mesmo critério da busca inteligente de fornecedores no Planejamento
- * de Compra (ver compra.ts) — numa fatia só, somando os valores. Nome/Classe exibidos vêm do
- * item de maior valor do grupo (o "principal"); produto sem match em `produtoPorId` fica sozinho.
+ * de Compra (ver chaveComparacaoNome em calculations.ts e compra.ts) — numa fatia só, somando os
+ * valores. Nome/Classe exibidos vêm do item de maior valor do grupo (o "principal"); produto sem
+ * match em `produtoPorId` fica sozinho.
  */
 function agruparPorNomeClasse(itens: ItemRepresentatividadeNomeado[], produtoPorId: Map<string, Produto>): ItemRepresentatividadeNomeado[] {
   const grupos = new Map<string, ItemRepresentatividadeNomeado>();
   for (const item of itens) {
     const produto = produtoPorId.get(item.produtoId);
-    const chave = produto ? `${primeirasDuasPalavras(produto.nome)}::${produto.subcategoriaId ?? ''}` : item.produtoId;
+    const chave = produto ? `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}` : item.produtoId;
     const existente = grupos.get(chave);
     const valorCriterio = (existente?.valorCriterio ?? 0) + item.valorCriterio;
     const qtdMedia = (existente?.qtdMedia ?? 0) + item.qtdMedia;

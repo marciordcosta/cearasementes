@@ -1,4 +1,4 @@
-import { primeirasDuasPalavras } from './calculations';
+import { chaveComparacaoNome } from './calculations';
 import type { Fornecedor, Produto } from './types';
 
 export interface ItemComparacaoFornecedor {
@@ -18,11 +18,11 @@ export interface GrupoComparacaoFornecedores {
 }
 
 /**
- * Agrupa produtos de fornecedores DIFERENTES com o mesmo nome base (2 primeiras palavras) e
- * mesma Classe (subcategoria) — mesmo critério da busca inteligente do Planejamento de Compra
- * (ver compra.ts) — só que aqui pra comparar preço (R$/Kg), não demanda. Só entram grupos com
- * mais de 1 fornecedor (senão não tem o que comparar); ordenados alfabeticamente pelo nome, cada
- * um com os fornecedores do mais barato pro mais caro.
+ * Agrupa produtos de fornecedores DIFERENTES com o mesmo nome "destacado" no cadastro e mesma
+ * Classe (subcategoria) — mesmo critério da busca inteligente do Planejamento de Compra (ver
+ * chaveComparacaoNome em calculations.ts e compra.ts) — só que aqui pra comparar preço (R$/Kg),
+ * não demanda. Só entram grupos com mais de 1 fornecedor (senão não tem o que comparar);
+ * ordenados alfabeticamente pelo nome, cada um com os fornecedores do mais barato pro mais caro.
  */
 export function calcularComparacaoFornecedores(produtos: Produto[], fornecedores: Fornecedor[]): GrupoComparacaoFornecedores[] {
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
@@ -33,7 +33,7 @@ export function calcularComparacaoFornecedores(produtos: Produto[], fornecedores
     const fornecedor = fornecedorPorId.get(produto.fornecedorId);
     if (!fornecedor) continue;
     const nomeLimpo = produto.nome.replace(/[*_]/g, '');
-    const chave = `${primeirasDuasPalavras(produto.nome)}::${produto.subcategoriaId ?? ''}`;
+    const chave = `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}`;
     const grupo = grupos.get(chave) ?? { nomeGrupo: nomeLimpo, itens: [] };
     grupo.itens.push({ fornecedorNome: fornecedor.nome, produtoNome: nomeLimpo, valorKg: produto.valorKg, valorSaco: produto.custo });
     grupos.set(chave, grupo);
