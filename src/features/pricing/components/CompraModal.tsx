@@ -1,10 +1,9 @@
-import { Printer } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { Printer, RotateCcw } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { ItemAgg } from '@/features/bi/types';
 import { fmtInt } from '@/lib/format';
-import { calcularNecessidadeCompra, dividirEmCaminhoes, reequilibrarCaminhao, type CaminhaoPedido } from '../compra';
+import { calcularNecessidadeCompra, type ItemNecessidadeCompra } from '../compra';
 import { gerarPedidoCompraPdf } from '../compraPdf';
 import { mesesSafraPadrao } from '../historicoBi';
 import type { Fornecedor, Produto } from '../types';
@@ -24,21 +23,27 @@ function fmtKg(v: number): string {
 // Fora do componente — os 12 rótulos não mudam, sem custo recalcular a cada render.
 const MESES = mesesSafraPadrao();
 
+/** "Ago: 120 | Set: 95 | Out: 60" — só os meses escolhidos na projeção, pro tooltip de detalhe. */
+function tooltipMensal(item: ItemNecessidadeCompra, mesesSelecionados: Set<number>): string {
+  return Array.from(mesesSelecionados)
+    .sort((a, b) => a - b)
+    .map((i) => `${MESES[i]}: ${fmtInt.format(Math.round(item.porMes[i] ?? 0))}`)
+    .join(' | ');
+}
+
 /**
  * Planejamento de Compra, por Fornecedor: escolhe o(s) mês(es) a abastecer, o
  * sistema projeta a quantidade média (últimas safras, todas as Tabelas) de
- * cada produto desse fornecedor nesses meses — informando o estoque atual,
- * desconta e mostra só o que falta comprar. Em seguida, "Fazer Pedido" pede o
- * peso que o caminhão traz e divide essa necessidade em 1+ carradas (cada uma
- * com a mesma mistura proporcional do que falta); se não couber tudo num
- * caminhão só, o(s) seguinte(s) levam o complemento.
+ * cada produto desse fornecedor nesses meses. Informando o estoque atual, a
+ * projeção já desconta a diferença — essa é a sugestão inicial da coluna
+ * Pedido, que o usuário preenche/ajusta manualmente linha a linha; a divisão
+ * por caminhão fica de fora do sistema, é feita manualmente por fora.
  */
 export function CompraModal({ open, onFechar, produtos, fornecedores, items }: CompraModalProps) {
   const [fornecedorId, setFornecedorId] = useState('');
   const [mesesSelecionados, setMesesSelecionados] = useState<Set<number>>(new Set());
   const [estoqueTexto, setEstoqueTexto] = useState<Record<string, string>>({});
-  const [mostrarPedido, setMostrarPedido] = useState(false);
-  const [pesoCaminhaoTexto, setPesoCaminhaoTexto] = useState('');
+  const [pedidoTexto, setPedidoTexto] = useState<Record<string, string>>({});
   const [produtosExcluidos, setProdutosExcluidos] = useState<Set<string>>(new Set());
 
   const produtosFornecedor = useMemo(() => produtos.filter((p) => p.fornecedorId === fornecedorId), [produtos, fornecedorId]);
@@ -67,47 +72,19 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
     [necessidadeCompleta, produtosExcluidos],
   );
 
-  const pesoTotalNecessario = necessidade.reduce((soma, i) => soma + i.pesoTotal, 0);
-
-  const caminhoes = useMemo(() => {
-    const capacidade = parseFloat(pesoCaminhaoTexto);
-    if (!mostrarPedido || !capacidade || capacidade <= 0) return [];
-    return dividirEmCaminhoes(necessidade, capacidade);
-  }, [mostrarPedido, pesoCaminhaoTexto, necessidade]);
-
-  // Cópia editável — o usuário pode ajustar a quantidade de cada item por caminhão
-  // (reequilibrando os últimos itens pra nunca ultrapassar a capacidade); some recálculo
-  // acima (novo peso do caminhão, nova necessidade) descarta os ajustes manuais e recomeça daqui.
-  const [caminhoesEditados, setCaminhoesEditados] = useState<CaminhaoPedido[]>([]);
-  // Texto do campo sendo digitado agora (não confirmado ainda) — o reequilíbrio só roda
-  // quando o campo perde o foco, nunca a cada tecla. Reequilibrar por tecla (ex.: "1" → "13"
-  // → "133") faz cada dígito digitado disparar um reequilíbrio EM CIMA do reequilíbrio
-  // anterior, indo zerando os últimos itens em cascata a cada tecla — daí o bug.
-  const [edicaoQtd, setEdicaoQtd] = useState<{ caminhaoIdx: number; itemIdx: number; texto: string } | null>(null);
-
-  useEffect(() => {
-    setCaminhoesEditados(caminhoes.map((c) => ({ ...c, itens: c.itens.map((it) => ({ ...it })) })));
-    setEdicaoQtd(null);
-  }, [caminhoes]);
-
-  function confirmarEdicaoQtd() {
-    if (!edicaoQtd) return;
-    const { caminhaoIdx, itemIdx, texto } = edicaoQtd;
-    setEdicaoQtd(null);
-    const capacidade = parseFloat(pesoCaminhaoTexto);
-    if (!capacidade || capacidade <= 0) return;
-    setCaminhoesEditados((prev) => {
-      const copia = prev.map((c) => ({ ...c, itens: c.itens.map((it) => ({ ...it })) }));
-      const item = copia[caminhaoIdx].itens[itemIdx];
-      const novaQtd = Math.max(0, Math.round(parseFloat(texto) || 0));
-      item.qtd = novaQtd;
-      item.peso = novaQtd * item.produto.peso;
-      const itensReequilibrados = reequilibrarCaminhao(copia[caminhaoIdx].itens, itemIdx, capacidade);
-      copia[caminhaoIdx].itens = itensReequilibrados;
-      copia[caminhaoIdx].pesoTotal = itensReequilibrados.reduce((soma, it) => soma + it.peso, 0);
-      return copia;
-    });
+  // Sugestão inicial = qtdComprar (projetado − estoque); o usuário sobrescreve linha a linha,
+  // e a sobrescrita fica valendo mesmo que a sugestão mude (ex.: editar o estoque de novo).
+  function pedidoQtd(item: ItemNecessidadeCompra): number {
+    const texto = pedidoTexto[item.produto.id];
+    if (texto === undefined) return item.qtdComprar;
+    return Math.max(0, Math.round(parseFloat(texto) || 0));
   }
+  function pedidoPeso(item: ItemNecessidadeCompra): number {
+    return pedidoQtd(item) * item.pesoUnitario;
+  }
+
+  const totalPedidoUn = necessidade.reduce((soma, item) => soma + pedidoQtd(item), 0);
+  const totalPedidoKg = necessidade.reduce((soma, item) => soma + pedidoPeso(item), 0);
 
   function toggleMes(i: number) {
     setMesesSelecionados((prev) => {
@@ -116,7 +93,6 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
       else novo.add(i);
       return novo;
     });
-    setMostrarPedido(false); // mudou a necessidade — o pedido calculado antes não vale mais
   }
 
   function fechar() {
@@ -124,8 +100,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
     setFornecedorId('');
     setMesesSelecionados(new Set());
     setEstoqueTexto({});
-    setMostrarPedido(false);
-    setPesoCaminhaoTexto('');
+    setPedidoTexto({});
     setProdutosExcluidos(new Set());
   }
 
@@ -134,6 +109,14 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
     .sort((a, b) => a - b)
     .map((i) => MESES[i]);
 
+  function imprimir() {
+    if (!fornecedorSelecionado) return;
+    const itens = necessidade
+      .map((item) => ({ nome: item.produto.nome.replace(/[*_]/g, ''), qtd: pedidoQtd(item), peso: pedidoPeso(item) }))
+      .filter((it) => it.qtd > 0);
+    gerarPedidoCompraPdf(fornecedorSelecionado, mesesLabelsSelecionados, itens);
+  }
+
   return (
     <Modal
       open={open}
@@ -141,17 +124,10 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
       title={
         <>
           <span>Planejamento de Compra</span>
-          {mostrarPedido && caminhoesEditados.length > 0 && fornecedorSelecionado && (
+          {necessidade.length > 0 && fornecedorSelecionado && (
             <button
               type="button"
-              onClick={() =>
-                gerarPedidoCompraPdf(
-                  fornecedorSelecionado,
-                  mesesLabelsSelecionados,
-                  caminhoesEditados,
-                  itensExcluidos.map((item) => item.produto.nome.replace(/[*_]/g, '')),
-                )
-              }
+              onClick={imprimir}
               title="Imprimir pedido"
               className="ml-auto shrink-0 rounded-md p-1.5 text-white/80 hover:bg-white/12 hover:text-white"
             >
@@ -169,8 +145,8 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
             value={fornecedorId}
             onChange={(e) => {
               setFornecedorId(e.target.value);
-              setMostrarPedido(false);
               setProdutosExcluidos(new Set());
+              setPedidoTexto({});
             }}
             className="w-full max-w-xs rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]"
           >
@@ -207,18 +183,30 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
 
         {fornecedorId &&
           mesesSelecionados.size > 0 &&
-          (necessidade.length === 0 ? (
+          (necessidade.length === 0 && itensExcluidos.length === 0 ? (
             <p className="text-sm text-[var(--color-text-soft)]">Nenhum produto desse fornecedor tem histórico de vendas nos meses escolhidos.</p>
           ) : (
             <>
               <div className="overflow-x-auto rounded-md border border-[var(--color-line)]">
-                <table className="w-full min-w-[560px] text-xs">
+                <table className="w-full min-w-[620px] text-xs">
                   <thead>
                     <tr className="bg-[var(--color-navy)] text-left text-white">
                       <th className="px-3 py-2 font-semibold">Produto</th>
-                      <th className="px-3 py-2 text-right font-semibold">Qtd Projetada</th>
+                      <th className="px-3 py-2 text-right font-semibold">
+                        <span className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setEstoqueTexto({})}
+                            title="Restaurar (zera o estoque informado)"
+                            className="text-white/70 hover:text-white"
+                          >
+                            <RotateCcw size={12} />
+                          </button>
+                          Qtd Projetada
+                        </span>
+                      </th>
                       <th className="px-3 py-2 text-right font-semibold">Estoque Atual</th>
-                      <th className="px-3 py-2 text-right font-semibold">Qtd a Comprar</th>
+                      <th className="px-3 py-2 text-right font-semibold">Pedido</th>
                       <th className="px-3 py-2 text-right font-semibold">Peso (kg)</th>
                       <th className="px-3 py-2" />
                     </tr>
@@ -227,29 +215,36 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                     {necessidade.map((item) => (
                       <tr key={item.produto.id}>
                         <td className="px-3 py-1.5 text-[var(--color-text)]">{item.produto.nome.replace(/[*_]/g, '')}</td>
-                        <td className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]">{fmtInt.format(Math.round(item.qtdProjetada))}</td>
+                        <td
+                          className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]"
+                          title={tooltipMensal(item, mesesSelecionados)}
+                        >
+                          {fmtInt.format(item.qtdComprar)}
+                        </td>
                         <td className="px-3 py-1.5 text-right">
                           <input
                             type="number"
                             min="0"
                             placeholder="0"
                             value={estoqueTexto[item.produto.id] ?? ''}
-                            onChange={(e) => {
-                              setEstoqueTexto((prev) => ({ ...prev, [item.produto.id]: e.target.value }));
-                              setMostrarPedido(false);
-                            }}
+                            onChange={(e) => setEstoqueTexto((prev) => ({ ...prev, [item.produto.id]: e.target.value }))}
                             className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                           />
                         </td>
-                        <td className="num px-3 py-1.5 text-right font-semibold text-[var(--color-text)]">{fmtInt.format(item.qtdComprar)}</td>
-                        <td className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]">{fmtKg(item.pesoTotal)}</td>
+                        <td className="px-3 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            value={pedidoTexto[item.produto.id] ?? String(item.qtdComprar)}
+                            onChange={(e) => setPedidoTexto((prev) => ({ ...prev, [item.produto.id]: e.target.value }))}
+                            className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right font-semibold text-[var(--color-text)]"
+                          />
+                        </td>
+                        <td className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]">{fmtKg(pedidoPeso(item))}</td>
                         <td className="px-3 py-1.5 text-right">
                           <button
                             type="button"
-                            onClick={() => {
-                              setProdutosExcluidos((prev) => new Set(prev).add(item.produto.id));
-                              setMostrarPedido(false);
-                            }}
+                            onClick={() => setProdutosExcluidos((prev) => new Set(prev).add(item.produto.id))}
                             title="Desconsiderar produto"
                             className="text-[var(--color-text-soft)] hover:text-bad"
                           >
@@ -259,15 +254,18 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot>
-                    <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)] font-semibold text-[var(--color-text)]">
-                      <td className="px-3 py-2" colSpan={4}>
-                        Total a comprar
-                      </td>
-                      <td className="num px-3 py-2 text-right">{fmtKg(pesoTotalNecessario)} kg</td>
-                      <td className="px-3 py-2" />
-                    </tr>
-                  </tfoot>
+                  {necessidade.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)] font-semibold text-[var(--color-text)]">
+                        <td className="px-3 py-2" colSpan={3}>
+                          Total do pedido
+                        </td>
+                        <td className="num px-3 py-2 text-right">{fmtInt.format(totalPedidoUn)} un.</td>
+                        <td className="num px-3 py-2 text-right">{fmtKg(totalPedidoKg)} kg</td>
+                        <td className="px-3 py-2" />
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 
@@ -286,72 +284,13 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                             return novo;
                           })
                         }
-                        title="Reincluir produto"
+                        title={`Reincluir produto\n${tooltipMensal(item, mesesSelecionados)}`}
                         className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1 text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
                       >
                         {item.produto.nome.replace(/[*_]/g, '')} ✕
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {!mostrarPedido ? (
-                <Button variant="primary" onClick={() => setMostrarPedido(true)} disabled={pesoTotalNecessario <= 0}>
-                  🚚 Fazer Pedido
-                </Button>
-              ) : (
-                <div className="space-y-3 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Peso que o caminhão traz (kg)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      autoFocus
-                      value={pesoCaminhaoTexto}
-                      onChange={(e) => setPesoCaminhaoTexto(e.target.value)}
-                      className="num w-36 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-right text-sm text-[var(--color-text)]"
-                    />
-                  </div>
-
-                  {caminhoesEditados.length > 0 && (
-                    <div className="space-y-3">
-                      {caminhoesEditados.map((caminhao, caminhaoIdx) => (
-                        <div key={caminhao.numero} className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] p-3">
-                          <p className="mb-2 text-xs font-semibold text-[var(--color-text)]">
-                            Caminhão {caminhao.numero}
-                            {caminhoesEditados.length > 1 && caminhao.numero === caminhoesEditados.length ? ' (complemento)' : ''} —{' '}
-                            <span className="font-normal text-[var(--color-text-soft)]">{fmtKg(caminhao.pesoTotal)} kg</span>
-                          </p>
-                          <div className="space-y-1">
-                            {caminhao.itens.map((it, itemIdx) => (
-                              <div key={it.produto.id} className="flex items-center justify-between gap-2 text-xs">
-                                <span className="text-[var(--color-text)]">{it.produto.nome.replace(/[*_]/g, '')}</span>
-                                <span className="flex items-center gap-1.5">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={
-                                      edicaoQtd && edicaoQtd.caminhaoIdx === caminhaoIdx && edicaoQtd.itemIdx === itemIdx
-                                        ? edicaoQtd.texto
-                                        : it.qtd
-                                    }
-                                    onChange={(e) => setEdicaoQtd({ caminhaoIdx, itemIdx, texto: e.target.value })}
-                                    onBlur={confirmarEdicaoQtd}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                                    }}
-                                    className="num w-16 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-1.5 py-0.5 text-right text-[var(--color-text)]"
-                                  />
-                                  <span className="num text-[var(--color-text-soft)]">un. — {fmtKg(it.peso)} kg</span>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
             </>

@@ -7,10 +7,11 @@ export interface ItemNecessidadeCompra {
   /** Soma da média mensal (últimas safras, todas as Tabelas) dos meses escolhidos. */
   qtdProjetada: number;
   estoqueAtual: number;
-  /** max(0, qtdProjetada - estoqueAtual). */
+  /** max(0, qtdProjetada - estoqueAtual) — sugestão inicial da coluna Pedido, sempre saco cheio. */
   qtdComprar: number;
   pesoUnitario: number;
-  pesoTotal: number;
+  /** Média mensal (mesmo critério de qtdProjetada) por mês da safra, índice 0 = 1º mês — pro tooltip de detalhe. */
+  porMes: number[];
 }
 
 /**
@@ -34,101 +35,8 @@ export function calcularNecessidadeCompra(
       const estoqueAtual = estoquePorProduto[produto.id] ?? 0;
       // Sempre saco cheio — arredonda pra cima o que falta, nunca fração de unidade.
       const qtdComprar = Math.ceil(Math.max(0, qtdProjetada - estoqueAtual));
-      return { produto, qtdProjetada, estoqueAtual, qtdComprar, pesoUnitario: produto.peso, pesoTotal: qtdComprar * produto.peso };
+      return { produto, qtdProjetada, estoqueAtual, qtdComprar, pesoUnitario: produto.peso, porMes };
     })
     .filter((item) => item.qtdProjetada > 0)
-    .sort((a, b) => b.pesoTotal - a.pesoTotal);
-}
-
-export interface ItemCaminhao {
-  produto: Produto;
-  qtd: number;
-  peso: number;
-}
-
-export interface CaminhaoPedido {
-  numero: number;
-  itens: ItemCaminhao[];
-  pesoTotal: number;
-}
-
-/**
- * Divide a necessidade de compra (qtdComprar de cada item) em caminhões de
- * até `capacidadeKg` cada — cada caminhão leva uma fatia proporcional (mesma
- * mistura do que ainda falta), até cobrir tudo. O último carrega só o que
- * sobrar (o "complemento"), podendo vir com menos que a capacidade cheia.
- */
-export function dividirEmCaminhoes(itens: ItemNecessidadeCompra[], capacidadeKg: number): CaminhaoPedido[] {
-  const pesoTotalGeral = itens.reduce((soma, i) => soma + i.pesoTotal, 0);
-  if (pesoTotalGeral <= 0 || capacidadeKg <= 0) return [];
-
-  const restanteQtd = itens.map((i) => i.qtdComprar);
-  let pesoRestanteGeral = pesoTotalGeral;
-  const caminhoes: CaminhaoPedido[] = [];
-  let numero = 0;
-
-  while (pesoRestanteGeral > 0.01 && numero < 50) {
-    numero += 1;
-    const pesoNesseCaminhao = Math.min(capacidadeKg, pesoRestanteGeral);
-    const ultimoCaminhao = pesoNesseCaminhao >= pesoRestanteGeral - 0.01;
-    const fracao = pesoNesseCaminhao / pesoRestanteGeral;
-    const itensCaminhao: ItemCaminhao[] = [];
-
-    itens.forEach((item, idx) => {
-      if (restanteQtd[idx] <= 0) return;
-      const qtd = ultimoCaminhao ? restanteQtd[idx] : Math.round(restanteQtd[idx] * fracao);
-      if (qtd <= 0) return;
-      restanteQtd[idx] -= qtd;
-      itensCaminhao.push({ produto: item.produto, qtd, peso: qtd * item.pesoUnitario });
-    });
-
-    const pesoTotal = itensCaminhao.reduce((soma, i) => soma + i.peso, 0);
-    caminhoes.push({ numero, itens: itensCaminhao, pesoTotal });
-    pesoRestanteGeral -= pesoTotal;
-  }
-
-  return caminhoes;
-}
-
-/**
- * Depois de editar manualmente a quantidade de um item (idxEditado) num
- * caminhão, reequilibra pelos últimos itens da lista (os menos relevantes,
- * já que `itens` vem ordenado por peso decrescente) pra manter o caminhão o
- * mais próximo possível de `capacidadeKg`: tira deles se a edição estourou o
- * limite, completa neles se a edição sobrou espaço. Quem controla "quero
- * levar menos peso" é o campo de capacidade do caminhão, não reduzir um item
- * — reduzir um item só realoca o peso liberado pros últimos.
- */
-export function reequilibrarCaminhao(itens: ItemCaminhao[], idxEditado: number, capacidadeKg: number): ItemCaminhao[] {
-  const novosItens = itens.map((it) => ({ ...it }));
-  const pesoTotal = novosItens.reduce((soma, it) => soma + it.qtd * it.produto.peso, 0);
-  let diferenca = pesoTotal - capacidadeKg; // > 0: excedente (precisa tirar) — < 0: sobra (precisa completar)
-  let j = novosItens.length - 1;
-  let guard = 0;
-
-  while (Math.abs(diferenca) > 0.001 && j >= 0 && guard++ < 1000) {
-    if (j === idxEditado) {
-      j -= 1;
-      continue;
-    }
-    const pesoUnit = novosItens[j].produto.peso;
-    if (diferenca > 0) {
-      const reduzir = Math.min(novosItens[j].qtd, Math.ceil(diferenca / pesoUnit));
-      novosItens[j].qtd -= reduzir;
-      diferenca -= reduzir * pesoUnit;
-      if (novosItens[j].qtd <= 0) j -= 1;
-    } else {
-      // Só dá pra completar em saco cheio — o resto (menor que 1 saco desse item) fica sem
-      // preencher, o próximo item da lista (peso unitário menor) tenta cobrir o que sobrou.
-      const completar = Math.floor(-diferenca / pesoUnit);
-      novosItens[j].qtd += completar;
-      diferenca += completar * pesoUnit;
-      j -= 1;
-    }
-  }
-
-  novosItens.forEach((it) => {
-    it.peso = it.qtd * it.produto.peso;
-  });
-  return novosItens;
+    .sort((a, b) => b.qtdComprar * b.pesoUnitario - a.qtdComprar * a.pesoUnitario);
 }
