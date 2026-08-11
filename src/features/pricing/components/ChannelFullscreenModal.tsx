@@ -46,6 +46,7 @@ interface ChannelFullscreenModalProps {
   onResetPreco: (produtoId: string, canalId: string) => void;
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
+  onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
 }
 
 export function ChannelFullscreenModal({
@@ -63,6 +64,7 @@ export function ChannelFullscreenModal({
   onResetPreco,
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
+  onAtualizarValorKg,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
@@ -212,6 +214,7 @@ export function ChannelFullscreenModal({
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+            onAtualizarValorKg={onAtualizarValorKg}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}

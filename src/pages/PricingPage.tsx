@@ -256,6 +256,15 @@ export function PricingPage() {
     debounced(`produto-preco-${produtoId}-${canalId}`, () => upsertProdutoPreco(produtoId, canalId, preco, true).then(invalidarProdutosPreco));
   }
 
+  /** Edição em lote do Valor Kg direto na grade (ícone ✎ ao lado de "Custo") — custo = valorKg x peso, mesma conta do Editar Produto. */
+  function onAtualizarValorKg(produtoId: string, valorKg: number) {
+    const produto = produtos.find((p) => p.id === produtoId);
+    if (!produto) return;
+    const custo = valorKg * produto.peso;
+    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, valorKg, custo } : p)));
+    debounced(`produto-valor-kg-${produtoId}`, () => atualizarProduto(produtoId, { valor_kg: valorKg, custo }).then(invalidarProdutosPreco));
+  }
+
   function onResetPreco(produtoId: string, canalId: string) {
     setProdutos((prev) =>
       prev.map((p) => (p.id === produtoId ? { ...p, precos: { ...p.precos, [canalId]: { ...p.precos[canalId], preco: null, manual: false } } } : p)),
@@ -802,6 +811,7 @@ export function PricingPage() {
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}
               onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+              onAtualizarValorKg={onAtualizarValorKg}
               onEditarProduto={setProdutoEditandoId}
               onRemoverProduto={onRemoverProduto}
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
@@ -882,6 +892,7 @@ export function PricingPage() {
         onResetPreco={onResetPreco}
         onResetTodosPrecos={onResetTodosPrecos}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+        onAtualizarValorKg={onAtualizarValorKg}
       />
 
       <OrderModal

@@ -70,6 +70,8 @@ interface PricingTableProps {
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
+  /** Ícone ✎ ao lado de "Custo (R$)" liga um modo de edição em lote do Valor Kg direto na grade — sem esse prop, o ícone não aparece. */
+  onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
   onEditarProduto?: (produtoId: string) => void;
   onRemoverProduto?: (produtoId: string) => void;
   onAbrirCanalTelaCheia?: (canal: Canal) => void;
@@ -123,6 +125,7 @@ export function PricingTable({
   onResetPreco,
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
+  onAtualizarValorKg,
   onEditarProduto,
   onRemoverProduto,
   onAbrirCanalTelaCheia,
@@ -159,6 +162,10 @@ export function PricingTable({
   // tabela ao rolar horizontalmente — só aparece quando há algo escondido
   // atrás dela (scrollLeft > 0), senão fica uma sombra parada sem sentido.
   const [roladoLateral, setRoladoLateral] = useState(false);
+
+  // Ícone ✎ ao lado de "Custo (R$)" — liga a edição em lote do Valor Kg direto na grade, sem
+  // precisar abrir o Editar Produto de cada linha.
+  const [edicaoCustoLote, setEdicaoCustoLote] = useState(false);
 
   // Navegação por teclado restrita aos campos de Preço (valor de venda):
   // Tab natural do navegador já pula só entre eles porque todo o resto
@@ -311,17 +318,41 @@ export function PricingTable({
     },
     { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{Math.round(p.peso)}kg</span> },
     {
-      // Não editável: custo = Valor Kg x Peso, calculado e salvo no Editar Produto.
+      // Normalmente não editável (custo = Valor Kg x Peso, calculado e salvo no Editar Produto) —
+      // o ícone ✎ libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
       chave: 'custo',
-      rotulo: 'Custo (R$)',
-      larguraPadrao: defaults.custo,
-      render: (p, destacada) => (
-        <div
-          className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
-        >
-          {fmtR(p.custo)}
-        </div>
+      rotulo: (
+        <span className="inline-flex items-center gap-1">
+          Custo (R$){edicaoCustoLote && <span className="text-[9px] font-normal whitespace-nowrap opacity-75">editando Vlr Kg</span>}
+          {onAtualizarValorKg && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setEdicaoCustoLote((v) => !v)}
+              title={edicaoCustoLote ? 'Concluir edição em lote' : 'Editar Valor Kg em lote, sem abrir cada produto'}
+              className={`rounded px-1 ${edicaoCustoLote ? 'bg-[var(--color-accent)] text-white' : 'hover:bg-white/15'}`}
+            >
+              ✎
+            </button>
+          )}
+        </span>
       ),
+      larguraPadrao: defaults.custo,
+      render: (p, destacada) =>
+        edicaoCustoLote && onAtualizarValorKg ? (
+          <NumeroSincronizado
+            valor={p.valorKg}
+            step="0.01"
+            onCommit={(val) => onAtualizarValorKg(p.id, val)}
+            className={`num w-full rounded border border-[var(--color-accent)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right font-semibold text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+          />
+        ) : (
+          <div
+            className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+          >
+            {fmtR(p.custo)}
+          </div>
+        ),
     },
     ...(mostrarMaisDetalhes && representatividadeGeralPorProduto
       ? [
