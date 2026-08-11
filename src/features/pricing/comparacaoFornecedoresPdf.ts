@@ -1,4 +1,4 @@
-import { abrirEImprimir } from './catalogoPdf';
+import { abrirEImprimir, nomeComDestaqueHtml } from './catalogoPdf';
 import type { GrupoComparacaoFornecedores } from './compraComparacao';
 
 function escapeHtml(texto: string): string {
@@ -19,8 +19,8 @@ export function gerarComparacaoFornecedoresPdf(grupos: GrupoComparacaoFornecedor
     grupo.itens.forEach((item) => {
       linhas += `
         <tr>
+          <td>${nomeComDestaqueHtml(item.produtoNome)}</td>
           <td>${escapeHtml(item.fornecedorNome)}</td>
-          <td>${escapeHtml(item.produtoNome)}</td>
           <td class="numero">R$ ${fmtValor(item.valorKg)}/kg</td>
           <td class="numero">R$ ${fmtValor(item.valorSaco)}/saco</td>
         </tr>
@@ -48,7 +48,7 @@ export function gerarComparacaoFornecedoresPdf(grupos: GrupoComparacaoFornecedor
         table.tabela-comparacao thead th{ text-align:left; padding:7px 10px; border-bottom:1px solid #000000; font-weight:700; color:#000000; white-space:nowrap; }
         table.tabela-comparacao tbody td{ padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000; }
         table.tabela-comparacao tbody tr{ page-break-inside:avoid; }
-        table.tabela-comparacao tr.espaco td{ border-bottom:none; padding:5px 0; }
+        table.tabela-comparacao tr.espaco td{ border-bottom:none; padding:14px 0; }
         table.tabela-comparacao th.numero, table.tabela-comparacao td.numero{ width:120px; text-align:right; white-space:nowrap; }
       </style>
     </head>
@@ -61,7 +61,7 @@ export function gerarComparacaoFornecedoresPdf(grupos: GrupoComparacaoFornecedor
         <div class="meta">${dataEmissao}</div>
       </div>
       <table class="tabela-comparacao">
-        <thead><tr><th>Fornecedor</th><th>Produto</th><th class="numero">Valor (Kg)</th><th class="numero">Valor (Saco)</th></tr></thead>
+        <thead><tr><th>Produto</th><th>Fornecedor</th><th class="numero">Valor (Kg)</th><th class="numero">Valor (Saco)</th></tr></thead>
         <tbody>${linhas}</tbody>
       </table>
     </body>

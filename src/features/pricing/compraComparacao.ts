@@ -3,6 +3,7 @@ import type { Fornecedor, Produto } from './types';
 
 export interface ItemComparacaoFornecedor {
   fornecedorNome: string;
+  /** Nome cru, com a marcação de negrito/itálico do cadastro (asterisco/underscore) — pra imprimir com o mesmo destaque da grade. */
   produtoNome: string;
   /** R$/Kg — a comparação justa entre fornecedores, mesmo quando o peso do saco difere. */
   valorKg: number;
@@ -35,7 +36,7 @@ export function calcularComparacaoFornecedores(produtos: Produto[], fornecedores
     const nomeLimpo = produto.nome.replace(/[*_]/g, '');
     const chave = `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}`;
     const grupo = grupos.get(chave) ?? { nomeGrupo: nomeLimpo, itens: [] };
-    grupo.itens.push({ fornecedorNome: fornecedor.nome, produtoNome: nomeLimpo, valorKg: produto.valorKg, valorSaco: produto.custo });
+    grupo.itens.push({ fornecedorNome: fornecedor.nome, produtoNome: produto.nome, valorKg: produto.valorKg, valorSaco: produto.custo });
     grupos.set(chave, grupo);
   }
 

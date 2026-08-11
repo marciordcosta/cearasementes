@@ -35,7 +35,7 @@ function tamanhoNomeCh(produto: Produto, fornecedor: Fornecedor | undefined): nu
 }
 
 /** Mesma marcação do nome do produto na tela (NomeComDestaque, PricingTable.tsx): *negrito*, _itálico_. */
-function nomeComDestaqueHtml(nome: string): string {
+export function nomeComDestaqueHtml(nome: string): string {
   const regex = /\*(.+?)\*|_(.+?)_/g;
   let resultado = '';
   let ultimoIndice = 0;
