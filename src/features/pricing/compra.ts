@@ -29,14 +29,15 @@ export interface ItemNecessidadeCompra {
  * (últimas safras, somando todas as Tabelas) nesses meses. Além da venda do
  * próprio produto, busca em OUTROS fornecedores produtos com o mesmo "nome
  * base" (2 primeiras palavras — mesmo critério da divisória na Tabela de
- * Preços) E o mesmo peso e soma a venda deles também, já que costuma ser a
- * mesma semente vendida por fornecedor diferente. O peso entra no critério
- * porque "nome base" sozinho não separa tratamento (ex.: Panicum Mombaça
- * tem Incrustado/Integra/Nutre — mesma categoria/peso entre si — e
- * Tradicional, categoria diferente e mais leve); pesos diferentes indicam
- * categorias diferentes, não entram na soma. Desconta o estoque atual
- * informado. `mesesSelecionados` usa os mesmos índices de mesesSafraPadrao()
- * (0 = 1º mês da safra, ex. Agosto).
+ * Preços) E a mesma Classe (subcategoriaId, campo "Classe" do Editar
+ * Produto) e soma a venda deles também, já que costuma ser a mesma semente
+ * vendida por fornecedor diferente. A Classe entra no critério porque "nome
+ * base" sozinho não separa tratamento (ex.: Panicum Mombaça tem
+ * Incrustado/Integra/Nutre — mesma Classe "Incrustada" entre si — e
+ * Tradicional, Classe diferente); Classe diferente indica categoria
+ * diferente, não entra na soma. Desconta o estoque atual informado.
+ * `mesesSelecionados` usa os mesmos índices de mesesSafraPadrao() (0 = 1º
+ * mês da safra, ex. Agosto).
  */
 export function calcularNecessidadeCompra(
   produtosFornecedor: Produto[],
@@ -59,7 +60,7 @@ export function calcularNecessidadeCompra(
           p.codigo &&
           p.fornecedorId !== produto.fornecedorId &&
           primeirasDuasPalavras(p.nome) === grupoNome &&
-          Math.abs(p.peso - produto.peso) < 0.01,
+          p.subcategoriaId === produto.subcategoriaId,
       );
 
       const porFornecedor: FornecedorMensal[] = [
