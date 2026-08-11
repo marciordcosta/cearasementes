@@ -197,6 +197,7 @@ export function PricingPage() {
       if (filtroClasse === 'todas') return true;
       if (filtroClasse.startsWith('cat:')) return p.categoriaId === filtroClasse.slice(4);
       if (filtroClasse.startsWith('forn:')) return p.fornecedorId === filtroClasse.slice(5);
+      if (filtroClasse.startsWith('sub:')) return p.subcategoriaId === filtroClasse.slice(4);
       return true;
     })
     .filter((p) => {
@@ -218,12 +219,14 @@ export function PricingPage() {
       rotuloFiltro = categorias.find((cat) => cat.id === filtroClasse.slice(4))?.nome ?? null;
     } else if (filtroClasse.startsWith('forn:')) {
       rotuloFiltro = fornecedores.find((f) => f.id === filtroClasse.slice(5))?.nome ?? null;
+    } else if (filtroClasse.startsWith('sub:')) {
+      rotuloFiltro = subcategorias.find((s) => s.id === filtroClasse.slice(4))?.nome ?? null;
     }
     const partesRotulo = [rotuloFiltro, buscaAtiva ? `"${buscaProduto.trim()}"` : null].filter((parte): parte is string => parte !== null);
     if (partesRotulo.length === 0) return null;
 
     return { rotulo: partesRotulo.join(' + '), produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
-  }, [filtroClasse, buscaProduto, categorias, fornecedores, produtosFiltrados]);
+  }, [filtroClasse, buscaProduto, categorias, subcategorias, fornecedores, produtosFiltrados]);
 
   // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
   const produtosExibidos = !ordenarPorRepresentacao
@@ -528,6 +531,7 @@ export function PricingPage() {
   function onRemoverSubcategoria(id: string) {
     setSubcategorias((prev) => prev.filter((s) => s.id !== id));
     setProdutos((prev) => prev.map((p) => (p.subcategoriaId === id ? { ...p, subcategoriaId: null } : p)));
+    if (filtroClasse === `sub:${id}`) setFiltroClasse('todas');
     salvarAgora(() => apagarSubcategoria(id));
   }
 
@@ -691,6 +695,15 @@ export function PricingPage() {
                     </option>
                   ))}
                 </optgroup>
+                {subcategorias.length > 0 && (
+                  <optgroup label="Classe">
+                    {subcategorias.map((s) => (
+                      <option key={s.id} value={`sub:${s.id}`} className="text-[var(--color-text)]">
+                        {categorias.find((c) => c.id === s.categoriaId)?.nome ?? '?'}: {s.nome}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 {fornecedores.length > 0 && (
                   <optgroup label="Fornecedor">
                     {fornecedores.map((f) => (
