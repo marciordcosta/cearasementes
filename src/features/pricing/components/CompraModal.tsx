@@ -17,7 +17,7 @@ interface CompraModalProps {
 }
 
 function fmtKg(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return Math.round(v).toLocaleString('pt-BR');
 }
 
 // Fora do componente — os 12 rótulos não mudam, sem custo recalcular a cada render.

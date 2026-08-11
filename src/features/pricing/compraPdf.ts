@@ -6,7 +6,7 @@ function escapeHtml(texto: string): string {
 }
 
 const fmtQtd = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
-const fmtKg = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtKg = (v: number) => Math.round(v).toLocaleString('pt-BR');
 
 export interface ItemImpressaoPedido {
   nome: string;
