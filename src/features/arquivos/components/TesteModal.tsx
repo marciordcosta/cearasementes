@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { uuidParaCurto } from '@/lib/idCurto';
 import type { PatchTeste } from '../api';
 import { redimensionarImagem } from '../fotoTeste';
 import { diasDesdeTeste, formatarDiasTeste, resultadoTeste, statusTeste } from '../testeGerminacao';
@@ -164,7 +165,7 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
   /** Link direto pro Teste de Campo desse laudo na página enxuta de celular (TesteCampoPage) — abre o WhatsApp Web já com o texto pronto pra escolher o contato e enviar. */
   function enviarPorWhatsapp() {
     if (!laudo) return;
-    const link = `${window.location.origin}/teste-campo?laudo=${laudo.id}`;
+    const link = `${window.location.origin}/teste-campo?laudo=${uuidParaCurto(laudo.id)}`;
     const texto = `Teste de Germinação (Campo) — ${laudo.nomeProduto}${laudo.lote ? ` (Lote ${laudo.lote})` : ''}: ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
   }

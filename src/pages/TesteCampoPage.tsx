@@ -7,6 +7,7 @@ import { filtrarArquivos } from '@/features/arquivos/filtrarArquivos';
 import { resultadoTeste, statusTeste } from '@/features/arquivos/testeGerminacao';
 import type { ArquivoLaudo } from '@/features/arquivos/types';
 import { mensagemDeErro } from '@/lib/errors';
+import { curtoParaUuid } from '@/lib/idCurto';
 
 /**
  * Página enxuta pra celular — busca um laudo e abre direto o Teste de Campo
@@ -29,7 +30,9 @@ export function TesteCampoPage() {
   const laudoIdLink = searchParams.get('laudo');
   useEffect(() => {
     if (!laudoIdLink) return;
-    const alvo = arquivos.find((a) => a.id === laudoIdLink);
+    const idReal = curtoParaUuid(laudoIdLink);
+    if (!idReal) return;
+    const alvo = arquivos.find((a) => a.id === idReal);
     if (alvo) setParaTeste(alvo);
   }, [laudoIdLink, arquivos]);
 
