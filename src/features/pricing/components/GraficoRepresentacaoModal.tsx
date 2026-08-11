@@ -45,10 +45,18 @@ interface FatiaPizza {
 /** Acima disso, Classes A e B (a C pouco relevante só teria poluído); com poucos candidatos, mostra todo mundo (até esse limite) — senão o filtro de classe podia sobrar quase vazio, tipo 1-2 produtos, mesmo tendo mais gente pra comparar. */
 const LIMITE_TOP_OU_CLASSE = 10;
 
-/** Já ordenado (maior pro menor) — decide entre "só Classes A/B" ou "Top N" conforme o tamanho do grupo. */
+/**
+ * Já ordenado (maior pro menor) — decide entre "só Classes A/B" ou "Top N" conforme o tamanho
+ * do grupo. Mesmo com mais de LIMITE_TOP_OU_CLASSE candidatos no total, se as Classes A/B
+ * sozinhas renderem MENOS itens que o limite (a C ficou com a maioria), o filtro de classe
+ * "sobra quase vazio" mesmo tendo mais gente pra comparar — nesse caso cai pro Top N direto.
+ */
 function selecionarClasseOuTop<T extends { classe: ClasseABC }>(ordenados: T[]): { itens: T[]; porClasse: boolean } {
   if (ordenados.length > LIMITE_TOP_OU_CLASSE) {
-    return { itens: ordenados.filter((i) => i.classe !== 'C'), porClasse: true };
+    const classesAB = ordenados.filter((i) => i.classe !== 'C');
+    if (classesAB.length >= LIMITE_TOP_OU_CLASSE) {
+      return { itens: classesAB, porClasse: true };
+    }
   }
   return { itens: ordenados.slice(0, LIMITE_TOP_OU_CLASSE), porClasse: false };
 }
