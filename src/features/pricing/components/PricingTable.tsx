@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
-import { alertaTolerancia, calcularCanal, gerarCorCanal, margemClasse, mesmoProdutoBase, montarTituloEncargos, montarTituloFrete } from '../calculations';
+import { alertaTolerancia, calcularCanal, chaveComparacaoNome, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete } from '../calculations';
 import type { ClasseABC, HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
@@ -736,7 +736,7 @@ export function PricingTable({
               // Produto "diferente" do anterior (mesmo dentro da mesma categoria) — mesma
               // linha divisória espessa usada entre categorias, só que verde quando a
               // categoria TAMBÉM mudou.
-              const produtoMudou = anterior !== null && !mesmoProdutoBase(produto, anterior);
+              const produtoMudou = anterior !== null && chaveComparacaoNome(produto.nome) !== chaveComparacaoNome(anterior.nome);
               const linhaEspessa = categoriaMudou || produtoMudou;
               const destacada = produto.id === linhaDestacada;
               return (

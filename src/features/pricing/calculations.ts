@@ -51,15 +51,6 @@ export function chaveComparacaoNome(nome: string): string {
   return primeirasDuasPalavras(nome);
 }
 
-/**
- * Mesmo "produto" pra fins de divisória visual (linha mais espessa entre produtos diferentes na
- * Tabela de Preços e no catálogo em PDF): mesma chaveComparacaoNome E mesma Classe (subcategoria)
- * — nome sozinho não separa tratamento (ex.: Incrustado x Tradicional viravam "o mesmo produto"
- * indevidamente, já que têm o mesmo nome destacado).
- */
-export function mesmoProdutoBase(a: { nome: string; subcategoriaId: string | null }, b: { nome: string; subcategoriaId: string | null }): boolean {
-  return chaveComparacaoNome(a.nome) === chaveComparacaoNome(b.nome) && a.subcategoriaId === b.subcategoriaId;
-}
 
 /**
  * Markup "por dentro": o preço é o custo dividido por (1 - soma de todos os
