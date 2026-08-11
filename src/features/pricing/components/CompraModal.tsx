@@ -219,7 +219,25 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                           className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]"
                           title={tooltipMensal(item, mesesSelecionados)}
                         >
-                          {fmtInt.format(item.qtdComprar)}
+                          <span className="inline-flex items-center gap-1.5">
+                            {estoqueTexto[item.produto.id] !== undefined && estoqueTexto[item.produto.id] !== '' && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEstoqueTexto((prev) => {
+                                    const novo = { ...prev };
+                                    delete novo[item.produto.id];
+                                    return novo;
+                                  })
+                                }
+                                title="Restaurar (zera o estoque informado desse produto)"
+                                className="text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                              >
+                                <RotateCcw size={11} />
+                              </button>
+                            )}
+                            {fmtInt.format(item.qtdComprar)}
+                          </span>
                         </td>
                         <td className="px-3 py-1.5 text-right">
                           <input
