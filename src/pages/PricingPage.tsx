@@ -66,6 +66,7 @@ import { SeletorCriterioRepresentacao } from '@/features/pricing/components/Sele
 import {
   calcularMargemAtualProjetada,
   calcularRepresentatividadeGeral,
+  calcularRepresentatividadePorCanal,
   construirHistoricoPorCodigo,
   listarTodasSafrasGeral,
   type CriterioRepresentacao,
@@ -240,6 +241,21 @@ export function PricingPage() {
     const partesRotulo = [rotuloFiltroClasse, buscaAtiva ? `"${buscaProduto.trim()}"` : null].filter((parte): parte is string => parte !== null);
     return { rotulo: partesRotulo.join(' + '), produtoIds: new Set(produtosFiltrados.map((p) => p.id)) };
   }, [rotuloFiltroClasse, buscaProduto, produtosFiltrados]);
+
+  // Participação de cada Tabela nas vendas dos itens em vista (mesmo recorte de filtroAtivoGrafico,
+  // ou todo o sortimento sem filtro) — só pro ícone "Tabelas" do gráfico de Representação Geral.
+  const representatividadePorCanalGrafico = useMemo(
+    () =>
+      calcularRepresentatividadePorCanal(
+        produtos,
+        canais,
+        itemsAgregadosBi,
+        criterioRepresentacao,
+        filtroAtivoGrafico?.produtoIds,
+        safraSelecionadaGrafico ?? undefined,
+      ),
+    [produtos, canais, itemsAgregadosBi, criterioRepresentacao, filtroAtivoGrafico, safraSelecionadaGrafico],
+  );
 
   // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
   const produtosExibidos = !ordenarPorRepresentacao
@@ -858,6 +874,7 @@ export function PricingPage() {
         historicoSafras={todasSafrasDisponiveisGeral}
         safraSelecionada={safraSelecionadaGrafico}
         onEscolherSafra={setSafraSelecionadaGrafico}
+        representatividadePorCanal={representatividadePorCanalGrafico}
       />
       <GraficoCurvaMensalModal
         produto={produtoGraficoLinha}

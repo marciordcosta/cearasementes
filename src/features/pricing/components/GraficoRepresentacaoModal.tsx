@@ -1,11 +1,19 @@
-import { useMemo } from 'react';
+import { Layers } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Chart } from 'react-chartjs-2';
 import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/hooks/useTheme';
 import { chartChrome } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
 import { chaveComparacaoProduto } from '../calculations';
-import { classificarABCPorValor, ROTULO_CRITERIO_REPRESENTACAO, type ClasseABC, type CriterioRepresentacao, type Representatividade } from '../historicoBi';
+import {
+  classificarABCPorValor,
+  ROTULO_CRITERIO_REPRESENTACAO,
+  type ClasseABC,
+  type CriterioRepresentacao,
+  type Representatividade,
+  type RepresentatividadePorCanal,
+} from '../historicoBi';
 import type { Produto } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
@@ -17,7 +25,7 @@ interface GraficoRepresentacaoModalProps {
   onEscolherCriterio: (criterio: CriterioRepresentacao) => void;
   produtos: Produto[];
   representatividadePorProduto: Map<string, Representatividade>;
-  /** Quando o "Filtrar:" (Categoria/Fornecedor) da grade está ativo — troca o gráfico pra pizza, só com os itens desse filtro. */
+  /** Quando o "Filtrar:" (Categoria/Fornecedor) da grade está ativo — recorta a pizza só aos itens desse filtro; sem isso, a pizza mostra todo o sortimento. */
   filtroAtivo?: { rotulo: string; produtoIds: Set<string> } | null;
   /** true quando o filtro ativo é a Categoria mãe (ex.: "Capim", geral) — junta numa fatia só
    * os produtos com o mesmo nome base (2 primeiras palavras) e mesma Classe (subcategoria)
@@ -30,10 +38,9 @@ interface GraficoRepresentacaoModalProps {
   /** null = média das últimas safras (padrão). O cálculo de representatividadePorProduto já reflete essa escolha — feito por quem chama (aqui só decide o rótulo/seletor). */
   safraSelecionada?: string | null;
   onEscolherSafra?: (safra: string | null) => void;
+  /** Participação de cada Tabela (canal) nas vendas dos itens em vista (já recortada pelo mesmo filtroAtivo/safra) — omitido esconde o ícone de alternar pra essa visão. */
+  representatividadePorCanal?: RepresentatividadePorCanal[];
 }
-
-/** Mesmas cores semânticas A/B/C (good/neutro/bad) já usadas em Badge/tailwind.config.js. */
-const COR_CLASSE: Record<ClasseABC, string> = { A: '#0B6E52', B: '#94A3B8', C: '#C24444' };
 
 /** Ângulo áureo — espaça os matizes de forma bem distribuída pra qualquer quantidade de fatias, sem repetir cor entre produtos vizinhos. */
 function corPorIndice(i: number, isDark: boolean): string {
@@ -78,10 +85,10 @@ interface ItemRepresentatividadeNomeado {
 }
 
 /**
- * Junta, dentro do filtro ativo, produtos com o mesmo nome "destacado" no cadastro e mesma
- * Classe (subcategoria) — mesmo critério da busca inteligente de fornecedores no Planejamento
- * de Compra (ver chaveComparacaoNome em calculations.ts e compra.ts) — numa fatia só, somando os
- * valores. Nome exibido vem do item de maior valor do grupo (o "principal"); produto sem match em
+ * Junta produtos com o mesmo nome "destacado" no cadastro e mesma Classe (subcategoria) — mesmo
+ * critério da busca inteligente de fornecedores no Planejamento de Compra (ver
+ * chaveComparacaoNome em calculations.ts e compra.ts) — numa fatia só, somando os valores. Nome
+ * exibido vem do item de maior valor do grupo (o "principal"); produto sem match em
  * `produtoPorId` fica sozinho. A Classe é RECALCULADA sobre o total já somado de cada grupo (não
  * herdada do principal) — um grupo pode juntar vários fornecedores individualmente Classe C e
  * ainda assim somar mais que muita Classe A/B sozinha; herdar do principal escondia esse grupo
@@ -110,13 +117,14 @@ function agruparPorNomeClasse(itens: ItemRepresentatividadeNomeado[], produtoPor
 }
 
 /**
- * Representação (%) — em colunas (maior pro menor, todo o sortimento) por padrão.
- * Quando a grade está com o "Filtrar:" (Categoria/Fornecedor) e/ou a busca por nome
- * ativos, vira pizza com só os itens que aparecem na grade, participação recalculada
- * dentro desse grupo. Nos dois formatos: com mais de LIMITE_TOP_OU_CLASSE candidatos,
- * mostra só Classes A e B da Curva ABC; com poucos candidatos (grupo já pequeno, ex.
- * filtro/busca estreitos), mostra Top N direto, sem filtrar classe — senão o filtro de
- * classe podia sobrar quase vazio mesmo tendo mais produtos pra comparar.
+ * Representação (%) — sempre em pizza (colunas não faz mais sentido só ela ser diferente).
+ * Com o "Filtrar:" (Categoria/Fornecedor) e/ou busca por nome ativos na grade, mostra só os
+ * itens que aparecem lá, participação recalculada dentro desse grupo; sem filtro nenhum, todo o
+ * sortimento entra no cálculo. Com mais de LIMITE_TOP_OU_CLASSE candidatos, mostra só Classes A
+ * e B da Curva ABC; com poucos (grupo já pequeno), mostra Top N direto, sem filtrar classe —
+ * senão o filtro de classe podia sobrar quase vazio mesmo tendo mais produtos pra comparar.
+ * O ícone de "Tabelas" (quando `representatividadePorCanal` é passado) troca pra uma segunda
+ * pizza — participação de cada Tabela de Preço nas vendas desses mesmos itens.
  */
 export function GraficoRepresentacaoModal({
   open,
@@ -131,28 +139,19 @@ export function GraficoRepresentacaoModal({
   historicoSafras,
   safraSelecionada,
   onEscolherSafra,
+  representatividadePorCanal,
 }: GraficoRepresentacaoModalProps) {
   const { isDark } = useTheme();
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const nomePorId = useMemo(() => new Map(produtos.map((p) => [p.id, p.nome.replace(/[*_]/g, '')])), [produtos]);
   const produtoPorId = useMemo(() => new Map(produtos.map((p) => [p.id, p])), [produtos]);
+  const [modoPorTabela, setModoPorTabela] = useState(false);
 
-  // Mais de LIMITE_TOP_OU_CLASSE candidatos: só Classes A e B (a C pouco relevante só poluía).
-  // Até esse limite: Top N mesmo, sem filtrar classe (senão sobrava quase vazio com poucos itens).
-  const { itens: linhas, porClasse: linhasPorClasse } = useMemo(() => {
-    const ordenados = Array.from(representatividadePorProduto.entries())
-      .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', ...repr }))
-      .sort((a, b) => b.pct - a.pct);
-    return selecionarClasseOuTop(ordenados);
-  }, [nomePorId, representatividadePorProduto]);
-
-  const emModoPizza = !!filtroAtivo && filtroAtivo.produtoIds.size > 0;
-
-  // Total recalculado só dentro do filtro (não do sortimento inteiro) — as fatias somam 100% entre si.
+  // Total recalculado só dentro do que está em vista (filtro, ou todo o sortimento sem filtro) — as fatias somam 100% entre si.
   const { itens: fatias, porClasse: fatiasPorClasse } = useMemo((): { itens: FatiaPizza[]; porClasse: boolean } => {
-    if (!filtroAtivo) return { itens: [], porClasse: true };
+    const idsEmVista = filtroAtivo?.produtoIds ?? new Set(representatividadePorProduto.keys());
     const doFiltroBase = Array.from(representatividadePorProduto.entries())
-      .filter(([produtoId]) => filtroAtivo.produtoIds.has(produtoId))
+      .filter(([produtoId]) => idsEmVista.has(produtoId))
       .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', produtoId, ...repr }));
     const doFiltro = (agruparPorNomeEClasse ? agruparPorNomeClasse(doFiltroBase, produtoPorId) : doFiltroBase).sort(
       (a, b) => b.valorCriterio - a.valorCriterio,
@@ -170,46 +169,6 @@ export function GraficoRepresentacaoModal({
       })),
     };
   }, [filtroAtivo, nomePorId, representatividadePorProduto, agruparPorNomeEClasse, produtoPorId]);
-
-  const chartDataBarras = useMemo(
-    () => ({
-      labels: linhas.map((l) => l.nome),
-      datasets: [
-        {
-          type: 'bar' as const,
-          label: 'Representação (%)',
-          data: linhas.map((l) => l.pct),
-          backgroundColor: linhas.map((l) => COR_CLASSE[l.classe]),
-          borderRadius: 4,
-        },
-      ],
-    }),
-    [linhas],
-  );
-
-  const chartOptionsBarras = useMemo(
-    () => ({
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx: { dataIndex: number; parsed: { y: number | null } }) => {
-              const l = linhas[ctx.dataIndex];
-              const valorFormatado = criterio === 'qtd' ? `${fmtInt.format(Math.round(l.valorCriterio))} un.` : fmtBRL.format(l.valorCriterio);
-              return [`Representação: ${ctx.parsed.y?.toFixed(1)}%`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`, `Classe: ${l.classe}`];
-            },
-          },
-        },
-      },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: c.text2, maxRotation: 60, minRotation: 60, font: { size: 10, weight: 300 as const } } },
-        y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.text2, callback: (v: number | string) => `${v}%` }, border: { display: false } },
-      },
-    }),
-    [c, criterio, linhas],
-  );
 
   const chartDataPizza = useMemo(
     () => ({
@@ -238,7 +197,7 @@ export function GraficoRepresentacaoModal({
             label: (ctx: { dataIndex: number }) => {
               const f = fatias[ctx.dataIndex];
               const valorFormatado = criterio === 'qtd' ? `${fmtInt.format(Math.round(f.valorCriterio))} un.` : fmtBRL.format(f.valorCriterio);
-              return [`${f.pctFiltro.toFixed(1)}% do filtro`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`, `Classe: ${f.classe}`];
+              return [`${f.pctFiltro.toFixed(1)}%`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`, `Classe: ${f.classe}`];
             },
           },
         },
@@ -247,9 +206,53 @@ export function GraficoRepresentacaoModal({
     [c, criterio, fatias],
   );
 
-  const semDados = emModoPizza ? fatias.length === 0 : linhas.length === 0;
+  const porCanal = useMemo(() => representatividadePorCanal ?? [], [representatividadePorCanal]);
+  const chartDataPizzaCanal = useMemo(
+    () => ({
+      labels: porCanal.map((cn) => cn.canalNome),
+      datasets: [
+        {
+          type: 'pie' as const,
+          data: porCanal.map((cn) => cn.valorCriterio),
+          backgroundColor: porCanal.map((_cn, i) => corPorIndice(i, isDark)),
+          borderColor: c.tooltipBg,
+          borderWidth: 2,
+        },
+      ],
+    }),
+    [c, porCanal, isDark],
+  );
+
+  const chartOptionsPizzaCanal = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' as const, labels: { color: c.text2, boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx: { dataIndex: number }) => {
+              const cn = porCanal[ctx.dataIndex];
+              const valorFormatado = criterio === 'qtd' ? `${fmtInt.format(Math.round(cn.valorCriterio))} un.` : fmtBRL.format(cn.valorCriterio);
+              return [`${cn.pct.toFixed(1)}%`, `${ROTULO_CRITERIO_REPRESENTACAO[criterio]}: ${valorFormatado}`];
+            },
+          },
+        },
+      },
+    }),
+    [c, criterio, porCanal],
+  );
+
+  const semDados = modoPorTabela ? porCanal.length === 0 : fatias.length === 0;
   const rotuloSafra = safraSelecionada ? historicoSafras?.find((s) => s.key === safraSelecionada)?.label : null;
   const trechoSafra = rotuloSafra ? `só a safra ${rotuloSafra}` : 'média das últimas safras';
+  const trechoEscopo = filtroAtivo ? (
+    <>
+      Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span>
+    </>
+  ) : (
+    'Todo o sortimento'
+  );
 
   return (
     <Modal
@@ -276,6 +279,16 @@ export function GraficoRepresentacaoModal({
               </select>
             )}
             <SeletorCriterioRepresentacao criterio={criterio} ordenarAtivo onEscolher={onEscolherCriterio} semOpcaoPadrao sobreFundoEscuro />
+            {representatividadePorCanal && (
+              <button
+                type="button"
+                onClick={() => setModoPorTabela((v) => !v)}
+                title={modoPorTabela ? 'Ver participação por produto' : 'Ver participação de cada Tabela de Preço'}
+                className={`shrink-0 rounded-full p-1.5 text-white ${modoPorTabela ? 'bg-[var(--color-accent)]' : 'bg-white/15 hover:bg-white/25'}`}
+              >
+                <Layers size={16} />
+              </button>
+            )}
           </span>
         </span>
       }
@@ -286,29 +299,28 @@ export function GraficoRepresentacaoModal({
         <p className="text-sm text-[var(--color-text-soft)]">
           Sem dado de Representação pra mostrar — nenhum produto com Código cadastrado bateu com o histórico do BI, ou só tem Classe C nesse filtro.
         </p>
-      ) : emModoPizza && filtroAtivo ? (
+      ) : modoPorTabela ? (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item (
-            {fatiasPorClasse ? 'Classes A e B da Curva ABC' : `Top ${fatias.length}`}) dentro desse filtro. Critério:{' '}
+            {trechoEscopo} — participação de cada Tabela de Preço nas vendas desses itens. Critério:{' '}
+            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>, {trechoSafra}.
+          </p>
+          <div className="h-96">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Chart type="pie" data={chartDataPizzaCanal as any} options={chartOptionsPizzaCanal as any} />
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mb-3 text-xs text-[var(--color-text-soft)]">
+            {trechoEscopo} — participação de cada item (
+            {fatiasPorClasse ? 'Classes A e B da Curva ABC' : `Top ${fatias.length}`}). Critério:{' '}
             <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>, {trechoSafra}. Cada produto com uma
             cor própria.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Chart type="pie" data={chartDataPizza as any} options={chartOptionsPizza as any} />
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>, {trechoSafra} —{' '}
-            {linhasPorClasse ? `Classes A e B da Curva ABC (${linhas.length} produtos)` : `Top ${linhas.length} produtos`}, maior pro menor. Cor da barra =
-            Classe da Curva ABC.
-          </p>
-          <div className="h-96">
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <Chart type="bar" data={chartDataBarras as any} options={chartOptionsBarras as any} />
           </div>
         </>
       )}

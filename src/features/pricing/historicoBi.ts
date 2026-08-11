@@ -325,6 +325,46 @@ export function calcularRepresentatividadeGeral(
   return resultado;
 }
 
+export interface RepresentatividadePorCanal {
+  canalId: string;
+  canalNome: string;
+  pct: number;
+  valorCriterio: number;
+}
+
+/**
+ * Participação de cada Tabela (canal) nas vendas totais dos produtos informados — soma o
+ * critério escolhido (média das últimas safras, ou uma safra específica) de cada produto NESSE
+ * canal, por canal. Sem `produtoIds`, considera todo o sortimento (com Código cadastrado); com
+ * `produtoIds`, só esses (mesmo recorte do filtro/busca já aplicado na grade). Não filtra por
+ * Curva ABC — o número de Tabelas já costuma ser pequeno o bastante pra mostrar todas.
+ */
+export function calcularRepresentatividadePorCanal(
+  produtos: Produto[],
+  canais: Canal[],
+  items: ItemAgg[],
+  criterio: CriterioRepresentacao = 'valor',
+  produtoIds?: Set<string>,
+  safraEspecifica?: string,
+): RepresentatividadePorCanal[] {
+  const porCanal = canais.map((canal) => {
+    const historicoPorCodigo = construirHistoricoPorCodigo(items, canal.nome);
+    let valorCriterio = 0;
+    for (const produto of produtos) {
+      if (!produto.codigo || (produtoIds && !produtoIds.has(produto.id))) continue;
+      const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
+      if (!porSafra) continue;
+      valorCriterio += mediaCriterioUltimasSafras(porSafra, criterio, safraEspecifica);
+    }
+    return { canalId: canal.id, canalNome: canal.nome, valorCriterio };
+  });
+  const total = porCanal.reduce((s, c) => s + c.valorCriterio, 0);
+  return porCanal
+    .filter((c) => c.valorCriterio > 0)
+    .map((c) => ({ ...c, pct: total > 0 ? (c.valorCriterio / total) * 100 : 0 }))
+    .sort((a, b) => b.valorCriterio - a.valorCriterio);
+}
+
 export interface MargemAtualProjetada {
   valorProjetado: number;
   margemProjetada: number;
