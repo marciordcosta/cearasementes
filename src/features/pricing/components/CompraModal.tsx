@@ -23,12 +23,16 @@ function fmtKg(v: number): string {
 // Fora do componente — os 12 rótulos não mudam, sem custo recalcular a cada render.
 const MESES = mesesSafraPadrao();
 
-/** "Ago: 120 | Set: 95 | Out: 60" — só os meses escolhidos na projeção, pro tooltip de detalhe. */
+/**
+ * "FORNECEDOR A — Ago: 120 | Set: 95 | Out: 60\nFORNECEDOR B — Ago: 10 | ..." — um bloco por
+ * fornecedor que contribuiu pra projeção (busca por nome achou o mesmo produto em outro
+ * fornecedor), só os meses escolhidos na projeção.
+ */
 function tooltipMensal(item: ItemNecessidadeCompra, mesesSelecionados: Set<number>): string {
-  return Array.from(mesesSelecionados)
-    .sort((a, b) => a - b)
-    .map((i) => `${MESES[i]}: ${fmtInt.format(Math.round(item.porMes[i] ?? 0))}`)
-    .join(' | ');
+  const mesesOrdenados = Array.from(mesesSelecionados).sort((a, b) => a - b);
+  return item.porFornecedor
+    .map((f) => `${f.fornecedorNome} — ${mesesOrdenados.map((i) => `${MESES[i]}: ${fmtInt.format(Math.round(f.porMes[i] ?? 0))}`).join(' | ')}`)
+    .join('\n');
 }
 
 /**
@@ -59,8 +63,8 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
 
   const necessidadeCompleta = useMemo(() => {
     if (!fornecedorId || mesesSelecionados.size === 0) return [];
-    return calcularNecessidadeCompra(produtosFornecedor, items, Array.from(mesesSelecionados), estoquePorProduto);
-  }, [produtosFornecedor, items, mesesSelecionados, estoquePorProduto, fornecedorId]);
+    return calcularNecessidadeCompra(produtosFornecedor, produtos, fornecedores, items, Array.from(mesesSelecionados), estoquePorProduto);
+  }, [produtosFornecedor, produtos, fornecedores, items, mesesSelecionados, estoquePorProduto, fornecedorId]);
 
   const necessidade = useMemo(
     () => necessidadeCompleta.filter((item) => !produtosExcluidos.has(item.produto.id)),
