@@ -91,16 +91,12 @@ export function interpretarConteudoLaudo(conteudo: ConteudoExtraido): CamposDoCo
   const cultivar = buscarRotulo(linhas, ['cultivar']);
   const processo = buscarRotulo(linhas, ['processo']);
   // Nome do produto = Espécie + Cultivar (ex.: "Andropogon Gayanus Planaltina") quando o laudo traz
-  // Espécie (modelo "Termo de Conformidade"); sem Espécie, cai pro par Cultivar + Processo (ex.:
-  // "Marandu Tradicional", modelo mais simples que não destaca a Espécie à parte).
-  const nomeProduto =
-    especie && cultivar
-      ? capitalizarPalavras(`${especie} ${cultivar}`)
-      : cultivar && processo
-        ? capitalizarPalavras(`${cultivar} ${processo}`)
-        : cultivar
-          ? capitalizarPalavras(cultivar)
-          : null;
+  // Espécie (modelo "Termo de Conformidade"); sem Espécie, cai só pro Cultivar. Processo (Tradicional/
+  // Incrustado/...) sempre entra no final quando existir, nos dois casos — sem ele, dois lotes do
+  // mesmo cultivar em processos diferentes ficam com o nome idêntico (ex.: "M.maximus Massai"), como
+  // se fossem o mesmo produto.
+  const baseNome = especie && cultivar ? `${especie} ${cultivar}` : cultivar;
+  const nomeProduto = baseNome ? capitalizarPalavras(processo ? `${baseNome} ${processo}` : baseNome) : null;
   const anoSafra = buscarRotulo(linhas, ['safra']);
   const lote = buscarLoteEmTabelas(tabelas);
 
