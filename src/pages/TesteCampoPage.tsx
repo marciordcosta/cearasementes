@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apagarFotoTeste, atualizarFotosTeste, atualizarTeste, enviarFotoTeste, fetchArquivosLaudos, type PatchTeste } from '@/features/arquivos/api';
 import { TesteModal } from '@/features/arquivos/components/TesteModal';
@@ -21,6 +22,16 @@ export function TesteCampoPage() {
   const [busca, setBusca] = useState('');
   const [paraTeste, setParaTeste] = useState<ArquivoLaudo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+
+  // Link enviado pelo ícone de WhatsApp do TesteModal (?laudo=<id>) — abre esse teste
+  // direto, sem precisar buscar/tocar na lista.
+  const laudoIdLink = searchParams.get('laudo');
+  useEffect(() => {
+    if (!laudoIdLink) return;
+    const alvo = arquivos.find((a) => a.id === laudoIdLink);
+    if (alvo) setParaTeste(alvo);
+  }, [laudoIdLink, arquivos]);
 
   function invalidar() {
     queryClient.invalidateQueries({ queryKey: ['arquivos_laudos'] });

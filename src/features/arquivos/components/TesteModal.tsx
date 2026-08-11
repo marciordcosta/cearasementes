@@ -23,6 +23,15 @@ const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var
 const valorClasse = 'w-28 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]';
 const valorNumeroClasse = `${valorClasse} text-right num`;
 
+/** Glifo do WhatsApp (simple-icons) — lucide-react não tem ícones de marca. */
+function IconeWhatsapp({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2Zm0 18.15a8.2 8.2 0 0 1-4.19-1.14l-.3-.18-3.12.82.83-3.04-.2-.32a8.14 8.14 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.42a8.17 8.17 0 0 1 2.41 5.82c0 4.54-3.7 8.24-8.24 8.24Zm4.98-6.04c-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12s-.62.79-.76.95-.28.18-.52.06c-.24-.12-1.04-.39-1.99-1.24-.74-.66-1.24-1.48-1.38-1.72-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.32-.74-1.8-.2-.48-.4-.42-.54-.42-.14 0-.3-.02-.46-.02s-.42.06-.64.3c-.22.24-.84.82-.84 2.02s.86 2.35 1 2.51c.14.16 1.7 2.62 4.15 3.62.58.25 1.03.4 1.38.51.58.19 1.11.16 1.53.1.47-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28Z" />
+    </svg>
+  );
+}
+
 /** Linha "descrição de um lado, valor do outro" — mais compacta que rótulo em cima do campo, cabe melhor numa tela de celular. */
 function LinhaCampo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -152,6 +161,14 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
     });
   }
 
+  /** Link direto pro Teste de Campo desse laudo na página enxuta de celular (TesteCampoPage) — abre o WhatsApp Web já com o texto pronto pra escolher o contato e enviar. */
+  function enviarPorWhatsapp() {
+    if (!laudo) return;
+    const link = `${window.location.origin}/teste-campo?laudo=${laudo.id}`;
+    const texto = `Teste de Germinação (Campo) — ${laudo.nomeProduto}${laudo.lote ? ` (Lote ${laudo.lote})` : ''}: ${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+  }
+
   async function excluir() {
     if (!laudo) return;
     await Promise.all(fotos.map((url) => onRemoverFoto(laudo.id, url).catch(() => {})));
@@ -170,7 +187,21 @@ export function TesteModal({ laudo, onFechar, onSalvar, onAdicionarFoto, onRemov
   return (
     <Modal
       open={laudo !== null}
-      title="Teste de Germinação (Campo)"
+      title={
+        <>
+          <span>Teste de Germinação (Campo)</span>
+          {laudo && (
+            <button
+              type="button"
+              onClick={enviarPorWhatsapp}
+              title="Enviar link de acesso pelo celular via WhatsApp"
+              className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#25D366] opacity-80 hover:opacity-100"
+            >
+              <IconeWhatsapp className="h-4 w-4" />
+            </button>
+          )}
+        </>
+      }
       onClose={onFechar}
       widthClassName="max-w-[480px]"
       footer={
