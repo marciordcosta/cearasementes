@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { ItemAgg } from '@/features/bi/types';
 import { fmtInt } from '@/lib/format';
-import { calcularNecessidadeCompra, type ItemNecessidadeCompra } from '../compra';
+import { calcularNecessidadeCompra, type FornecedorMensal, type ItemNecessidadeCompra } from '../compra';
 import { gerarPedidoCompraPdf } from '../compraPdf';
 import { mesesSafraPadrao } from '../historicoBi';
 import type { Fornecedor, Produto } from '../types';
@@ -23,14 +23,27 @@ function fmtKg(v: number): string {
 // Fora do componente — os 12 rótulos não mudam, sem custo recalcular a cada render.
 const MESES = mesesSafraPadrao();
 
+function qtdMesesSoma(porMes: number[], mesesSelecionados: Set<number>): number {
+  return Array.from(mesesSelecionados).reduce((soma, i) => soma + (porMes[i] ?? 0), 0);
+}
+
+/** 1ª entrada de porFornecedor é sempre o próprio produto (ver calcularNecessidadeCompra). */
+function qtdPropria(item: ItemNecessidadeCompra, mesesSelecionados: Set<number>): number {
+  return qtdMesesSoma(item.porFornecedor[0]?.porMes ?? [], mesesSelecionados);
+}
+
+/** Demais entradas — achadas pela busca por nome+Classe em outros fornecedores. */
+function qtdOutrosFornecedores(item: ItemNecessidadeCompra, mesesSelecionados: Set<number>): number {
+  return item.porFornecedor.slice(1).reduce((soma, f) => soma + qtdMesesSoma(f.porMes, mesesSelecionados), 0);
+}
+
 /**
  * "FORNECEDOR A — Ago: 120 | Set: 95 | Out: 60\nFORNECEDOR B — Ago: 10 | ..." — um bloco por
- * fornecedor que contribuiu pra projeção (busca por nome achou o mesmo produto em outro
- * fornecedor), só os meses escolhidos na projeção.
+ * fornecedor, só os meses escolhidos na projeção.
  */
-function tooltipMensal(item: ItemNecessidadeCompra, mesesSelecionados: Set<number>): string {
+function tooltipMensal(porFornecedor: FornecedorMensal[], mesesSelecionados: Set<number>): string {
   const mesesOrdenados = Array.from(mesesSelecionados).sort((a, b) => a - b);
-  return item.porFornecedor
+  return porFornecedor
     .map((f) => `${f.fornecedorNome} — ${mesesOrdenados.map((i) => `${MESES[i]}: ${fmtInt.format(Math.round(f.porMes[i] ?? 0))}`).join(' | ')}`)
     .join('\n');
 }
@@ -192,7 +205,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
           ) : (
             <>
               <div className="overflow-x-auto rounded-md border border-[var(--color-line)]">
-                <table className="w-full min-w-[620px] text-xs">
+                <table className="w-full min-w-[720px] text-xs">
                   <thead>
                     <tr className="bg-[var(--color-navy)] text-left text-white">
                       <th className="px-3 py-2 font-semibold">Produto</th>
@@ -209,6 +222,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                           Qtd Projetada
                         </span>
                       </th>
+                      <th className="px-3 py-2 text-right font-semibold">Outros Fornecedores</th>
                       <th className="px-3 py-2 text-right font-semibold">Estoque Atual</th>
                       <th className="px-3 py-2 text-right font-semibold">Pedido</th>
                       <th className="px-3 py-2 text-right font-semibold">Peso (kg)</th>
@@ -221,8 +235,17 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                         <td className="px-3 py-1.5 text-[var(--color-text)]">{item.produto.nome.replace(/[*_]/g, '')}</td>
                         <td
                           className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]"
-                          title={tooltipMensal(item, mesesSelecionados)}
+                          title={tooltipMensal(item.porFornecedor.slice(0, 1), mesesSelecionados)}
                         >
+                          {fmtInt.format(Math.round(qtdPropria(item, mesesSelecionados)))}
+                        </td>
+                        <td
+                          className="num px-3 py-1.5 text-right text-[var(--color-text-soft)]"
+                          title={item.porFornecedor.length > 1 ? tooltipMensal(item.porFornecedor.slice(1), mesesSelecionados) : undefined}
+                        >
+                          {item.porFornecedor.length > 1 ? fmtInt.format(Math.round(qtdOutrosFornecedores(item, mesesSelecionados))) : '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
                           <span className="inline-flex items-center gap-1.5">
                             {estoqueTexto[item.produto.id] !== undefined && estoqueTexto[item.produto.id] !== '' && (
                               <button
@@ -240,18 +263,15 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                                 <RotateCcw size={11} />
                               </button>
                             )}
-                            {fmtInt.format(item.qtdComprar)}
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="0"
+                              value={estoqueTexto[item.produto.id] ?? ''}
+                              onChange={(e) => setEstoqueTexto((prev) => ({ ...prev, [item.produto.id]: e.target.value }))}
+                              className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
+                            />
                           </span>
-                        </td>
-                        <td className="px-3 py-1.5 text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="0"
-                            value={estoqueTexto[item.produto.id] ?? ''}
-                            onChange={(e) => setEstoqueTexto((prev) => ({ ...prev, [item.produto.id]: e.target.value }))}
-                            className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
-                          />
                         </td>
                         <td className="px-3 py-1.5 text-right">
                           <input
@@ -279,7 +299,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                   {necessidade.length > 0 && (
                     <tfoot>
                       <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)] font-semibold text-[var(--color-text)]">
-                        <td className="px-3 py-2" colSpan={3}>
+                        <td className="px-3 py-2" colSpan={4}>
                           Total do pedido
                         </td>
                         <td className="num px-3 py-2 text-right">{fmtInt.format(totalPedidoUn)} un.</td>
@@ -306,7 +326,7 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
                             return novo;
                           })
                         }
-                        title={`Reincluir produto\n${tooltipMensal(item, mesesSelecionados)}`}
+                        title={`Reincluir produto\n${tooltipMensal(item.porFornecedor, mesesSelecionados)}`}
                         className="rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1 text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
                       >
                         {item.produto.nome.replace(/[*_]/g, '')} ✕
