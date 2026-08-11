@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Chart } from 'react-chartjs-2';
 import { Modal } from '@/components/ui/Modal';
+import { useTheme } from '@/hooks/useTheme';
+import { chartChrome, palette } from '@/lib/chartSetup';
 import { calcularTotalCustosPersonalizados } from '../custosPersonalizados';
 import type { CustoPersonalizado } from '../types';
 
@@ -50,6 +53,9 @@ export function MargemResumoModal({
   totalEncargos,
   totalDesconto,
 }: MargemResumoModalProps) {
+  const { isDark } = useTheme();
+  const c = useMemo(() => chartChrome(isDark), [isDark]);
+  const cores = useMemo(() => palette(isDark), [isDark]);
   const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
   const { pctDasVendas: custosPct } = calcularTotalCustosPersonalizados(custos, totalVendas);
   const margemLiquidaFinalPct = margemLiquidaPct - custosPct;
@@ -65,6 +71,39 @@ export function MargemResumoModal({
     { rotulo: 'Descontos', valorPct: pctDoValor(totalDesconto) },
     { rotulo: 'Despesas Fixas', valorPct: custosPct },
   ];
+
+  const chartDataPizza = useMemo(
+    () => ({
+      labels: linhasDetalhe.map((l) => l.rotulo),
+      datasets: [
+        {
+          type: 'pie' as const,
+          data: linhasDetalhe.map((l) => l.valorPct),
+          backgroundColor: cores,
+          borderColor: c.tooltipBg,
+          borderWidth: 2,
+        },
+      ],
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [totalFornecedor, totalEncargos, totalFrete, totalDesconto, custosPct, totalVendas, cores, c],
+  );
+
+  const chartOptionsPizza = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' as const, labels: { color: c.text2, boxWidth: 10, padding: 10, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx: { label?: string; parsed: number }) => `${ctx.label}: ${fmtP(ctx.parsed)}%`,
+          },
+        },
+      },
+    }),
+    [c],
+  );
 
   return (
     <Modal open={open} onClose={onFechar} title="Margens — visão geral" widthClassName="max-w-sm">
@@ -96,13 +135,9 @@ export function MargemResumoModal({
             </p>
           </button>
           {mostrarDetalhes && (
-            <div className="mt-3 space-y-1.5 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-3">
-              {linhasDetalhe.map((l) => (
-                <div key={l.rotulo} className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--color-text-soft)]">{l.rotulo}</span>
-                  <span className="num font-semibold text-[var(--color-text)]">{fmtP(l.valorPct)}%</span>
-                </div>
-              ))}
+            <div className="mt-3 h-64 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] p-3">
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <Chart type="pie" data={chartDataPizza as any} options={chartOptionsPizza as any} />
             </div>
           )}
         </div>
