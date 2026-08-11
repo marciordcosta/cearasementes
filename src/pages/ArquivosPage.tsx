@@ -38,7 +38,6 @@ import { ListaArquivos } from '@/features/arquivos/components/ListaArquivos';
 import { ParametrizacaoProdutosModal } from '@/features/arquivos/components/ParametrizacaoProdutosModal';
 import { TesteModal } from '@/features/arquivos/components/TesteModal';
 import { VisualizarArquivoModal } from '@/features/arquivos/components/VisualizarArquivoModal';
-import { filtrarArquivos } from '@/features/arquivos/filtrarArquivos';
 import { gerarGuiaTestePdf } from '@/features/arquivos/guiaTestePdf';
 import type { ArquivoLaudo, ManualPlantio, NovoLaudoInput } from '@/features/arquivos/types';
 import { fetchProdutos } from '@/features/pricing/api';
@@ -293,9 +292,6 @@ export function ArquivosPage() {
             }}
           >
             Guia de Plantio
-          </Button>
-          <Button variant="navy" onClick={() => gerarGuiaTestePdf(filtrarArquivos(arquivos, busca))}>
-            Guia de Teste
           </Button>
         </>
       }
