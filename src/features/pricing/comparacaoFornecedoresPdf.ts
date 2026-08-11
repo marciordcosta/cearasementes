@@ -7,26 +7,42 @@ function escapeHtml(texto: string): string {
 
 const fmtValor = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Mesma largura de coluna repetida em toda tabela (cabeçalho + 1 por grupo) — como cada grupo
+// vira uma <table> própria (é o jeito confiável de dar "não quebrar entre páginas" numa lista
+// desse tamanho), sem isso as colunas saem desalinhadas entre um grupo e outro.
+const COLGROUP = `
+  <colgroup>
+    <col style="width:44%">
+    <col style="width:26%">
+    <col style="width:15%">
+    <col style="width:15%">
+  </colgroup>
+`;
+
 /**
  * Imprime a comparação de preço (R$/Kg) entre fornecedores do mesmo produto — um bloco de linhas
- * por produto (fornecedor mais barato primeiro), com uma linha em branco separando cada produto,
- * grupos em ordem alfabética (mesmo layout de janela de impressão do catálogo — abrirEImprimir/catalogoPdf.ts).
+ * por produto (fornecedor mais barato primeiro), grupos em ordem alfabética. Cada grupo é a sua
+ * própria tabela (com "não quebrar entre páginas") — senão o navegador quebra o grupo no meio
+ * quando ele cai numa borda de página, e ele levava a reimpressão do cabeçalho junto.
  */
 export function gerarComparacaoFornecedoresPdf(grupos: GrupoComparacaoFornecedores[]): void {
-  let linhas = '';
-  grupos.forEach((grupo, i) => {
-    if (i > 0) linhas += `<tr class="espaco"><td colspan="4"></td></tr>`;
-    grupo.itens.forEach((item) => {
-      linhas += `
-        <tr>
-          <td>${nomeComDestaqueHtml(item.produtoNome)}</td>
-          <td>${escapeHtml(item.fornecedorNome)}</td>
-          <td class="numero">R$ ${fmtValor(item.valorKg)}/kg</td>
-          <td class="numero">R$ ${fmtValor(item.valorSaco)}/saco</td>
-        </tr>
-      `;
-    });
-  });
+  const blocosGrupos = grupos
+    .map((grupo) => {
+      const linhas = grupo.itens
+        .map(
+          (item) => `
+            <tr>
+              <td>${nomeComDestaqueHtml(item.produtoNome)}</td>
+              <td>${escapeHtml(item.fornecedorNome)}</td>
+              <td class="numero">R$ ${fmtValor(item.valorKg)}/kg</td>
+              <td class="numero">R$ ${fmtValor(item.valorSaco)}/saco</td>
+            </tr>
+          `,
+        )
+        .join('');
+      return `<table class="tabela-grupo">${COLGROUP}<tbody>${linhas}</tbody></table>`;
+    })
+    .join('');
 
   const dataEmissao = new Date().toLocaleDateString('pt-BR');
   const htmlCompleto = `
@@ -44,12 +60,12 @@ export function gerarComparacaoFornecedoresPdf(grupos: GrupoComparacaoFornecedor
         .cabecalho h1{ font-size:20px; font-weight:700; margin:0; letter-spacing:.3px; }
         .cabecalho .subtitulo{ font-size:12.5px; font-weight:400; color:#333333; margin:0; }
         .cabecalho .meta{ font-size:11px; color:#333333; text-align:right; line-height:1.5; white-space:nowrap; }
-        table.tabela-comparacao{ width:100%; border-collapse:collapse; font-size:12px; }
-        table.tabela-comparacao thead th{ text-align:left; padding:7px 10px; border-bottom:1px solid #000000; font-weight:700; color:#000000; white-space:nowrap; }
-        table.tabela-comparacao tbody td{ padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000; }
-        table.tabela-comparacao tbody tr{ page-break-inside:avoid; }
-        table.tabela-comparacao tr.espaco td{ border-bottom:none; padding:14px 0; }
-        table.tabela-comparacao th.numero, table.tabela-comparacao td.numero{ width:120px; text-align:right; white-space:nowrap; }
+        table{ width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed; }
+        table.tabela-titulo th{ text-align:left; padding:7px 10px; border-bottom:1px solid #000000; font-weight:700; color:#000000; white-space:nowrap; }
+        table.tabela-grupo{ margin-bottom:14px; break-inside:avoid; page-break-inside:avoid; }
+        table.tabela-grupo td{ padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000; }
+        table.tabela-grupo tr{ break-inside:avoid; page-break-inside:avoid; }
+        th.numero, td.numero{ text-align:right; white-space:nowrap; }
       </style>
     </head>
     <body>
@@ -60,10 +76,11 @@ export function gerarComparacaoFornecedoresPdf(grupos: GrupoComparacaoFornecedor
         </div>
         <div class="meta">${dataEmissao}</div>
       </div>
-      <table class="tabela-comparacao">
-        <thead><tr><th>Produto</th><th>Fornecedor</th><th class="numero">Valor (Kg)</th><th class="numero">Valor (Saco)</th></tr></thead>
-        <tbody>${linhas}</tbody>
+      <table class="tabela-titulo">
+        ${COLGROUP}
+        <tr><th>Produto</th><th>Fornecedor</th><th class="numero">Valor (Kg)</th><th class="numero">Valor (Saco)</th></tr>
       </table>
+      ${blocosGrupos}
     </body>
     </html>
   `;
