@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useTheme } from '@/hooks/useTheme';
 import { chartChrome } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
+import { primeirasDuasPalavras } from '../calculations';
 import { ROTULO_CRITERIO_REPRESENTACAO, type ClasseABC, type CriterioRepresentacao, type Representatividade } from '../historicoBi';
 import type { Produto } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
@@ -18,6 +19,12 @@ interface GraficoRepresentacaoModalProps {
   representatividadePorProduto: Map<string, Representatividade>;
   /** Quando o "Filtrar:" (Categoria/Fornecedor) da grade está ativo — troca o gráfico pra pizza, só com os itens desse filtro. */
   filtroAtivo?: { rotulo: string; produtoIds: Set<string> } | null;
+  /** true quando o filtro ativo é a Categoria mãe (ex.: "Capim", geral) — junta numa fatia só
+   * os produtos com o mesmo nome base (2 primeiras palavras) e mesma Classe (subcategoria)
+   * achados em fornecedores diferentes, mesmo critério da busca inteligente do Planejamento de
+   * Compra. Com o filtro numa Subcategoria/Fornecedor específica (ou sem esse prop), cada
+   * produto continua com sua própria fatia. */
+  agruparPorNomeEClasse?: boolean;
   /** Safras disponíveis pro seletor "ver uma safra específica" — omitido/vazio esconde o seletor. */
   historicoSafras?: { key: string; label: string }[];
   /** null = média das últimas safras (padrão). O cálculo de representatividadePorProduto já reflete essa escolha — feito por quem chama (aqui só decide o rótulo/seletor). */
@@ -61,6 +68,41 @@ function selecionarClasseOuTop<T extends { classe: ClasseABC }>(ordenados: T[]):
   return { itens: ordenados.slice(0, LIMITE_TOP_OU_CLASSE), porClasse: false };
 }
 
+interface ItemRepresentatividadeNomeado {
+  nome: string;
+  produtoId: string;
+  pct: number;
+  qtdMedia: number;
+  classe: ClasseABC;
+  valorCriterio: number;
+}
+
+/**
+ * Junta, dentro do filtro ativo, produtos com o mesmo nome base (2 primeiras palavras) e mesma
+ * Classe (subcategoria) — mesmo critério da busca inteligente de fornecedores no Planejamento
+ * de Compra (ver compra.ts) — numa fatia só, somando os valores. Nome/Classe exibidos vêm do
+ * item de maior valor do grupo (o "principal"); produto sem match em `produtoPorId` fica sozinho.
+ */
+function agruparPorNomeClasse(itens: ItemRepresentatividadeNomeado[], produtoPorId: Map<string, Produto>): ItemRepresentatividadeNomeado[] {
+  const grupos = new Map<string, ItemRepresentatividadeNomeado>();
+  for (const item of itens) {
+    const produto = produtoPorId.get(item.produtoId);
+    const chave = produto ? `${primeirasDuasPalavras(produto.nome)}::${produto.subcategoriaId ?? ''}` : item.produtoId;
+    const existente = grupos.get(chave);
+    const valorCriterio = (existente?.valorCriterio ?? 0) + item.valorCriterio;
+    const qtdMedia = (existente?.qtdMedia ?? 0) + item.qtdMedia;
+    const pct = (existente?.pct ?? 0) + item.pct;
+    if (!existente || item.valorCriterio > existente.valorCriterio) {
+      // Ainda não existe, ou esse item é o novo "principal" (maior valor) — nome/classe passam
+      // a vir dele, mas os totais já acumulados no grupo continuam somados.
+      grupos.set(chave, { ...item, valorCriterio, qtdMedia, pct });
+    } else {
+      grupos.set(chave, { ...existente, valorCriterio, qtdMedia, pct });
+    }
+  }
+  return Array.from(grupos.values());
+}
+
 /**
  * Representação (%) — em colunas (maior pro menor, todo o sortimento) por padrão.
  * Quando a grade está com o "Filtrar:" (Categoria/Fornecedor) e/ou a busca por nome
@@ -79,6 +121,7 @@ export function GraficoRepresentacaoModal({
   produtos,
   representatividadePorProduto,
   filtroAtivo,
+  agruparPorNomeEClasse,
   historicoSafras,
   safraSelecionada,
   onEscolherSafra,
@@ -86,6 +129,7 @@ export function GraficoRepresentacaoModal({
   const { isDark } = useTheme();
   const c = useMemo(() => chartChrome(isDark), [isDark]);
   const nomePorId = useMemo(() => new Map(produtos.map((p) => [p.id, p.nome.replace(/[*_]/g, '')])), [produtos]);
+  const produtoPorId = useMemo(() => new Map(produtos.map((p) => [p.id, p])), [produtos]);
 
   // Mais de LIMITE_TOP_OU_CLASSE candidatos: só Classes A e B (a C pouco relevante só poluía).
   // Até esse limite: Top N mesmo, sem filtrar classe (senão sobrava quase vazio com poucos itens).
@@ -101,10 +145,12 @@ export function GraficoRepresentacaoModal({
   // Total recalculado só dentro do filtro (não do sortimento inteiro) — as fatias somam 100% entre si.
   const { itens: fatias, porClasse: fatiasPorClasse } = useMemo((): { itens: FatiaPizza[]; porClasse: boolean } => {
     if (!filtroAtivo) return { itens: [], porClasse: true };
-    const doFiltro = Array.from(representatividadePorProduto.entries())
+    const doFiltroBase = Array.from(representatividadePorProduto.entries())
       .filter(([produtoId]) => filtroAtivo.produtoIds.has(produtoId))
-      .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', produtoId, ...repr }))
-      .sort((a, b) => b.valorCriterio - a.valorCriterio);
+      .map(([produtoId, repr]) => ({ nome: nomePorId.get(produtoId) ?? '—', produtoId, ...repr }));
+    const doFiltro = (agruparPorNomeEClasse ? agruparPorNomeClasse(doFiltroBase, produtoPorId) : doFiltroBase).sort(
+      (a, b) => b.valorCriterio - a.valorCriterio,
+    );
     const { itens: selecionados, porClasse } = selecionarClasseOuTop(doFiltro);
     const totalValor = selecionados.reduce((soma, l) => soma + l.valorCriterio, 0);
     return {
@@ -117,7 +163,7 @@ export function GraficoRepresentacaoModal({
         pctFiltro: totalValor > 0 ? (l.valorCriterio / totalValor) * 100 : 0,
       })),
     };
-  }, [filtroAtivo, nomePorId, representatividadePorProduto]);
+  }, [filtroAtivo, nomePorId, representatividadePorProduto, agruparPorNomeEClasse, produtoPorId]);
 
   const chartDataBarras = useMemo(
     () => ({

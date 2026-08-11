@@ -811,6 +811,7 @@ export function PricingPage() {
         produtos={produtos}
         representatividadePorProduto={representatividadeGeralGraficoPorProduto}
         filtroAtivo={filtroAtivoGrafico}
+        agruparPorNomeEClasse={filtroClasse.startsWith('cat:')}
         historicoSafras={todasSafrasDisponiveisGeral}
         safraSelecionada={safraSelecionadaGrafico}
         onEscolherSafra={setSafraSelecionadaGrafico}
