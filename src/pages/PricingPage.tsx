@@ -65,6 +65,7 @@ import {
   calcularMargemAtualProjetada,
   calcularRepresentatividadeGeral,
   construirHistoricoPorCodigo,
+  listarTodasSafrasGeral,
   type CriterioRepresentacao,
 } from '@/features/pricing/historicoBi';
 import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
@@ -127,6 +128,8 @@ export function PricingPage() {
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoRepresentacaoAberto, setGraficoRepresentacaoAberto] = useState(false);
+  // null = média das últimas safras (padrão) — só afeta o gráfico de Representação Geral, não a grade.
+  const [safraSelecionadaGrafico, setSafraSelecionadaGrafico] = useState<string | null>(null);
   const [produtoGraficoLinha, setProdutoGraficoLinha] = useState<Produto | null>(null);
   const [produtoEditandoId, setProdutoEditandoId] = useState<string | null>(null);
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
@@ -169,6 +172,13 @@ export function PricingPage() {
     () => calcularRepresentatividadeGeral(produtos, canais, itemsAgregadosBi, criterioRepresentacao),
     [produtos, canais, itemsAgregadosBi, criterioRepresentacao],
   );
+  // Só pro gráfico de Representação Geral (colunas/pizza) — a grade principal (coluna "Repres.
+  // Geral (%)") sempre usa a média acima, sem a opção de ver uma safra específica.
+  const representatividadeGeralGraficoPorProduto = useMemo(
+    () => calcularRepresentatividadeGeral(produtos, canais, itemsAgregadosBi, criterioRepresentacao, safraSelecionadaGrafico ?? undefined),
+    [produtos, canais, itemsAgregadosBi, criterioRepresentacao, safraSelecionadaGrafico],
+  );
+  const todasSafrasDisponiveisGeral = useMemo(() => listarTodasSafrasGeral(canais, itemsAgregadosBi), [canais, itemsAgregadosBi]);
   let margemAtualTotalValor = 0;
   let margemAtualTotalMargem = 0;
   let margemAtualTotalMargemLiquida = 0;
@@ -688,22 +698,20 @@ export function PricingPage() {
               <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar:</span>
               <select value={filtroClasse} onChange={(e) => setFiltroClasse(e.target.value)} className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-text)]">
                 <option value="todas" className="text-[var(--color-text)]">Mostrar Todas</option>
-                <optgroup label="Categoria">
-                  {categorias.map((c) => (
-                    <option key={c.id} value={`cat:${c.id}`} className="text-[var(--color-text)]">
-                      {c.nome}
+                {categorias.map((c) => (
+                  <optgroup key={c.id} label={c.nome}>
+                    <option value={`cat:${c.id}`} className="text-[var(--color-text)]">
+                      {c.nome} (geral)
                     </option>
-                  ))}
-                </optgroup>
-                {subcategorias.length > 0 && (
-                  <optgroup label="Classe">
-                    {subcategorias.map((s) => (
-                      <option key={s.id} value={`sub:${s.id}`} className="text-[var(--color-text)]">
-                        {categorias.find((c) => c.id === s.categoriaId)?.nome ?? '?'}: {s.nome}
-                      </option>
-                    ))}
+                    {subcategorias
+                      .filter((s) => s.categoriaId === c.id)
+                      .map((s) => (
+                        <option key={s.id} value={`sub:${s.id}`} className="text-[var(--color-text)]">
+                          {s.nome}
+                        </option>
+                      ))}
                   </optgroup>
-                )}
+                ))}
                 {fornecedores.length > 0 && (
                   <optgroup label="Fornecedor">
                     {fornecedores.map((f) => (
@@ -801,8 +809,11 @@ export function PricingPage() {
         criterio={criterioRepresentacao}
         onEscolherCriterio={setCriterioRepresentacao}
         produtos={produtos}
-        representatividadePorProduto={representatividadeGeralPorProduto}
+        representatividadePorProduto={representatividadeGeralGraficoPorProduto}
         filtroAtivo={filtroAtivoGrafico}
+        historicoSafras={todasSafrasDisponiveisGeral}
+        safraSelecionada={safraSelecionadaGrafico}
+        onEscolherSafra={setSafraSelecionadaGrafico}
       />
       <GraficoCurvaMensalModal
         produto={produtoGraficoLinha}

@@ -7,7 +7,7 @@ import type { ItemAgg } from '@/features/bi/types';
 import { useTheme } from '@/hooks/useTheme';
 import { chartChrome, criarGridVerticalPontilhado, palette } from '@/lib/chartSetup';
 import { fmtBRL, fmtInt } from '@/lib/format';
-import { construirCurvaMensalProduto, ROTULO_CRITERIO_REPRESENTACAO, type CriterioRepresentacao } from '../historicoBi';
+import { construirCurvaMensalProduto, listarSafrasProduto, ROTULO_CRITERIO_REPRESENTACAO, type CriterioRepresentacao } from '../historicoBi';
 import type { Produto } from '../types';
 import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
@@ -58,6 +58,8 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
   const [produtoEscolhendoTabela, setProdutoEscolhendoTabela] = useState<Produto | null>(null);
   const [comparacoes, setComparacoes] = useState<Produto[]>([]);
   const [tabelaAtiva, setTabelaAtiva] = useState<string | null>(null);
+  // null = média (últimas safras, padrão); preenchido = mostra só aquela safra específica.
+  const [safraSelecionada, setSafraSelecionada] = useState<string | null>(null);
 
   // Cada produto novo aberto (ou o modal fechando) zera qualquer comparação/busca em andamento —
   // não faz sentido herdar isso de uma sessão anterior do modal.
@@ -67,12 +69,18 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
     setProdutoEscolhendoTabela(null);
     setComparacoes([]);
     setTabelaAtiva(null);
+    setSafraSelecionada(null);
   }, [produto?.id]);
+
+  const safrasDisponiveis = useMemo(() => {
+    if (!produto?.codigo) return [];
+    return listarSafrasProduto(items, produto.codigo);
+  }, [produto, items]);
 
   const curva = useMemo(() => {
     if (!produto?.codigo) return null;
-    return construirCurvaMensalProduto(items, produto.codigo, criterio);
-  }, [produto, items, criterio]);
+    return construirCurvaMensalProduto(items, produto.codigo, criterio, undefined, safraSelecionada ?? undefined);
+  }, [produto, items, criterio, safraSelecionada]);
 
   const opcoesBusca = useMemo(() => {
     if (!mostrarBusca) return [];
@@ -88,9 +96,11 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
   // só as Tabelas em que os DOIS produtos (o principal e esse novo) têm dado.
   const tabelasEmComum = useMemo(() => {
     if (!produtoEscolhendoTabela?.codigo || !curva) return [];
-    const doNovo = new Set(construirCurvaMensalProduto(items, produtoEscolhendoTabela.codigo, criterio).tabelas.map((t) => t.tabela));
+    const doNovo = new Set(
+      construirCurvaMensalProduto(items, produtoEscolhendoTabela.codigo, criterio, undefined, safraSelecionada ?? undefined).tabelas.map((t) => t.tabela),
+    );
     return curva.tabelas.map((t) => t.tabela).filter((t) => doNovo.has(t));
-  }, [produtoEscolhendoTabela, curva, items, criterio]);
+  }, [produtoEscolhendoTabela, curva, items, criterio, safraSelecionada]);
 
   // Opções pro seletor de Tabela ativa, uma vez já em modo comparação — união das Tabelas
   // do produto principal com as de TODOS os produtos já adicionados na comparação.
@@ -99,10 +109,10 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
     const nomes = new Set(curva.tabelas.map((t) => t.tabela));
     comparacoes.forEach((p) => {
       if (!p.codigo) return;
-      construirCurvaMensalProduto(items, p.codigo, criterio).tabelas.forEach((t) => nomes.add(t.tabela));
+      construirCurvaMensalProduto(items, p.codigo, criterio, undefined, safraSelecionada ?? undefined).tabelas.forEach((t) => nomes.add(t.tabela));
     });
     return Array.from(nomes).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [curva, comparacoes, items, criterio]);
+  }, [curva, comparacoes, items, criterio, safraSelecionada]);
 
   function escolherProdutoComparacao(p: Produto) {
     setMostrarBusca(false);
@@ -134,11 +144,11 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
     if (!tabelaAtiva) return [];
     return comparacoes.map((p) => {
       if (!p.codigo) return { produto: p, valores: Array(12).fill(0) };
-      const tabelasProduto = construirCurvaMensalProduto(items, p.codigo, criterio).tabelas;
+      const tabelasProduto = construirCurvaMensalProduto(items, p.codigo, criterio, undefined, safraSelecionada ?? undefined).tabelas;
       const valores = tabelaAtiva === TODAS_TABELAS ? somarTodasTabelas(tabelasProduto) : (tabelasProduto.find((t) => t.tabela === tabelaAtiva)?.valores ?? Array(12).fill(0));
       return { produto: p, valores };
     });
-  }, [comparacoes, tabelaAtiva, items, criterio]);
+  }, [comparacoes, tabelaAtiva, items, criterio, safraSelecionada]);
 
   // Sem comparação nenhuma: todas as Tabelas do produto principal (como sempre foi). Com
   // comparação: só a Tabela ativa (ou a soma de todas) — os dois lados (principal e
@@ -213,6 +223,23 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
         <span className="flex w-full min-w-0 items-center gap-2">
           <span className="truncate">Curva de venda — {produto?.nome.replace(/[*_]/g, '') ?? ''}</span>
           <span className="ml-auto flex shrink-0 items-center gap-2">
+            {safrasDisponiveis.length > 0 && (
+              <select
+                value={safraSelecionada ?? ''}
+                onChange={(e) => setSafraSelecionada(e.target.value || null)}
+                title="Ver a média das últimas safras, ou uma safra específica"
+                className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white"
+              >
+                <option value="" className="text-[var(--color-text)]">
+                  Média (últimas safras)
+                </option>
+                {safrasDisponiveis.map((s) => (
+                  <option key={s.key} value={s.key} className="text-[var(--color-text)]">
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <SeletorCriterioRepresentacao criterio={criterio} ordenarAtivo onEscolher={onEscolherCriterio} semOpcaoPadrao sobreFundoEscuro />
             <button
               type="button"
@@ -322,8 +349,10 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
       ) : (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> — cada ponto é a média
-            daquele mês nas últimas safras.{' '}
+            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> —{' '}
+            {safraSelecionada
+              ? `cada ponto é o valor daquele mês na safra ${safrasDisponiveis.find((s) => s.key === safraSelecionada)?.label ?? ''}.`
+              : 'cada ponto é a média daquele mês nas últimas safras.'}{' '}
             {tabelaAtiva === TODAS_TABELAS
               ? 'Uma linha por produto, somando todas as Tabelas.'
               : tabelaAtiva

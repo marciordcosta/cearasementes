@@ -18,6 +18,11 @@ interface GraficoRepresentacaoModalProps {
   representatividadePorProduto: Map<string, Representatividade>;
   /** Quando o "Filtrar:" (Categoria/Fornecedor) da grade está ativo — troca o gráfico pra pizza, só com os itens desse filtro. */
   filtroAtivo?: { rotulo: string; produtoIds: Set<string> } | null;
+  /** Safras disponíveis pro seletor "ver uma safra específica" — omitido/vazio esconde o seletor. */
+  historicoSafras?: { key: string; label: string }[];
+  /** null = média das últimas safras (padrão). O cálculo de representatividadePorProduto já reflete essa escolha — feito por quem chama (aqui só decide o rótulo/seletor). */
+  safraSelecionada?: string | null;
+  onEscolherSafra?: (safra: string | null) => void;
 }
 
 /** Mesmas cores semânticas A/B/C (good/neutro/bad) já usadas em Badge/tailwind.config.js. */
@@ -66,6 +71,9 @@ export function GraficoRepresentacaoModal({
   produtos,
   representatividadePorProduto,
   filtroAtivo,
+  historicoSafras,
+  safraSelecionada,
+  onEscolherSafra,
 }: GraficoRepresentacaoModalProps) {
   const { isDark } = useTheme();
   const c = useMemo(() => chartChrome(isDark), [isDark]);
@@ -180,6 +188,8 @@ export function GraficoRepresentacaoModal({
   );
 
   const semDados = emModoPizza ? fatias.length === 0 : linhas.length === 0;
+  const rotuloSafra = safraSelecionada ? historicoSafras?.find((s) => s.key === safraSelecionada)?.label : null;
+  const trechoSafra = rotuloSafra ? `só a safra ${rotuloSafra}` : 'média das últimas safras';
 
   return (
     <Modal
@@ -187,7 +197,24 @@ export function GraficoRepresentacaoModal({
       title={
         <span className="flex w-full min-w-0 items-center gap-2">
           <span className="truncate">{titulo}</span>
-          <span className="ml-auto shrink-0">
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {historicoSafras && historicoSafras.length > 0 && onEscolherSafra && (
+              <select
+                value={safraSelecionada ?? ''}
+                onChange={(e) => onEscolherSafra(e.target.value || null)}
+                title="Ver a média das últimas safras, ou uma safra específica"
+                className="rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-semibold text-white"
+              >
+                <option value="" className="text-[var(--color-text)]">
+                  Média (últimas safras)
+                </option>
+                {historicoSafras.map((s) => (
+                  <option key={s.key} value={s.key} className="text-[var(--color-text)]">
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            )}
             <SeletorCriterioRepresentacao criterio={criterio} ordenarAtivo onEscolher={onEscolherCriterio} semOpcaoPadrao sobreFundoEscuro />
           </span>
         </span>
@@ -204,7 +231,8 @@ export function GraficoRepresentacaoModal({
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
             Filtro: <span className="font-semibold text-[var(--color-text)]">{filtroAtivo.rotulo}</span> — participação de cada item (
             {fatiasPorClasse ? 'Classes A e B da Curva ABC' : `Top ${fatias.length}`}) dentro desse filtro. Critério:{' '}
-            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>. Cada produto com uma cor própria.
+            <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>, {trechoSafra}. Cada produto com uma
+            cor própria.
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -214,7 +242,7 @@ export function GraficoRepresentacaoModal({
       ) : (
         <>
           <p className="mb-3 text-xs text-[var(--color-text-soft)]">
-            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span> —{' '}
+            Critério: <span className="font-semibold text-[var(--color-text)]">{ROTULO_CRITERIO_REPRESENTACAO[criterio]}</span>, {trechoSafra} —{' '}
             {linhasPorClasse ? `Classes A e B da Curva ABC (${linhas.length} produtos)` : `Top ${linhas.length} produtos`}, maior pro menor. Cor da barra =
             Classe da Curva ABC.
           </p>

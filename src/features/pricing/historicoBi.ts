@@ -85,6 +85,43 @@ export function listarSafrasDisponiveis(historico: Map<string, Map<string, Histo
     .map(([key, label]) => ({ key, label }));
 }
 
+/**
+ * Mesma união de safras de listarSafrasDisponiveis, mas SEM o limite de
+ * MAX_SAFRAS_EXIBIDAS — pro seletor "ver uma Safra específica" dos gráficos
+ * de Representação e Curva de venda, onde faz sentido oferecer o histórico
+ * inteiro, não só as 3 mais recentes.
+ */
+export function listarTodasSafras(historico: Map<string, Map<string, HistoricoSafra>>): { key: string; label: string }[] {
+  const vistos = new Map<string, string>();
+  historico.forEach((porSafra) => porSafra.forEach((s) => vistos.set(s.key, s.label)));
+  return Array.from(vistos.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, label]) => ({ key, label }));
+}
+
+/** Mesma listarTodasSafras, só que somando o histórico de TODAS as Tabelas de uma vez — pro gráfico de Representação Geral. */
+export function listarTodasSafrasGeral(canais: Canal[], items: ItemAgg[], ctx: PeriodContext = SAFRA_PADRAO): { key: string; label: string }[] {
+  const vistos = new Map<string, string>();
+  for (const canal of canais) {
+    const historicoPorCodigo = construirHistoricoPorCodigo(items, canal.nome, ctx);
+    historicoPorCodigo.forEach((porSafra) => porSafra.forEach((s) => vistos.set(s.key, s.label)));
+  }
+  return Array.from(vistos.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([key, label]) => ({ key, label }));
+}
+
+/** Safras com QUALQUER venda de um produto específico (em qualquer Tabela) — pro seletor da Curva de venda por produto. */
+export function listarSafrasProduto(items: ItemAgg[], codigoProduto: string, ctx: PeriodContext = SAFRA_PADRAO): { key: string; label: string }[] {
+  const codigo = codigoCanonico(codigoProduto);
+  const item = items.find((i) => i.codInterno === codigo);
+  if (!item) return [];
+  const vistos = new Set(item.monthly.map((m) => getPeriodKeyFor(ctx, m.year, m.month)));
+  return Array.from(vistos)
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => ({ key, label: getPeriodLabel(ctx, key) }));
+}
+
 export interface MargemBrutaAgregada {
   valorVendido: number;
   custoTotal: number;
@@ -159,8 +196,17 @@ function valorCriterioSafra(h: HistoricoSafra, criterio: CriterioRepresentacao):
   return h.valorMedio * h.qtd;
 }
 
-/** Média (últimas MAX_SAFRAS_EXIBIDAS safras) do critério escolhido pra esse produto — histórico puro, sem projetar pro preço de hoje. */
-function mediaCriterioUltimasSafras(porSafra: Map<string, HistoricoSafra>, criterio: CriterioRepresentacao): number {
+/**
+ * Média (últimas MAX_SAFRAS_EXIBIDAS safras) do critério escolhido pra esse
+ * produto — histórico puro, sem projetar pro preço de hoje. Com
+ * `safraEspecifica` preenchida, ignora a média e usa só o valor daquela
+ * safra (0 se o produto não vendeu nela).
+ */
+function mediaCriterioUltimasSafras(porSafra: Map<string, HistoricoSafra>, criterio: CriterioRepresentacao, safraEspecifica?: string): number {
+  if (safraEspecifica) {
+    const h = porSafra.get(safraEspecifica);
+    return h ? valorCriterioSafra(h, criterio) : 0;
+  }
   const ordenadas = Array.from(porSafra.values())
     .sort((a, b) => b.key.localeCompare(a.key))
     .slice(0, MAX_SAFRAS_EXIBIDAS);
@@ -217,6 +263,7 @@ export function calcularRepresentatividade(
   produtos: Produto[],
   historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
   criterio: CriterioRepresentacao = 'valor',
+  safraEspecifica?: string,
 ): Map<string, Representatividade> {
   const porProduto = new Map<string, { valor: number; qtdMedia: number }>();
   let total = 0;
@@ -224,9 +271,9 @@ export function calcularRepresentatividade(
     if (!produto.codigo) continue;
     const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
     if (!porSafra) continue;
-    const qtdMedia = mediaCriterioUltimasSafras(porSafra, 'qtd');
+    const qtdMedia = mediaCriterioUltimasSafras(porSafra, 'qtd', safraEspecifica);
     if (qtdMedia <= 0) continue;
-    const valor = mediaCriterioUltimasSafras(porSafra, criterio);
+    const valor = mediaCriterioUltimasSafras(porSafra, criterio, safraEspecifica);
     porProduto.set(produto.id, { valor, qtdMedia });
     total += valor;
   }
@@ -251,6 +298,7 @@ export function calcularRepresentatividadeGeral(
   canais: Canal[],
   items: ItemAgg[],
   criterio: CriterioRepresentacao = 'valor',
+  safraEspecifica?: string,
 ): Map<string, Representatividade> {
   const acumuladoPorProduto = new Map<string, { valor: number; qtdMedia: number }>();
   for (const canal of canais) {
@@ -259,10 +307,10 @@ export function calcularRepresentatividadeGeral(
       if (!produto.codigo) continue;
       const porSafra = historicoPorCodigo.get(codigoCanonico(produto.codigo));
       if (!porSafra) continue;
-      const qtdMedia = mediaCriterioUltimasSafras(porSafra, 'qtd');
+      const qtdMedia = mediaCriterioUltimasSafras(porSafra, 'qtd', safraEspecifica);
       if (qtdMedia <= 0) continue;
       const acc = acumuladoPorProduto.get(produto.id) ?? { valor: 0, qtdMedia: 0 };
-      acc.valor += mediaCriterioUltimasSafras(porSafra, criterio);
+      acc.valor += mediaCriterioUltimasSafras(porSafra, criterio, safraEspecifica);
       acc.qtdMedia += qtdMedia;
       acumuladoPorProduto.set(produto.id, acc);
     }
@@ -367,24 +415,30 @@ export function mesesSafraPadrao(ctx: PeriodContext = SAFRA_PADRAO): string[] {
  * ponto é a MÉDIA (últimas MAX_SAFRAS_EXIBIDAS safras com dado nesse produto,
  * mesma janela/filosofia da Representação) daquele mês específico do "ano da
  * safra" (ex.: todo Agosto vira 1 ponto só, com a média dos Agostos das
- * últimas safras) — sem o ano no eixo, de propósito.
+ * últimas safras) — sem o ano no eixo, de propósito. Com `safraEspecifica`
+ * preenchida, ignora a média e mostra só aquela safra (cada ponto vira o
+ * valor real daquele mês, não mais uma média).
  */
 export function construirCurvaMensalProduto(
   items: ItemAgg[],
   codigoProduto: string,
   criterio: CriterioRepresentacao,
   ctx: PeriodContext = SAFRA_PADRAO,
+  safraEspecifica?: string,
 ): CurvaMensalProduto {
   const meses = mesesSafraPadrao(ctx);
   const codigo = codigoCanonico(codigoProduto);
   const item = items.find((i) => i.codInterno === codigo);
   if (!item) return { meses, tabelas: [] };
 
-  // Últimas (até) MAX_SAFRAS_EXIBIDAS safras com QUALQUER venda desse produto (em qualquer Tabela)
-  // — mesma janela pra todas as Tabelas, pra ficarem comparáveis no mesmo gráfico.
-  const safrasComDado = Array.from(new Set(item.monthly.map((m) => getPeriodKeyFor(ctx, m.year, m.month))))
-    .sort((a, b) => b.localeCompare(a))
-    .slice(0, MAX_SAFRAS_EXIBIDAS);
+  // Sem safra específica: últimas (até) MAX_SAFRAS_EXIBIDAS safras com QUALQUER venda desse
+  // produto (em qualquer Tabela) — mesma janela pra todas as Tabelas, pra ficarem comparáveis
+  // no mesmo gráfico. Com safra específica: só ela.
+  const safrasComDado = safraEspecifica
+    ? [safraEspecifica]
+    : Array.from(new Set(item.monthly.map((m) => getPeriodKeyFor(ctx, m.year, m.month))))
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, MAX_SAFRAS_EXIBIDAS);
   const safrasConsideradas = new Set(safrasComDado);
 
   const porTabela = new Map<string, Map<number, { soma: number; contagem: number }>>();

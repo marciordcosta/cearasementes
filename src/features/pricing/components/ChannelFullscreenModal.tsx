@@ -10,6 +10,7 @@ import {
   construirHistoricoPorCodigo,
   construirMargemBrutaAgregadaPorSafra,
   listarSafrasDisponiveis,
+  listarTodasSafras,
   type CriterioRepresentacao,
   type HistoricoSafra,
   type MargemBrutaAgregada,
@@ -59,6 +60,8 @@ export function ChannelFullscreenModal({
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoAberto, setGraficoAberto] = useState(false);
   const [produtoGraficoLinha, setProdutoGraficoLinha] = useState<Produto | null>(null);
+  // null = média das últimas safras (padrão) — só afeta o gráfico de Representação, não a grade.
+  const [safraSelecionadaGrafico, setSafraSelecionadaGrafico] = useState<string | null>(null);
 
   // Cada abertura do modal (canal diferente, ou reabrir o mesmo) começa sem
   // busca nem ordenação — não faz sentido herdar isso de uma sessão anterior do modal.
@@ -68,6 +71,7 @@ export function ChannelFullscreenModal({
       setOrdenarPorRepresentacao(false);
       setGraficoAberto(false);
       setProdutoGraficoLinha(null);
+      setSafraSelecionadaGrafico(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
@@ -84,6 +88,8 @@ export function ChannelFullscreenModal({
     return construirHistoricoPorCodigo(itemsAgregados, canal.nome);
   }, [itemsAgregados, canal]);
   const safrasDisponiveis = useMemo(() => listarSafrasDisponiveis(historicoPorCodigo), [historicoPorCodigo]);
+  // Sem o limite de MAX_SAFRAS_EXIBIDAS de safrasDisponiveis (essa é só pro seletor "ver uma safra específica" do gráfico).
+  const todasSafrasDisponiveis = useMemo(() => listarTodasSafras(historicoPorCodigo), [historicoPorCodigo]);
   const margemAgregadaPorSafra = useMemo((): Map<string, MargemBrutaAgregada> => {
     if (!canal) return new Map();
     return construirMargemBrutaAgregadaPorSafra(itemsAgregados, canal.nome);
@@ -97,6 +103,12 @@ export function ChannelFullscreenModal({
   const representatividadePorProduto = useMemo(
     () => calcularRepresentatividade(produtos, historicoPorCodigo, criterioRepresentacao),
     [produtos, historicoPorCodigo, criterioRepresentacao],
+  );
+  // Só pro gráfico de Representação (colunas/pizza) — a grade principal sempre usa a média
+  // (representatividadePorProduto acima), sem a opção de ver uma safra específica.
+  const representatividadeGraficoPorProduto = useMemo(
+    () => calcularRepresentatividade(produtos, historicoPorCodigo, criterioRepresentacao, safraSelecionadaGrafico ?? undefined),
+    [produtos, historicoPorCodigo, criterioRepresentacao, safraSelecionadaGrafico],
   );
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
@@ -207,8 +219,11 @@ export function ChannelFullscreenModal({
         criterio={criterioRepresentacao}
         onEscolherCriterio={setCriterioRepresentacao}
         produtos={produtos}
-        representatividadePorProduto={representatividadePorProduto}
+        representatividadePorProduto={representatividadeGraficoPorProduto}
         filtroAtivo={filtroAtivoGrafico}
+        historicoSafras={todasSafrasDisponiveis}
+        safraSelecionada={safraSelecionadaGrafico}
+        onEscolherSafra={setSafraSelecionadaGrafico}
       />
       <GraficoCurvaMensalModal
         produto={produtoGraficoLinha}
