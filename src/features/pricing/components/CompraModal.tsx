@@ -38,13 +38,17 @@ function qtdOutrosFornecedores(item: ItemNecessidadeCompra, mesesSelecionados: S
 }
 
 /**
- * "FORNECEDOR A — Ago: 120 | Set: 95 | Out: 60\nFORNECEDOR B — Ago: 10 | ..." — um bloco por
- * fornecedor, só os meses escolhidos na projeção.
+ * "FORNECEDOR A — 1.500 un. (Ago: 120 | Set: 95 | Out: 60)\nFORNECEDOR B — ..." — total primeiro,
+ * detalhe mês a mês entre parênteses, um bloco por fornecedor.
  */
 function tooltipMensal(porFornecedor: FornecedorMensal[], mesesSelecionados: Set<number>): string {
   const mesesOrdenados = Array.from(mesesSelecionados).sort((a, b) => a - b);
   return porFornecedor
-    .map((f) => `${f.fornecedorNome} — ${mesesOrdenados.map((i) => `${MESES[i]}: ${fmtInt.format(Math.round(f.porMes[i] ?? 0))}`).join(' | ')}`)
+    .map((f) => {
+      const total = qtdMesesSoma(f.porMes, mesesSelecionados);
+      const detalhe = mesesOrdenados.map((i) => `${MESES[i]}: ${fmtInt.format(Math.round(f.porMes[i] ?? 0))}`).join(' | ');
+      return `${f.fornecedorNome} — ${fmtInt.format(Math.round(total))} un. (${detalhe})`;
+    })
     .join('\n');
 }
 
