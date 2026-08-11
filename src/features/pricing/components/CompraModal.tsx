@@ -1,9 +1,11 @@
-import { Printer, RotateCcw } from 'lucide-react';
+import { GitCompare, Printer, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { ItemAgg } from '@/features/bi/types';
 import { fmtInt } from '@/lib/format';
 import { calcularNecessidadeCompra, type FornecedorMensal, type ItemNecessidadeCompra } from '../compra';
+import { gerarComparacaoFornecedoresPdf } from '../comparacaoFornecedoresPdf';
+import { calcularComparacaoFornecedores } from '../compraComparacao';
 import { gerarPedidoCompraPdf } from '../compraPdf';
 import { mesesSafraPadrao } from '../historicoBi';
 import type { Fornecedor, Produto } from '../types';
@@ -68,6 +70,10 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
   const [produtosExcluidos, setProdutosExcluidos] = useState<Set<string>>(new Set());
 
   const produtosFornecedor = useMemo(() => produtos.filter((p) => p.fornecedorId === fornecedorId), [produtos, fornecedorId]);
+
+  // Comparação de preço entre fornecedores — independe do Fornecedor selecionado acima, olha o
+  // catálogo inteiro (mesma regra de nome+Classe da busca inteligente da necessidade, ver compra.ts).
+  const comparacaoFornecedores = useMemo(() => calcularComparacaoFornecedores(produtos, fornecedores), [produtos, fornecedores]);
 
   const estoquePorProduto = useMemo(() => {
     const mapa: Record<string, number> = {};
@@ -145,16 +151,28 @@ export function CompraModal({ open, onFechar, produtos, fornecedores, items }: C
       title={
         <>
           <span>Planejamento de Compra</span>
-          {necessidade.length > 0 && fornecedorSelecionado && (
-            <button
-              type="button"
-              onClick={imprimir}
-              title="Imprimir pedido"
-              className="ml-auto shrink-0 rounded-md p-1.5 text-white/80 hover:bg-white/12 hover:text-white"
-            >
-              <Printer size={16} />
-            </button>
-          )}
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            {comparacaoFornecedores.length > 0 && (
+              <button
+                type="button"
+                onClick={() => gerarComparacaoFornecedoresPdf(comparacaoFornecedores)}
+                title="Comparar preço (R$/Kg) entre fornecedores do mesmo produto"
+                className="rounded-md p-1.5 text-white/80 hover:bg-white/12 hover:text-white"
+              >
+                <GitCompare size={16} />
+              </button>
+            )}
+            {necessidade.length > 0 && fornecedorSelecionado && (
+              <button
+                type="button"
+                onClick={imprimir}
+                title="Imprimir pedido"
+                className="rounded-md p-1.5 text-white/80 hover:bg-white/12 hover:text-white"
+              >
+                <Printer size={16} />
+              </button>
+            )}
+          </span>
         </>
       }
       widthClassName="max-w-4xl"
