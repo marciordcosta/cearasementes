@@ -216,15 +216,18 @@ function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number |
  * prioriza o Covas/m² MÁXIMO cadastrado (Parametrização) direto: gêneros diferentes toleram uma
  * densidade de covas bem diferente (competição entre covas vizinhas), então esse número já é o
  * espaçamento certo, sem depender da Densidade. Sem isso cadastrado, cai no cálculo antigo (Densidade ÷
- * Máx. de plântulas/cova); sem nenhum dos dois, cai no 50×50 de sempre. Só o PONTO DE PARTIDA muda — o
- * operador segue livre pra ajustar Cova/Corredor manualmente depois, e isso não se repete sozinho (ver
- * calcularValorCovaParaEspacamentoFixo, que mantém o espaçamento intocado daí em diante).
+ * Máx. de plântulas/cova); sem nenhum dos dois, cai no 50×50 de sempre. Lado arredondado sempre pra
+ * CIMA (nunca pra baixo) — garante que o Covas/m² real nunca ultrapassa o máximo, mesmo com a perda de
+ * precisão do arredondamento pro centímetro fechado (arredondar pra baixo poderia deixar passar do
+ * limite). Só o PONTO DE PARTIDA muda — o operador segue livre pra ajustar Cova/Corredor manualmente
+ * depois (sem nunca poder passar do Covas/m² máximo, ver atualizarEspacamento), e isso não se repete
+ * sozinho (ver calcularValorCovaParaEspacamentoFixo, que mantém o espaçamento intocado daí em diante).
  */
 function calcularEspacamentoPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): { cova: string; corredor: string } {
   const padrao = { cova: '50', corredor: '50' };
   const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
   if (maxCovasM2 !== null && maxCovasM2 > 0) {
-    const ladoCm = Math.round(Math.sqrt(10000 / maxCovasM2));
+    const ladoCm = Math.ceil(Math.sqrt(10000 / maxCovasM2));
     if (ladoCm > 0) return { cova: String(ladoCm), corredor: String(ladoCm) };
   }
   const densidade = resolverDensidadeBase(laudo.nomeProduto, produtos);
@@ -232,8 +235,35 @@ function calcularEspacamentoPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, pro
   if (densidade === null || densidade <= 0 || maxPlantulasCova === null || maxPlantulasCova <= 0) return padrao;
   const covasPorM2 = densidade / maxPlantulasCova;
   if (covasPorM2 <= 0) return padrao;
-  const ladoCm = Math.round(Math.sqrt(10000 / covasPorM2));
+  const ladoCm = Math.ceil(Math.sqrt(10000 / covasPorM2));
   return ladoCm > 0 ? { cova: String(ladoCm), corredor: String(ladoCm) } : padrao;
+}
+
+/**
+ * Trava o Covas/m² no Máx. cadastrado (Parametrização) — nunca deixa passar do limite (competição entre
+ * covas vizinhas), pode só ficar menor. Vale sempre que o produto tiver Covas/m² máximo cadastrado,
+ * MESMO sem Máx. de plântulas/cova (são 2 cadastros independentes) — por isso é chamado tanto ao editar
+ * Cova/Corredor direto quanto ao editar Sementes/cova no modelo antigo (que ainda deriva o espaçamento
+ * via derivarEspacamento). Ajusta `campoAjustavel` (o campo "de fora" que pode subir mais um pouco) pra
+ * trazer o produto Cova×Corredor de volta ao mínimo permitido — nunca mexe no outro campo.
+ */
+function limitarCovasM2(
+  laudo: ArquivoLaudo,
+  produtos: ProdutoParametrizacao[],
+  item: Pick<ItemGuia, 'cova' | 'corredor'>,
+  patch: Partial<ItemGuia>,
+  campoAjustavel: CampoEspacamento,
+): void {
+  const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
+  if (maxCovasM2 === null || maxCovasM2 <= 0) return;
+  const cova = paraNumero(patch.cova ?? item.cova);
+  const corredor = paraNumero(patch.corredor ?? item.corredor);
+  if (cova === null || cova <= 0 || corredor === null || corredor <= 0) return;
+  if (10000 / (cova * corredor) <= maxCovasM2) return;
+  const fixo = campoAjustavel === 'corredor' ? cova : corredor;
+  // Arredonda pra CIMA — garante que o produto final não fica menor que o mínimo permitido (arredondar
+  // pra baixo poderia, por causa do centímetro fechado, deixar passar do limite de novo).
+  patch[campoAjustavel] = String(Math.ceil(10000 / (maxCovasM2 * fixo)));
 }
 
 /**
@@ -370,7 +400,9 @@ export function GuiaPlantioModal({
    * Sementes/cova não depende mais do espaçamento (mira direto o Máx. cadastrado, ver
    * sementesPorCovaAlvo), então editar um não precisa recalcular o outro; só muda a densidade
    * resultante (Covas/m²). Sem esse cadastro (modelo antigo), Cova e Corredor continuam ligados: fixado
-   * o alvo de Sementes/m² (via Densidade) e a Sementes/cova atual, editar um recalcula o outro.
+   * o alvo de Sementes/m² (via Densidade) e a Sementes/cova atual, editar um recalcula o outro. Em
+   * QUALQUER caso, se o produto tiver Covas/m² máximo cadastrado, o resultado nunca pode ultrapassar
+   * esse teto (ver limitarCovasM2) — o campo NÃO editado agora é quem se ajusta, se precisar.
    */
   function atualizarEspacamento(laudo: ArquivoLaudo, item: ItemGuia, campo: CampoEspacamento, valorTexto: string) {
     const patch: Partial<ItemGuia> = { [campo]: valorTexto, ultimoCampoEspacamento: campo };
@@ -388,6 +420,8 @@ export function GuiaPlantioModal({
         }
       }
     }
+    const outroCampo: CampoEspacamento = campo === 'cova' ? 'corredor' : 'cova';
+    limitarCovasM2(laudo, produtos, item, patch, outroCampo);
     atualizarItem(item.laudoId, patch);
   }
 
@@ -422,7 +456,9 @@ export function GuiaPlantioModal({
    * Sementes só aceita dígitos (inteiro); Peso aceita vírgula/ponto (decimal). Com Máx. de
    * plântulas/cova cadastrado (modelo novo), não depende mais do espaçamento — editar aqui não mexe em
    * Cova/Corredor. Sem esse cadastro (modelo antigo), continua disparando o recálculo do espaçamento
-   * que estava "de fora" (mantém Cova × Corredor ligado ao alvo de Densidade).
+   * que estava "de fora" (mantém Cova × Corredor ligado ao alvo de Densidade) — mas SEM nunca deixar o
+   * resultado passar do Covas/m² máximo, se o produto tiver isso cadastrado (ver limitarCovasM2): esse
+   * teto vale independente de ter ou não Máx. de plântulas/cova, os 2 cadastros não dependem um do outro.
    */
   function atualizarSementesCova(laudo: ArquivoLaudo, item: ItemGuia, valorTexto: string) {
     const valorLimpo = precisaPesoPorCova(laudo) ? valorTexto.replace(/[^\d.,]/g, '') : valorTexto.replace(/\D/g, '');
@@ -436,7 +472,11 @@ export function GuiaPlantioModal({
         const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicao);
         if (sementesPorM2 !== null && sementesPorM2 > 0) {
           const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
-          if (derivadoPatch) Object.assign(patch, derivadoPatch);
+          if (derivadoPatch) {
+            Object.assign(patch, derivadoPatch);
+            const campoDerivado: CampoEspacamento = item.ultimoCampoEspacamento === 'cova' ? 'corredor' : 'cova';
+            limitarCovasM2(laudo, produtos, item, patch, campoDerivado);
+          }
         }
       }
     }
@@ -811,7 +851,7 @@ export function GuiaPlantioModal({
                       const tituloComum = semPmsParaPeso
                         ? 'Sem PMS cadastrado — não dá pra converter Peso/cova em sementes'
                         : modeloNovoAtivo
-                          ? 'Livre — Sementes/cova não depende do espaçamento (mira o Máx./cova cadastrado), só muda a densidade resultante (Covas/m²)'
+                          ? 'Livre — Sementes/cova não depende do espaçamento (mira o Máx./cova cadastrado); só não deixa passar do Covas/m² máximo cadastrado, se houver'
                           : espacamentoBloqueado
                             ? `Informe ${pesoPorCova ? 'o peso (g) de sementes' : 'a quantidade de sementes (número inteiro ≥ 1)'} por cova pra liberar o espaçamento`
                             : null;
