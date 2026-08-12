@@ -509,7 +509,7 @@ export function GuiaPlantioModal({
           sementesOuCovasValor: item.modo === 'linha_cova' ? (r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)) : null,
           espacamento:
             item.modo === 'linha_cova'
-              ? `${distanciaItem === null ? '—' : formatarCovas(distanciaItem)}×${item.corredor || '—'} cm`
+              ? `${distanciaItem === null ? '—' : Math.round(distanciaItem)}×${item.corredor || '—'} cm`
               : null,
           sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sem./cova') : null,
           sementesPorCovaValor:
@@ -741,7 +741,7 @@ export function GuiaPlantioModal({
                                 title="Travada — sempre derivada do Corredor pra manter o Covas/m² no alvo parametrizado"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
-                                {distancia === null ? '—' : formatarCovas(distancia)}
+                                {distancia === null ? '—' : Math.round(distancia)}
                               </p>
                             </div>
                             <div>
