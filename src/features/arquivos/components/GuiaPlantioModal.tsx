@@ -511,7 +511,7 @@ export function GuiaPlantioModal({
             item.modo === 'linha_cova'
               ? `${distanciaItem === null ? '—' : formatarCovas(distanciaItem)}×${item.corredor || '—'} cm`
               : null,
-          sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sementes/cova') : null,
+          sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sem./cova') : null,
           sementesPorCovaValor:
             item.modo === 'linha_cova'
               ? formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, espacamentoItem) || '—'
@@ -757,7 +757,7 @@ export function GuiaPlantioModal({
                           </div>
                           <div className="grid grid-cols-3 gap-1.5">
                             <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sementes/cova'}</p>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sem./cova'}</p>
                               <p
                                 title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, ajustada conforme o mais apertado entre Distância e Corredor se afasta do ideal do produto (1%/cm, até 40%): desconta se mais apertado (ou acrescenta se mais aberto, só quando o produto tem 1 planta/cova)"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
@@ -773,7 +773,7 @@ export function GuiaPlantioModal({
                               </p>
                             </div>
                             <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Sementes/m (linear)</p>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
                               <p
                                 title="Sementes por metro linear de linha — útil pra calibrar a plantadeira em Milho/Sorgo"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
