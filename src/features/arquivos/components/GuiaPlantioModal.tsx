@@ -115,12 +115,20 @@ function pmsNumericoDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, pr
  * físico de plântulas por cova (competição dentro do buraco), então mira ESSE número direto, não um
  * alvo derivado da Densidade. Null sem Máx. cadastrado (cai no modelo antigo, ver sementesCovaAtual) ou
  * sem Germinação (VC/teste, Sobrevivência, Fatores).
+ *
+ * Nunca fica abaixo do Máx. de plântulas/cova (piso, ex.: 1 pra Milho/Sorgo) — não existe "0,9 semente":
+ * o mínimo físico é sempre o próprio Máx. cadastrado. Condição pior (Germinação final menor) SOBE esse
+ * número livremente acima do piso (fica fracionado de propósito, ex.: 1,17) — isso é o que sustenta o
+ * kg/ha subir de verdade quando a condição piora, mesmo com Covas/m² travado: na prática vira "a maioria
+ * das covas com 1 semente, uma a cada tanto com 2", não dá pra exibir fracionado no card (ver
+ * formatarSementesCovaAtual, que arredonda só pra exibição), mas o kg/ha e o Sementes/m² usam esse valor
+ * cheio, não o arredondado.
  */
 function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
   const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
   if (maxPlantulasCova === null || maxPlantulasCova <= 0) return null;
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
-  return germinacaoFinal !== null && germinacaoFinal > 0 ? (maxPlantulasCova * 100) / germinacaoFinal : null;
+  return germinacaoFinal !== null && germinacaoFinal > 0 ? Math.max(maxPlantulasCova, (maxPlantulasCova * 100) / germinacaoFinal) : null;
 }
 
 // % de ajuste na Sementes/cova por cm que o espaçamento efetivo (o menor entre Distância e Corredor
@@ -188,18 +196,6 @@ function formatarSementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParamet
   if (!precisaPesoPorCova(laudo)) return String(Math.round(sementesCova));
   const pms = pmsNumericoDoLaudo(laudo, produtos);
   return pms !== null && pms > 0 ? formatarCovas((sementesCova * pms) / 1000) : '';
-}
-
-/**
- * Sementes/cova pronta pra entrar em kg/ha e Sementes/m² — arredondada pro inteiro quando o card mostra
- * Sem./cova como número inteiro de sementes (não existe meia semente física, ex.: Milho/Sorgo com 1
- * planta/cova — mudar só a Condição não pode mudar a Taxa de Semeadura se o espaçamento e a Sem./cova
- * exibida continuam os mesmos), mas continua em ponto flutuante quando o card mostra Peso/cova (g) via
- * PMS (Tradicional — sementes miúdas, pesadas em monte, não contadas uma a uma, ver precisaPesoPorCova).
- */
-function sementesCovaParaCalculo(laudo: Pick<ArquivoLaudo, 'processo'>, sementesCova: number | null): number | null {
-  if (sementesCova === null) return null;
-  return precisaPesoPorCova(laudo) ? sementesCova : Math.round(sementesCova);
 }
 
 /**
@@ -432,12 +428,10 @@ export function GuiaPlantioModal({
       // PMS) — nunca só da Densidade (que funciona bem pra "A Lanço", mas em Covas o espaçamento pode
       // não bater a Densidade cadastrada de propósito, ver Máx./cova e Covas/m² na Parametrização).
       const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
-      const sementesCovaBruta = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
-      // kg/ha e Sementes/m² têm que bater EXATO com o que o card mostra em Sem./cova (ver
-      // sementesCovaParaCalculo) × Covas/m² — senão dá pra trocar a Condição sem mexer no espaçamento e a
-      // Taxa de Semeadura muda mesmo assim, o que não faz sentido pro operador (mesma cova, mesma
-      // quantidade de sementes exibida, tem que dar o mesmo kg/ha).
-      const sementesCova = sementesCovaParaCalculo(laudo, sementesCovaBruta);
+      // Sementes/cova em ponto flutuante (piso em 1, ver sementesPorCovaAlvo) — não o valor arredondado
+      // que o card mostra: acima do piso, é esse fracionado que carrega o efeito real da Condição no
+      // kg/ha e no Sementes/m² (ex.: 1,17 sementes/cova com Covas/m² travado em 6 dá 7 sementes/m²).
+      const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
       sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
     } else {
@@ -481,7 +475,7 @@ export function GuiaPlantioModal({
     const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
     return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
       const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
-      const sementesCova = sementesCovaParaCalculo(laudo, sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual));
+      const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual);
       return { rotulo: o.rotulo, kgPorHa: kgPorHaDeSementesCova(covasPorM2, sementesCova, pms) };
     });
   }
