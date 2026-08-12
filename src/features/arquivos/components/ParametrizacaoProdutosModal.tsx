@@ -13,6 +13,20 @@ const ABAS: { valor: Aba; rotulo: string; icone: string }[] = [
   { valor: 'plantio', rotulo: 'Plantio', icone: '🌱' },
 ];
 
+interface CamposProduto {
+  nomeProduto: string;
+  pmsBase: string;
+  densidadeBase: string;
+  indiceSobrevivencia: string;
+  maxPlantulasCova: string;
+  maxCovasM2: string;
+  perdaMedia: string;
+  perdaBaixa: string;
+  modoPlantio: 'cova' | 'lanco' | null;
+  margemTolerancia: string;
+  observacaoEtiqueta: string;
+}
+
 interface ParametrizacaoProdutosModalProps {
   open: boolean;
   produtos: ProdutoParametrizacao[];
@@ -221,6 +235,20 @@ export function ParametrizacaoProdutosModal({
   const [aba, setAba] = useState<Aba>('produtos');
   /** id da linha (parametrização já cadastrada) cujo grupo está em edição — null quando nenhuma. */
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  /** Linha cuja Observação (selo) está aberta no modal próprio — evita a coluna larga na grade. */
+  const [observacaoModal, setObservacaoModal] = useState<{ grupo: string; campos: CamposProduto } | null>(null);
+  const [observacaoTexto, setObservacaoTexto] = useState('');
+
+  function abrirObservacao(grupo: string, campos: CamposProduto) {
+    setObservacaoModal({ grupo, campos });
+    setObservacaoTexto(campos.observacaoEtiqueta);
+  }
+
+  function salvarObservacao() {
+    if (!observacaoModal) return;
+    onSalvar({ ...observacaoModal.campos, observacaoEtiqueta: observacaoTexto.trim() });
+    setObservacaoModal(null);
+  }
 
   const condicoes = fatores.filter((f) => f.categoria === 'condicao');
 
@@ -251,6 +279,7 @@ export function ParametrizacaoProdutosModal({
   }, [produtos, arquivos]);
 
   return (
+    <>
     <Modal open={open} title="Parametrização de Produtos" onClose={onFechar} widthClassName="max-w-[1080px]">
       <div className="space-y-4">
         <div className="flex items-center gap-1 border-b border-[var(--color-line)] pb-2">
@@ -272,13 +301,6 @@ export function ParametrizacaoProdutosModal({
 
         {aba === 'produtos' && (
         <div className="space-y-3">
-          <p className="px-3 text-[11px] text-[var(--color-text-soft)]">
-            Grupo calculado automaticamente dos laudos importados (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Em modo Covas, o
-            espaçamento padrão do Guia de Plantio vem de Máx/cova (plântulas estabelecidas, pós-perdas, que cabem numa mesma cova) e Cov/m² (covas por m² que a cultivar aguenta) — a Densidade não é
-            mais o alvo em Covas (só continua valendo pra "A Lanço"); sem os 2 campos, cai no cálculo por Densidade de antes, ou no 50×50 fixo. Perda Média%/Baixa% sobrepõe, só pra esse produto, o
-            fator global de perda das Condições de Implantação (aba Plantio) — em branco, usa o valor global. Margem% decide o arredondamento de sacos no Guia de Plantio (até essa % de saco faltando
-            arredonda pra baixo, acima pra cima) — 25% se em branco.
-          </p>
           <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
               <span className="flex-1">Grupo</span>
@@ -291,7 +313,7 @@ export function ParametrizacaoProdutosModal({
               <span className="w-16 shrink-0 text-center">Perda Baix%</span>
               <span className="w-[74px] shrink-0 text-center">Plantio</span>
               <span className="w-16 shrink-0 text-center">Margem%</span>
-              <span className="w-56 shrink-0 text-center">Observação (selo)</span>
+              <span className="w-8 shrink-0 text-center">Obs.</span>
               <span className="w-8 shrink-0" />
             </div>
             {linhasGrupo.map(({ grupo, existente }) => {
@@ -418,16 +440,14 @@ export function ParametrizacaoProdutosModal({
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
-                <input
-                  defaultValue={camposAtuais.observacaoEtiqueta}
-                  placeholder="Ex.: PRODUTOR : RENASEM : GO - 02.647/2019"
-                  title="Texto impresso no Selo"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.observacaoEtiqueta) onSalvar({ ...camposAtuais, observacaoEtiqueta: valor });
-                  }}
-                  className={`w-56 shrink-0 ${campoClasse}`}
-                />
+                <button
+                  type="button"
+                  onClick={() => abrirObservacao(grupo, camposAtuais)}
+                  title={camposAtuais.observacaoEtiqueta ? `Observação: ${camposAtuais.observacaoEtiqueta}` : 'Adicionar observação (texto impresso no Selo)'}
+                  className={`w-8 shrink-0 text-center text-sm ${camposAtuais.observacaoEtiqueta ? 'text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'} hover:text-[var(--color-navy)]`}
+                >
+                  📝
+                </button>
                 {existente ? (
                   <>
                     <button
@@ -546,5 +566,29 @@ export function ParametrizacaoProdutosModal({
         )}
       </div>
     </Modal>
+    <Modal
+      open={observacaoModal !== null}
+      title={`Observação (selo) — ${observacaoModal?.grupo ?? ''}`}
+      onClose={() => setObservacaoModal(null)}
+      widthClassName="max-w-[420px]"
+      footer={
+        <>
+          <Button variant="ghost" onClick={() => setObservacaoModal(null)}>
+            Cancelar
+          </Button>
+          <Button onClick={salvarObservacao}>Salvar</Button>
+        </>
+      }
+    >
+      <textarea
+        value={observacaoTexto}
+        onChange={(e) => setObservacaoTexto(e.target.value)}
+        placeholder="Ex.: PRODUTOR : RENASEM : GO - 02.647/2019"
+        rows={4}
+        autoFocus
+        className={`w-full resize-y text-sm ${campoClasse}`}
+      />
+    </Modal>
+    </>
   );
 }
