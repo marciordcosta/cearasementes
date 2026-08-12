@@ -75,6 +75,8 @@ export interface ProdutoParametrizacao {
   indiceSobrevivencia: string | null;
   /** Máximo de plântulas estabelecidas (pós-perdas) que cabem numa mesma cova sem competir demais — depende do gênero (Panicum/Brachiaria perfilham e ocupam espaço; Milho/Sorgo são plantas unitárias). Usado no Guia de Plantio pra calcular o espaçamento padrão em modo Covas (Covas/m² = Densidade ÷ esse valor), substituindo o 50×50 fixo. Null = sem limite cadastrado, cai no 50×50. */
   maxPlantulasCova: string | null;
+  /** Máximo de covas por m² que a cultivar aguenta (competição entre covas vizinhas) — em modo Covas, junto com maxPlantulasCova, passa a definir o espaçamento padrão do Guia de Plantio diretamente (em vez de derivar da Densidade, que só funciona bem pra "A Lanço"). Null = sem limite cadastrado, cai no cálculo por Densidade (ou no 50×50 fixo). */
+  maxCovasM2: string | null;
   /** Modo de plantio padrão do grupo (Cova ou Lanço) — só pré-seleciona o modo ao adicionar o produto no Guia de Plantio, não entra em nenhum cálculo. Null = sem preferência cadastrada (o Guia cai no padrão dele, Lanço). */
   modoPlantio: 'cova' | 'lanco' | null;
   /** Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando ainda arredonda pra baixo, acima arredonda pra cima. Texto cru (ex.: "25"); null cai no padrão de 25%. */

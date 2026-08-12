@@ -77,6 +77,11 @@ export function resolverMaxPlantulasCova(nomeProduto: string, produtos: ProdutoP
   return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasCova ?? null);
 }
 
+/** Máximo de covas por m² que a cultivar aguenta, como número — junto com Máx. de plântulas/cova, define o espaçamento padrão do Guia de Plantio em modo Covas (ver calcularEspacamentoPadrao em GuiaPlantioModal.tsx). Null se não cadastrado. */
+export function resolverMaxCovasM2(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxCovasM2 ?? null);
+}
+
 /** Modo de plantio padrão do produto (Cova ou Lanço) — só pré-seleciona o modo ao adicionar no Guia de Plantio, nunca entra em cálculo. Null = sem preferência cadastrada. */
 export function resolverModoPlantio(nomeProduto: string, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | null {
   return encontrarProduto(nomeProduto, produtos)?.modoPlantio ?? null;

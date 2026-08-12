@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { Produto } from '@/features/pricing/types';
-import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2 } from '../calculoSemeadura';
+import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2, germinacaoFinalSemeadura } from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
 import {
@@ -10,6 +10,7 @@ import {
   normalizarNome,
   resolverDensidadeBase,
   resolverMargemTolerancia,
+  resolverMaxCovasM2,
   resolverMaxPlantulasCova,
   resolverModoPlantio,
   resolverPmsBaseTexto,
@@ -157,12 +158,29 @@ function pmsNumericoDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, pr
 }
 
 /**
- * Sementes/cova (ou Peso/cova) que bate a Densidade alvo NUM ESPAÇAMENTO FIXO (Cova × Corredor
- * atuais, sem mexer neles) — usado quando quem muda é um fator EXTERNO à cova/corredor em si
- * (Condição do plantio, Modo, ou ao adicionar o produto pela 1ª vez): a distância física entre covas
- * é uma decisão do operador (equipamento, praticidade de campo) que não deve pular sozinha; o que
- * compensa a Condição/Modo é a quantidade de semente/peso jogada em cada cova, não o espaçamento.
- * Fica em branco quando falta algum dado (Densidade, Germinação, ou PMS no caso Tradicional).
+ * Sementes/cova (equivalente, sempre em SEMENTES mesmo pra Tradicional) que bate EXATAMENTE o Máx. de
+ * plântulas/cova cadastrado (Parametrização), numa dada Germinação final — MODELO NOVO pro modo Covas,
+ * onde a Densidade não serve de referência (ela funciona bem só pra "A Lanço"): a cultivar tem um teto
+ * físico de plântulas por cova (competição dentro do buraco), então mira ESSE número direto, não um
+ * alvo derivado da Densidade. Null sem Máx. cadastrado (cai no modelo antigo, ver
+ * calcularValorCovaParaEspacamentoFixo) ou sem Germinação (VC/teste, Sobrevivência, Fatores).
+ */
+function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
+  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
+  if (maxPlantulasCova === null || maxPlantulasCova <= 0) return null;
+  const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
+  return germinacaoFinal !== null && germinacaoFinal > 0 ? (maxPlantulasCova * 100) / germinacaoFinal : null;
+}
+
+/**
+ * Sementes/cova (ou Peso/cova) que bate o alvo NUM ESPAÇAMENTO FIXO (Cova × Corredor atuais, sem mexer
+ * neles) — usado quando quem muda é um fator EXTERNO à cova/corredor em si (Condição do plantio, Modo,
+ * ou ao adicionar o produto pela 1ª vez): a distância física entre covas é uma decisão do operador
+ * (equipamento, praticidade de campo) que não deve pular sozinha; o que compensa a Condição/Modo é a
+ * quantidade de semente/peso jogada em cada cova, não o espaçamento. Prioriza o Máx. de plântulas/cova
+ * cadastrado (ver sementesPorCovaAlvo — não depende do espaçamento atual, independente da Densidade);
+ * sem esse cadastro, cai no modelo antigo (deriva de Densidade, no espaçamento atual). Fica em branco
+ * quando falta algum dado (Máx./Densidade, Germinação, ou PMS no caso Tradicional).
  */
 function calcularValorCovaParaEspacamentoFixo(
   laudo: ArquivoLaudo,
@@ -171,9 +189,12 @@ function calcularValorCovaParaEspacamentoFixo(
   fatorModo: number,
   fatorCondicaoValor: number,
 ): string {
-  const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
-  const covasPorM2 = calcularCovasPorM2(paraNumero(espacamento.cova), paraNumero(espacamento.corredor));
-  const sementesCova = calcularSementesPorCova(sementesPorM2, covasPorM2);
+  let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
+  if (sementesCova === null) {
+    const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
+    const covasPorM2 = calcularCovasPorM2(paraNumero(espacamento.cova), paraNumero(espacamento.corredor));
+    sementesCova = calcularSementesPorCova(sementesPorM2, covasPorM2);
+  }
   if (sementesCova === null) return '';
   if (!precisaPesoPorCova(laudo)) return String(Math.round(sementesCova));
   const pms = pmsNumericoDoLaudo(laudo, produtos);
@@ -181,17 +202,31 @@ function calcularValorCovaParaEspacamentoFixo(
 }
 
 /**
+ * kg/ha a partir de Covas/m² × Sementes/cova (equivalente) × PMS — a conta "de verdade" em modo Covas,
+ * usada tanto pro card (com a Sementes/cova ATUAL, digitada) quanto pra comparação entre condições (com
+ * a Sementes/cova ALVO de cada uma, ver sementesPorCovaAlvo) — nunca pela Densidade sozinha, que em
+ * Covas só serve de estimativa de fallback (ver calcularValorCovaParaEspacamentoFixo).
+ */
+function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number | null, pms: number | null): number | null {
+  return covasPorM2 !== null && sementesCova !== null && pms !== null && pms > 0 ? (covasPorM2 * sementesCova * pms) / 100 : null;
+}
+
+/**
  * Espaçamento padrão (Cova × Corredor, em grade quadrada) ao adicionar um produto em modo Covas —
- * quando o produto tem Máx. de plântulas/cova cadastrado (Parametrização), calcula o espaçamento que
- * entrega EXATAMENTE esse máximo na Densidade alvo (Covas/m² = Densidade ÷ Máx.), em vez do 50×50
- * fixo: gêneros que perfilham (Panicum/Brachiaria) toleram mais plântulas por cova que plantas
- * unitárias (Milho/Sorgo), então o espaçamento "certo" não é o mesmo pra todo produto. Sem Densidade
- * ou sem Máx. cadastrado, cai no 50×50 de sempre. Só o PONTO DE PARTIDA muda — o operador segue livre
- * pra ajustar Cova/Corredor manualmente depois, e isso não se repete sozinho (ver
+ * prioriza o Covas/m² MÁXIMO cadastrado (Parametrização) direto: gêneros diferentes toleram uma
+ * densidade de covas bem diferente (competição entre covas vizinhas), então esse número já é o
+ * espaçamento certo, sem depender da Densidade. Sem isso cadastrado, cai no cálculo antigo (Densidade ÷
+ * Máx. de plântulas/cova); sem nenhum dos dois, cai no 50×50 de sempre. Só o PONTO DE PARTIDA muda — o
+ * operador segue livre pra ajustar Cova/Corredor manualmente depois, e isso não se repete sozinho (ver
  * calcularValorCovaParaEspacamentoFixo, que mantém o espaçamento intocado daí em diante).
  */
 function calcularEspacamentoPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): { cova: string; corredor: string } {
   const padrao = { cova: '50', corredor: '50' };
+  const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
+  if (maxCovasM2 !== null && maxCovasM2 > 0) {
+    const ladoCm = Math.round(Math.sqrt(10000 / maxCovasM2));
+    if (ladoCm > 0) return { cova: String(ladoCm), corredor: String(ladoCm) };
+  }
   const densidade = resolverDensidadeBase(laudo.nomeProduto, produtos);
   const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
   if (densidade === null || densidade <= 0 || maxPlantulasCova === null || maxPlantulasCova <= 0) return padrao;
@@ -209,11 +244,20 @@ function calcularEspacamentoPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, pro
  * de vários produtos diferentes na mesma sessão, um "x" no canto tira um
  * resultado da pilha sem mexer nos outros.
  *
- * Referência do cálculo é sempre a Densidade (Parametrização de Produtos):
- * Sementes/m² = Densidade ÷ Germinação final (VC%/teste × Sobrevivência% ×
- * Fatores de Modo/Condição) — não depende de PMS nem de área. PMS só entra
- * DEPOIS, pra converter Sementes/m² em kg/ha (peso). Sem PMS, kg/ha, Peso e
- * Sacos ficam pendentes, mas Sementes/m²/cova continuam saindo.
+ * Em "A Lanço", a referência do cálculo é sempre a Densidade (Parametrização
+ * de Produtos): Sementes/m² = Densidade ÷ Germinação final (VC%/teste ×
+ * Sobrevivência% × Fatores de Modo/Condição) — não depende de PMS nem de
+ * área. Em "Covas", a Densidade não serve de referência direta (ela é feita
+ * pra semeadura contínua, não bate certo com competição dentro de uma cova)
+ * — quem manda é o Máx. de plântulas/cova e o Covas/m² máximo cadastrados
+ * (Parametrização): Sementes/cova mira o Máx. direto (ver sementesPorCovaAlvo)
+ * e o espaçamento vem do Covas/m² (ver calcularEspacamentoPadrao); a
+ * densidade final (Covas/m² × Máx./cova) é uma CONSEQUÊNCIA, pode ficar
+ * abaixo da Densidade cadastrada de propósito. Sem esses 2 campos
+ * cadastrados, Covas cai no cálculo antigo (via Densidade, igual A Lanço).
+ * Em qualquer caso, PMS só entra DEPOIS, pra converter Sementes/m² em kg/ha
+ * (peso); sem PMS, kg/ha, Peso e Sacos ficam pendentes, mas Sementes/m²/cova
+ * continuam saindo.
  *
  * Peso do saco vem da Tabela de Preço (módulo Precificação), casando o
  * produto do laudo pelo nome com um produto cadastrado lá — só usado por
@@ -322,22 +366,26 @@ export function GuiaPlantioModal({
   }
 
   /**
-   * Cova (cm) e Corredor (cm) são ligados: fixados o alvo de Sementes/m² e a
-   * Sementes/cova (sempre digitada manualmente), sobra 1 grau de liberdade —
-   * editar um dos 2 espaçamentos recalcula o outro sozinho.
+   * Com Máx. de plântulas/cova cadastrado (modelo novo), Cova e Corredor são 2 campos INDEPENDENTES —
+   * Sementes/cova não depende mais do espaçamento (mira direto o Máx. cadastrado, ver
+   * sementesPorCovaAlvo), então editar um não precisa recalcular o outro; só muda a densidade
+   * resultante (Covas/m²). Sem esse cadastro (modelo antigo), Cova e Corredor continuam ligados: fixado
+   * o alvo de Sementes/m² (via Densidade) e a Sementes/cova atual, editar um recalcula o outro.
    */
   function atualizarEspacamento(laudo: ArquivoLaudo, item: ItemGuia, campo: CampoEspacamento, valorTexto: string) {
     const patch: Partial<ItemGuia> = { [campo]: valorTexto, ultimoCampoEspacamento: campo };
-    const valorCova = valorCovaValido(laudo, item.sementesCova);
-    const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
-    if (sementesEquiv !== null) {
-      const fatorModo = fatorDe(fatores, item.modo);
-      const fatorCondicaoItem = fatorCondicao;
-      const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
-      if (sementesPorM2 !== null && sementesPorM2 > 0) {
-        const itemAtualizado = { ...item, [campo]: valorTexto, ultimoCampoEspacamento: campo };
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, itemAtualizado);
-        if (derivadoPatch) Object.assign(patch, derivadoPatch);
+    const fatorModo = fatorDe(fatores, item.modo);
+    const modeloNovoAtivo = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicao) !== null;
+    if (!modeloNovoAtivo) {
+      const valorCova = valorCovaValido(laudo, item.sementesCova);
+      const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+      if (sementesEquiv !== null) {
+        const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicao);
+        if (sementesPorM2 !== null && sementesPorM2 > 0) {
+          const itemAtualizado = { ...item, [campo]: valorTexto, ultimoCampoEspacamento: campo };
+          const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, itemAtualizado);
+          if (derivadoPatch) Object.assign(patch, derivadoPatch);
+        }
       }
     }
     atualizarItem(item.laudoId, patch);
@@ -369,19 +417,27 @@ export function GuiaPlantioModal({
     atualizarItem(item.laudoId, { area: areaNova > 0 ? String(Math.round(areaNova * 100) / 100) : '' });
   }
 
-  /** Sementes/cova (Incrustado) ou Peso/cova (Tradicional) é sempre manual — nunca recalculado sozinho; só dispara o recálculo do espaçamento que já estava "de fora". Sementes só aceita dígitos (inteiro); Peso aceita vírgula/ponto (decimal). */
+  /**
+   * Sementes/cova (Incrustado) ou Peso/cova (Tradicional) é sempre manual — nunca recalculado sozinho.
+   * Sementes só aceita dígitos (inteiro); Peso aceita vírgula/ponto (decimal). Com Máx. de
+   * plântulas/cova cadastrado (modelo novo), não depende mais do espaçamento — editar aqui não mexe em
+   * Cova/Corredor. Sem esse cadastro (modelo antigo), continua disparando o recálculo do espaçamento
+   * que estava "de fora" (mantém Cova × Corredor ligado ao alvo de Densidade).
+   */
   function atualizarSementesCova(laudo: ArquivoLaudo, item: ItemGuia, valorTexto: string) {
     const valorLimpo = precisaPesoPorCova(laudo) ? valorTexto.replace(/[^\d.,]/g, '') : valorTexto.replace(/\D/g, '');
     const patch: Partial<ItemGuia> = { sementesCova: valorLimpo };
-    const valorCova = valorCovaValido(laudo, valorLimpo);
-    const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
-    if (sementesEquiv !== null) {
-      const fatorModo = fatorDe(fatores, item.modo);
-      const fatorCondicaoItem = fatorCondicao;
-      const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
-      if (sementesPorM2 !== null && sementesPorM2 > 0) {
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
-        if (derivadoPatch) Object.assign(patch, derivadoPatch);
+    const fatorModo = fatorDe(fatores, item.modo);
+    const modeloNovoAtivo = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicao) !== null;
+    if (!modeloNovoAtivo) {
+      const valorCova = valorCovaValido(laudo, valorLimpo);
+      const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+      if (sementesEquiv !== null) {
+        const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicao);
+        if (sementesPorM2 !== null && sementesPorM2 > 0) {
+          const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
+          if (derivadoPatch) Object.assign(patch, derivadoPatch);
+        }
       }
     }
     atualizarItem(item.laudoId, patch);
@@ -433,8 +489,21 @@ export function GuiaPlantioModal({
   function calcularResultado(laudo: ArquivoLaudo, item: ItemGuia) {
     const fatorModo = fatorDe(fatores, item.modo);
     const fatorCondicaoItem = fatorCondicao;
-    const kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
-    const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
+    const covasPorM2 = item.modo === 'linha_cova' ? calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor)) : null;
+    let kgPorHa: number | null;
+    let sementesPorM2: number | null;
+    if (item.modo === 'linha_cova') {
+      // Em Covas, kg/ha vem do espaçamento e da Sementes/cova REAIS do card (Covas/m² × Sementes/cova ×
+      // PMS) — nunca só da Densidade (que funciona bem pra "A Lanço", mas em Covas o espaçamento pode
+      // não bater a Densidade cadastrada de propósito, ver Máx./cova e Covas/m² na Parametrização).
+      const valorCova = valorCovaValido(laudo, item.sementesCova);
+      const sementesCova = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
+      sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
+      kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
+    } else {
+      kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
+      sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
+    }
     const areaNum = paraNumero(item.area);
     // Total necessário parte do kg/ha já arredondado pra cima (o mesmo número
     // exibido em Taxa de Semeadura), não do valor cru — os cálculos de
@@ -450,17 +519,34 @@ export function GuiaPlantioModal({
     // Peso total REAL (o que efetivamente se compra/pesa) = sacos (arredondados) × peso do saco — diferente do
     // "Total previsto/necessário" (teórico, continuo) porque só dá pra comprar saco inteiro.
     const pesoTotalReal = sacos !== null && pesoSaco !== null ? sacos * pesoSaco : null;
-    const covasPorM2 = item.modo === 'linha_cova' ? calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor)) : null;
     return { kgPorHa, pesoTotal, pesoTotalReal, pesoSaco, sacos, sementesPorM2, covasPorM2 };
   }
 
-  /** Taxa de Semeadura (kg/ha) nas outras 2 condições (não a selecionada agora) — só informativo, pra comparar sem precisar trocar a condição global. */
+  /**
+   * Taxa de Semeadura (kg/ha) nas outras 2 condições (não a selecionada agora) — só informativo, pra
+   * comparar sem precisar trocar a condição global. Em Covas, usa o espaçamento ATUAL do card (fixo,
+   * não muda com a condição — ver useEffect acima) com a Sementes/cova ALVO de cada condição (ver
+   * sementesPorCovaAlvo), consistente com o que calcularResultado mostra pra condição selecionada.
+   */
   function kgPorHaOutrasCondicoes(laudo: ArquivoLaudo, item: ItemGuia): { rotulo: string; kgPorHa: number | null }[] {
     const fatorModo = fatorDe(fatores, item.modo);
-    return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => ({
-      rotulo: o.rotulo,
-      kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorDe(fatores, o.valor)),
-    }));
+    if (item.modo !== 'linha_cova') {
+      return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => ({
+        rotulo: o.rotulo,
+        kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorDe(fatores, o.valor)),
+      }));
+    }
+    const covasPorM2 = calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor));
+    const pms = pmsNumericoDoLaudo(laudo, produtos);
+    return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
+      const fatorCondicaoAlt = fatorDe(fatores, o.valor);
+      let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoAlt);
+      if (sementesCova === null) {
+        const sementesPorM2Densidade = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoAlt);
+        sementesCova = calcularSementesPorCova(sementesPorM2Densidade, covasPorM2);
+      }
+      return { rotulo: o.rotulo, kgPorHa: kgPorHaDeSementesCova(covasPorM2, sementesCova, pms) };
+    });
   }
 
   // Soma dos cards empilhados — só entra na soma o que deu pra calcular (sacos/peso nulos são ignorados, não zerados).
@@ -717,10 +803,20 @@ export function GuiaPlantioModal({
                       const pesoPorCova = precisaPesoPorCova(laudo);
                       const pms = pmsNumericoDoLaudo(laudo, produtos);
                       const semPmsParaPeso = pesoPorCova && pms === null;
-                      const espacamentoBloqueado = valorCovaValido(laudo, item.sementesCova) === null || semPmsParaPeso;
-                      const tituloEspacamento = semPmsParaPeso
+                      // Com Máx./cova cadastrado, Cova e Corredor são independentes de Sementes/cova
+                      // (ver atualizarEspacamento) — só ficam bloqueados sem PMS (Tradicional). Sem esse
+                      // cadastro (modelo antigo), continuam ligados à Sementes/cova atual.
+                      const modeloNovoAtivo = sementesPorCovaAlvo(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao) !== null;
+                      const espacamentoBloqueado = semPmsParaPeso || (!modeloNovoAtivo && valorCovaValido(laudo, item.sementesCova) === null);
+                      const tituloComum = semPmsParaPeso
                         ? 'Sem PMS cadastrado — não dá pra converter Peso/cova em sementes'
-                        : `Informe ${pesoPorCova ? 'o peso (g) de sementes' : 'a quantidade de sementes (número inteiro ≥ 1)'} por cova pra liberar o espaçamento`;
+                        : modeloNovoAtivo
+                          ? 'Livre — Sementes/cova não depende do espaçamento (mira o Máx./cova cadastrado), só muda a densidade resultante (Covas/m²)'
+                          : espacamentoBloqueado
+                            ? `Informe ${pesoPorCova ? 'o peso (g) de sementes' : 'a quantidade de sementes (número inteiro ≥ 1)'} por cova pra liberar o espaçamento`
+                            : null;
+                      const tituloDistancia = tituloComum ?? 'Ligado com Corredor — editar um recalcula o outro';
+                      const tituloCorredor = tituloComum ?? 'Ligado com Cova — editar um recalcula o outro';
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -731,7 +827,7 @@ export function GuiaPlantioModal({
                                 onChange={(e) => atualizarEspacamento(laudo, item, 'cova', e.target.value)}
                                 disabled={espacamentoBloqueado}
                                 inputMode="decimal"
-                                title={espacamentoBloqueado ? tituloEspacamento : 'Ligado com Corredor — editar um recalcula o outro'}
+                                title={tituloDistancia}
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
                               />
                             </div>
@@ -742,7 +838,7 @@ export function GuiaPlantioModal({
                                 onChange={(e) => atualizarEspacamento(laudo, item, 'corredor', e.target.value)}
                                 disabled={espacamentoBloqueado}
                                 inputMode="decimal"
-                                title={espacamentoBloqueado ? tituloEspacamento : 'Ligado com Cova — editar um recalcula o outro'}
+                                title={tituloCorredor}
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
                               />
                             </div>
@@ -783,7 +879,7 @@ export function GuiaPlantioModal({
                         <div className="grid grid-cols-2 items-center gap-x-2 gap-y-1 text-xs">
                           {r.kgPorHa === null && (
                             <p className="col-span-2 pb-0.5 text-[10px] text-[var(--color-text-soft)]">
-                              Sem PMS cadastrado — Taxa e Total ficam pendentes; sementes seguem calculadas por Densidade e Germinação.
+                              Sem PMS cadastrado — Taxa e Total ficam pendentes; Sementes/m²/cova continuam calculadas normalmente.
                             </p>
                           )}
                           <p className="whitespace-nowrap border-b border-[var(--color-line)] pb-1 text-[var(--color-text-soft)]">Taxa de Semeadura</p>

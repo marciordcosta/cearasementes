@@ -157,6 +157,7 @@ export function ArquivosPage() {
     densidadeBase: string;
     indiceSobrevivencia: string;
     maxPlantulasCova: string;
+    maxCovasM2: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
