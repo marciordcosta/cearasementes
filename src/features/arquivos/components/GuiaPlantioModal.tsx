@@ -857,6 +857,20 @@ export function GuiaPlantioModal({
                             : null;
                       const tituloDistancia = tituloComum ?? 'Ligado com Corredor — editar um recalcula o outro';
                       const tituloCorredor = tituloComum ?? 'Ligado com Cova — editar um recalcula o outro';
+                      // Covas/m² "ideal alcançável" — o mesmo valor que o espaçamento padrão (50×50 ou
+                      // calcularEspacamentoPadrao) já entrega de cara, arredondado pro centímetro fechado
+                      // (nunca dá pra bater o Máx./cova em cheio, só chegar perto). Abaixo disso é
+                      // espaçamento mais aberto que o recomendado — às vezes de propósito (ponta de
+                      // consorciação), mas o operador precisa notar que a densidade caiu.
+                      const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
+                      const idealCovasM2 =
+                        maxCovasM2 !== null && maxCovasM2 > 0
+                          ? (() => {
+                              const lado = Math.ceil(Math.sqrt(10000 / maxCovasM2));
+                              return 10000 / (lado * lado);
+                            })()
+                          : null;
+                      const abaixoDoIdeal = idealCovasM2 !== null && r.covasPorM2 !== null && r.covasPorM2 < idealCovasM2 - 1e-9;
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -899,7 +913,10 @@ export function GuiaPlantioModal({
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
-                              <p className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
+                              <p
+                                title={abaixoDoIdeal ? `Espaçamento mais aberto que o recomendado — adensamento ideal seria ~${formatarCovas(idealCovasM2 as number)} covas/m²` : undefined}
+                                className={`border border-transparent px-1.5 py-1 text-xs font-medium ${abaixoDoIdeal ? 'text-bad' : 'text-[var(--color-text)]'}`}
+                              >
                                 {r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)}
                               </p>
                             </div>
