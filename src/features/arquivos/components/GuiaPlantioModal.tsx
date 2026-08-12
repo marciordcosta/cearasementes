@@ -769,7 +769,7 @@ export function GuiaPlantioModal({
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
                               <p
-                                title={`Sementes por metro linear de linha — útil pra calibrar a plantadeira em Milho/Sorgo. Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}`}
+                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}`}
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
                                 {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
