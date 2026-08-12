@@ -122,36 +122,47 @@ function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizaca
   return germinacaoFinal !== null && germinacaoFinal > 0 ? (maxPlantulasCova * 100) / germinacaoFinal : null;
 }
 
-// % de desconto na Sementes/cova por cm que a Distância na linha fica abaixo da distância ideal do
-// produto (ver distanciaIdealProduto) — evita superdimensionar a cova em espaçamentos mais densos.
-const TAXA_DESCONTO_SEMENTES_POR_CM = 1;
-// Teto do desconto — por mais que a cova aperte, nunca desconta mais que isso (piso de segurança pra
-// nunca jogar menos que 60% do volume padrão, mesmo com covas coladas).
-const DESCONTO_MAXIMO_SEMENTES = 40;
+// % de ajuste na Sementes/cova por cm que a Distância na linha se afasta da distância ideal do produto
+// (ver distanciaIdealProduto) — mais apertada desconta (evita superdimensionar a cova), mais aberta
+// acrescenta (aproveita o espaço sobrando, mantém a população por m² mais próxima do alvo).
+const TAXA_AJUSTE_SEMENTES_POR_CM = 1;
+// Teto do ajuste, pros dois lados — nunca desconta mais que isso (piso de 60% do padrão, mesmo com covas
+// coladas) nem acrescenta mais que isso (nunca dobra a semente só por causa de espaço sobrando).
+const TETO_AJUSTE_SEMENTES = 40;
 
-/** Distância (cm) que o produto teria no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de desconto" pra sementesComDescontoPorDistancia. Valor EXATO (sem arredondar pro centímetro fechado, diferente de corredorPadrao), pra a curva de desconto ficar contínua. */
+/** Distância (cm) que o produto teria no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de ajuste" pra sementesComAjustePorDistancia. Valor EXATO (sem arredondar pro centímetro fechado, diferente de corredorPadrao), pra a curva ficar contínua. */
 function distanciaIdealProduto(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): number {
   return Math.sqrt(10000 / covasM2Alvo(laudo, produtos));
 }
 
 /**
- * Desconta a Sementes/cova padrão quando a Distância na linha fica mais apertada que a distância ideal
- * do produto — 1%/cm abaixo do ideal (nunca desconta se estiver igual ou mais aberta), até um teto de
- * 40%: por mais que a cova aperte, nunca joga menos que 60% do volume padrão.
+ * Ajusta a Sementes/cova padrão conforme a Distância na linha se afasta da distância ideal do produto —
+ * 1%/cm de diferença, até um teto de 40% pros dois lados. Distância mais APERTADA que o ideal desconta
+ * (evita superdimensionar a cova); mais ABERTA acrescenta (mais espaço sobrando, mais semente por cova).
+ * Corredor não entra à parte na conta: como o Covas/m² fica travado (ver covasM2Alvo), Corredor e
+ * Distância sempre se movem em sentidos opostos pra manter esse produto fixo — a Distância sozinha já
+ * reflete o efeito do Corredor.
+ *
+ * `permiteDesconto = false` desliga só o lado de DESCONTO (usado quando Máx./cova = 1, ex.: Milho,
+ * Sorgo — com 1 planta só por cova não tem o que superdimensionar, não faz sentido descontar abaixo
+ * disso) — o lado de ACRÉSCIMO continua valendo normalmente nesse caso.
  */
-function sementesComDescontoPorDistancia(sementesPadrao: number, distanciaAtual: number, distanciaIdeal: number): number {
-  if (distanciaAtual >= distanciaIdeal) return sementesPadrao;
-  const desconto = Math.min(DESCONTO_MAXIMO_SEMENTES, (distanciaIdeal - distanciaAtual) * TAXA_DESCONTO_SEMENTES_POR_CM);
-  return sementesPadrao * (1 - desconto / 100);
+function sementesComAjustePorDistancia(sementesPadrao: number, distanciaAtual: number, distanciaIdeal: number, permiteDesconto: boolean): number {
+  const diferenca = distanciaIdeal - distanciaAtual; // > 0: mais apertada (desconta); < 0: mais aberta (acrescenta)
+  if (diferenca === 0 || (diferenca > 0 && !permiteDesconto)) return sementesPadrao;
+  const percentual = Math.min(TETO_AJUSTE_SEMENTES, Math.abs(diferenca) * TAXA_AJUSTE_SEMENTES_POR_CM);
+  const fator = diferenca > 0 ? 1 - percentual / 100 : 1 + percentual / 100;
+  return sementesPadrao * fator;
 }
 
 /**
  * Sementes/cova (equivalente, sempre em sementes) que o card usa AGORA — TRAVADA, nunca digitada
  * manualmente: o sistema sempre traz a quantidade ideal parametrizada (Máx. de plântulas/cova cadastrado
- * — ver sementesPorCovaAlvo —, ou o modelo antigo por Densidade), já descontada se a Distância na linha
- * (derivada do Corredor, ver distanciaAtual) ficou mais apertada que o ideal do produto (ver
- * sementesComDescontoPorDistancia). O operador só ajusta o Corredor. Fica null quando falta algum dado
- * (Máx./Densidade, Germinação) ou a Distância não dá pra calcular.
+ * — ver sementesPorCovaAlvo —, ou o modelo antigo por Densidade), já ajustada conforme a Distância na
+ * linha (derivada do Corredor, ver distanciaAtual) se afasta do ideal do produto (ver
+ * sementesComAjustePorDistancia — desconta se mais apertada, acrescenta se mais aberta; sem Máx./cova
+ * cadastrado ou com só 1 planta/cova, não desconta, só acrescenta). O operador só ajusta o Corredor.
+ * Fica null quando falta algum dado (Máx./Densidade, Germinação) ou a Distância não dá pra calcular.
  */
 function sementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, distanciaAtual: number | null): number | null {
   let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
@@ -160,7 +171,9 @@ function sementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[
     sementesCova = calcularSementesPorCova(sementesPorM2, covasM2Alvo(laudo, produtos));
   }
   if (sementesCova === null || distanciaAtual === null) return sementesCova;
-  return sementesComDescontoPorDistancia(sementesCova, distanciaAtual, distanciaIdealProduto(laudo, produtos));
+  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
+  const permiteDesconto = maxPlantulasCova === null || maxPlantulasCova > 1;
+  return sementesComAjustePorDistancia(sementesCova, distanciaAtual, distanciaIdealProduto(laudo, produtos), permiteDesconto);
 }
 
 /** Igual sementesCovaAtual, já formatado pra exibir — "Sementes/cova" (inteiro) ou "Peso/cova (g)" (Tradicional, via PMS), conforme o Processo do laudo (ver precisaPesoPorCova). '' quando falta algum dado. */
@@ -720,7 +733,7 @@ export function GuiaPlantioModal({
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sementes/cova'}</p>
                               <p
-                                title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada se a Distância ficou mais apertada que o ideal do produto (1%/cm abaixo do ideal, até 40% de desconto)"
+                                title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, ajustada conforme a Distância se afasta do ideal do produto (1%/cm, até 40%): desconta se mais apertada, acrescenta se mais aberta"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
                                 {formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, distancia) || '—'}
