@@ -812,15 +812,7 @@ export function GuiaPlantioModal({
                           : null;
                       const abaixoDoIdeal = idealCovasM2 !== null && r.covasPorM2 !== null && r.covasPorM2 < idealCovasM2 - 1e-9;
                       return (
-                        <div className="relative flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
-                          <button
-                            type="button"
-                            onClick={() => restaurarEspacamento(laudo, item)}
-                            title="Restaurar espaçamento e Sementes/cova pra configuração inicial"
-                            className="absolute right-1.5 top-1.5 text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
-                          >
-                            <RotateCcw size={12} />
-                          </button>
+                        <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
@@ -858,7 +850,17 @@ export function GuiaPlantioModal({
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>
                             <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
+                              <div className="flex items-center gap-1">
+                                <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
+                                <button
+                                  type="button"
+                                  onClick={() => restaurarEspacamento(laudo, item)}
+                                  title="Restaurar espaçamento e Sementes/cova pra configuração inicial"
+                                  className="text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
+                                >
+                                  <RotateCcw size={10} />
+                                </button>
+                              </div>
                               <p
                                 title={abaixoDoIdeal ? `Espaçamento mais aberto que o recomendado — adensamento ideal seria ~${formatarCovas(idealCovasM2 as number)} covas/m²` : undefined}
                                 className={`border border-transparent px-1.5 py-1 text-xs font-medium ${abaixoDoIdeal ? 'text-bad' : 'text-[var(--color-text)]'}`}
