@@ -1,9 +1,8 @@
-import { RotateCcw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { Produto } from '@/features/pricing/types';
-import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2, germinacaoFinalSemeadura } from '../calculoSemeadura';
+import { calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2, germinacaoFinalSemeadura } from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
 import {
@@ -34,7 +33,6 @@ interface GuiaPlantioModalProps {
 
 type Modo = 'linha_cova' | 'lanco';
 type Condicao = 'ideal' | 'media' | 'baixa';
-type CampoEspacamento = 'cova' | 'corredor';
 
 interface ItemGuia {
   laudoId: string;
@@ -42,11 +40,10 @@ interface ItemGuia {
   /** Modo de plantio — individual por item (produtos diferentes na mesma pilha podem ter modos diferentes). */
   modo: Modo;
   /**
-   * Só usados quando modo === 'linha_cova'. Cova (cm) e Corredor (cm) são 2 campos INDEPENDENTES —
-   * editar um NÃO recalcula o outro; o único limite automático é o Covas/m² máximo cadastrado
-   * (Parametrização), se houver — nunca deixa passar dele, ver limitarCovasM2.
+   * Único campo editável do espaçamento (modo Covas) — Distância é sempre DERIVADA dele pra manter
+   * Covas/m² travado no alvo parametrizado (ver covasM2Alvo/distanciaDerivada): não guarda Distância
+   * nem tem como o espaçamento "descolar" do Covas/m² alvo.
    */
-  cova: string;
   corredor: string;
 }
 
@@ -126,24 +123,22 @@ function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizaca
 }
 
 /**
- * Sementes/cova (equivalente, sempre em sementes) que o card usa AGORA, no espaçamento atual do item —
- * TRAVADA, nunca digitada manualmente: o sistema sempre traz a quantidade ideal parametrizada, o
- * operador só ajusta o espaçamento (Distância/Corredor). Prioriza o Máx. de plântulas/cova cadastrado
- * (ver sementesPorCovaAlvo — não depende do espaçamento); sem esse cadastro, cai no modelo antigo
- * (deriva de Densidade, no espaçamento atual). Fica null quando falta algum dado (Máx./Densidade,
- * Germinação).
+ * Sementes/cova (equivalente, sempre em sementes) que o card usa AGORA — TRAVADA, nunca digitada
+ * manualmente: o sistema sempre traz a quantidade ideal parametrizada, o operador só ajusta o Corredor.
+ * Prioriza o Máx. de plântulas/cova cadastrado (ver sementesPorCovaAlvo — não depende do espaçamento);
+ * sem esse cadastro, cai no modelo antigo (deriva de Densidade, no Covas/m² alvo — ver covasM2Alvo, que
+ * também não depende do espaçamento atual). Fica null quando falta algum dado (Máx./Densidade, Germinação).
  */
-function sementesCovaAtual(laudo: ArquivoLaudo, item: Pick<ItemGuia, 'cova' | 'corredor'>, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
+function sementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
   const sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (sementesCova !== null) return sementesCova;
   const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
-  const covasPorM2 = calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor));
-  return calcularSementesPorCova(sementesPorM2, covasPorM2);
+  return calcularSementesPorCova(sementesPorM2, covasM2Alvo(laudo, produtos));
 }
 
 /** Igual sementesCovaAtual, já formatado pra exibir — "Sementes/cova" (inteiro) ou "Peso/cova (g)" (Tradicional, via PMS), conforme o Processo do laudo (ver precisaPesoPorCova). '' quando falta algum dado. */
-function formatarSementesCovaAtual(laudo: ArquivoLaudo, item: Pick<ItemGuia, 'cova' | 'corredor'>, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): string {
-  const sementesCova = sementesCovaAtual(laudo, item, produtos, fatorModo, fatorCondicaoValor);
+function formatarSementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): string {
+  const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (sementesCova === null) return '';
   if (!precisaPesoPorCova(laudo)) return String(Math.round(sementesCova));
   const pms = pmsNumericoDoLaudo(laudo, produtos);
@@ -161,58 +156,35 @@ function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number |
 }
 
 /**
- * Espaçamento padrão (Cova × Corredor, em grade quadrada) ao adicionar um produto em modo Covas —
- * prioriza o Covas/m² MÁXIMO cadastrado (Parametrização) direto: gêneros diferentes toleram uma
- * densidade de covas bem diferente (competição entre covas vizinhas), então esse número já é o
- * espaçamento certo, sem depender da Densidade. Sem isso cadastrado, cai no cálculo antigo (Densidade ÷
- * Máx. de plântulas/cova); sem nenhum dos dois, cai no 50×50 de sempre. Lado arredondado sempre pra
- * CIMA (nunca pra baixo) — garante que o Covas/m² real nunca ultrapassa o máximo, mesmo com a perda de
- * precisão do arredondamento pro centímetro fechado (arredondar pra baixo poderia deixar passar do
- * limite). Só o PONTO DE PARTIDA muda — o operador segue livre pra ajustar Cova/Corredor manualmente
- * depois (sem nunca poder passar do Covas/m² máximo, ver atualizarEspacamento); Sementes/cova é travada
- * e sempre recalculada ao vivo pro espaçamento atual (ver sementesCovaAtual), nunca guardada.
+ * Covas/m² TRAVADO — não é editável de jeito nenhum, é sempre esse valor (nunca mais nem menos):
+ * prioriza o Máx. cadastrado (Parametrização); sem isso, cai no cálculo antigo (Densidade ÷ Máx. de
+ * plântulas/cova); sem nenhum dos dois, 4 (equivalente ao 50×50 de sempre). Único grau de liberdade que
+ * sobra pro operador é o Corredor — Distância é sempre derivada dele pra manter esse valor fixo (ver
+ * distanciaDerivada). Sempre positivo (nunca null), pra sempre existir um espaçamento válido.
  */
-function calcularEspacamentoPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): { cova: string; corredor: string } {
-  const padrao = { cova: '50', corredor: '50' };
+function covasM2Alvo(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): number {
   const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
-  if (maxCovasM2 !== null && maxCovasM2 > 0) {
-    const ladoCm = Math.ceil(Math.sqrt(10000 / maxCovasM2));
-    if (ladoCm > 0) return { cova: String(ladoCm), corredor: String(ladoCm) };
-  }
+  if (maxCovasM2 !== null && maxCovasM2 > 0) return maxCovasM2;
   const densidade = resolverDensidadeBase(laudo.nomeProduto, produtos);
   const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
-  if (densidade === null || densidade <= 0 || maxPlantulasCova === null || maxPlantulasCova <= 0) return padrao;
-  const covasPorM2 = densidade / maxPlantulasCova;
-  if (covasPorM2 <= 0) return padrao;
-  const ladoCm = Math.ceil(Math.sqrt(10000 / covasPorM2));
-  return ladoCm > 0 ? { cova: String(ladoCm), corredor: String(ladoCm) } : padrao;
+  if (densidade !== null && densidade > 0 && maxPlantulasCova !== null && maxPlantulasCova > 0) {
+    const covasPorM2 = densidade / maxPlantulasCova;
+    if (covasPorM2 > 0) return covasPorM2;
+  }
+  return 4;
 }
 
-/**
- * Trava o Covas/m² no Máx. cadastrado (Parametrização) — nunca deixa passar do limite (competição entre
- * covas vizinhas), pode só ficar menor. É o ÚNICO ajuste automático que existe em Cova/Corredor (ver
- * atualizarEspacamento) — vale sempre que o produto tiver Covas/m² máximo cadastrado, independente de
- * ter ou não Máx. de plântulas/cova (são 2 cadastros independentes). Ajusta `campoAjustavel` (o campo
- * que não acabou de ser digitado) pra trazer o produto Cova×Corredor de volta ao mínimo permitido —
- * nunca mexe no valor que o operador acabou de digitar.
- */
-function limitarCovasM2(
-  laudo: ArquivoLaudo,
-  produtos: ProdutoParametrizacao[],
-  item: Pick<ItemGuia, 'cova' | 'corredor'>,
-  patch: Partial<ItemGuia>,
-  campoAjustavel: CampoEspacamento,
-): void {
-  const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
-  if (maxCovasM2 === null || maxCovasM2 <= 0) return;
-  const cova = paraNumero(patch.cova ?? item.cova);
-  const corredor = paraNumero(patch.corredor ?? item.corredor);
-  if (cova === null || cova <= 0 || corredor === null || corredor <= 0) return;
-  if (10000 / (cova * corredor) <= maxCovasM2) return;
-  const fixo = campoAjustavel === 'corredor' ? cova : corredor;
-  // Arredonda pra CIMA — garante que o produto final não fica menor que o mínimo permitido (arredondar
-  // pra baixo poderia, por causa do centímetro fechado, deixar passar do limite de novo).
-  patch[campoAjustavel] = String(Math.ceil(10000 / (maxCovasM2 * fixo)));
+/** Corredor padrão (cm) ao adicionar o produto — grade quadrada (lado = √(10000 ÷ Covas/m² alvo)), arredondado pra cima. Só o PONTO DE PARTIDA — o operador ajusta o Corredor livremente depois, Distância acompanha sozinha (ver distanciaDerivada). */
+function corredorPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): string {
+  const lado = Math.ceil(Math.sqrt(10000 / covasM2Alvo(laudo, produtos)));
+  return String(lado > 0 ? lado : 50);
+}
+
+/** Distância (cm) — SEMPRE derivada do Corredor pra manter o Covas/m² travado (ver covasM2Alvo): Distância = 10000 ÷ (Corredor × Covas/m² alvo). Nunca editável, nunca guardada — impossível o espaçamento "descolar" do alvo parametrizado. Null com Corredor inválido. */
+function distanciaDerivada(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, corredorTexto: string, produtos: ProdutoParametrizacao[]): number | null {
+  const corredor = paraNumero(corredorTexto);
+  if (corredor === null || corredor <= 0) return null;
+  return 10000 / (corredor * covasM2Alvo(laudo, produtos));
 }
 
 /**
@@ -230,13 +202,15 @@ function limitarCovasM2(
  * pra semeadura contínua, não bate certo com competição dentro de uma cova)
  * — quem manda é o Máx. de plântulas/cova e o Covas/m² máximo cadastrados
  * (Parametrização): Sementes/cova mira o Máx. direto (ver sementesPorCovaAlvo)
- * e o espaçamento vem do Covas/m² (ver calcularEspacamentoPadrao); a
- * densidade final (Covas/m² × Máx./cova) é uma CONSEQUÊNCIA, pode ficar
- * abaixo da Densidade cadastrada de propósito. Sem esses 2 campos
- * cadastrados, Covas cai no cálculo antigo (via Densidade, igual A Lanço).
- * Em qualquer caso, PMS só entra DEPOIS, pra converter Sementes/m² em kg/ha
- * (peso); sem PMS, kg/ha, Peso e Sacos ficam pendentes, mas Sementes/m²/cova
- * continuam saindo.
+ * e o Covas/m² fica TRAVADO no valor cadastrado (ver covasM2Alvo), nunca
+ * editável — só o Corredor é livre, Distância é sempre derivada dele pra
+ * manter esse travamento (ver distanciaDerivada). A densidade final
+ * (Covas/m² × Máx./cova) é uma CONSEQUÊNCIA, pode ficar abaixo da Densidade
+ * cadastrada de propósito. Sem os 2 campos cadastrados, Covas cai no cálculo
+ * antigo (via Densidade, igual A Lanço), mas o Corredor continua sendo o
+ * único campo editável. Em qualquer caso, PMS só entra DEPOIS, pra converter
+ * Sementes/m² em kg/ha (peso); sem PMS, kg/ha, Peso e Sacos ficam pendentes,
+ * mas Sementes/m²/cova continuam saindo.
  *
  * Peso do saco vem da Tabela de Preço (módulo Precificação), casando o
  * produto do laudo pelo nome com um produto cadastrado lá — só usado por
@@ -304,10 +278,6 @@ export function GuiaPlantioModal({
       // grupo) — só o ponto de partida do item, o operador ainda troca à
       // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
       const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
-      // Espaçamento de partida: 50×50 (4 covas/m²), ou o que o Covas/m² máximo cadastrado exigir (ver
-      // calcularEspacamentoPadrao) — Sementes/cova (ou Peso/cova) não é guardado, é sempre recalculado ao
-      // vivo pro espaçamento atual (ver sementesCovaAtual).
-      const { cova, corredor } = calcularEspacamentoPadrao(a, produtos);
       return [
         ...prev,
         {
@@ -317,8 +287,9 @@ export function GuiaPlantioModal({
           // seguida.
           area: '1',
           modo: modoPadrao,
-          cova,
-          corredor,
+          // Ponto de partida do Corredor (ver corredorPadrao) — Distância nunca é guardada, é sempre
+          // derivada dele pra manter o Covas/m² travado no alvo parametrizado (ver distanciaDerivada).
+          corredor: corredorPadrao(a, produtos),
         },
       ];
     });
@@ -340,29 +311,9 @@ export function GuiaPlantioModal({
     setItens((prev) => prev.map((it) => (it.laudoId === laudoId ? { ...it, ...patch } : it)));
   }
 
-  /**
-   * Cova e Corredor são 2 campos totalmente INDEPENDENTES entre si e de Sementes/cova — editar um nunca
-   * recalcula o outro nem mexe na quantidade de sementes. O ÚNICO ajuste automático é o teto: se o
-   * produto tiver Covas/m² máximo cadastrado (Parametrização) e o valor digitado ultrapassar esse
-   * limite, o campo NÃO editado agora sobe sozinho o suficiente pra voltar exatamente a ele (ver
-   * limitarCovasM2) — nunca mexe no valor que acabou de ser digitado, e nunca aperta mais que o
-   * necessário (pode ficar mais espaçado que o teto à vontade, só não mais apertado).
-   */
-  function atualizarEspacamento(laudo: ArquivoLaudo, item: ItemGuia, campo: CampoEspacamento, valorTexto: string) {
-    const patch: Partial<ItemGuia> = { [campo]: valorTexto };
-    const outroCampo: CampoEspacamento = campo === 'cova' ? 'corredor' : 'cova';
-    limitarCovasM2(laudo, produtos, item, patch, outroCampo);
-    atualizarItem(item.laudoId, patch);
-  }
-
-  /**
-   * Volta Cova e Corredor pro ponto de partida — o mesmo cálculo de quando o produto foi adicionado (ver
-   * calcularEspacamentoPadrao) — descartando qualquer ajuste manual (Sementes/cova acompanha sozinha,
-   * já que é sempre recalculada ao vivo, nunca guardada). Escape hatch pra quando o espaçamento ficou
-   * numa combinação confusa e o operador só quer recomeçar daquele item.
-   */
-  function restaurarEspacamento(laudo: ArquivoLaudo, item: ItemGuia) {
-    atualizarItem(item.laudoId, calcularEspacamentoPadrao(laudo, produtos));
+  /** Corredor é o único campo editável do espaçamento — Distância acompanha sozinha (derivada, ver distanciaDerivada) pra manter o Covas/m² sempre travado no alvo parametrizado; impossível o espaçamento fugir dele. */
+  function atualizarCorredor(item: ItemGuia, valorTexto: string) {
+    atualizarItem(item.laudoId, { corredor: valorTexto });
   }
 
   /**
@@ -405,14 +356,14 @@ export function GuiaPlantioModal({
   function calcularResultado(laudo: ArquivoLaudo, item: ItemGuia) {
     const fatorModo = fatorDe(fatores, item.modo);
     const fatorCondicaoItem = fatorCondicao;
-    const covasPorM2 = item.modo === 'linha_cova' ? calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor)) : null;
+    const covasPorM2 = item.modo === 'linha_cova' ? covasM2Alvo(laudo, produtos) : null;
     let kgPorHa: number | null;
     let sementesPorM2: number | null;
     if (item.modo === 'linha_cova') {
-      // Em Covas, kg/ha vem do espaçamento atual e da Sementes/cova travada (Covas/m² × Sementes/cova ×
+      // Em Covas, kg/ha vem do Covas/m² travado e da Sementes/cova travada (Covas/m² × Sementes/cova ×
       // PMS) — nunca só da Densidade (que funciona bem pra "A Lanço", mas em Covas o espaçamento pode
       // não bater a Densidade cadastrada de propósito, ver Máx./cova e Covas/m² na Parametrização).
-      const sementesCova = sementesCovaAtual(laudo, item, produtos, fatorModo, fatorCondicaoItem);
+      const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem);
       sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
     } else {
@@ -439,9 +390,9 @@ export function GuiaPlantioModal({
 
   /**
    * Taxa de Semeadura (kg/ha) nas outras 2 condições (não a selecionada agora) — só informativo, pra
-   * comparar sem precisar trocar a condição global. Em Covas, usa o espaçamento ATUAL do card (fixo,
-   * não muda com a condição — ver useEffect acima) com a Sementes/cova ALVO de cada condição (ver
-   * sementesPorCovaAlvo), consistente com o que calcularResultado mostra pra condição selecionada.
+   * comparar sem precisar trocar a condição global. Em Covas, usa o Covas/m² travado (fixo, não muda
+   * com a condição) com a Sementes/cova ALVO de cada condição (ver sementesPorCovaAlvo), consistente com
+   * o que calcularResultado mostra pra condição selecionada.
    */
   function kgPorHaOutrasCondicoes(laudo: ArquivoLaudo, item: ItemGuia): { rotulo: string; kgPorHa: number | null }[] {
     const fatorModo = fatorDe(fatores, item.modo);
@@ -451,7 +402,7 @@ export function GuiaPlantioModal({
         kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorDe(fatores, o.valor)),
       }));
     }
-    const covasPorM2 = calcularCovasPorM2(paraNumero(item.cova), paraNumero(item.corredor));
+    const covasPorM2 = covasM2Alvo(laudo, produtos);
     const pms = pmsNumericoDoLaudo(laudo, produtos);
     return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
       const fatorCondicaoAlt = fatorDe(fatores, o.valor);
@@ -499,10 +450,16 @@ export function GuiaPlantioModal({
           totalSacos: r.sacos === null ? '—' : `${r.sacos} sacos`,
           sementesOuCovasLabel: item.modo === 'linha_cova' ? 'Covas/m²' : null,
           sementesOuCovasValor: item.modo === 'linha_cova' ? (r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)) : null,
-          espacamento: item.modo === 'linha_cova' ? `${item.cova || '—'}×${item.corredor || '—'} cm` : null,
+          espacamento:
+            item.modo === 'linha_cova'
+              ? (() => {
+                  const distancia = distanciaDerivada(laudo, item.corredor, produtos);
+                  return `${distancia === null ? '—' : formatarCovas(distancia)}×${item.corredor || '—'} cm`;
+                })()
+              : null,
           sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sementes/cova') : null,
           sementesPorCovaValor:
-            item.modo === 'linha_cova' ? formatarSementesCovaAtual(laudo, item, produtos, fatorDe(fatores, item.modo), fatorCondicao) || '—' : null,
+            item.modo === 'linha_cova' ? formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao) || '—' : null,
         },
       ];
     });
@@ -712,69 +669,42 @@ export function GuiaPlantioModal({
                       const pesoPorCova = precisaPesoPorCova(laudo);
                       const pms = pmsNumericoDoLaudo(laudo, produtos);
                       const semPmsParaPeso = pesoPorCova && pms === null;
-                      // Covas/m² "ideal alcançável" — o mesmo valor que o espaçamento padrão (50×50 ou
-                      // calcularEspacamentoPadrao) já entrega de cara, arredondado pro centímetro fechado
-                      // (nunca dá pra bater o Máx./cova em cheio, só chegar perto). Abaixo disso é
-                      // espaçamento mais aberto que o recomendado — às vezes de propósito (ponta de
-                      // consorciação), mas o operador precisa notar que a densidade caiu.
-                      const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
-                      const idealCovasM2 =
-                        maxCovasM2 !== null && maxCovasM2 > 0
-                          ? (() => {
-                              const lado = Math.ceil(Math.sqrt(10000 / maxCovasM2));
-                              return 10000 / (lado * lado);
-                            })()
-                          : null;
-                      const abaixoDoIdeal = idealCovasM2 !== null && r.covasPorM2 !== null && r.covasPorM2 < idealCovasM2 - 1e-9;
+                      const distancia = distanciaDerivada(laudo, item.corredor, produtos);
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
-                              <input
-                                value={item.cova}
-                                onChange={(e) => atualizarEspacamento(laudo, item, 'cova', e.target.value)}
-                                inputMode="decimal"
-                                title="Independente do Corredor — só ajusta sozinho se ultrapassar o Covas/m² máximo cadastrado"
-                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
-                              />
+                              <p
+                                title="Travada — sempre derivada do Corredor pra manter o Covas/m² no alvo parametrizado"
+                                className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
+                              >
+                                {distancia === null ? '—' : formatarCovas(distancia)}
+                              </p>
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
                               <input
                                 value={item.corredor}
-                                onChange={(e) => atualizarEspacamento(laudo, item, 'corredor', e.target.value)}
+                                onChange={(e) => atualizarCorredor(item, e.target.value)}
                                 inputMode="decimal"
-                                title="Independente da Distância — só ajusta sozinho se ultrapassar o Covas/m² máximo cadastrado"
+                                title="Único campo editável do espaçamento — Distância acompanha sozinha pra manter o Covas/m² travado"
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sementes/cova'}</p>
                               <p
-                                title="Travada — sempre a quantidade ideal parametrizada pra Condição/Modo atuais; só o espaçamento é ajustável"
+                                title="Travada — sempre a quantidade ideal parametrizada pra Condição/Modo atuais"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
-                                {formatarSementesCovaAtual(laudo, item, produtos, fatorDe(fatores, item.modo), fatorCondicao) || '—'}
+                                {formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao) || '—'}
                               </p>
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>
                             <div>
-                              <div className="flex items-center gap-1">
-                                <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
-                                <button
-                                  type="button"
-                                  onClick={() => restaurarEspacamento(laudo, item)}
-                                  title="Restaurar espaçamento e Sementes/cova pra configuração inicial"
-                                  className="text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
-                                >
-                                  <RotateCcw size={10} />
-                                </button>
-                              </div>
-                              <p
-                                title={abaixoDoIdeal ? `Espaçamento mais aberto que o recomendado — adensamento ideal seria ~${formatarCovas(idealCovasM2 as number)} covas/m²` : undefined}
-                                className={`border border-transparent px-1.5 py-1 text-xs font-medium ${abaixoDoIdeal ? 'text-bad' : 'text-[var(--color-text)]'}`}
-                              >
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
+                              <p title="Travado — sempre o alvo parametrizado" className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
                                 {r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)}
                               </p>
                             </div>
