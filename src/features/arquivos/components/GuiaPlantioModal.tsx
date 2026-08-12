@@ -711,6 +711,11 @@ export function GuiaPlantioModal({
                       const pms = pmsNumericoDoLaudo(laudo, produtos);
                       const semPmsParaPeso = pesoPorCova && pms === null;
                       const distancia = distanciaDerivada(laudo, item.corredor, produtos);
+                      const sementesCovaNum = sementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, distancia);
+                      // Sementes por metro linear de linha (covas por metro × Sementes/cova) — só faz sentido
+                      // pra plantas unitárias (Milho, Sorgo), onde é assim que o operador calibra a plantadeira,
+                      // mais direto que "Sementes/cova" (quase sempre 1) ou "Covas/m²" (área, não linha).
+                      const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -743,10 +748,21 @@ export function GuiaPlantioModal({
                               </p>
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
                               <p title="Travado — sempre o alvo parametrizado" className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
                                 {r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Sementes/m (linear)</p>
+                              <p
+                                title="Sementes por metro linear de linha — útil pra calibrar a plantadeira em Milho/Sorgo"
+                                className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
+                              >
+                                {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
                               </p>
                             </div>
                           </div>
