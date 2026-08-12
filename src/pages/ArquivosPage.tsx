@@ -158,6 +158,8 @@ export function ArquivosPage() {
     indiceSobrevivencia: string;
     maxPlantulasCova: string;
     maxCovasM2: string;
+    perdaMedia: string;
+    perdaBaixa: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;

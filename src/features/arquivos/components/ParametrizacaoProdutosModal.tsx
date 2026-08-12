@@ -29,6 +29,8 @@ interface ParametrizacaoProdutosModalProps {
     indiceSobrevivencia: string;
     maxPlantulasCova: string;
     maxCovasM2: string;
+    perdaMedia: string;
+    perdaBaixa: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
@@ -273,8 +275,9 @@ export function ParametrizacaoProdutosModal({
           <p className="px-3 text-[11px] text-[var(--color-text-soft)]">
             Grupo calculado automaticamente dos laudos importados (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Em modo Covas, o
             espaçamento padrão do Guia de Plantio vem de Máx/cova (plântulas estabelecidas, pós-perdas, que cabem numa mesma cova) e Cov/m² (covas por m² que a cultivar aguenta) — a Densidade não é
-            mais o alvo em Covas (só continua valendo pra "A Lanço"); sem os 2 campos, cai no cálculo por Densidade de antes, ou no 50×50 fixo. Margem% decide o arredondamento de sacos no Guia de
-            Plantio (até essa % de saco faltando arredonda pra baixo, acima pra cima) — 25% se em branco.
+            mais o alvo em Covas (só continua valendo pra "A Lanço"); sem os 2 campos, cai no cálculo por Densidade de antes, ou no 50×50 fixo. Perda Média%/Baixa% sobrepõe, só pra esse produto, o
+            fator global de perda das Condições de Implantação (aba Plantio) — em branco, usa o valor global. Margem% decide o arredondamento de sacos no Guia de Plantio (até essa % de saco faltando
+            arredonda pra baixo, acima pra cima) — 25% se em branco.
           </p>
           <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
@@ -284,6 +287,8 @@ export function ParametrizacaoProdutosModal({
               <span className="w-16 shrink-0 text-center">Sobrev%</span>
               <span className="w-16 shrink-0 text-center">Máx/cova</span>
               <span className="w-16 shrink-0 text-center">Cov/m²</span>
+              <span className="w-16 shrink-0 text-center">Perda Méd%</span>
+              <span className="w-16 shrink-0 text-center">Perda Baix%</span>
               <span className="w-[74px] shrink-0 text-center">Plantio</span>
               <span className="w-16 shrink-0 text-center">Margem%</span>
               <span className="w-56 shrink-0 text-center">Observação (selo)</span>
@@ -297,6 +302,8 @@ export function ParametrizacaoProdutosModal({
                 indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
                 maxPlantulasCova: existente?.maxPlantulasCova ?? '',
                 maxCovasM2: existente?.maxCovasM2 ?? '',
+                perdaMedia: existente?.perdaMedia ?? '',
+                perdaBaixa: existente?.perdaBaixa ?? '',
                 modoPlantio: existente?.modoPlantio ?? null,
                 margemTolerancia: existente?.margemTolerancia ?? '',
                 observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
@@ -369,6 +376,26 @@ export function ParametrizacaoProdutosModal({
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxCovasM2) onSalvar({ ...camposAtuais, maxCovasM2: valor });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                <input
+                  defaultValue={camposAtuais.perdaMedia}
+                  placeholder="global"
+                  title="Perda (%) na Condição Média — em branco, usa o valor global"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.perdaMedia) onSalvar({ ...camposAtuais, perdaMedia: valor });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                <input
+                  defaultValue={camposAtuais.perdaBaixa}
+                  placeholder="global"
+                  title="Perda (%) na Condição Baixa — em branco, usa o valor global"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.perdaBaixa) onSalvar({ ...camposAtuais, perdaBaixa: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -481,9 +508,11 @@ export function ParametrizacaoProdutosModal({
               </div>
               <div className="space-y-1.5">
                 <p className="text-[11px] font-semibold text-[var(--color-text-soft)]">Condição de Implantação</p>
-                {condicoes.map((f) => (
-                  <LinhaFator key={f.chave} fator={f} onSalvar={onSalvarFator} onSalvarResumo={onSalvarResumoCondicao} />
-                ))}
+                {condicoes
+                  .filter((f) => f.chave !== 'ideal')
+                  .map((f) => (
+                    <LinhaFator key={f.chave} fator={f} onSalvar={onSalvarFator} onSalvarResumo={onSalvarResumoCondicao} />
+                  ))}
               </div>
             </div>
           </div>

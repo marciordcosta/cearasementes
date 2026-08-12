@@ -77,6 +77,10 @@ export interface ProdutoParametrizacao {
   maxPlantulasCova: string | null;
   /** Máximo de covas por m² que a cultivar aguenta (competição entre covas vizinhas) — em modo Covas, junto com maxPlantulasCova, passa a definir o espaçamento padrão do Guia de Plantio diretamente (em vez de derivar da Densidade, que só funciona bem pra "A Lanço"). Null = sem limite cadastrado, cai no cálculo por Densidade (ou no 50×50 fixo). */
   maxCovasM2: string | null;
+  /** Perda (%) na Condição "Média" — sobrepõe o fator GLOBAL (Parametrização > Plantio) só pra esse produto; a sensibilidade a condição ruim varia por cultivar (Milho aguenta bem menos que um capim já estabelecido). Texto cru (ex.: "25"); null cai no fator global. Ver resolverFatorCondicao. */
+  perdaMedia: string | null;
+  /** Igual perdaMedia, pra Condição "Baixa". "Ideal" não tem override — é sempre 0% de perda por definição. */
+  perdaBaixa: string | null;
   /** Modo de plantio padrão do grupo (Cova ou Lanço) — só pré-seleciona o modo ao adicionar o produto no Guia de Plantio, não entra em nenhum cálculo. Null = sem preferência cadastrada (o Guia cai no padrão dele, Lanço). */
   modoPlantio: 'cova' | 'lanco' | null;
   /** Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando ainda arredonda pra baixo, acima arredonda pra cima. Texto cru (ex.: "25"); null cai no padrão de 25%. */

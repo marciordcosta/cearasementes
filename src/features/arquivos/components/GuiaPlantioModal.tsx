@@ -11,6 +11,7 @@ import {
   resolverDensidadeBase,
   resolverMargemTolerancia,
   resolverMaxCovasM2,
+  resolverFatorCondicao,
   resolverMaxPlantulasCova,
   resolverModoPlantio,
   resolverPmsBaseTexto,
@@ -293,8 +294,6 @@ export function GuiaPlantioModal({
   const [itens, setItens] = useState<ItemGuia[]>([]);
   const [confirmarImpressaoAberto, setConfirmarImpressaoAberto] = useState(false);
 
-  const fatorCondicao = fatorDe(fatores, condicao);
-
   /**
    * Peso do pacote (kg) — prioriza o que o próprio laudo traz (Peso por
    * Embalagem do Boletim de Análise, ver interpretarConteudoLaudo.ts); sem
@@ -412,7 +411,7 @@ export function GuiaPlantioModal({
 
   function calcularResultado(laudo: ArquivoLaudo, item: ItemGuia) {
     const fatorModo = fatorDe(fatores, item.modo);
-    const fatorCondicaoItem = fatorCondicao;
+    const fatorCondicaoItem = resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores);
     const covasPorM2 = item.modo === 'linha_cova' ? covasM2Alvo(laudo, produtos) : null;
     let kgPorHa: number | null;
     let sementesPorM2: number | null;
@@ -422,7 +421,10 @@ export function GuiaPlantioModal({
       // não bater a Densidade cadastrada de propósito, ver Máx./cova e Covas/m² na Parametrização).
       const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
       const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
-      sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
+      // Sementes/m² tem que bater EXATO com o que o card mostra em Sem./cova (Math.round, ver
+      // formatarSementesCovaAtual) × Covas/m² — senão o operador confere na mão (1 semente/cova × Covas/m²)
+      // e o número não fecha. kg/ha continua com a Sementes/cova em ponto flutuante (mais precisa pro peso).
+      sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * Math.round(sementesCova) : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
     } else {
       kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
@@ -457,14 +459,14 @@ export function GuiaPlantioModal({
     if (item.modo !== 'linha_cova') {
       return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => ({
         rotulo: o.rotulo,
-        kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorDe(fatores, o.valor)),
+        kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores)),
       }));
     }
     const covasPorM2 = covasM2Alvo(laudo, produtos);
     const pms = pmsNumericoDoLaudo(laudo, produtos);
     const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
     return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
-      const fatorCondicaoAlt = fatorDe(fatores, o.valor);
+      const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
       const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual);
       return { rotulo: o.rotulo, kgPorHa: kgPorHaDeSementesCova(covasPorM2, sementesCova, pms) };
     });
@@ -514,7 +516,7 @@ export function GuiaPlantioModal({
           sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sem./cova') : null,
           sementesPorCovaValor:
             item.modo === 'linha_cova'
-              ? formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, espacamentoItem) || '—'
+              ? formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores), espacamentoItem) || '—'
               : null,
         },
       ];
@@ -727,7 +729,7 @@ export function GuiaPlantioModal({
                       const semPmsParaPeso = pesoPorCova && pms === null;
                       const distancia = distanciaDerivada(laudo, item.corredor, produtos);
                       const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
-                      const sementesCovaNum = sementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, espacamentoAtual);
+                      const sementesCovaNum = sementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores), espacamentoAtual);
                       // Sementes por metro linear de linha (covas por metro × Sementes/cova) — só faz sentido
                       // pra plantas unitárias (Milho, Sorgo), onde é assim que o operador calibra a plantadeira,
                       // mais direto que "Sementes/cova" (quase sempre 1) ou "Covas/m²" (área, não linha).
@@ -762,7 +764,7 @@ export function GuiaPlantioModal({
                                 title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, ajustada conforme o mais apertado entre Distância e Corredor se afasta do ideal do produto (1%/cm, até 40%): desconta se mais apertado (ou acrescenta se mais aberto, só quando o produto tem 1 planta/cova)"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
-                                {formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, espacamentoAtual) || '—'}
+                                {formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores), espacamentoAtual) || '—'}
                               </p>
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>

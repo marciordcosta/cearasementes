@@ -1,6 +1,6 @@
 import type { Produto } from '@/features/pricing/types';
 import { paraNumero } from './metricas';
-import type { ArquivoLaudo, ProdutoParametrizacao } from './types';
+import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from './types';
 
 /**
  * Compara nomes de produto ignorando acento, caixa e espaçamento — usado em
@@ -80,6 +80,26 @@ export function resolverMaxPlantulasCova(nomeProduto: string, produtos: ProdutoP
 /** Máximo de covas por m² que a cultivar aguenta, como número — junto com Máx. de plântulas/cova, define o espaçamento padrão do Guia de Plantio em modo Covas (ver calcularEspacamentoPadrao em GuiaPlantioModal.tsx). Null se não cadastrado. */
 export function resolverMaxCovasM2(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
   return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxCovasM2 ?? null);
+}
+
+/**
+ * Fator de perda (multiplicador 0–1) pra uma Condição de Implantação do Guia de Plantio — prioriza o
+ * valor cadastrado POR PRODUTO (Parametrização, ex.: Milho aguenta bem menos variação de condição que um
+ * capim já estabelecido); sem isso, cai no fator GLOBAL de sempre (arquivos_fatores_plantio). "Ideal" não
+ * tem override em lugar nenhum — é sempre 0% de perda (fator 1) por definição.
+ */
+export function resolverFatorCondicao(
+  nomeProduto: string,
+  condicao: 'ideal' | 'media' | 'baixa',
+  produtos: ProdutoParametrizacao[],
+  fatoresGlobais: FatorPlantio[],
+): number {
+  if (condicao === 'ideal') return 1;
+  const produto = encontrarProduto(nomeProduto, produtos);
+  const perdaTexto = condicao === 'media' ? produto?.perdaMedia : produto?.perdaBaixa;
+  const perdaProduto = paraNumero(perdaTexto ?? null);
+  if (perdaProduto !== null) return 1 - perdaProduto / 100;
+  return paraNumero(fatoresGlobais.find((f) => f.chave === condicao)?.fator ?? null) ?? 1;
 }
 
 /** Modo de plantio padrão do produto (Cova ou Lanço) — só pré-seleciona o modo ao adicionar no Guia de Plantio, nunca entra em cálculo. Null = sem preferência cadastrada. */

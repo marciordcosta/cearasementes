@@ -520,6 +520,8 @@ export interface Database {
           indice_sobrevivencia: string | null;
           max_plantulas_cova: string | null;
           max_covas_m2: string | null;
+          perda_media: string | null;
+          perda_baixa: string | null;
           modo_plantio: string | null;
           margem_tolerancia: string | null;
           observacao_etiqueta: string | null;
