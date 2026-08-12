@@ -72,6 +72,11 @@ export function resolverIndiceSobrevivencia(nomeProduto: string, produtos: Produ
   return percentual === null ? null : percentual / 100;
 }
 
+/** Máximo de plântulas estabelecidas (pós-perdas) por cova, como número — usado pra calcular o espaçamento padrão do Guia de Plantio em modo Covas (ver calcularEspacamentoPadrao em GuiaPlantioModal.tsx). Null se não cadastrado. */
+export function resolverMaxPlantulasCova(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasCova ?? null);
+}
+
 /** Modo de plantio padrão do produto (Cova ou Lanço) — só pré-seleciona o modo ao adicionar no Guia de Plantio, nunca entra em cálculo. Null = sem preferência cadastrada. */
 export function resolverModoPlantio(nomeProduto: string, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | null {
   return encontrarProduto(nomeProduto, produtos)?.modoPlantio ?? null;

@@ -27,6 +27,7 @@ interface ParametrizacaoProdutosModalProps {
     pmsBase: string;
     densidadeBase: string;
     indiceSobrevivencia: string;
+    maxPlantulasCova: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
@@ -273,8 +274,9 @@ export function ParametrizacaoProdutosModal({
         {aba === 'produtos' && (
         <div className="space-y-3">
           <p className="px-3 text-[11px] text-[var(--color-text-soft)]">
-            Grupo calculado automaticamente dos laudos importados (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Margem% decide o
-            arredondamento de sacos no Guia de Plantio (até essa % de saco faltando arredonda pra baixo, acima pra cima) — 25% se em branco.
+            Grupo calculado automaticamente dos laudos importados (1ª + 3ª palavra do nome, pulando a variedade do meio) — só preencha PMS, Densidade e Sobrevivência de cada linha. Máx/cova (plântulas
+            estabelecidas, pós-perdas, que cabem numa mesma cova) define o espaçamento padrão do Guia de Plantio em modo Covas — em branco, cai no 50×50 fixo. Margem% decide o arredondamento de sacos
+            no Guia de Plantio (até essa % de saco faltando arredonda pra baixo, acima pra cima) — 25% se em branco.
           </p>
           <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
@@ -282,6 +284,7 @@ export function ParametrizacaoProdutosModal({
               <span className="w-16 shrink-0 text-center">PMS</span>
               <span className="w-16 shrink-0 text-center">Densid.</span>
               <span className="w-16 shrink-0 text-center">Sobrev%</span>
+              <span className="w-16 shrink-0 text-center">Máx/cova</span>
               <span className="w-[74px] shrink-0 text-center">Plantio</span>
               <span className="w-16 shrink-0 text-center">Margem%</span>
               <span className="w-56 shrink-0 text-center">Observação (selo)</span>
@@ -293,6 +296,7 @@ export function ParametrizacaoProdutosModal({
                 pmsBase: existente?.pmsBase ?? '',
                 densidadeBase: existente?.densidadeBase ?? '',
                 indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                maxPlantulasCova: existente?.maxPlantulasCova ?? '',
                 modoPlantio: existente?.modoPlantio ?? null,
                 margemTolerancia: existente?.margemTolerancia ?? '',
                 observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
@@ -342,6 +346,16 @@ export function ParametrizacaoProdutosModal({
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                <input
+                  defaultValue={camposAtuais.maxPlantulasCova}
+                  placeholder="50x50"
+                  title="Máximo de plântulas estabelecidas (pós-perdas) numa mesma cova — define o espaçamento padrão do Guia de Plantio; em branco, cai no 50×50 fixo"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />

@@ -5,7 +5,15 @@ import type { Produto } from '@/features/pricing/types';
 import { calcularCovasPorM2, calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2 } from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
-import { encontrarProdutoPreco, normalizarNome, resolverMargemTolerancia, resolverModoPlantio, resolverPmsBaseTexto } from '../parametrizacaoProdutos';
+import {
+  encontrarProdutoPreco,
+  normalizarNome,
+  resolverDensidadeBase,
+  resolverMargemTolerancia,
+  resolverMaxPlantulasCova,
+  resolverModoPlantio,
+  resolverPmsBaseTexto,
+} from '../parametrizacaoProdutos';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 import { ChecklistCondicaoModal } from './ChecklistCondicaoModal';
 
@@ -173,6 +181,27 @@ function calcularValorCovaParaEspacamentoFixo(
 }
 
 /**
+ * Espaçamento padrão (Cova × Corredor, em grade quadrada) ao adicionar um produto em modo Covas —
+ * quando o produto tem Máx. de plântulas/cova cadastrado (Parametrização), calcula o espaçamento que
+ * entrega EXATAMENTE esse máximo na Densidade alvo (Covas/m² = Densidade ÷ Máx.), em vez do 50×50
+ * fixo: gêneros que perfilham (Panicum/Brachiaria) toleram mais plântulas por cova que plantas
+ * unitárias (Milho/Sorgo), então o espaçamento "certo" não é o mesmo pra todo produto. Sem Densidade
+ * ou sem Máx. cadastrado, cai no 50×50 de sempre. Só o PONTO DE PARTIDA muda — o operador segue livre
+ * pra ajustar Cova/Corredor manualmente depois, e isso não se repete sozinho (ver
+ * calcularValorCovaParaEspacamentoFixo, que mantém o espaçamento intocado daí em diante).
+ */
+function calcularEspacamentoPadrao(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): { cova: string; corredor: string } {
+  const padrao = { cova: '50', corredor: '50' };
+  const densidade = resolverDensidadeBase(laudo.nomeProduto, produtos);
+  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
+  if (densidade === null || densidade <= 0 || maxPlantulasCova === null || maxPlantulasCova <= 0) return padrao;
+  const covasPorM2 = densidade / maxPlantulasCova;
+  if (covasPorM2 <= 0) return padrao;
+  const ladoCm = Math.round(Math.sqrt(10000 / covasPorM2));
+  return ladoCm > 0 ? { cova: String(ladoCm), corredor: String(ladoCm) } : padrao;
+}
+
+/**
  * Guia de Plantio — busca ancorada direto nos laudos (não mais na Tabela de
  * Preço): o operador digita uma palavra-chave, o sistema filtra os laudos
  * cujo nome bate e agrupa por nome de produto. Escolher um lote empilha um
@@ -253,10 +282,10 @@ export function GuiaPlantioModal({
       // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
       const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
       const fatorModo = fatorDe(fatores, modoPadrao);
-      // Espaçamento sempre começa 50×50 (4 covas/m²) — Sementes/cova (ou Peso/cova) é calculado PARA
-      // esse espaçamento fixo, nunca o contrário (ver calcularValorCovaParaEspacamentoFixo).
-      const cova = '50';
-      const corredor = '50';
+      // Espaçamento de partida: 50×50 (4 covas/m²), ou o que o Máx. de plântulas/cova cadastrado exigir
+      // pra essa Densidade (ver calcularEspacamentoPadrao) — Sementes/cova (ou Peso/cova) é calculado
+      // PARA esse espaçamento, nunca o contrário (ver calcularValorCovaParaEspacamentoFixo).
+      const { cova, corredor } = calcularEspacamentoPadrao(a, produtos);
       const sementesCova = calcularValorCovaParaEspacamentoFixo(a, { cova, corredor }, produtos, fatorModo, fatorCondicao);
       return [
         ...prev,
