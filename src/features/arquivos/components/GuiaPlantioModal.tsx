@@ -171,9 +171,9 @@ function sementesComAjustePorDistancia(sementesPadrao: number, espacamentoAtual:
 function sementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, espacamentoAtual: number | null): number | null {
   const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
   if (maxPlantulasCova !== null && maxPlantulasCova <= 1) {
-    const teto = tetoCovasM2(laudo, produtos);
-    const totalSementesM2 = totalSementesM2Alvo(laudo, produtos, fatorModo, fatorCondicaoValor, teto, maxPlantulasCova);
-    return totalSementesM2 === null ? null : sementesPorCovaInteira(totalSementesM2, teto, maxPlantulasCova);
+    const referencia = tetoCovasM2(laudo, produtos);
+    const totalSementesM2 = totalSementesM2Alvo(laudo, produtos, fatorModo, fatorCondicaoValor, referencia, maxPlantulasCova);
+    return totalSementesM2 === null ? null : sementesPorCovaInteira(totalSementesM2, referencia, maxPlantulasCova);
   }
   let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (sementesCova === null) {
@@ -204,11 +204,13 @@ function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number |
 }
 
 /**
- * Teto de Covas/m² — cadeia de fallback de sempre: prioriza o Máx. cadastrado (Parametrização); sem
+ * Covas/m² cadastrado — cadeia de fallback de sempre: prioriza o Máx. cadastrado (Parametrização); sem
  * isso, cai no cálculo antigo (Densidade ÷ Máx. de plântulas/cova); sem nenhum dos dois, 4 (equivalente
  * ao 50×50 de sempre). Sempre positivo (nunca null). Em produtos de várias plantas/cova, ESSE já é o
- * Covas/m² alvo — travado, igual pra qualquer Condição (ver covasM2Alvo). Em produtos de 1 planta/cova,
- * é só o TETO: o alvo real varia com a Condição, mas nunca ultrapassa esse valor.
+ * Covas/m² alvo — travado, igual pra qualquer Condição (ver covasM2Alvo). Em produtos de 1 planta/cova, é
+ * só uma REFERÊNCIA (não um teto físico intransponível): o alvo real varia com a Condição, tentando
+ * ficar o mais próximo possível desse valor — pode passar um pouco quando essa for a opção mais próxima
+ * (ver sementesPorCovaInteira).
  */
 function tetoCovasM2(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): number {
   const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
@@ -223,45 +225,55 @@ function tetoCovasM2(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: Produto
 }
 
 /**
- * Total de sementes/m² necessário pra bater o Máx. de plântulas/cova em TODAS as covas do teto de
- * Covas/m² (ver tetoCovasM2), numa dada Germinação final — só usado em produtos de 1 planta/cova, antes
- * de decidir como dividir esse total entre densidade (Covas/m²) e sementes/cova (ver
- * sementesPorCovaInteira/covasM2Alvo). Null sem Germinação (VC/teste, Sobrevivência, Fatores).
+ * Total de sementes/m² necessário pra bater o Máx. de plântulas/cova em TODAS as covas na densidade de
+ * referência (Máx. Cov/m² cadastrado, ver tetoCovasM2), numa dada Germinação final — só usado em
+ * produtos de 1 planta/cova, antes de decidir como dividir esse total entre densidade (Covas/m²) e
+ * sementes/cova (ver sementesPorCovaInteira/covasM2Alvo). Null sem Germinação (VC/teste, Sobrevivência,
+ * Fatores).
  */
-function totalSementesM2Alvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, teto: number, maxPlantulasCova: number): number | null {
+function totalSementesM2Alvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, referencia: number, maxPlantulasCova: number): number | null {
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
-  return germinacaoFinal !== null && germinacaoFinal > 0 ? (teto * maxPlantulasCova * 100) / germinacaoFinal : null;
+  return germinacaoFinal !== null && germinacaoFinal > 0 ? (referencia * maxPlantulasCova * 100) / germinacaoFinal : null;
 }
 
 /**
- * Menor número INTEIRO de sementes/cova (fisicamente não dá pra plantar semente fracionada) que faz o
- * Total de sementes/m² necessário (ver totalSementesM2Alvo) caber dentro do teto de Covas/m² — o sistema
- * sempre prefere resolver só abrindo/fechando a densidade (ver covasM2Alvo); só sobe de 1 em 1 quando
- * nem no teto máximo de covas dá pra encaixar a necessidade da Condição com o número anterior.
+ * Número INTEIRO de sementes/cova (fisicamente não dá pra plantar semente fracionada) que faz a
+ * densidade resultante (Total de sementes/m² necessário ÷ N, ver totalSementesM2Alvo) ficar o mais
+ * PRÓXIMA possível da referência cadastrada (Máx. Cov/m² — é uma referência de quanto costuma plantar,
+ * não um teto físico intransponível: pode passar um pouco se for a opção mais próxima). Compara os 2
+ * candidatos ao redor do ponto onde a densidade bateria a referência em cheio — o de menos sementes/cova
+ * (densidade um pouco ACIMA da referência) contra o de mais sementes/cova (densidade um pouco ABAIXO) —
+ * e fica com quem chega mais perto. Nunca abaixo do Máx. de plântulas/cova (piso físico).
  */
-function sementesPorCovaInteira(totalSementesM2: number, teto: number, maxPlantulasCova: number): number {
-  return Math.max(maxPlantulasCova, Math.ceil(totalSementesM2 / teto));
+function sementesPorCovaInteira(totalSementesM2: number, referencia: number, maxPlantulasCova: number): number {
+  const nAlvo = totalSementesM2 / referencia;
+  const nMenos = Math.max(maxPlantulasCova, Math.floor(nAlvo));
+  const nMais = Math.max(maxPlantulasCova, Math.ceil(nAlvo));
+  if (nMenos === nMais) return nMenos;
+  const distMenos = Math.abs(totalSementesM2 / nMenos - referencia);
+  const distMais = Math.abs(totalSementesM2 / nMais - referencia);
+  return distMenos <= distMais ? nMenos : nMais;
 }
 
 /**
- * Covas/m² alvo. Em produtos de várias plantas/cova, é sempre o teto cadastrado (ver tetoCovasM2) —
- * travado, igual pra qualquer Condição, do jeito que já era. Em produtos de 1 planta/cova (Milho, Sorgo
- * — Máx./cova ≤ 1), a Condição não muda mais a Sementes/cova em si (sempre um número inteiro — não dá
- * pra plantar semente fracionada no mundo real, o plantador só executa "N sementes nesse espaçamento"):
- * o sistema tenta resolver só abrindo/fechando a densidade (dentro do teto — ver
- * sementesPorCovaInteira/totalSementesM2Alvo); só sobe pra 2+ sementes/cova quando nem no teto máximo dá
- * pra encaixar a necessidade da Condição com 1 — e aí a densidade relaxa de novo (menos covas cobrem a
- * mesma necessidade, já que cada uma carrega mais semente). Nunca ultrapassa o teto. Sempre positivo
- * (nunca null), pra sempre existir um espaçamento válido. Único grau de liberdade que sobra pro operador
- * é o Corredor — Distância é sempre derivada dele pra manter esse alvo (ver distanciaDerivada).
+ * Covas/m² alvo. Em produtos de várias plantas/cova, é sempre o cadastrado (ver tetoCovasM2) — travado,
+ * igual pra qualquer Condição, do jeito que já era. Em produtos de 1 planta/cova (Milho, Sorgo — Máx./cova
+ * ≤ 1), a Condição não muda mais a Sementes/cova em si (sempre um número inteiro — não dá pra plantar
+ * semente fracionada no mundo real, o plantador só executa "N sementes nesse espaçamento"): o sistema
+ * escolhe o N inteiro que deixa a densidade mais PRÓXIMA do Máx. Cov/m² cadastrado (referência, não teto
+ * — pode passar um pouco, ver sementesPorCovaInteira); só sobe pra 2+ sementes/cova quando isso fica mais
+ * perto da referência do que ficar em 1 — e aí a densidade cai de novo (menos covas cobrem a mesma
+ * necessidade, já que cada uma carrega mais semente). Sempre positivo (nunca null), pra sempre existir um
+ * espaçamento válido. Único grau de liberdade que sobra pro operador é o Corredor — Distância é sempre
+ * derivada dele pra manter esse alvo (ver distanciaDerivada).
  */
 function covasM2Alvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number {
-  const teto = tetoCovasM2(laudo, produtos);
+  const referencia = tetoCovasM2(laudo, produtos);
   const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
-  if (maxPlantulasCova === null || maxPlantulasCova > 1) return teto;
-  const totalSementesM2 = totalSementesM2Alvo(laudo, produtos, fatorModo, fatorCondicaoValor, teto, maxPlantulasCova);
-  if (totalSementesM2 === null) return teto;
-  return totalSementesM2 / sementesPorCovaInteira(totalSementesM2, teto, maxPlantulasCova);
+  if (maxPlantulasCova === null || maxPlantulasCova > 1) return referencia;
+  const totalSementesM2 = totalSementesM2Alvo(laudo, produtos, fatorModo, fatorCondicaoValor, referencia, maxPlantulasCova);
+  if (totalSementesM2 === null) return referencia;
+  return totalSementesM2 / sementesPorCovaInteira(totalSementesM2, referencia, maxPlantulasCova);
 }
 
 /** Corredor padrão (cm) ao adicionar o produto — grade quadrada (lado = √(10000 ÷ Covas/m² alvo pro Modo/Condição atuais)), arredondado pra cima. Só o PONTO DE PARTIDA — o operador ajusta o Corredor livremente depois, Distância acompanha sozinha (ver distanciaDerivada). */
