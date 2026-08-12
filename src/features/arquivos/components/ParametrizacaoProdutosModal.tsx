@@ -329,6 +329,7 @@ export function ParametrizacaoProdutosModal({
                 )}
                 <input
                   defaultValue={camposAtuais.pmsBase}
+                  title="Peso de Mil Sementes (g)"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor });
@@ -338,6 +339,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.densidadeBase}
                   placeholder="por m²"
+                  title="Densidade alvo (plântulas/m²)"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor });
@@ -347,6 +349,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.indiceSobrevivencia}
                   placeholder="ideal"
+                  title="Índice de Sobrevivência (%)"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor });
@@ -356,7 +359,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.maxPlantulasCova}
                   placeholder="8"
-                  title="Máximo de plântulas estabelecidas (pós-perdas) numa mesma cova"
+                  title="Máx. de plântulas por cova"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
@@ -366,7 +369,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.maxCovasM2}
                   placeholder="10"
-                  title="Máximo de covas por m² que a cultivar aguenta (competição entre covas vizinhas) — junto com Máx/cova, define o espaçamento padrão do Guia de Plantio em modo Covas"
+                  title="Máx. de covas por m²"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxCovasM2) onSalvar({ ...camposAtuais, maxCovasM2: valor });
@@ -376,7 +379,7 @@ export function ParametrizacaoProdutosModal({
                 <select
                   value={camposAtuais.modoPlantio ?? 'lanco'}
                   onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' })}
-                  title="Modo de plantio padrão — só pré-seleciona ao adicionar no Guia de Plantio"
+                  title="Modo de plantio padrão"
                   className={`w-[74px] shrink-0 ${campoClasse}`}
                 >
                   <option value="lanco">Lanço</option>
@@ -385,7 +388,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.margemTolerancia}
                   placeholder="25"
-                  title="Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando arredonda pra baixo, acima arredonda pra cima. 25% se em branco."
+                  title="Margem de tolerância (%) pra arredondar sacos"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.margemTolerancia) onSalvar({ ...camposAtuais, margemTolerancia: valor });
@@ -395,7 +398,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.observacaoEtiqueta}
                   placeholder="Ex.: PRODUTOR : RENASEM : GO - 02.647/2019"
-                  title="Texto livre impresso na linha Observação do Selo"
+                  title="Texto impresso no Selo"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.observacaoEtiqueta) onSalvar({ ...camposAtuais, observacaoEtiqueta: valor });
