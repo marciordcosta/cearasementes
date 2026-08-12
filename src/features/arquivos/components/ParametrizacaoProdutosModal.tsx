@@ -49,10 +49,7 @@ interface ParametrizacaoProdutosModalProps {
 
 const campoClasse = 'rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
 
-/** Opções fechadas de perda — inversamente, fator 1 = 0% de perda (potencial máximo). */
-const OPCOES_PERDA = [0, 25, 50, 75];
-
-/** O banco guarda o fator (multiplicador, ex.: "0,75"), mas aqui exibe/edita a PERDA em % (ex.: "25") — mais intuitivo que digitar um multiplicador. Perda% = (1 - fator) × 100, e volta: fator = 1 - perda%/100. */
+/** O banco guarda o fator (multiplicador, ex.: "0,75"), mas aqui exibe/edita a PERDA em % (ex.: "25") — mais intuitivo que digitar um multiplicador. Perda% = (1 - fator) × 100, e volta: fator = 1 - perda%/100. Preenchimento manual (não mais só as 4 opções fechadas de antes) — aceita qualquer valor entre 0 e 100. */
 function LinhaFator({
   fator,
   onSalvar,
@@ -64,26 +61,25 @@ function LinhaFator({
 }) {
   const fatorNumero = paraNumero(fator.fator);
   const perdaAtual = fatorNumero !== null ? Math.round((1 - fatorNumero) * 100) : 0;
-  const perdaMaisProxima = OPCOES_PERDA.reduce((maisProxima, opcao) => (Math.abs(opcao - perdaAtual) < Math.abs(maisProxima - perdaAtual) ? opcao : maisProxima), OPCOES_PERDA[0]);
 
   return (
     <div className="space-y-1 rounded-md bg-[var(--color-page)] px-3 py-1.5">
       <div className="flex items-center gap-2">
         <span className="flex-1 truncate text-sm text-[var(--color-text)]">{fator.rotulo}</span>
-        <select
-          value={perdaMaisProxima}
-          onChange={(e) => {
-            const perdaEscolhida = Number(e.target.value);
-            onSalvar(fator.chave, (1 - perdaEscolhida / 100).toFixed(2));
-          }}
-          className={`w-28 ${campoClasse}`}
-        >
-          {OPCOES_PERDA.map((p) => (
-            <option key={p} value={p}>
-              {p}%
-            </option>
-          ))}
-        </select>
+        <div className="flex w-28 items-center gap-1">
+          <input
+            defaultValue={perdaAtual}
+            inputMode="decimal"
+            title="Perda (%) — 0% = potencial máximo, sem redução"
+            onBlur={(e) => {
+              const perdaDigitada = paraNumero(e.target.value);
+              const perdaLimitada = Math.min(100, Math.max(0, perdaDigitada ?? 0));
+              onSalvar(fator.chave, (1 - perdaLimitada / 100).toFixed(2));
+            }}
+            className={`w-full text-right num ${campoClasse}`}
+          />
+          <span className="text-xs text-[var(--color-text-soft)]">%</span>
+        </div>
       </div>
       {onSalvarResumo && (
         <textarea
@@ -471,7 +467,7 @@ export function ParametrizacaoProdutosModal({
         <div className="space-y-4">
           <div className="space-y-2">
             <p className="text-xs text-[var(--color-text-soft)]">
-              Fator de perda (globais, não são por produto) — usados no Guia de Plantio pra corrigir o kg/ha conforme a forma de plantio escolhida. Escolha a perda em % (0% = potencial máximo, sem
+              Fator de perda (globais, não são por produto) — usados no Guia de Plantio pra corrigir o kg/ha conforme a forma de plantio escolhida. Digite a perda em % (0% = potencial máximo, sem
               redução). Nas condições, o Resumo é o texto discreto mostrado no Guia de Plantio ao escolher a opção.
             </p>
             <div className="grid grid-cols-2 gap-3">
