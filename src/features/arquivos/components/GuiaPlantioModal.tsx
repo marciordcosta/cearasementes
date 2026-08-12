@@ -149,6 +149,30 @@ function pmsNumericoDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, pr
 }
 
 /**
+ * Sementes/cova (ou Peso/cova) que bate a Densidade alvo NUM ESPAÇAMENTO FIXO (Cova × Corredor
+ * atuais, sem mexer neles) — usado quando quem muda é um fator EXTERNO à cova/corredor em si
+ * (Condição do plantio, Modo, ou ao adicionar o produto pela 1ª vez): a distância física entre covas
+ * é uma decisão do operador (equipamento, praticidade de campo) que não deve pular sozinha; o que
+ * compensa a Condição/Modo é a quantidade de semente/peso jogada em cada cova, não o espaçamento.
+ * Fica em branco quando falta algum dado (Densidade, Germinação, ou PMS no caso Tradicional).
+ */
+function calcularValorCovaParaEspacamentoFixo(
+  laudo: ArquivoLaudo,
+  espacamento: Pick<ItemGuia, 'cova' | 'corredor'>,
+  produtos: ProdutoParametrizacao[],
+  fatorModo: number,
+  fatorCondicaoValor: number,
+): string {
+  const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
+  const covasPorM2 = calcularCovasPorM2(paraNumero(espacamento.cova), paraNumero(espacamento.corredor));
+  const sementesCova = calcularSementesPorCova(sementesPorM2, covasPorM2);
+  if (sementesCova === null) return '';
+  if (!precisaPesoPorCova(laudo)) return String(Math.round(sementesCova));
+  const pms = pmsNumericoDoLaudo(laudo, produtos);
+  return pms !== null && pms > 0 ? formatarCovas((sementesCova * pms) / 1000) : '';
+}
+
+/**
  * Guia de Plantio — busca ancorada direto nos laudos (não mais na Tabela de
  * Preço): o operador digita uma palavra-chave, o sistema filtra os laudos
  * cujo nome bate e agrupa por nome de produto. Escolher um lote empilha um
@@ -229,17 +253,11 @@ export function GuiaPlantioModal({
       // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
       const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
       const fatorModo = fatorDe(fatores, modoPadrao);
-      const sementesPorM2Inicial = calcularSementesPorM2(a, produtos, fatorModo, fatorCondicao);
-      const covasPorM2Inicial = calcularCovasPorM2(50, 50);
-      const sementesCovaInicial = calcularSementesPorCova(sementesPorM2Inicial, covasPorM2Inicial);
-      // Sementes/cova é sempre o cálculo de partida; Peso/cova (Tradicional) converte esse alvo pra
-      // gramas via PMS pra já sugerir um valor — sem PMS cadastrado ainda, fica em branco (bloqueado até
-      // o operador digitar manualmente).
-      let valorCovaInicial: number | null = sementesCovaInicial;
-      if (sementesCovaInicial !== null && precisaPesoPorCova(a)) {
-        const pms = pmsNumericoDoLaudo(a, produtos);
-        valorCovaInicial = pms !== null && pms > 0 ? (sementesCovaInicial * pms) / 1000 : null;
-      }
+      // Espaçamento sempre começa 50×50 (4 covas/m²) — Sementes/cova (ou Peso/cova) é calculado PARA
+      // esse espaçamento fixo, nunca o contrário (ver calcularValorCovaParaEspacamentoFixo).
+      const cova = '50';
+      const corredor = '50';
+      const sementesCova = calcularValorCovaParaEspacamentoFixo(a, { cova, corredor }, produtos, fatorModo, fatorCondicao);
       return [
         ...prev,
         {
@@ -249,9 +267,9 @@ export function GuiaPlantioModal({
           // seguida.
           area: '1',
           modo: modoPadrao,
-          cova: '50',
-          corredor: '50',
-          sementesCova: valorCovaInicial === null ? '' : precisaPesoPorCova(a) ? formatarCovas(valorCovaInicial) : String(Math.round(valorCovaInicial)),
+          cova,
+          corredor,
+          sementesCova,
           ultimoCampoEspacamento: 'corredor',
         },
       ];
@@ -340,26 +358,26 @@ export function GuiaPlantioModal({
     atualizarItem(item.laudoId, patch);
   }
 
-  /** Trocar o modo (A Lanço ⇄ Covas) também muda o alvo de Sementes/m² (fator de perda diferente) — recalcula o espaçamento derivado na hora, junto com a troca. */
+  /**
+   * Trocar o modo (A Lanço ⇄ Covas) também muda o alvo de Sementes/m² (fator de perda diferente) —
+   * recalcula Sementes/cova (ou Peso/cova) na hora, junto com a troca, mantendo o espaçamento (Cova ×
+   * Corredor) exatamente como estava (ver calcularValorCovaParaEspacamentoFixo): é uma decisão física
+   * do operador, não deve pular sozinha só porque o modo mudou.
+   */
   function mudarModo(laudo: ArquivoLaudo, item: ItemGuia, modo: Modo) {
     const patch: Partial<ItemGuia> = { modo };
-    const valorCova = valorCovaValido(laudo, item.sementesCova);
-    const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
-    if (modo === 'linha_cova' && sementesEquiv !== null) {
+    if (modo === 'linha_cova') {
       const fatorModo = fatorDe(fatores, modo);
-      const fatorCondicaoItem = fatorCondicao;
-      const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
-      if (sementesPorM2 !== null && sementesPorM2 > 0) {
-        const derivadoPatch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
-        if (derivadoPatch) Object.assign(patch, derivadoPatch);
-      }
+      patch.sementesCova = calcularValorCovaParaEspacamentoFixo(laudo, item, produtos, fatorModo, fatorCondicao);
     }
     atualizarItem(item.laudoId, patch);
   }
 
-  // A condição de plantio (agora só global, no cabeçalho) muda o fator de
-  // perda e, com ele, o alvo de Sementes/m² — sem isso, o espaçamento
-  // derivado ficaria com o valor antigo até o operador tocar nele de novo.
+  // A condição de plantio (agora só global, no cabeçalho) muda o fator de perda e, com ele, o alvo de
+  // Sementes/m² — sem isso, Sementes/cova ficaria com o valor antigo até o operador tocar nele de novo.
+  // Recalcula só a QUANTIDADE (Sementes/cova ou Peso/cova), nunca o espaçamento (Cova/Corredor): a
+  // distância física é uma decisão do operador (equipamento, praticidade de campo), não deve mudar
+  // sozinha só porque a Condição mudou — quem compensa é a quantidade jogada em cada cova.
   useEffect(() => {
     setItens((prev) => {
       let mudou = false;
@@ -367,18 +385,11 @@ export function GuiaPlantioModal({
         if (item.modo !== 'linha_cova') return item;
         const laudo = arquivos.find((a) => a.id === item.laudoId);
         if (!laudo) return item;
-        const valorCova = valorCovaValido(laudo, item.sementesCova);
-        const sementesEquiv = valorCova !== null ? sementesEquivalentePorCova(laudo, valorCova, pmsNumericoDoLaudo(laudo, produtos)) : null;
-        if (sementesEquiv === null) return item;
         const fatorModo = fatorDe(fatores, item.modo);
-        const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicao);
-        if (sementesPorM2 === null || sementesPorM2 <= 0) return item;
-        const patch = derivarEspacamento(sementesPorM2, sementesEquiv, item);
-        if (!patch) return item;
-        const chave = Object.keys(patch)[0] as keyof ItemGuia;
-        if (patch[chave] === item[chave]) return item;
+        const novoValor = calcularValorCovaParaEspacamentoFixo(laudo, item, produtos, fatorModo, fatorCondicao);
+        if (novoValor === item.sementesCova) return item;
         mudou = true;
-        return { ...item, ...patch };
+        return { ...item, sementesCova: novoValor };
       });
       return mudou ? proximos : prev;
     });
