@@ -124,11 +124,10 @@ function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizaca
 
 // % de desconto na Sementes/cova por cm que a Distância na linha fica abaixo da distância ideal do
 // produto (ver distanciaIdealProduto) — evita superdimensionar a cova em espaçamentos mais densos.
-const TAXA_DESCONTO_SEMENTES_POR_CM = 2;
-// Abaixo desse tanto de cm, a fórmula de % deixa de fazer sentido (a cova vira praticamente uma linha
-// contínua) — trava direto no mínimo de sementes, ignorando o percentual.
-const DISTANCIA_MINIMA_LINHA_CM = 15;
-const SEMENTES_MINIMAS_DISTANCIA_APERTADA = 2;
+const TAXA_DESCONTO_SEMENTES_POR_CM = 1;
+// Teto do desconto — por mais que a cova aperte, nunca desconta mais que isso (piso de segurança pra
+// nunca jogar menos que 60% do volume padrão, mesmo com covas coladas).
+const DESCONTO_MAXIMO_SEMENTES = 40;
 
 /** Distância (cm) que o produto teria no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de desconto" pra sementesComDescontoPorDistancia. Valor EXATO (sem arredondar pro centímetro fechado, diferente de corredorPadrao), pra a curva de desconto ficar contínua. */
 function distanciaIdealProduto(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): number {
@@ -137,15 +136,13 @@ function distanciaIdealProduto(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produto
 
 /**
  * Desconta a Sementes/cova padrão quando a Distância na linha fica mais apertada que a distância ideal
- * do produto — 2%/cm abaixo do ideal (nunca desconta se estiver igual ou mais aberta). A fórmula vale até
- * 15cm (nos 15cm exatos já dá ~70% de desconto); ABAIXO de 15cm ela deixa de fazer sentido (cova vira
- * praticamente linha contínua) — trava no mínimo de sementes direto, ignorando o percentual.
+ * do produto — 1%/cm abaixo do ideal (nunca desconta se estiver igual ou mais aberta), até um teto de
+ * 40%: por mais que a cova aperte, nunca joga menos que 60% do volume padrão.
  */
 function sementesComDescontoPorDistancia(sementesPadrao: number, distanciaAtual: number, distanciaIdeal: number): number {
-  if (distanciaAtual < DISTANCIA_MINIMA_LINHA_CM) return SEMENTES_MINIMAS_DISTANCIA_APERTADA;
   if (distanciaAtual >= distanciaIdeal) return sementesPadrao;
-  const desconto = (distanciaIdeal - distanciaAtual) * TAXA_DESCONTO_SEMENTES_POR_CM;
-  return Math.max(sementesPadrao * (1 - desconto / 100), SEMENTES_MINIMAS_DISTANCIA_APERTADA);
+  const desconto = Math.min(DESCONTO_MAXIMO_SEMENTES, (distanciaIdeal - distanciaAtual) * TAXA_DESCONTO_SEMENTES_POR_CM);
+  return sementesPadrao * (1 - desconto / 100);
 }
 
 /**
@@ -723,7 +720,7 @@ export function GuiaPlantioModal({
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sementes/cova'}</p>
                               <p
-                                title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada se a Distância ficou mais apertada que o ideal do produto (2%/cm abaixo do ideal)"
+                                title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada se a Distância ficou mais apertada que o ideal do produto (1%/cm abaixo do ideal, até 40% de desconto)"
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
                                 {formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, distancia) || '—'}
