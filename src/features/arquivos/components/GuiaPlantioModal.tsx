@@ -673,7 +673,7 @@ export function GuiaPlantioModal({
                 <div
                   className={`grid ${
                     item.modo === 'linha_cova'
-                      ? 'grid-cols-[minmax(160px,1.1fr)_minmax(140px,0.9fr)_minmax(160px,1.2fr)]'
+                      ? 'grid-cols-[minmax(150px,1fr)_minmax(210px,1.3fr)_minmax(150px,1fr)]'
                       : 'grid-cols-[minmax(160px,1.1fr)_minmax(160px,2.1fr)]'
                   }`}
                 >
@@ -754,6 +754,8 @@ export function GuiaPlantioModal({
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
                             </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sementes/cova'}</p>
                               <p
@@ -764,8 +766,6 @@ export function GuiaPlantioModal({
                               </p>
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
                               <p title="Travado — sempre o alvo parametrizado" className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
