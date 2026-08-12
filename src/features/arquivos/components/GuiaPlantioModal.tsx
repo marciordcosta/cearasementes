@@ -191,6 +191,18 @@ function formatarSementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParamet
 }
 
 /**
+ * Sementes/cova pronta pra entrar em kg/ha e Sementes/m² — arredondada pro inteiro quando o card mostra
+ * Sem./cova como número inteiro de sementes (não existe meia semente física, ex.: Milho/Sorgo com 1
+ * planta/cova — mudar só a Condição não pode mudar a Taxa de Semeadura se o espaçamento e a Sem./cova
+ * exibida continuam os mesmos), mas continua em ponto flutuante quando o card mostra Peso/cova (g) via
+ * PMS (Tradicional — sementes miúdas, pesadas em monte, não contadas uma a uma, ver precisaPesoPorCova).
+ */
+function sementesCovaParaCalculo(laudo: Pick<ArquivoLaudo, 'processo'>, sementesCova: number | null): number | null {
+  if (sementesCova === null) return null;
+  return precisaPesoPorCova(laudo) ? sementesCova : Math.round(sementesCova);
+}
+
+/**
  * kg/ha a partir de Covas/m² × Sementes/cova (equivalente) × PMS — a conta "de verdade" em modo Covas,
  * usada tanto pro card (com a Sementes/cova atual, ver sementesCovaAtual) quanto pra comparação entre
  * condições (com a Sementes/cova alvo de cada uma, ver sementesPorCovaAlvo) — nunca pela Densidade
@@ -420,11 +432,13 @@ export function GuiaPlantioModal({
       // PMS) — nunca só da Densidade (que funciona bem pra "A Lanço", mas em Covas o espaçamento pode
       // não bater a Densidade cadastrada de propósito, ver Máx./cova e Covas/m² na Parametrização).
       const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
-      const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
-      // Sementes/m² tem que bater EXATO com o que o card mostra em Sem./cova (Math.round, ver
-      // formatarSementesCovaAtual) × Covas/m² — senão o operador confere na mão (1 semente/cova × Covas/m²)
-      // e o número não fecha. kg/ha continua com a Sementes/cova em ponto flutuante (mais precisa pro peso).
-      sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * Math.round(sementesCova) : null;
+      const sementesCovaBruta = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
+      // kg/ha e Sementes/m² têm que bater EXATO com o que o card mostra em Sem./cova (ver
+      // sementesCovaParaCalculo) × Covas/m² — senão dá pra trocar a Condição sem mexer no espaçamento e a
+      // Taxa de Semeadura muda mesmo assim, o que não faz sentido pro operador (mesma cova, mesma
+      // quantidade de sementes exibida, tem que dar o mesmo kg/ha).
+      const sementesCova = sementesCovaParaCalculo(laudo, sementesCovaBruta);
+      sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
     } else {
       kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
@@ -467,7 +481,7 @@ export function GuiaPlantioModal({
     const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
     return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
       const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
-      const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual);
+      const sementesCova = sementesCovaParaCalculo(laudo, sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual));
       return { rotulo: o.rotulo, kgPorHa: kgPorHaDeSementesCova(covasPorM2, sementesCova, pms) };
     });
   }
