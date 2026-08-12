@@ -351,8 +351,8 @@ export function ParametrizacaoProdutosModal({
                 />
                 <input
                   defaultValue={camposAtuais.maxPlantulasCova}
-                  placeholder="50x50"
-                  title="Máximo de plântulas estabelecidas (pós-perdas) numa mesma cova — define o espaçamento padrão do Guia de Plantio; em branco, cai no 50×50 fixo"
+                  placeholder="8"
+                  title="Máximo de plântulas estabelecidas (pós-perdas) numa mesma cova — define o espaçamento padrão do Guia de Plantio; em branco, cai no espaçamento fixo 50×50"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
