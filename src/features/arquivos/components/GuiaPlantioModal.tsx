@@ -673,7 +673,7 @@ export function GuiaPlantioModal({
                 <div
                   className={`grid ${
                     item.modo === 'linha_cova'
-                      ? 'grid-cols-[minmax(150px,1fr)_minmax(170px,1fr)_minmax(160px,1.2fr)]'
+                      ? 'grid-cols-[minmax(160px,1.1fr)_minmax(140px,0.9fr)_minmax(160px,1.2fr)]'
                       : 'grid-cols-[minmax(160px,1.1fr)_minmax(160px,2.1fr)]'
                   }`}
                 >
@@ -733,9 +733,8 @@ export function GuiaPlantioModal({
                       // mais direto que "Sementes/cova" (quase sempre 1) ou "Covas/m²" (área, não linha).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
                       return (
-                        <div className="flex gap-2.5 border-l border-[var(--color-line)] p-2.5">
-                          {/* Coluna A: espaçamentos, Distância em cima e Corredor embaixo */}
-                          <div className="flex flex-1 flex-col gap-1">
+                        <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
+                          <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
                               <p
@@ -756,8 +755,7 @@ export function GuiaPlantioModal({
                               />
                             </div>
                           </div>
-                          {/* Coluna B: resultados, compactados um embaixo do outro */}
-                          <div className="flex flex-1 flex-col gap-1">
+                          <div className="grid grid-cols-2 gap-1.5">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sem./cova'}</p>
                               <p
@@ -767,12 +765,6 @@ export function GuiaPlantioModal({
                                 {formatarSementesCovaAtual(laudo, produtos, fatorDe(fatores, item.modo), fatorCondicao, espacamentoAtual) || '—'}
                               </p>
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Covas/m²</p>
-                              <p title="Travado — sempre o alvo parametrizado" className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
-                                {r.covasPorM2 === null ? '—' : formatarCovas(r.covasPorM2)}
-                              </p>
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
