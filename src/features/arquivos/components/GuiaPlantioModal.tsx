@@ -673,7 +673,7 @@ export function GuiaPlantioModal({
                 <div
                   className={`grid ${
                     item.modo === 'linha_cova'
-                      ? 'grid-cols-[minmax(150px,1fr)_minmax(210px,1.3fr)_minmax(150px,1fr)]'
+                      ? 'grid-cols-[minmax(150px,1fr)_minmax(170px,1fr)_minmax(160px,1.2fr)]'
                       : 'grid-cols-[minmax(160px,1.1fr)_minmax(160px,2.1fr)]'
                   }`}
                 >
@@ -733,8 +733,9 @@ export function GuiaPlantioModal({
                       // mais direto que "Sementes/cova" (quase sempre 1) ou "Covas/m²" (área, não linha).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
                       return (
-                        <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
-                          <div className="grid grid-cols-2 gap-1.5">
+                        <div className="flex gap-2.5 border-l border-[var(--color-line)] p-2.5">
+                          {/* Coluna A: espaçamentos, Distância em cima e Corredor embaixo */}
+                          <div className="flex flex-1 flex-col gap-1">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Distância (cm)</p>
                               <p
@@ -755,7 +756,8 @@ export function GuiaPlantioModal({
                               />
                             </div>
                           </div>
-                          <div className="grid grid-cols-3 gap-1.5">
+                          {/* Coluna B: resultados, compactados um embaixo do outro */}
+                          <div className="flex flex-1 flex-col gap-1">
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/cova (g)' : 'Sem./cova'}</p>
                               <p
