@@ -480,23 +480,38 @@ export function GuiaPlantioModal({
   }
 
   /**
-   * Ao sair do campo Corredor (só Milho/Sorgo, ver ehMilhoOuSorgo), se a Distância resultante ficar
-   * abaixo da mínima real (cadastrada por plântula — ver distanciaMinimaEfetivaMilhoSorgo), corrige o
-   * próprio Corredor pra travar a Distância exatamente na mínima, preservando o Covas/m² pretendido
-   * (Densidade ÷ plântulas esperadas por cova) — só o aviso não bastava, o Corredor continuaria
-   * mostrando um valor que não respeita o mínimo físico da cultivar. Sem Distância mínima cadastrada,
-   * não corrige nada (mantém só o aviso genérico de antes, com o teto fixo de 40%). Quando corrige,
-   * liga o balão flutuante (ver avisoCorredorCorrigido) — só nesse momento, não a cada render.
+   * Ao sair do campo Corredor (só Milho/Sorgo, ver ehMilhoOuSorgo), se o espaçamento efetivo (o menor
+   * entre Distância derivada e o próprio Corredor digitado — quem estiver mais apertado é quem limita,
+   * mesma lógica de espacamentoDeDistancia) ficar abaixo da mínima real (cadastrada por plântula — ver
+   * distanciaMinimaEfetivaMilhoSorgo), corrige o Corredor pra travar esse espaçamento exatamente na
+   * mínima, preservando o Covas/m² pretendido (Densidade ÷ plântulas esperadas por cova).
+   *
+   * Distância × Corredor = 10000 ÷ Covas/m² é uma constante (chamada aqui de `produtoConstante`) — então
+   * existe uma faixa válida de Corredor que deixa OS DOIS (Distância e Corredor) ≥ mínima:
+   * [mínima, produtoConstante ÷ mínima]. Corredor digitado abaixo da faixa (ele mesmo é quem aperta, ver
+   * o caso de Corredor=10 com Distância folgada em 245) sobe pro piso da faixa; acima da faixa (a
+   * Distância derivada é quem aperta) desce pro teto da faixa. Se nem o grid quadrado (Distância =
+   * Corredor) cabe na mínima — densidade pedida fisicamente incompatível — aproxima o máximo possível
+   * (√produtoConstante). Sem Distância mínima cadastrada, não corrige nada (mantém só o aviso genérico
+   * de antes, com o teto fixo de 40%). Quando corrige, liga o balão flutuante (ver
+   * avisoCorredorCorrigido) — só nesse momento, não a cada render.
    */
   function corrigirCorredorMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, item: ItemGuia) {
     const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
     const covasM2 = covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, sementesCovaDigitada);
     const distanciaMinimaEfetiva = distanciaMinimaEfetivaMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, sementesCovaDigitada);
-    if (covasM2 === null || covasM2 <= 0 || distanciaMinimaEfetiva === null || distanciaMinimaEfetiva <= 0) return;
-    const distanciaAtual = distanciaDeCovasM2(covasM2, item.corredor);
-    if (distanciaAtual === null || distanciaAtual >= distanciaMinimaEfetiva) return;
-    const corredorCorrigido = 10000 / (distanciaMinimaEfetiva * covasM2);
-    if (corredorCorrigido <= 0) return;
+    const corredorAtual = paraNumero(item.corredor);
+    if (covasM2 === null || covasM2 <= 0 || distanciaMinimaEfetiva === null || distanciaMinimaEfetiva <= 0 || corredorAtual === null || corredorAtual <= 0) return;
+    const produtoConstante = 10000 / covasM2; // Distância × Corredor, fixo pro Covas/m² alvo atual
+    let corredorCorrigido: number | null = null;
+    if (produtoConstante < distanciaMinimaEfetiva * distanciaMinimaEfetiva) {
+      corredorCorrigido = Math.sqrt(produtoConstante);
+    } else if (corredorAtual < distanciaMinimaEfetiva) {
+      corredorCorrigido = distanciaMinimaEfetiva;
+    } else if (produtoConstante / corredorAtual < distanciaMinimaEfetiva) {
+      corredorCorrigido = produtoConstante / distanciaMinimaEfetiva;
+    }
+    if (corredorCorrigido === null || corredorCorrigido <= 0 || Math.round(corredorCorrigido) === Math.round(corredorAtual)) return;
     atualizarItem(item.laudoId, { corredor: String(Math.round(corredorCorrigido)) });
     setAvisoCorredorCorrigido((prev) => ({ ...prev, [item.laudoId]: true }));
   }
