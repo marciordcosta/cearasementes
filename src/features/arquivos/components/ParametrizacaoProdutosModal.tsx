@@ -375,7 +375,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.maxPlantulasMetroLinear}
                   placeholder="sem limite"
-                  title="Máx. de plântulas pretendidas por metro linear de linha, no Guia de Plantio — em Milho/Sorgo trava o Corredor sozinho pra nunca passar desse limite; nos demais produtos, passando dele o plantio vira semeadura contínua na linha (covas coladas demais). Em branco, sem esse limite."
+                  title="Máx. de plântulas pretendidas por metro linear — usada em Covas linear (Milho/Sorgo)"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor });
