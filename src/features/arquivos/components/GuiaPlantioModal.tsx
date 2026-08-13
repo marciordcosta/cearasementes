@@ -434,29 +434,36 @@ export function GuiaPlantioModal({
   }, [arquivos, busca]);
 
   function selecionar(a: ArquivoLaudo) {
-    setItens((prev) => {
-      if (prev.some((it) => it.laudoId === a.id)) return prev;
-      // Modo padrão vem da Parametrização (Cova ou Lanço, cadastrado por
-      // grupo) — só o ponto de partida do item, o operador ainda troca à
-      // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
-      const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
-      return [
-        ...prev,
-        {
-          laudoId: a.id,
-          // Começa em 1 ha (não zerado) — só pra já sair mostrando os
-          // totais calculados; o operador ajusta a área de verdade em
-          // seguida.
-          area: '1',
-          modo: modoPadrao,
-          // Ponto de partida do Corredor (ver corredorPadrao) — Distância nunca é guardada, é sempre
-          // derivada dele pra manter o Covas/m² no alvo (ver distanciaDerivada).
-          corredor: corredorPadrao(a, produtos, fatorDe(fatores, modoPadrao), resolverFatorCondicao(a.nomeProduto, condicao, produtos, fatores)),
-          // Só usado em Milho/Sorgo (ver ehMilhoOuSorgo) — começa em 1 semente/cova, o operador ajusta depois.
-          sementesCova: '1',
-        },
-      ];
-    });
+    if (itens.some((it) => it.laudoId === a.id)) {
+      setBusca('');
+      setBuscaAberta(false);
+      return;
+    }
+    // Modo padrão vem da Parametrização (Cova ou Lanço, cadastrado por
+    // grupo) — só o ponto de partida do item, o operador ainda troca à
+    // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
+    const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
+    // Ponto de partida do Corredor (ver corredorPadrao) — Distância nunca é guardada, é sempre derivada
+    // dele pra manter o Covas/m² no alvo (ver distanciaDerivada).
+    const corredorInicial = corredorPadrao(a, produtos, fatorDe(fatores, modoPadrao), resolverFatorCondicao(a.nomeProduto, condicao, produtos, fatores));
+    setItens((prev) => [
+      ...prev,
+      {
+        laudoId: a.id,
+        // Começa em 1 ha (não zerado) — só pra já sair mostrando os
+        // totais calculados; o operador ajusta a área de verdade em
+        // seguida.
+        area: '1',
+        modo: modoPadrao,
+        corredor: corredorInicial,
+        // Só usado em Milho/Sorgo (ver ehMilhoOuSorgo) — começa em 1 semente/cova, o operador ajusta depois.
+        sementesCova: '1',
+      },
+    ]);
+    // Nasce já "confirmado" nesse valor (ver corredorConfirmadoCapim) — senão, antes do primeiro
+    // blur/Enter, a decisão de layout (Covas x Semeadura contínua) cairia no valor AO VIVO sendo
+    // digitado, trocando de estrutura já no primeiro dígito.
+    setCorredorConfirmadoCapim((prev) => ({ ...prev, [a.id]: corredorInicial }));
     setBusca('');
     setBuscaAberta(false);
   }
