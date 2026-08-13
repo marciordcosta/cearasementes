@@ -305,9 +305,9 @@ export function ParametrizacaoProdutosModal({
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
               <span className="flex-1">Grupo</span>
               <span className="w-16 shrink-0 text-center">PMS</span>
-              <span className="w-16 shrink-0 text-center">Densid.</span>
+              <span className="w-16 shrink-0 text-center">Plant/m²</span>
+              <span className="w-16 shrink-0 text-center">Plant/cova</span>
               <span className="w-16 shrink-0 text-center">Sobrev%</span>
-              <span className="w-16 shrink-0 text-center">Máx/cova</span>
               <span className="w-16 shrink-0 text-center">Cov/m²</span>
               <span className="w-16 shrink-0 text-center">Perda Méd%</span>
               <span className="w-16 shrink-0 text-center">Perda Baix%</span>
@@ -364,10 +364,20 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.densidadeBase}
                   placeholder="por m²"
-                  title="Densidade alvo (plântulas/m²)"
+                  title="Plântulas pretendidas por m²"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                <input
+                  defaultValue={camposAtuais.maxPlantulasCova}
+                  placeholder="8"
+                  title="Plântulas pretendidas por cova"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -378,16 +388,6 @@ export function ParametrizacaoProdutosModal({
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor });
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.maxPlantulasCova}
-                  placeholder="8"
-                  title="Máx. de plântulas por cova"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
