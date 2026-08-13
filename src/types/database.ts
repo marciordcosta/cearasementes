@@ -519,7 +519,6 @@ export interface Database {
           densidade_base: string | null;
           indice_sobrevivencia: string | null;
           max_plantulas_cova: string | null;
-          max_covas_m2: string | null;
           perda_media: string | null;
           perda_baixa: string | null;
           max_plantulas_metro_linear: string | null;

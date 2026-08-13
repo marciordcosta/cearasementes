@@ -193,7 +193,6 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
     densidadeBase: row.densidade_base,
     indiceSobrevivencia: row.indice_sobrevivencia,
     maxPlantulasCova: row.max_plantulas_cova,
-    maxCovasM2: row.max_covas_m2,
     perdaMedia: row.perda_media,
     perdaBaixa: row.perda_baixa,
     maxPlantulasMetroLinear: row.max_plantulas_metro_linear,
@@ -224,7 +223,6 @@ export async function salvarParametrizacaoProduto(produto: {
   densidadeBase: string;
   indiceSobrevivencia: string;
   maxPlantulasCova: string;
-  maxCovasM2: string;
   perdaMedia: string;
   perdaBaixa: string;
   maxPlantulasMetroLinear: string;
@@ -239,7 +237,6 @@ export async function salvarParametrizacaoProduto(produto: {
       densidade_base: produto.densidadeBase || null,
       indice_sobrevivencia: produto.indiceSobrevivencia || null,
       max_plantulas_cova: produto.maxPlantulasCova || null,
-      max_covas_m2: produto.maxCovasM2 || null,
       perda_media: produto.perdaMedia || null,
       perda_baixa: produto.perdaBaixa || null,
       max_plantulas_metro_linear: produto.maxPlantulasMetroLinear || null,

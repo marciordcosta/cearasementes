@@ -10,7 +10,6 @@ import {
   normalizarNome,
   resolverDensidadeBase,
   resolverMargemTolerancia,
-  resolverMaxCovasM2,
   resolverFatorCondicao,
   resolverMaxPlantulasCova,
   resolverMaxPlantulasMetroLinear,
@@ -169,10 +168,10 @@ function sementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[
   let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (sementesCova === null) {
     const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
-    sementesCova = calcularSementesPorCova(sementesPorM2, covasM2Alvo(laudo, produtos));
+    sementesCova = calcularSementesPorCova(sementesPorM2, covasM2Alvo());
   }
   if (sementesCova === null || espacamentoAtual === null) return sementesCova;
-  return sementesComAjustePorDistancia(sementesCova, espacamentoAtual, distanciaIdealProduto(laudo, produtos));
+  return sementesComAjustePorDistancia(sementesCova, espacamentoAtual, distanciaIdealProduto());
 }
 
 /** Igual sementesCovaAtual, já formatado pra exibir — "Sementes/cova" (inteiro) ou "Peso/cova (g)" (Tradicional, via PMS), conforme o Processo do laudo (ver precisaPesoPorCova). '' quando falta algum dado. Só regra geral — Milho/Sorgo usa campo editável (ver ItemGuia.sementesCova). */
@@ -195,28 +194,20 @@ function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number |
 }
 
 /**
- * Covas/m² TRAVADO — regra GERAL (Milho/Sorgo usa a regra própria, ver covasM2AlvoMilhoSorgo). Não é
- * editável de jeito nenhum, é sempre esse valor (nunca mais nem menos): prioriza o Máx. cadastrado
- * (Parametrização); sem isso, cai no cálculo antigo (Densidade ÷ Máx. de plântulas/cova); sem nenhum dos
- * dois, 4 (equivalente ao 50×50 de sempre). Único grau de liberdade que sobra pro operador é o Corredor
- * — Distância é sempre derivada dele pra manter esse valor fixo (ver distanciaDerivada). Sempre positivo
- * (nunca null), pra sempre existir um espaçamento válido.
+ * Covas/m² TRAVADO — regra GERAL (Milho/Sorgo usa a regra própria, ver covasM2AlvoMilhoSorgo). PADRONIZADO
+ * em 4 (equivalente ao 50×50 de sempre) pra qualquer capim — não é mais um campo por produto: só os
+ * capins usam essa condição, e todos os cadastrados até hoje já usavam o mesmo valor na prática (a conta
+ * por Densidade ÷ Máx.plântulas/cova dava número diferente e nunca foi usada de propósito). Não é
+ * editável de jeito nenhum. Único grau de liberdade que sobra pro operador é o Corredor — Distância é
+ * sempre derivada dele pra manter esse valor fixo (ver distanciaDerivada).
  */
-function covasM2Alvo(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): number {
-  const maxCovasM2 = resolverMaxCovasM2(laudo.nomeProduto, produtos);
-  if (maxCovasM2 !== null && maxCovasM2 > 0) return maxCovasM2;
-  const densidade = resolverDensidadeBase(laudo.nomeProduto, produtos);
-  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
-  if (densidade !== null && densidade > 0 && maxPlantulasCova !== null && maxPlantulasCova > 0) {
-    const covasPorM2 = densidade / maxPlantulasCova;
-    if (covasPorM2 > 0) return covasPorM2;
-  }
+function covasM2Alvo(): number {
   return 4;
 }
 
-/** Distância (cm) que o produto teria no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de desconto" pra sementesComAjustePorDistancia (regra geral). Valor EXATO (sem arredondar pro centímetro fechado, diferente de corredorPadrao), pra a curva ficar contínua. */
-function distanciaIdealProduto(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[]): number {
-  return Math.sqrt(10000 / covasM2Alvo(laudo, produtos));
+/** Distância (cm) no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de desconto" pra sementesComAjustePorDistancia (regra geral). Valor EXATO (sem arredondar pro centímetro fechado, diferente de corredorPadrao), pra a curva ficar contínua. */
+function distanciaIdealProduto(): number {
+  return Math.sqrt(10000 / covasM2Alvo());
 }
 
 /** Distância (cm) a partir de um Covas/m² alvo já resolvido e do Corredor digitado — Distância = 10000 ÷ (Corredor × Covas/m² alvo). Primitivo compartilhado pelas 2 regras (geral, ver distanciaDerivada; Milho/Sorgo, ver covasM2AlvoMilhoSorgo). Null com Corredor ou Covas/m² inválido. */
@@ -239,13 +230,13 @@ function espacamentoDeDistancia(distancia: number | null, corredorTexto: string)
 }
 
 /** Distância (cm) — SEMPRE derivada do Corredor pra manter o Covas/m² travado (regra geral, ver covasM2Alvo). Nunca editável, nunca guardada — impossível o espaçamento "descolar" do alvo. Null com Corredor inválido. */
-function distanciaDerivada(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, corredorTexto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return distanciaDeCovasM2(covasM2Alvo(laudo, produtos), corredorTexto);
+function distanciaDerivada(corredorTexto: string): number | null {
+  return distanciaDeCovasM2(covasM2Alvo(), corredorTexto);
 }
 
 /** Igual espacamentoDeDistancia, já resolvendo a Distância a partir do Corredor (regra geral, ver distanciaDerivada). */
-function espacamentoEfetivo(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, corredorTexto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return espacamentoDeDistancia(distanciaDerivada(laudo, corredorTexto, produtos), corredorTexto);
+function espacamentoEfetivo(corredorTexto: string): number | null {
+  return espacamentoDeDistancia(distanciaDerivada(corredorTexto), corredorTexto);
 }
 
 /**
@@ -330,7 +321,7 @@ function sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada: number, espacamento
 
 /** Corredor padrão (cm) ao adicionar o produto — grade quadrada (lado = √(10000 ÷ Covas/m² alvo)), arredondado pra cima. Milho/Sorgo usa a regra própria (Densidade + 1 semente/cova de partida, ver covasM2AlvoMilhoSorgo); os demais usam o Covas/m² cadastrado (ver covasM2Alvo). Só o PONTO DE PARTIDA — o operador ajusta o Corredor livremente depois, Distância acompanha sozinha. */
 function corredorPadrao(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): string {
-  const covasM2 = ehMilhoOuSorgo(laudo.nomeProduto) ? covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, 1) : covasM2Alvo(laudo, produtos);
+  const covasM2 = ehMilhoOuSorgo(laudo.nomeProduto) ? covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, 1) : covasM2Alvo();
   const lado = Math.ceil(Math.sqrt(10000 / (covasM2 !== null && covasM2 > 0 ? covasM2 : 4)));
   return String(lado > 0 ? lado : 50);
 }
@@ -613,8 +604,8 @@ export function GuiaPlantioModal({
       // Regra geral: kg/ha vem do Covas/m² travado e da Sementes/cova travada (Covas/m² × Sementes/cova
       // × PMS) — nunca só da Densidade (que funciona bem pra "A Lanço", mas em Covas o espaçamento pode
       // não bater a Densidade cadastrada de propósito, ver Máx./cova e Covas/m² na Parametrização).
-      covasPorM2 = covasM2Alvo(laudo, produtos);
-      const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
+      covasPorM2 = covasM2Alvo();
+      const espacamentoAtual = espacamentoEfetivo(item.corredor);
       const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
       sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
@@ -666,8 +657,8 @@ export function GuiaPlantioModal({
         return { rotulo: o.rotulo, kgPorHa: kgPorHaDeSementesCova(covasPorM2, sementesCovaEfetiva, pms) };
       });
     }
-    const covasPorM2 = covasM2Alvo(laudo, produtos);
-    const espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
+    const covasPorM2 = covasM2Alvo();
+    const espacamentoAtual = espacamentoEfetivo(item.corredor);
     return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
       const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
       const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual);
@@ -710,7 +701,7 @@ export function GuiaPlantioModal({
         } else {
           const fatorModoItem = fatorDe(fatores, item.modo);
           const fatorCondicaoAtual = resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores);
-          const espacamentoItem = espacamentoEfetivo(laudo, item.corredor, produtos);
+          const espacamentoItem = espacamentoEfetivo(item.corredor);
           sementesPorCovaValor = formatarSementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoItem) || '—';
         }
       }
@@ -956,8 +947,8 @@ export function GuiaPlantioModal({
                         espacamentoAtual = espacamentoDeDistancia(distancia, item.corredor);
                         sementesCovaNum = sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada, espacamentoAtual, covasM2);
                       } else {
-                        distancia = distanciaDerivada(laudo, item.corredor, produtos);
-                        espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
+                        distancia = distanciaDerivada(item.corredor);
+                        espacamentoAtual = espacamentoEfetivo(item.corredor);
                         sementesCovaNum = sementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoAtual);
                       }
                       // Sementes por metro linear de linha (covas por metro × Sementes/cova) — sempre calculado
@@ -968,7 +959,7 @@ export function GuiaPlantioModal({
                       // Layout (Covas x Semeadura contínua) decide pelo Corredor CONFIRMADO (último blur/Enter),
                       // não pelo item.corredor ao vivo — senão o card trocaria de estrutura no meio da digitação.
                       const corredorConfirmado = corredorConfirmadoCapim[item.laudoId] ?? item.corredor;
-                      const espacamentoConfirmado = !milhoSorgo ? espacamentoEfetivo(laudo, corredorConfirmado, produtos) : null;
+                      const espacamentoConfirmado = !milhoSorgo ? espacamentoEfetivo(corredorConfirmado) : null;
                       const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, espacamentoConfirmado);
                       if (linearCapim) {
                         return (

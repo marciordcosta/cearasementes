@@ -157,7 +157,6 @@ export function ArquivosPage() {
     densidadeBase: string;
     indiceSobrevivencia: string;
     maxPlantulasCova: string;
-    maxCovasM2: string;
     perdaMedia: string;
     perdaBaixa: string;
     maxPlantulasMetroLinear: string;

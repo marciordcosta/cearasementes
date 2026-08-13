@@ -23,7 +23,6 @@ interface CamposProduto {
   indiceSobrevivencia: string;
   perdaMedia: string;
   perdaBaixa: string;
-  maxCovasM2: string;
   modoPlantio: 'cova' | 'lanco' | null;
   margemTolerancia: string;
   observacaoEtiqueta: string;
@@ -47,7 +46,6 @@ interface ParametrizacaoProdutosModalProps {
     indiceSobrevivencia: string;
     perdaMedia: string;
     perdaBaixa: string;
-    maxCovasM2: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
@@ -314,7 +312,6 @@ export function ParametrizacaoProdutosModal({
               <span className="w-16 shrink-0 text-center">Sobrev%</span>
               <span className="w-16 shrink-0 text-center">Perda Méd%</span>
               <span className="w-16 shrink-0 text-center">Perda Baix%</span>
-              <span className="w-16 shrink-0 text-center">Cov/m²</span>
               <span className="w-[74px] shrink-0 text-center">Plantio</span>
               <span className="w-16 shrink-0 text-center">Margem%</span>
               <span className="w-8 shrink-0 text-center">Obs.</span>
@@ -330,7 +327,6 @@ export function ParametrizacaoProdutosModal({
                 indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
                 perdaMedia: existente?.perdaMedia ?? '',
                 perdaBaixa: existente?.perdaBaixa ?? '',
-                maxCovasM2: existente?.maxCovasM2 ?? '',
                 modoPlantio: existente?.modoPlantio ?? null,
                 margemTolerancia: existente?.margemTolerancia ?? '',
                 observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
@@ -423,16 +419,6 @@ export function ParametrizacaoProdutosModal({
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.perdaBaixa) onSalvar({ ...camposAtuais, perdaBaixa: valor });
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.maxCovasM2}
-                  placeholder="10"
-                  title="Máx. de covas por m²"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxCovasM2) onSalvar({ ...camposAtuais, maxCovasM2: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />

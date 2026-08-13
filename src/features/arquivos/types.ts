@@ -75,8 +75,6 @@ export interface ProdutoParametrizacao {
   indiceSobrevivencia: string | null;
   /** Máximo de plântulas estabelecidas (pós-perdas) que cabem numa mesma cova sem competir demais — depende do gênero (Panicum/Brachiaria perfilham e ocupam espaço; Milho/Sorgo são plantas unitárias). Usado no Guia de Plantio pra calcular o espaçamento padrão em modo Covas (Covas/m² = Densidade ÷ esse valor), substituindo o 50×50 fixo. Null = sem limite cadastrado, cai no 50×50. */
   maxPlantulasCova: string | null;
-  /** Máximo de covas por m² que a cultivar aguenta (competição entre covas vizinhas) — em modo Covas, junto com maxPlantulasCova, passa a definir o espaçamento padrão do Guia de Plantio diretamente (em vez de derivar da Densidade, que só funciona bem pra "A Lanço"). Null = sem limite cadastrado, cai no cálculo por Densidade (ou no 50×50 fixo). */
-  maxCovasM2: string | null;
   /** Perda (%) na Condição "Média" — sobrepõe o fator GLOBAL (Parametrização > Plantio) só pra esse produto; a sensibilidade a condição ruim varia por cultivar (Milho aguenta bem menos que um capim já estabelecido). Texto cru (ex.: "25"); null cai no fator global. Ver resolverFatorCondicao. */
   perdaMedia: string | null;
   /** Igual perdaMedia, pra Condição "Baixa". "Ideal" não tem override — é sempre 0% de perda por definição. */

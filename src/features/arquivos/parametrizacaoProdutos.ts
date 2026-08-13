@@ -77,11 +77,6 @@ export function resolverMaxPlantulasCova(nomeProduto: string, produtos: ProdutoP
   return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasCova ?? null);
 }
 
-/** Máximo de covas por m² que a cultivar aguenta, como número — junto com Máx. de plântulas/cova, define o espaçamento padrão do Guia de Plantio em modo Covas (ver calcularEspacamentoPadrao em GuiaPlantioModal.tsx). Null se não cadastrado. */
-export function resolverMaxCovasM2(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxCovasM2 ?? null);
-}
-
 /** Máximo de plântulas estabelecidas por metro linear de linha, como número — 3ª dimensão de densidade (junto com resolverDensidadeBase, por m², e resolverMaxPlantulasCova, por cova). Equivale a uma distância mínima em cm (100 ÷ esse valor) entre plântulas na linha, usada no Guia de Plantio (ver distanciaMinimaEfetivaMilhoSorgo/modoLinearCapim em GuiaPlantioModal.tsx). Null se não cadastrado. */
 export function resolverMaxPlantulasMetroLinear(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
   return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasMetroLinear ?? null);
