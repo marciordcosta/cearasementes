@@ -9,11 +9,11 @@ import {
   encontrarProdutoPreco,
   normalizarNome,
   resolverDensidadeBase,
-  resolverDistanciaMinima,
   resolverMargemTolerancia,
   resolverMaxCovasM2,
   resolverFatorCondicao,
   resolverMaxPlantulasCova,
+  resolverMaxPlantulasMetroLinear,
   resolverModoPlantio,
   resolverPmsBaseTexto,
 } from '../parametrizacaoProdutos';
@@ -250,18 +250,21 @@ function espacamentoEfetivo(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, corredorTe
 
 /**
  * True quando o espaçamento efetivo (regra GERAL — Milho/Sorgo nunca chega aqui, o Corredor se corrige
- * sozinho antes, ver corrigirCorredorMilhoSorgo) fica abaixo da Distância mínima cadastrada
- * (Parametrização, mesmo campo do Milho/Sorgo, agora geral pra qualquer produto). A partir daí não faz
- * mais sentido pensar em "covas" discretas (buracos colados demais pra caber fisicamente) — o plantio
- * vira, na prática, semeadura contínua na linha: a UI esconde Sem./cova e Distância, e destaca Sementes/m
+ * sozinho antes, ver corrigirCorredorMilhoSorgo) fica abaixo da distância mínima entre plântulas —
+ * derivada do Máx. de plântulas/metro linear cadastrado (Parametrização, mesmo campo do Milho/Sorgo,
+ * geral pra qualquer produto): 100 ÷ esse valor = cm entre plântulas. A partir daí não faz mais sentido
+ * pensar em "covas" discretas (buracos colados demais pra caber fisicamente) — o plantio vira, na
+ * prática, semeadura contínua na linha: a UI esconde Sem./cova e Distância, e destaca Sementes/m
  * (linear) — SEM mudar a conta de kg/ha (que já é a mesma, Sementes/m linear só é outra forma de mostrar
- * o mesmo resultado). Volta ao normal sozinho se o Corredor abrir de novo. Sem Distância mínima
- * cadastrada, sempre false (comportamento de sempre, sem esse modo).
+ * o mesmo resultado). Volta ao normal sozinho se o Corredor abrir de novo. Sem Máx. plântulas/metro
+ * cadastrado, sempre false (comportamento de sempre, sem esse modo).
  */
 function modoLinearCapim(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[], espacamentoAtual: number | null): boolean {
   if (espacamentoAtual === null) return false;
-  const distanciaMinima = resolverDistanciaMinima(laudo.nomeProduto, produtos);
-  return distanciaMinima !== null && distanciaMinima > 0 && espacamentoAtual < distanciaMinima;
+  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo.nomeProduto, produtos);
+  if (maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return false;
+  const distanciaMinima = 100 / maxPlantulasMetroLinear;
+  return espacamentoAtual < distanciaMinima;
 }
 
 /**
@@ -286,21 +289,23 @@ function covasM2AlvoMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametriza
 }
 
 /**
- * Distância mínima EFETIVA (cm) pra Milho/Sorgo — a Distância mínima cadastrada (Parametrização) é por
- * PLÂNTULA estabelecida, não por semente jogada (nem toda semente vira plântula); então multiplica pelas
- * plântulas esperadas por cova (Sementes/cova digitada × Germinação final ÷ 100, o mesmo valor contínuo
- * usado em covasM2AlvoMilhoSorgo). Mas só multiplica pra CIMA — nunca abaixo de 1 plântula: com 1
- * semente/cova e germinação imperfeita, o resultado esperado pode ficar abaixo de 1 (ex.: 0,8), só que a
- * planta que eventualmente nascer precisa do espaço INTEIRO de uma plântula, não um espaço proporcional
- * à chance dela nascer — não existe "0,8 de planta" fisicamente disputando espaço. Multiplicar só faz
- * sentido com 2+ sementes/cova, resultando em mais de 1 plântula esperada (aí sim precisa de mais
- * espaço, ver a explicação original do usuário: cova com 1 planta, cova com 2, a distância é a média).
- * Null sem Distância mínima cadastrada ou sem Germinação — nesse caso o desconto cai no teto fixo de 40%
- * de sempre (ver sementesComAjustePorDistancia).
+ * Distância mínima EFETIVA (cm) pra Milho/Sorgo — derivada do Máx. de plântulas/metro linear cadastrado
+ * (Parametrização): 100 ÷ esse valor = distância mínima em cm entre PLÂNTULAS estabelecidas, não por
+ * semente jogada (nem toda semente vira plântula); então multiplica pelas plântulas esperadas por cova
+ * (Sementes/cova digitada × Germinação final ÷ 100, o mesmo valor contínuo usado em
+ * covasM2AlvoMilhoSorgo). Mas só multiplica pra CIMA — nunca abaixo de 1 plântula: com 1 semente/cova e
+ * germinação imperfeita, o resultado esperado pode ficar abaixo de 1 (ex.: 0,8), só que a planta que
+ * eventualmente nascer precisa do espaço INTEIRO de uma plântula, não um espaço proporcional à chance
+ * dela nascer — não existe "0,8 de planta" fisicamente disputando espaço. Multiplicar só faz sentido com
+ * 2+ sementes/cova, resultando em mais de 1 plântula esperada (aí sim precisa de mais espaço, ver a
+ * explicação original do usuário: cova com 1 planta, cova com 2, a distância é a média). Null sem Máx.
+ * plântulas/metro cadastrado ou sem Germinação — nesse caso o desconto por espaçamento continua sem
+ * teto nenhum (ver sementesComAjustePorDistancia).
  */
 function distanciaMinimaEfetivaMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, sementesCovaDigitada: number): number | null {
-  const distanciaMinimaCadastrada = resolverDistanciaMinima(laudo.nomeProduto, produtos);
-  if (distanciaMinimaCadastrada === null || distanciaMinimaCadastrada <= 0) return null;
+  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo.nomeProduto, produtos);
+  if (maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return null;
+  const distanciaMinimaCadastrada = 100 / maxPlantulasMetroLinear;
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (germinacaoFinal === null || germinacaoFinal <= 0) return null;
   const plantulasPorCova = Math.max(1, sementesCovaDigitada * (germinacaoFinal / 100));

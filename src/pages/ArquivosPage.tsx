@@ -160,7 +160,7 @@ export function ArquivosPage() {
     maxCovasM2: string;
     perdaMedia: string;
     perdaBaixa: string;
-    distanciaMinima: string;
+    maxPlantulasMetroLinear: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;

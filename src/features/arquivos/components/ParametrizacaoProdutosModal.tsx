@@ -16,13 +16,14 @@ const ABAS: { valor: Aba; rotulo: string; icone: string }[] = [
 interface CamposProduto {
   nomeProduto: string;
   pmsBase: string;
+  /** As 3 colunas de densidade (m² → linear → cova) ficam juntas, nessa ordem — cada modo de plantio usa a que corresponde (ver ProdutoParametrizacao). */
   densidadeBase: string;
-  indiceSobrevivencia: string;
+  maxPlantulasMetroLinear: string;
   maxPlantulasCova: string;
-  maxCovasM2: string;
+  indiceSobrevivencia: string;
   perdaMedia: string;
   perdaBaixa: string;
-  distanciaMinima: string;
+  maxCovasM2: string;
   modoPlantio: 'cova' | 'lanco' | null;
   margemTolerancia: string;
   observacaoEtiqueta: string;
@@ -41,12 +42,12 @@ interface ParametrizacaoProdutosModalProps {
     nomeProduto: string;
     pmsBase: string;
     densidadeBase: string;
-    indiceSobrevivencia: string;
+    maxPlantulasMetroLinear: string;
     maxPlantulasCova: string;
-    maxCovasM2: string;
+    indiceSobrevivencia: string;
     perdaMedia: string;
     perdaBaixa: string;
-    distanciaMinima: string;
+    maxCovasM2: string;
     modoPlantio: 'cova' | 'lanco' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
@@ -308,12 +309,12 @@ export function ParametrizacaoProdutosModal({
               <span className="flex-1">Grupo</span>
               <span className="w-16 shrink-0 text-center">PMS</span>
               <span className="w-16 shrink-0 text-center">Plant/m²</span>
+              <span className="w-16 shrink-0 text-center">Plant/linear</span>
               <span className="w-16 shrink-0 text-center">Plant/cova</span>
               <span className="w-16 shrink-0 text-center">Sobrev%</span>
-              <span className="w-16 shrink-0 text-center">Cov/m²</span>
               <span className="w-16 shrink-0 text-center">Perda Méd%</span>
               <span className="w-16 shrink-0 text-center">Perda Baix%</span>
-              <span className="w-16 shrink-0 text-center">Dist.Mín</span>
+              <span className="w-16 shrink-0 text-center">Cov/m²</span>
               <span className="w-[74px] shrink-0 text-center">Plantio</span>
               <span className="w-16 shrink-0 text-center">Margem%</span>
               <span className="w-8 shrink-0 text-center">Obs.</span>
@@ -324,12 +325,12 @@ export function ParametrizacaoProdutosModal({
                 nomeProduto: existente?.nomeProduto ?? grupo,
                 pmsBase: existente?.pmsBase ?? '',
                 densidadeBase: existente?.densidadeBase ?? '',
-                indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+                maxPlantulasMetroLinear: existente?.maxPlantulasMetroLinear ?? '',
                 maxPlantulasCova: existente?.maxPlantulasCova ?? '',
-                maxCovasM2: existente?.maxCovasM2 ?? '',
+                indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
                 perdaMedia: existente?.perdaMedia ?? '',
                 perdaBaixa: existente?.perdaBaixa ?? '',
-                distanciaMinima: existente?.distanciaMinima ?? '',
+                maxCovasM2: existente?.maxCovasM2 ?? '',
                 modoPlantio: existente?.modoPlantio ?? null,
                 margemTolerancia: existente?.margemTolerancia ?? '',
                 observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
@@ -368,7 +369,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.densidadeBase}
                   placeholder="por m²"
-                  title="Plântulas pretendidas por m²"
+                  title="Plântulas pretendidas por m² — usada em modo A Lanço"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor });
@@ -376,9 +377,19 @@ export function ParametrizacaoProdutosModal({
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <input
+                  defaultValue={camposAtuais.maxPlantulasMetroLinear}
+                  placeholder="sem limite"
+                  title="Máx. de plântulas pretendidas por metro linear de linha, no Guia de Plantio — em Milho/Sorgo trava o Corredor sozinho pra nunca passar desse limite; nos demais produtos, passando dele o plantio vira semeadura contínua na linha (covas coladas demais). Em branco, sem esse limite."
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
+                <input
                   defaultValue={camposAtuais.maxPlantulasCova}
                   placeholder="8"
-                  title="Plântulas pretendidas por cova"
+                  title="Plântulas pretendidas por cova — usada em modo Covas"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
@@ -392,16 +403,6 @@ export function ParametrizacaoProdutosModal({
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor });
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.maxCovasM2}
-                  placeholder="10"
-                  title="Máx. de covas por m²"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxCovasM2) onSalvar({ ...camposAtuais, maxCovasM2: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -426,12 +427,12 @@ export function ParametrizacaoProdutosModal({
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <input
-                  defaultValue={camposAtuais.distanciaMinima}
-                  placeholder="sem limite"
-                  title="Distância mínima (cm) entre plântulas na linha, no Guia de Plantio — em Milho/Sorgo trava o Corredor sozinho pra nunca passar dela; nos demais produtos, abaixo dela o plantio vira semeadura contínua na linha (covas coladas demais). Em branco, sem esse limite."
+                  defaultValue={camposAtuais.maxCovasM2}
+                  placeholder="10"
+                  title="Máx. de covas por m²"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.distanciaMinima) onSalvar({ ...camposAtuais, distanciaMinima: valor });
+                    if (valor !== camposAtuais.maxCovasM2) onSalvar({ ...camposAtuais, maxCovasM2: valor });
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />

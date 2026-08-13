@@ -196,7 +196,7 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
     maxCovasM2: row.max_covas_m2,
     perdaMedia: row.perda_media,
     perdaBaixa: row.perda_baixa,
-    distanciaMinima: row.distancia_minima,
+    maxPlantulasMetroLinear: row.max_plantulas_metro_linear,
     modoPlantio: row.modo_plantio === 'cova' || row.modo_plantio === 'lanco' ? row.modo_plantio : null,
     margemTolerancia: row.margem_tolerancia,
     observacaoEtiqueta: row.observacao_etiqueta,
@@ -227,7 +227,7 @@ export async function salvarParametrizacaoProduto(produto: {
   maxCovasM2: string;
   perdaMedia: string;
   perdaBaixa: string;
-  distanciaMinima: string;
+  maxPlantulasMetroLinear: string;
   modoPlantio: 'cova' | 'lanco' | null;
   margemTolerancia: string;
   observacaoEtiqueta: string;
@@ -242,7 +242,7 @@ export async function salvarParametrizacaoProduto(produto: {
       max_covas_m2: produto.maxCovasM2 || null,
       perda_media: produto.perdaMedia || null,
       perda_baixa: produto.perdaBaixa || null,
-      distancia_minima: produto.distanciaMinima || null,
+      max_plantulas_metro_linear: produto.maxPlantulasMetroLinear || null,
       modo_plantio: produto.modoPlantio,
       margem_tolerancia: produto.margemTolerancia || null,
       observacao_etiqueta: produto.observacaoEtiqueta || null,

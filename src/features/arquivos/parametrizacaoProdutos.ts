@@ -82,9 +82,9 @@ export function resolverMaxCovasM2(nomeProduto: string, produtos: ProdutoParamet
   return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxCovasM2 ?? null);
 }
 
-/** Distância mínima (cm) entre PLÂNTULAS estabelecidas na mesma linha, como número — só usada na regra própria de Milho/Sorgo do Guia de Plantio (Sementes/cova editável, ver distanciaMinimaEfetivaMilhoSorgo em GuiaPlantioModal.tsx). Null se não cadastrado. */
-export function resolverDistanciaMinima(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(encontrarProduto(nomeProduto, produtos)?.distanciaMinima ?? null);
+/** Máximo de plântulas estabelecidas por metro linear de linha, como número — 3ª dimensão de densidade (junto com resolverDensidadeBase, por m², e resolverMaxPlantulasCova, por cova). Equivale a uma distância mínima em cm (100 ÷ esse valor) entre plântulas na linha, usada no Guia de Plantio (ver distanciaMinimaEfetivaMilhoSorgo/modoLinearCapim em GuiaPlantioModal.tsx). Null se não cadastrado. */
+export function resolverMaxPlantulasMetroLinear(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasMetroLinear ?? null);
 }
 
 /**
