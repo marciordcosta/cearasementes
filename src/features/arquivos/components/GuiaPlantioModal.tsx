@@ -275,16 +275,21 @@ function covasM2AlvoMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametriza
  * Distância mínima EFETIVA (cm) pra Milho/Sorgo — a Distância mínima cadastrada (Parametrização) é por
  * PLÂNTULA estabelecida, não por semente jogada (nem toda semente vira plântula); então multiplica pelas
  * plântulas esperadas por cova (Sementes/cova digitada × Germinação final ÷ 100, o mesmo valor contínuo
- * usado em covasM2AlvoMilhoSorgo — mesmo sem existir "meia planta", é a média que se materializa no
- * campo real: cova com 1 plântula, cova com 2). Null sem Distância mínima cadastrada ou sem Germinação —
- * nesse caso o desconto cai no teto fixo de 40% de sempre (ver sementesComAjustePorDistancia).
+ * usado em covasM2AlvoMilhoSorgo). Mas só multiplica pra CIMA — nunca abaixo de 1 plântula: com 1
+ * semente/cova e germinação imperfeita, o resultado esperado pode ficar abaixo de 1 (ex.: 0,8), só que a
+ * planta que eventualmente nascer precisa do espaço INTEIRO de uma plântula, não um espaço proporcional
+ * à chance dela nascer — não existe "0,8 de planta" fisicamente disputando espaço. Multiplicar só faz
+ * sentido com 2+ sementes/cova, resultando em mais de 1 plântula esperada (aí sim precisa de mais
+ * espaço, ver a explicação original do usuário: cova com 1 planta, cova com 2, a distância é a média).
+ * Null sem Distância mínima cadastrada ou sem Germinação — nesse caso o desconto cai no teto fixo de 40%
+ * de sempre (ver sementesComAjustePorDistancia).
  */
 function distanciaMinimaEfetivaMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, sementesCovaDigitada: number): number | null {
   const distanciaMinimaCadastrada = resolverDistanciaMinima(laudo.nomeProduto, produtos);
   if (distanciaMinimaCadastrada === null || distanciaMinimaCadastrada <= 0) return null;
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (germinacaoFinal === null || germinacaoFinal <= 0) return null;
-  const plantulasPorCova = sementesCovaDigitada * (germinacaoFinal / 100);
+  const plantulasPorCova = Math.max(1, sementesCovaDigitada * (germinacaoFinal / 100));
   return distanciaMinimaCadastrada * plantulasPorCova;
 }
 
@@ -360,6 +365,13 @@ export function GuiaPlantioModal({
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [itens, setItens] = useState<ItemGuia[]>([]);
   const [confirmarImpressaoAberto, setConfirmarImpressaoAberto] = useState(false);
+  /**
+   * Balão flutuante (não empurra o card) avisando que o Corredor foi corrigido sozinho ao sair do campo
+   * (só Milho/Sorgo, ver corrigirCorredorMilhoSorgo) — por laudoId, some ao editar Corredor ou
+   * Sementes/cova de novo. Não é reativo a cada render (senão apareceria já digitando, antes de sair do
+   * campo) — só liga no próprio blur, quando a correção de fato acontece.
+   */
+  const [avisoCorredorCorrigido, setAvisoCorredorCorrigido] = useState<Record<string, boolean>>({});
 
   /**
    * Peso do pacote (kg) — prioriza o que o próprio laudo traz (Peso por
@@ -436,9 +448,20 @@ export function GuiaPlantioModal({
     setItens((prev) => prev.map((it) => (it.laudoId === laudoId ? { ...it, ...patch } : it)));
   }
 
+  /** Limpa o balão de "Corredor corrigido" desse laudo — chamado sempre que o operador volta a editar Corredor ou Sementes/cova, pra não deixar um aviso velho flutuando sobre um valor novo. */
+  function limparAvisoCorredor(laudoId: string) {
+    setAvisoCorredorCorrigido((prev) => {
+      if (!(laudoId in prev)) return prev;
+      const proximo = { ...prev };
+      delete proximo[laudoId];
+      return proximo;
+    });
+  }
+
   /** Corredor é o único campo editável do espaçamento — Distância acompanha sozinha (derivada, ver distanciaDerivada) pra manter o Covas/m² sempre travado no alvo parametrizado; impossível o espaçamento fugir dele. */
   function atualizarCorredor(item: ItemGuia, valorTexto: string) {
     atualizarItem(item.laudoId, { corredor: valorTexto });
+    limparAvisoCorredor(item.laudoId);
   }
 
   /** Sementes/cova editável (só Milho/Sorgo, ver ehMilhoOuSorgo) — teto é o Máx. plântulas/cova cadastrado (Parametrização); sem esse cadastro, aceita qualquer inteiro positivo. Mínimo 1 (não existe cova sem semente). */
@@ -446,12 +469,14 @@ export function GuiaPlantioModal({
     const valorLimpo = valorTexto.replace(/\D/g, '');
     if (valorLimpo === '') {
       atualizarItem(item.laudoId, { sementesCova: '' });
+      limparAvisoCorredor(item.laudoId);
       return;
     }
     let n = parseInt(valorLimpo, 10);
     if (maxPlantulasCova !== null && maxPlantulasCova > 0 && n > maxPlantulasCova) n = Math.floor(maxPlantulasCova);
     if (n < 1) n = 1;
     atualizarItem(item.laudoId, { sementesCova: String(n) });
+    limparAvisoCorredor(item.laudoId);
   }
 
   /**
@@ -460,7 +485,8 @@ export function GuiaPlantioModal({
    * próprio Corredor pra travar a Distância exatamente na mínima, preservando o Covas/m² pretendido
    * (Densidade ÷ plântulas esperadas por cova) — só o aviso não bastava, o Corredor continuaria
    * mostrando um valor que não respeita o mínimo físico da cultivar. Sem Distância mínima cadastrada,
-   * não corrige nada (mantém só o aviso genérico de antes, com o teto fixo de 40%).
+   * não corrige nada (mantém só o aviso genérico de antes, com o teto fixo de 40%). Quando corrige,
+   * liga o balão flutuante (ver avisoCorredorCorrigido) — só nesse momento, não a cada render.
    */
   function corrigirCorredorMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, item: ItemGuia) {
     const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
@@ -470,7 +496,9 @@ export function GuiaPlantioModal({
     const distanciaAtual = distanciaDeCovasM2(covasM2, item.corredor);
     if (distanciaAtual === null || distanciaAtual >= distanciaMinimaEfetiva) return;
     const corredorCorrigido = 10000 / (distanciaMinimaEfetiva * covasM2);
-    if (corredorCorrigido > 0) atualizarItem(item.laudoId, { corredor: String(Math.round(corredorCorrigido)) });
+    if (corredorCorrigido <= 0) return;
+    atualizarItem(item.laudoId, { corredor: String(Math.round(corredorCorrigido)) });
+    setAvisoCorredorCorrigido((prev) => ({ ...prev, [item.laudoId]: true }));
   }
 
   /**
@@ -869,11 +897,6 @@ export function GuiaPlantioModal({
                       let distancia: number | null;
                       let espacamentoAtual: number | null;
                       let sementesCovaNum: number | null;
-                      // Avisa (não corrige o campo sozinho) quando o espaçamento efetivo fica abaixo da Distância
-                      // mínima real (cadastrada por produto, ver distanciaMinimaEfetivaMilhoSorgo) — a Taxa de
-                      // Semeadura já é ajustada automaticamente por trás (ver sementesCovaEfetivaMilhoSorgo); o
-                      // aviso é só pro operador não achar que é bug quando o kg/ha não bater exatamente na conta.
-                      let avisoEspacamentoApertado = false;
                       if (milhoSorgo) {
                         const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
                         const covasM2 = covasM2AlvoMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, sementesCovaDigitada);
@@ -881,15 +904,6 @@ export function GuiaPlantioModal({
                         espacamentoAtual = espacamentoDeDistancia(distancia, item.corredor);
                         const distanciaMinimaEfetiva = distanciaMinimaEfetivaMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, sementesCovaDigitada);
                         sementesCovaNum = sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada, espacamentoAtual, covasM2, distanciaMinimaEfetiva);
-                        if (espacamentoAtual !== null) {
-                          if (distanciaMinimaEfetiva !== null) {
-                            avisoEspacamentoApertado = espacamentoAtual < distanciaMinimaEfetiva;
-                          } else if (covasM2 !== null && covasM2 > 0) {
-                            // Sem Distância mínima cadastrada — cai no aviso genérico de antes (teto fixo de 40%).
-                            const distanciaIdeal = Math.sqrt(10000 / covasM2);
-                            avisoEspacamentoApertado = distanciaIdeal - espacamentoAtual >= TETO_AJUSTE_SEMENTES;
-                          }
-                        }
                       } else {
                         distancia = distanciaDerivada(laudo, item.corredor, produtos);
                         espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
@@ -915,7 +929,7 @@ export function GuiaPlantioModal({
                                 {distancia === null ? '—' : Math.round(distancia)}
                               </p>
                             </div>
-                            <div>
+                            <div className="relative">
                               <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
                               <input
                                 value={item.corredor}
@@ -930,6 +944,13 @@ export function GuiaPlantioModal({
                                 }
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
+                              {/* Balão flutuante — não empurra o card (ver avisoCorredorCorrigido); só aparece depois que o
+                                  operador sai do campo e o sistema já recalculou o Corredor sozinho. */}
+                              {milhoSorgo && avisoCorredorCorrigido[item.laudoId] && (
+                                <div className="absolute right-0 top-full z-40 mt-1 w-max max-w-[180px] rounded-md bg-bad px-2 py-1 text-[9px] leading-tight text-white shadow-lg">
+                                  Espaçamento abaixo do mínimo — Corredor e Taxa de Semeadura já ajustados
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-1.5">
@@ -956,9 +977,6 @@ export function GuiaPlantioModal({
                                 </p>
                               )}
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
-                              {avisoEspacamentoApertado && (
-                                <p className="mt-0.5 text-[9px] text-bad">Espaçamento abaixo do mínimo — Taxa de Semeadura já ajustada</p>
-                              )}
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
