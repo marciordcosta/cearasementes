@@ -240,22 +240,25 @@ function espacamentoEfetivo(corredorTexto: string): number | null {
 }
 
 /**
- * True quando o espaçamento efetivo (regra GERAL — Milho/Sorgo nunca chega aqui, o Corredor se corrige
- * sozinho antes, ver corrigirCorredorMilhoSorgo) fica abaixo da distância mínima entre plântulas —
- * derivada do Máx. de plântulas/metro linear cadastrado (Parametrização, mesmo campo do Milho/Sorgo,
- * geral pra qualquer produto): 100 ÷ esse valor = cm entre plântulas. A partir daí não faz mais sentido
- * pensar em "covas" discretas (buracos colados demais pra caber fisicamente) — o plantio vira, na
- * prática, semeadura contínua na linha: a UI esconde Sem./cova e Distância, e destaca Sementes/m
- * (linear) — SEM mudar a conta de kg/ha (que já é a mesma, Sementes/m linear só é outra forma de mostrar
- * o mesmo resultado). Volta ao normal sozinho se o Corredor abrir de novo. Sem Máx. plântulas/metro
- * cadastrado, sempre false (comportamento de sempre, sem esse modo).
+ * True quando a quantidade de PLÂNTULAS esperadas por metro linear (Sementes/m linear × Germinação
+ * final ÷ 100 — nem toda semente vira plântula) chega ou passa do Máx. de plântulas/metro linear
+ * cadastrado (Parametrização, regra GERAL — Milho/Sorgo nunca chega aqui, o Corredor se corrige sozinho
+ * antes, ver corrigirCorredorMilhoSorgo). Comparar direto em plântulas/m (não em cm de distância) evita
+ * o descompasso de unidade entre a Distância derivada e o que o campo cadastrado realmente representa.
+ * A partir daí não faz mais sentido pensar em "covas" discretas (buracos colados demais pra caber
+ * fisicamente) — o plantio vira, na prática, semeadura contínua na linha: a UI esconde Sem./cova e
+ * Distância, e destaca Sementes/m (linear) — SEM mudar a conta de kg/ha (que já é a mesma, Sementes/m
+ * linear só é outra forma de mostrar o mesmo resultado). Volta ao normal sozinho se o Corredor abrir de
+ * novo. Sem Máx. plântulas/metro cadastrado, ou sem Sementes/m linear calculável, sempre false.
  */
-function modoLinearCapim(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[], espacamentoAtual: number | null): boolean {
-  if (espacamentoAtual === null) return false;
+function modoLinearCapim(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, sementesPorMetroLinear: number | null): boolean {
+  if (sementesPorMetroLinear === null) return false;
   const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo.nomeProduto, produtos);
   if (maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return false;
-  const distanciaMinima = 100 / maxPlantulasMetroLinear;
-  return espacamentoAtual < distanciaMinima;
+  const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
+  if (germinacaoFinal === null || germinacaoFinal <= 0) return false;
+  const plantulasPorMetroLinear = sementesPorMetroLinear * (germinacaoFinal / 100);
+  return plantulasPorMetroLinear >= maxPlantulasMetroLinear;
 }
 
 /**
@@ -959,8 +962,15 @@ export function GuiaPlantioModal({
                       // Layout (Covas x Semeadura contínua) decide pelo Corredor CONFIRMADO (último blur/Enter),
                       // não pelo item.corredor ao vivo — senão o card trocaria de estrutura no meio da digitação.
                       const corredorConfirmado = corredorConfirmadoCapim[item.laudoId] ?? item.corredor;
-                      const espacamentoConfirmado = !milhoSorgo ? espacamentoEfetivo(corredorConfirmado) : null;
-                      const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, espacamentoConfirmado);
+                      let sementesPorMetroLinearConfirmado: number | null = null;
+                      if (!milhoSorgo) {
+                        const distanciaConfirmada = distanciaDerivada(corredorConfirmado);
+                        const espacamentoConfirmado = espacamentoEfetivo(corredorConfirmado);
+                        const sementesCovaConfirmada = sementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoConfirmado);
+                        sementesPorMetroLinearConfirmado =
+                          distanciaConfirmada !== null && distanciaConfirmada > 0 && sementesCovaConfirmada !== null ? (100 / distanciaConfirmada) * sementesCovaConfirmada : null;
+                      }
+                      const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, fatorModoItem, fatorCondicaoAtual, sementesPorMetroLinearConfirmado);
                       if (linearCapim) {
                         return (
                           <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
