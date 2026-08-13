@@ -385,6 +385,15 @@ export function GuiaPlantioModal({
    * campo) — só liga no próprio blur, quando a correção de fato acontece.
    */
   const [avisoCorredorCorrigido, setAvisoCorredorCorrigido] = useState<Record<string, boolean>>({});
+  /**
+   * Corredor "confirmado" — só atualiza no blur/Enter do campo (regra geral, capim), pra decidir se o
+   * card mostra modo Covas ou "Semeadura contínua" (ver modoLinearCapim): evita o card trocar de layout
+   * no meio da digitação (ex.: já viraria linear ao digitar só "2" de "20", antes de terminar). Os
+   * NÚMEROS (kg/ha, Sementes/m linear etc.) continuam recalculando ao vivo a partir de item.corredor —
+   * só a decisão de QUAL layout mostrar espera o operador terminar de editar. Ausente = usa item.corredor
+   * (estado inicial, antes de qualquer edição).
+   */
+  const [corredorConfirmadoCapim, setCorredorConfirmadoCapim] = useState<Record<string, string>>({});
 
   /**
    * Peso do pacote (kg) — prioriza o que o próprio laudo traz (Peso por
@@ -475,6 +484,11 @@ export function GuiaPlantioModal({
   function atualizarCorredor(item: ItemGuia, valorTexto: string) {
     atualizarItem(item.laudoId, { corredor: valorTexto });
     limparAvisoCorredor(item.laudoId);
+  }
+
+  /** Ao sair do campo Corredor (regra geral, capim), "confirma" o valor pra decidir o layout do card (Covas x Semeadura contínua, ver modoLinearCapim/corredorConfirmadoCapim) — só nesse momento, não a cada tecla digitada. */
+  function confirmarCorredorCapim(item: ItemGuia) {
+    setCorredorConfirmadoCapim((prev) => ({ ...prev, [item.laudoId]: item.corredor }));
   }
 
   /** Sementes/cova editável (só Milho/Sorgo, ver ehMilhoOuSorgo) — teto é o Máx. plântulas/cova cadastrado (Parametrização); sem esse cadastro, aceita qualquer inteiro positivo. Mínimo 1 (não existe cova sem semente). */
@@ -939,7 +953,11 @@ export function GuiaPlantioModal({
                       // deixa de comportar covas discretas (ver modoLinearCapim, regra geral) ou pra plantas
                       // unitárias (Milho, Sorgo), onde é mais direto que "Sementes/cova" (quase sempre 1).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
-                      const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, espacamentoAtual);
+                      // Layout (Covas x Semeadura contínua) decide pelo Corredor CONFIRMADO (último blur/Enter),
+                      // não pelo item.corredor ao vivo — senão o card trocaria de estrutura no meio da digitação.
+                      const corredorConfirmado = corredorConfirmadoCapim[item.laudoId] ?? item.corredor;
+                      const espacamentoConfirmado = !milhoSorgo ? espacamentoEfetivo(laudo, corredorConfirmado, produtos) : null;
+                      const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, espacamentoConfirmado);
                       if (linearCapim) {
                         return (
                           <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
@@ -954,6 +972,8 @@ export function GuiaPlantioModal({
                               <input
                                 value={item.corredor}
                                 onChange={(e) => atualizarCorredor(item, e.target.value)}
+                                onBlur={() => confirmarCorredorCapim(item)}
+                                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                                 inputMode="decimal"
                                 title="Único campo editável do espaçamento"
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
@@ -989,8 +1009,8 @@ export function GuiaPlantioModal({
                               <input
                                 value={item.corredor}
                                 onChange={(e) => atualizarCorredor(item, e.target.value)}
-                                onBlur={milhoSorgo ? () => corrigirCorredorMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, item) : undefined}
-                                onKeyDown={milhoSorgo ? (e) => e.key === 'Enter' && e.currentTarget.blur() : undefined}
+                                onBlur={milhoSorgo ? () => corrigirCorredorMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, item) : () => confirmarCorredorCapim(item)}
+                                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                                 inputMode="decimal"
                                 title={
                                   milhoSorgo
