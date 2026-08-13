@@ -139,23 +139,21 @@ function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizaca
 // % de desconto na Sementes/cova por cm que o espaçamento efetivo (o menor entre Distância e Corredor
 // atuais) fica mais apertado que a distância ideal — evita superdimensionar a cova quando o espaçamento
 // aperta. Regra do "espaçamento mínimo", usada nas 2 regras (geral, ver sementesCovaAtual; Milho/Sorgo,
-// ver sementesCovaEfetivaMilhoSorgo), cada uma aplicando em cima da sua própria Sementes/cova.
+// ver sementesCovaEfetivaMilhoSorgo), cada uma aplicando em cima da sua própria Sementes/cova. Sem teto —
+// a conta continua linear (nada empírico travando antes da hora); quem trava o espaçamento na Distância
+// mínima real (Parametrização, agora geral pra qualquer produto) é a correção do Corredor em Milho/Sorgo
+// (ver corrigirCorredorMilhoSorgo), ou a troca pro modo linear contínuo nos demais (ver modoLinearCapim).
 const TAXA_AJUSTE_SEMENTES_POR_CM = 1;
-// Teto do desconto — nunca desconta mais que isso (piso de 60% do padrão, mesmo com covas coladas).
-const TETO_AJUSTE_SEMENTES = 40;
 
 /**
  * Desconta a Sementes/cova padrão quando o espaçamento efetivo fica mais apertado que a distância ideal
- * — 1%/cm de diferença, até um teto (`tetoPercentual`, 40% por padrão — regra geral, capim). Mais aberto
- * que o ideal não faz nada (mantém o padrão, sem "prêmio" por sobrar espaço). Milho/Sorgo passa um teto
- * PRÓPRIO (ver distanciaMinimaEfetivaMilhoSorgo/sementesCovaEfetivaMilhoSorgo), calculado a partir da
- * Distância mínima cadastrada — não faz sentido usar 40% fixo pra cultivares com necessidade de
- * espaçamento tão diferente entre si (Milho x Sorgo).
+ * — 1%/cm de diferença, sem teto. Mais aberto que o ideal não faz nada (mantém o padrão, sem "prêmio"
+ * por sobrar espaço).
  */
-function sementesComAjustePorDistancia(sementesPadrao: number, espacamentoAtual: number, distanciaIdeal: number, tetoPercentual: number = TETO_AJUSTE_SEMENTES): number {
+function sementesComAjustePorDistancia(sementesPadrao: number, espacamentoAtual: number, distanciaIdeal: number): number {
   const diferenca = distanciaIdeal - espacamentoAtual; // > 0: mais apertado (desconto); <= 0: sem ajuste
   if (diferenca <= 0) return sementesPadrao;
-  const percentual = Math.min(tetoPercentual, diferenca * TAXA_AJUSTE_SEMENTES_POR_CM);
+  const percentual = diferenca * TAXA_AJUSTE_SEMENTES_POR_CM;
   return sementesPadrao * (1 - percentual / 100);
 }
 
@@ -251,6 +249,22 @@ function espacamentoEfetivo(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, corredorTe
 }
 
 /**
+ * True quando o espaçamento efetivo (regra GERAL — Milho/Sorgo nunca chega aqui, o Corredor se corrige
+ * sozinho antes, ver corrigirCorredorMilhoSorgo) fica abaixo da Distância mínima cadastrada
+ * (Parametrização, mesmo campo do Milho/Sorgo, agora geral pra qualquer produto). A partir daí não faz
+ * mais sentido pensar em "covas" discretas (buracos colados demais pra caber fisicamente) — o plantio
+ * vira, na prática, semeadura contínua na linha: a UI esconde Sem./cova e Distância, e destaca Sementes/m
+ * (linear) — SEM mudar a conta de kg/ha (que já é a mesma, Sementes/m linear só é outra forma de mostrar
+ * o mesmo resultado). Volta ao normal sozinho se o Corredor abrir de novo. Sem Distância mínima
+ * cadastrada, sempre false (comportamento de sempre, sem esse modo).
+ */
+function modoLinearCapim(laudo: Pick<ArquivoLaudo, 'nomeProduto'>, produtos: ProdutoParametrizacao[], espacamentoAtual: number | null): boolean {
+  if (espacamentoAtual === null) return false;
+  const distanciaMinima = resolverDistanciaMinima(laudo.nomeProduto, produtos);
+  return distanciaMinima !== null && distanciaMinima > 0 && espacamentoAtual < distanciaMinima;
+}
+
+/**
  * Covas/m² alvo — REGRA PRÓPRIA de Milho/Sorgo (ver ehMilhoOuSorgo), independente da regra geral
  * (covasM2Alvo). Aqui é o INVERSO da regra geral: o operador digita quantas sementes vão em cada cova
  * (ItemGuia.sementesCova, editável, padrão 1 — teto é o Máx. de plântulas/cova cadastrado); o sistema
@@ -306,7 +320,7 @@ function distanciaMinimaEfetivaMilhoSorgo(laudo: ArquivoLaudo, produtos: Produto
 function sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada: number, espacamentoAtual: number | null, covasM2AlvoAtual: number | null): number {
   if (espacamentoAtual === null || covasM2AlvoAtual === null || covasM2AlvoAtual <= 0) return sementesCovaDigitada;
   const distanciaIdeal = Math.sqrt(10000 / covasM2AlvoAtual);
-  return sementesComAjustePorDistancia(sementesCovaDigitada, espacamentoAtual, distanciaIdeal, Infinity);
+  return sementesComAjustePorDistancia(sementesCovaDigitada, espacamentoAtual, distanciaIdeal);
 }
 
 /** Corredor padrão (cm) ao adicionar o produto — grade quadrada (lado = √(10000 ÷ Covas/m² alvo)), arredondado pra cima. Milho/Sorgo usa a regra própria (Densidade + 1 semente/cova de partida, ver covasM2AlvoMilhoSorgo); os demais usam o Covas/m² cadastrado (ver covasM2Alvo). Só o PONTO DE PARTIDA — o operador ajusta o Corredor livremente depois, Distância acompanha sozinha. */
@@ -920,10 +934,40 @@ export function GuiaPlantioModal({
                         espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
                         sementesCovaNum = sementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoAtual);
                       }
-                      // Sementes por metro linear de linha (covas por metro × Sementes/cova) — só faz sentido
-                      // pra plantas unitárias (Milho, Sorgo), onde é assim que o operador calibra a plantadeira,
-                      // mais direto que "Sementes/cova" (quase sempre 1) ou "Covas/m²" (área, não linha).
+                      // Sementes por metro linear de linha (covas por metro × Sementes/cova) — sempre calculado
+                      // (útil pra calibrar plantadeira), mas só vira a informação PRINCIPAL quando o espaçamento
+                      // deixa de comportar covas discretas (ver modoLinearCapim, regra geral) ou pra plantas
+                      // unitárias (Milho, Sorgo), onde é mais direto que "Sementes/cova" (quase sempre 1).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
+                      const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, espacamentoAtual);
+                      if (linearCapim) {
+                        return (
+                          <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
+                            <p
+                              title="Covas coladas demais pra esse espaçamento — o plantio vira semeadura contínua na linha (Distância/Sem./cova deixam de fazer sentido); calibre pela Sementes/m (linear). Abrindo o Corredor de novo, volta ao modo Covas."
+                              className="rounded-md bg-[var(--color-page)] px-1.5 py-1 text-center text-[9px] font-medium text-[var(--color-text-soft)]"
+                            >
+                              Semeadura contínua (linha)
+                            </p>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
+                              <input
+                                value={item.corredor}
+                                onChange={(e) => atualizarCorredor(item, e.target.value)}
+                                inputMode="decimal"
+                                title="Único campo editável do espaçamento"
+                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
+                              <p className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
+                                {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -992,7 +1036,7 @@ export function GuiaPlantioModal({
                                 />
                               ) : (
                                 <p
-                                  title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada quando o espaçamento fica mais apertado que o ideal do produto (1%/cm, até 40%)"
+                                  title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada quando o espaçamento fica mais apertado que o ideal do produto (1%/cm)"
                                   className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                                 >
                                   {formatarSementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoAtual) || '—'}
