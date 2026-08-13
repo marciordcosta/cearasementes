@@ -81,6 +81,8 @@ export interface ProdutoParametrizacao {
   perdaMedia: string | null;
   /** Igual perdaMedia, pra Condição "Baixa". "Ideal" não tem override — é sempre 0% de perda por definição. */
   perdaBaixa: string | null;
+  /** Distância mínima (cm) entre PLÂNTULAS estabelecidas na mesma linha — só usada na regra própria de Milho/Sorgo (Sementes/cova editável, ver GuiaPlantioModal.tsx): calcula um teto de desconto real (Distância mínima × plântulas esperadas por cova, já descontada a Germinação) em vez do 40% fixo genérico. Null = sem cadastro, cai no teto de 40% de sempre. */
+  distanciaMinima: string | null;
   /** Modo de plantio padrão do grupo (Cova ou Lanço) — só pré-seleciona o modo ao adicionar o produto no Guia de Plantio, não entra em nenhum cálculo. Null = sem preferência cadastrada (o Guia cai no padrão dele, Lanço). */
   modoPlantio: 'cova' | 'lanco' | null;
   /** Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando ainda arredonda pra baixo, acima arredonda pra cima. Texto cru (ex.: "25"); null cai no padrão de 25%. */

@@ -522,6 +522,7 @@ export interface Database {
           max_covas_m2: string | null;
           perda_media: string | null;
           perda_baixa: string | null;
+          distancia_minima: string | null;
           modo_plantio: string | null;
           margem_tolerancia: string | null;
           observacao_etiqueta: string | null;

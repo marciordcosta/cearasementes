@@ -82,6 +82,11 @@ export function resolverMaxCovasM2(nomeProduto: string, produtos: ProdutoParamet
   return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxCovasM2 ?? null);
 }
 
+/** Distância mínima (cm) entre PLÂNTULAS estabelecidas na mesma linha, como número — só usada na regra própria de Milho/Sorgo do Guia de Plantio (Sementes/cova editável, ver distanciaMinimaEfetivaMilhoSorgo em GuiaPlantioModal.tsx). Null se não cadastrado. */
+export function resolverDistanciaMinima(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(nomeProduto, produtos)?.distanciaMinima ?? null);
+}
+
 /**
  * Fator de perda (multiplicador 0–1) pra uma Condição de Implantação do Guia de Plantio — prioriza o
  * valor cadastrado POR PRODUTO (Parametrização, ex.: Milho aguenta bem menos variação de condição que um
