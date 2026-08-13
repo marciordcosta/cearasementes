@@ -823,12 +823,20 @@ export function GuiaPlantioModal({
                       let distancia: number | null;
                       let espacamentoAtual: number | null;
                       let sementesCovaNum: number | null;
+                      // Avisa (não corrige sozinho) quando o desconto por espaçamento mínimo bate no teto de 40%
+                      // (ver TETO_AJUSTE_SEMENTES) — sinal de que a Sementes/cova digitada está superdimensionada
+                      // pro espaçamento atual; quem decide reduzir é o operador, o campo nunca muda sozinho.
+                      let avisoEspacamentoApertado = false;
                       if (milhoSorgo) {
                         const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
                         const covasM2 = covasM2AlvoMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, sementesCovaDigitada);
                         distancia = distanciaDeCovasM2(covasM2, item.corredor);
                         espacamentoAtual = espacamentoDeDistancia(distancia, item.corredor);
                         sementesCovaNum = sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada, espacamentoAtual, covasM2);
+                        if (espacamentoAtual !== null && covasM2 !== null && covasM2 > 0) {
+                          const distanciaIdeal = Math.sqrt(10000 / covasM2);
+                          avisoEspacamentoApertado = distanciaIdeal - espacamentoAtual >= TETO_AJUSTE_SEMENTES;
+                        }
                       } else {
                         distancia = distanciaDerivada(laudo, item.corredor, produtos);
                         espacamentoAtual = espacamentoEfetivo(laudo, item.corredor, produtos);
@@ -889,6 +897,9 @@ export function GuiaPlantioModal({
                                 </p>
                               )}
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
+                              {avisoEspacamentoApertado && (
+                                <p className="mt-0.5 text-[9px] text-bad">Espaçamento muito apertado pra {item.sementesCova || '1'} sementes/cova — considere reduzir</p>
+                              )}
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
