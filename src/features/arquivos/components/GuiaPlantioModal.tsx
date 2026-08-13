@@ -455,6 +455,25 @@ export function GuiaPlantioModal({
   }
 
   /**
+   * Ao sair do campo Corredor (só Milho/Sorgo, ver ehMilhoOuSorgo), se a Distância resultante ficar
+   * abaixo da mínima real (cadastrada por plântula — ver distanciaMinimaEfetivaMilhoSorgo), corrige o
+   * próprio Corredor pra travar a Distância exatamente na mínima, preservando o Covas/m² pretendido
+   * (Densidade ÷ plântulas esperadas por cova) — só o aviso não bastava, o Corredor continuaria
+   * mostrando um valor que não respeita o mínimo físico da cultivar. Sem Distância mínima cadastrada,
+   * não corrige nada (mantém só o aviso genérico de antes, com o teto fixo de 40%).
+   */
+  function corrigirCorredorMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, item: ItemGuia) {
+    const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
+    const covasM2 = covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, sementesCovaDigitada);
+    const distanciaMinimaEfetiva = distanciaMinimaEfetivaMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, sementesCovaDigitada);
+    if (covasM2 === null || covasM2 <= 0 || distanciaMinimaEfetiva === null || distanciaMinimaEfetiva <= 0) return;
+    const distanciaAtual = distanciaDeCovasM2(covasM2, item.corredor);
+    if (distanciaAtual === null || distanciaAtual >= distanciaMinimaEfetiva) return;
+    const corredorCorrigido = 10000 / (distanciaMinimaEfetiva * covasM2);
+    if (corredorCorrigido > 0) atualizarItem(item.laudoId, { corredor: String(Math.round(corredorCorrigido)) });
+  }
+
+  /**
    * Área (ha) e Total de sacos são ligados nos dois modos: kg/ha e peso do
    * saco são fixos (Parametrização e Tabela de Preço), então dá pra ir dos
    * sacos pra área tão bem quanto o contrário — editar Total de sacos
@@ -901,8 +920,14 @@ export function GuiaPlantioModal({
                               <input
                                 value={item.corredor}
                                 onChange={(e) => atualizarCorredor(item, e.target.value)}
+                                onBlur={milhoSorgo ? () => corrigirCorredorMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, item) : undefined}
+                                onKeyDown={milhoSorgo ? (e) => e.key === 'Enter' && e.currentTarget.blur() : undefined}
                                 inputMode="decimal"
-                                title="Único campo editável do espaçamento — Distância acompanha sozinha pra manter o Covas/m² no alvo"
+                                title={
+                                  milhoSorgo
+                                    ? 'Único campo editável do espaçamento — se a Distância ficar abaixo do mínimo cadastrado, corrige sozinho ao sair do campo'
+                                    : 'Único campo editável do espaçamento — Distância acompanha sozinha pra manter o Covas/m² no alvo'
+                                }
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
                             </div>
