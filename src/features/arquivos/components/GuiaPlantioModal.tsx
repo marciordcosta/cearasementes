@@ -945,10 +945,21 @@ export function GuiaPlantioModal({
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
                               {/* Balão flutuante — não empurra o card (ver avisoCorredorCorrigido); só aparece depois que o
-                                  operador sai do campo e o sistema já recalculou o Corredor sozinho. */}
+                                  operador sai do campo e o sistema já recalculou o Corredor sozinho. Fecha sozinho ao
+                                  editar Corredor/Sementes/cova de novo, ou no ×. */}
                               {milhoSorgo && avisoCorredorCorrigido[item.laudoId] && (
-                                <div className="absolute right-0 top-full z-40 mt-1 w-max max-w-[180px] rounded-md bg-bad px-2 py-1 text-[9px] leading-tight text-white shadow-lg">
-                                  Espaçamento abaixo do mínimo — Corredor e Taxa de Semeadura já ajustados
+                                <div className="absolute left-1/2 top-full z-40 mt-1 w-max max-w-[170px] -translate-x-1/2 rounded-md bg-bad py-1 pl-2 pr-1 text-[9px] leading-tight text-white shadow-lg">
+                                  <div className="flex items-start gap-1">
+                                    <span className="flex-1">Espaçamento abaixo do mínimo — Corredor e Taxa de Semeadura já ajustados</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => limparAvisoCorredor(item.laudoId)}
+                                      title="Fechar aviso"
+                                      className="shrink-0 px-0.5 text-white/80 hover:text-white"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>
