@@ -427,8 +427,8 @@ export function ParametrizacaoProdutosModal({
                 />
                 <input
                   defaultValue={camposAtuais.distanciaMinima}
-                  placeholder="global"
-                  title="Distância mínima (cm) entre plântulas na linha — só usada em Milho/Sorgo (Sementes/cova editável no Guia de Plantio); em branco, cai no teto de desconto fixo de 40%"
+                  placeholder="sem limite"
+                  title="Distância mínima (cm) entre plântulas na linha, no Guia de Plantio — em Milho/Sorgo trava o Corredor sozinho pra nunca passar dela; nos demais produtos, abaixo dela o plantio vira semeadura contínua na linha (covas coladas demais). Em branco, sem esse limite."
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.distanciaMinima) onSalvar({ ...camposAtuais, distanciaMinima: valor });
