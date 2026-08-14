@@ -278,7 +278,13 @@ export function ParametrizacaoProdutosModal({
       if (!grupoPorChave.has(chave)) grupoPorChave.set(chave, grupo);
     });
     return [...grupoPorChave.entries()]
-      .map(([chave, grupo]) => ({ grupo, existente: produtos.find((p) => normalizarNome(grupoDoNome(p.nomeProduto)) === chave) ?? null }))
+      .map(([chave, grupo]) => {
+        const existente = produtos.find((p) => normalizarNome(grupoDoNome(p.nomeProduto)) === chave) ?? null;
+        // Já cadastrado: mostra o nome de VERDADE salvo no cadastro (fonte de verdade — reflete uma
+        // correção de nome feita pelo ✎, ver onRenomear) em vez da extração automática do laudo, que
+        // só serve de SUGESTÃO de partida pra grupo ainda sem cadastro nenhum (existente === null).
+        return { grupo: existente?.nomeProduto ?? grupo, existente };
+      })
       .sort((a, b) => a.grupo.localeCompare(b.grupo));
   }, [produtos, arquivos]);
 
