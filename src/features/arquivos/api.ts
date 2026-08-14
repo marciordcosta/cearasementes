@@ -195,7 +195,6 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
     nomeProduto: row.nome_produto,
     pmsBase: row.pms_base,
     densidadeBase: row.densidade_base,
-    vcPadrao: row.vc_padrao,
     indiceSobrevivencia: row.indice_sobrevivencia,
     maxPlantulasCova: row.max_plantulas_cova,
     perdaMedia: row.perda_media,
@@ -226,7 +225,6 @@ export async function salvarParametrizacaoProduto(produto: {
   nomeProduto: string;
   pmsBase: string;
   densidadeBase: string;
-  vcPadrao: string;
   indiceSobrevivencia: string;
   maxPlantulasCova: string;
   perdaMedia: string;
@@ -241,7 +239,6 @@ export async function salvarParametrizacaoProduto(produto: {
       nome_produto: produto.nomeProduto,
       pms_base: produto.pmsBase || null,
       densidade_base: produto.densidadeBase || null,
-      vc_padrao: produto.vcPadrao || null,
       indice_sobrevivencia: produto.indiceSobrevivencia || null,
       max_plantulas_cova: produto.maxPlantulasCova || null,
       perda_media: produto.perdaMedia || null,

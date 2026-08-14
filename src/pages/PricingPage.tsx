@@ -453,7 +453,9 @@ export function PricingPage() {
           plantioSementesCovaBase: plantio.sementesCovaBase,
           plantioPms: plantio.pms,
           plantioVc: plantio.vc,
+          plantioPmsManual: plantio.pmsManual,
           plantioValidade: plantio.validade,
+          plantioMargemTolerancia: plantio.margemTolerancia,
           ordem: indice,
         };
       });

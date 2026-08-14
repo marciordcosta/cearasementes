@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import {
+  arredondarSacos,
   covasM2Alvo,
   distanciaDeCovasM2,
   distanciaIdealProduto,
@@ -85,13 +86,15 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
  * (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo
  * do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de
  * texto quebrar sozinho. `mostrarDetalhes` (Canal.mostrarDetalhesPlantio, ver ChannelsPanel.tsx) —
- * só quando ligado pra essa Tabela, VC% e Validade entram na mesma linha discreta, nessa ordem:
- * Fornecedor > VC% > Validade; desligado (padrão), mostra só o Fornecedor.
+ * só quando ligado pra essa Tabela, VC%/PMS/Validade entram na mesma linha discreta, nessa ordem:
+ * Fornecedor > VC% > PMS > Validade; desligado (padrão), mostra só o Fornecedor. PMS aqui é sempre
+ * o digitado NESSE laudo (plantioPmsManual) — nunca o base da Parametrização.
  */
 function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: ItemCatalogo; selecionado: boolean; mostrarDetalhes: boolean; onClick: () => void }) {
   const infoPartes = [
     item.fornecedorNome,
     mostrarDetalhes && item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
+    mostrarDetalhes && item.plantioPmsManual ? `PMS ${item.plantioPmsManual}` : null,
     mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
   ].filter((parte): parte is string => !!parte);
 
@@ -487,10 +490,13 @@ function ModalCalculadoraPlantio({
   const distanciaCovas = modo === 'covas' ? distanciaDeCovasM2(covasM2Alvo(), corredor) : null;
 
   // Nº de embalagens = Total necessário ÷ peso da embalagem desse produto (já cadastrado, o mesmo
-  // peso mostrado no card) — arredondado pra cima, mesma filosofia de "compra um pouco a mais" do
-  // resto do sistema (ver arredondarSacos em GuiaPlantioModal.tsx, aqui simplificado sem margem de
-  // tolerância).
-  const qtdEmbalagens = totalKg !== null && itemSelecionado && itemSelecionado.peso > 0 ? Math.ceil(totalKg / itemSelecionado.peso) : null;
+  // peso mostrado no card) — arredondado pela MESMA margem de tolerância por grupo do Guia de
+  // Plantio interno (ver arredondarSacos em calculoSemeadura.ts), não um Math.ceil puro: até essa %
+  // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
+  const qtdEmbalagens =
+    totalKg !== null && itemSelecionado && itemSelecionado.peso > 0
+      ? arredondarSacos(totalKg / itemSelecionado.peso, (itemSelecionado.plantioMargemTolerancia ?? 25) / 100)
+      : null;
   const valorTotalPedido = qtdEmbalagens !== null && itemSelecionado ? qtdEmbalagens * itemSelecionado.preco : null;
 
   function adicionarAoCarrinho() {

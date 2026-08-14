@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { filtrarArquivos } from '../filtrarArquivos';
@@ -61,6 +61,15 @@ export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApag
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   /** Realce visual (referência ao olhar a grade, não é seleção pra ação em lote) — igual ao clique de linha já usado na Tabela de Preço. */
   const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
+  const tabelaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function aoClicarFora(e: MouseEvent) {
+      if (tabelaRef.current && !tabelaRef.current.contains(e.target as Node)) setLinhaDestacada(null);
+    }
+    document.addEventListener('mousedown', aoClicarFora);
+    return () => document.removeEventListener('mousedown', aoClicarFora);
+  }, []);
 
   // As caixas de seleção ficam escondidas por padrão (só a maioria das vezes
   // ninguém precisa selecionar nada) — o botão "Selecionar" liga o modo; ao
@@ -130,7 +139,7 @@ export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApag
           </div>
         )}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" ref={tabelaRef}>
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-[var(--color-line)] bg-[var(--color-page)] text-left text-[var(--color-text-soft)]">

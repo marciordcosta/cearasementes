@@ -250,10 +250,14 @@ export interface Database {
           plantio_sementes_cova_base: number | null;
           /** = PlantioPublicoResultado.pms — PMS do laudo usado no cálculo de plantio, pra converter Sementes/cova em kg/ha na calculadora pública. */
           plantio_pms: number | null;
-          /** = PlantioPublicoResultado.vc — VC% do laudo usado no cálculo de plantio (manual, ou padrão da Parametrização quando o laudo não tem) — só exibição, ordem Fornecedor > VC% > Validade no card. */
+          /** = PlantioPublicoResultado.vc — VC% do laudo usado no cálculo de plantio — só exibição, ordem Fornecedor > VC% > PMS > Validade no card (gatilho: canal.mostrar_detalhes_plantio). */
           plantio_vc: number | null;
+          /** = PlantioPublicoResultado.pmsManual — PMS como veio digitado NESSE laudo (texto cru) — nunca cai pro PMS base da Parametrização (esse fallback só vale pro plantio_pms, usado no cálculo). Null = lote sem PMS próprio informado. */
+          plantio_pms_manual: string | null;
           /** = PlantioPublicoResultado.validade — Validade do laudo usado no cálculo de plantio, como veio cadastrada (ex.: "07/2027") — só exibição. */
           plantio_validade: string | null;
+          /** = PlantioPublicoResultado.margemTolerancia — % de tolerância do grupo pra arredondar embalagens na calculadora pública (ver arredondarSacos). Null = publicado antes dessa coluna existir, cai no padrão 25% na leitura. */
+          plantio_margem_tolerancia: number | null;
           ordem: number;
           atualizado_em: string;
         };
@@ -586,8 +590,6 @@ export interface Database {
           nome_produto: string;
           pms_base: string | null;
           densidade_base: string | null;
-          /** VC% padrão do grupo (Pureza × Germinação/100) — reserva pro cálculo de kg/ha quando o laudo não tem Pureza/Germinação (nem teste de campo). Ver germinacaoParaSemeadura em calculoSemeadura.ts. */
-          vc_padrao: string | null;
           indice_sobrevivencia: string | null;
           max_plantulas_cova: string | null;
           perda_media: string | null;

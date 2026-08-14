@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { Produto } from '@/features/pricing/types';
 import {
+  arredondarSacos,
   calcularKgPorHectareNumero,
   calcularSementesPorM2,
   covasM2Alvo,
@@ -82,21 +83,6 @@ function formatarCovas(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
 }
 
-/**
- * Arredonda o total de sacos por MARGEM de tolerância (cadastrada por grupo
- * em Parametrização, 25% se não cadastrado) em vez do arredondamento padrão
- * (0,5): até essa % de saco faltando ainda arredonda pra baixo (compra
- * menos), acima arredonda pra cima. Sempre no mínimo 1 saco quando há
- * alguma demanda de verdade (senão "faltar pouco" pra completar o PRIMEIRO
- * saco resultaria em 0 sacos, o que não faz sentido — tem que comprar pelo
- * menos 1 pra ter semente nenhuma).
- */
-function arredondarSacos(quociente: number, margemFracao: number): number {
-  const inteiros = Math.floor(quociente);
-  const fracao = quociente - inteiros;
-  const sacos = fracao > margemFracao ? inteiros + 1 : inteiros;
-  return quociente > 0 ? Math.max(sacos, 1) : 0;
-}
 
 /** Sementes Tradicionais (soltas, pequenas) não dá pra catar uma a uma pra colocar na cova — só pesar; Incrustadas (peletizadas) são grandes o bastante pra contar. Decide qual campo o card mostra: "Sementes/cova" (Incrustado e demais) ou "Peso/cova (g)" (Tradicional). */
 function precisaPesoPorCova(laudo: Pick<ArquivoLaudo, 'processo'>): boolean {

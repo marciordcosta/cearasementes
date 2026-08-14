@@ -75,15 +75,6 @@ export interface ProdutoParametrizacao {
   nomeProduto: string;
   pmsBase: string | null;
   densidadeBase: string | null;
-  /**
-   * VC% padrão (Valor Cultural = Pureza × Germinação/100) do grupo — usado no cálculo de kg/ha
-   * (ver germinacaoParaSemeadura em calculoSemeadura.ts) só quando o laudo em questão NÃO tem
-   * Pureza/Germinação preenchidas (nem teste de campo) — o laudo, quando traz o dado, sempre tem
-   * prioridade sobre esse padrão. Mesma métrica já exibida nas grades de Arquivos (ver calcularVC
-   * em metricas.ts), só que fixa por grupo em vez de por lote — deixa o cálculo sempre resolvível
-   * mesmo sem (ou antes de) laudo com Boletim de Análise completo.
-   */
-  vcPadrao: string | null;
   indiceSobrevivencia: string | null;
   /** Máximo de plântulas estabelecidas (pós-perdas) que cabem numa mesma cova sem competir demais — depende do gênero (Panicum/Brachiaria perfilham e ocupam espaço; Milho/Sorgo são plantas unitárias). Usado no Guia de Plantio pra calcular o espaçamento padrão em modo Covas (Covas/m² = Densidade ÷ esse valor), substituindo o 50×50 fixo. Null = sem limite cadastrado, cai no 50×50. */
   maxPlantulasCova: string | null;

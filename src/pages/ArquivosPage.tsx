@@ -159,7 +159,6 @@ export function ArquivosPage() {
     nomeProduto: string;
     pmsBase: string;
     densidadeBase: string;
-    vcPadrao: string;
     indiceSobrevivencia: string;
     maxPlantulasCova: string;
     perdaMedia: string;

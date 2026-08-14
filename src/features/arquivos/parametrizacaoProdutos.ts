@@ -56,11 +56,6 @@ export function resolverPmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pm
   return paraNumero(laudo.pms) ?? resolverPmsBase(laudo.nomeProduto, produtos);
 }
 
-/** VC% padrão do grupo (Pureza × Germinação/100) — reserva pro cálculo de kg/ha (ver germinacaoParaSemeadura em calculoSemeadura.ts) quando o laudo em questão não tem Pureza/Germinação preenchidas. Null se não cadastrado. */
-export function resolverVcPadrao(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(encontrarProduto(nomeProduto, produtos)?.vcPadrao ?? null);
-}
-
 /** Densidade base do produto, como texto cru — não é editável por lote, então isso é sempre o que a grade mostra. */
 export function resolverDensidadeBaseTexto(nomeProduto: string, produtos: ProdutoParametrizacao[]): string | null {
   return encontrarProduto(nomeProduto, produtos)?.densidadeBase ?? null;

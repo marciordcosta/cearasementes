@@ -5,10 +5,10 @@ import {
   resolverDensidadeBase,
   resolverFatorCondicao,
   resolverIndiceSobrevivencia,
+  resolverMargemTolerancia,
   resolverMaxPlantulasCova,
   resolverPmsBase,
   resolverPmsDoLaudo,
-  resolverVcPadrao,
 } from './parametrizacaoProdutos';
 import { resultadoTesteNumero } from './testeGerminacao';
 import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from './types';
@@ -26,17 +26,18 @@ type LaudoParaSemeadura = Pick<
  *   verdade, então já reflete a sobrevivência real — usa direto, sem
  *   multiplicar mais nada por cima.
  * - Sem teste de campo: cai pro VC do laudo (Pureza × Germinação, medidos em
- *   laboratório) — sem isso também (laudo sem Pureza/Germinação preenchidas),
- *   cai pro VC% padrão cadastrado por grupo em Parametrização (ver
- *   resolverVcPadrao), pra sempre ter algo pra calcular. Corrigido pelo
- *   Índice de Sobrevivência do produto nos 2 casos (laudo ou padrão) — o
+ *   laboratório) corrigido pelo Índice de Sobrevivência do produto — o
  *   laboratório não capta perdas de campo (seca, praga, forma de plantio),
  *   por isso a correção só entra aqui, nunca em cima do teste de campo.
+ *   Sempre o LAUDO de verdade (o último lote) — nunca um valor genérico
+ *   cadastrado por cima; sem Pureza/Germinação nesse laudo, fica sem
+ *   calcular (mesma regra tanto no Guia interno quanto no Catálogo Online,
+ *   é a mesma função).
  */
 export function germinacaoParaSemeadura(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
   const doTeste = resultadoTesteNumero(a, resolverPmsDoLaudo(a, produtos));
   if (doTeste !== null) return doTeste;
-  const vc = calcularVCNumero(a) ?? resolverVcPadrao(a.nomeProduto, produtos);
+  const vc = calcularVCNumero(a);
   if (vc === null) return null;
   const sobrevivencia = resolverIndiceSobrevivencia(a.nomeProduto, produtos);
   return sobrevivencia === null ? vc : vc * sobrevivencia;
@@ -115,6 +116,20 @@ export function calcularCovasPorM2(covaCm: number | null, corredorCm: number | n
 export function calcularSementesPorCova(sementesPorM2: number | null, covasPorM2: number | null): number | null {
   if (sementesPorM2 === null || covasPorM2 === null || covasPorM2 <= 0) return null;
   return sementesPorM2 / covasPorM2;
+}
+
+/**
+ * Arredonda o total de embalagens/sacos por MARGEM de tolerância (cadastrada por grupo em
+ * Parametrização, ver resolverMargemTolerancia — 25% se não cadastrado) em vez do arredondamento
+ * padrão (0,5): até essa % de embalagem faltando ainda arredonda pra baixo (compra menos), acima
+ * arredonda pra cima. Sempre no mínimo 1 quando há alguma demanda de verdade (senão "faltar pouco"
+ * pra completar a PRIMEIRA embalagem resultaria em 0, o que não faz sentido).
+ */
+export function arredondarSacos(quociente: number, margemFracao: number): number {
+  const inteiros = Math.floor(quociente);
+  const fracao = quociente - inteiros;
+  const sacos = fracao > margemFracao ? inteiros + 1 : inteiros;
+  return quociente > 0 ? Math.max(sacos, 1) : 0;
 }
 
 /** Valor de um Fator (Modo ou Condição) cadastrado em `arquivos_fatores_plantio`, pela `chave` — 1 se não cadastrado (sem efeito na conta). */
@@ -247,10 +262,14 @@ export interface PlantioPublicoResultado {
   /** Sementes/cova ANTES do ajuste por espaçamento (Corredor no padrão, 50cm) — a página pública do Catálogo Online recalcula ao vivo a partir daqui conforme o Corredor que o cliente digitar (ver sementesComAjustePorDistancia). */
   sementesCovaBase: number | null;
   pms: number | null;
-  /** VC% do laudo escolhido — manual (Pureza × Germinação) quando o laudo tem, senão o VC% padrão cadastrado no grupo (Parametrização, ver resolverVcPadrao). Só pra EXIBIÇÃO no card do Catálogo Online; o cálculo de kg/ha já aplica essa mesma prioridade por baixo (ver germinacaoParaSemeadura). */
+  /** VC% (Pureza × Germinação) do laudo escolhido — null sem essas duas preenchidas nesse laudo. Só pra EXIBIÇÃO no card do Catálogo Online. */
   vc: number | null;
+  /** PMS como veio digitado NESSE laudo (texto cru, ex.: "3,794") — diferente de `pms` (usado no cálculo, que cai pro PMS base da Parametrização quando o laudo não tem); aqui NUNCA cai pro base, só pra exibição — null quando esse lote não tem PMS próprio informado. */
+  pmsManual: string | null;
   /** Validade do laudo escolhido, como veio cadastrada (ex.: "07/2027") — só pra exibição. */
   validade: string | null;
+  /** Margem de tolerância (%) do grupo pra arredondar embalagens (ver resolverMargemTolerancia/arredondarSacos) — 25 se não cadastrado, nunca null (a calculadora pública sempre tem algum valor pra arredondar). */
+  margemTolerancia: number;
 }
 
 /**
@@ -269,11 +288,12 @@ export function resolverPlantioParaProduto(
   fornecedorProduto: string | null = null,
 ): PlantioPublicoResultado {
   const laudo = encontrarLaudoParaProduto(nomeProdutoPreco, arquivos, fornecedorProduto);
-  if (!laudo) return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, validade: null };
+  if (!laudo) return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25 };
   const fatorCondicaoMedia = resolverFatorCondicao(laudo.nomeProduto, 'media', produtos, fatores);
   const kgHaLanco = calcularKgPorHectareNumero(laudo, produtos, fatorDe(fatores, 'lanco'), fatorCondicaoMedia);
   const sementesCovaBase = sementesCovaAtual(laudo, produtos, fatorDe(fatores, 'linha_cova'), fatorCondicaoMedia, null);
   const pms = resolverPmsDoLaudo(laudo, produtos);
-  const vc = calcularVCNumero(laudo) ?? resolverVcPadrao(laudo.nomeProduto, produtos);
-  return { kgHaLanco, sementesCovaBase, pms, vc, validade: laudo.validade };
+  const vc = calcularVCNumero(laudo);
+  const margemTolerancia = resolverMargemTolerancia(laudo.nomeProduto, produtos);
+  return { kgHaLanco, sementesCovaBase, pms, vc, pmsManual: laudo.pms, validade: laudo.validade, margemTolerancia };
 }

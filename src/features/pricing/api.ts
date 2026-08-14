@@ -595,9 +595,12 @@ export interface ItemCatalogoPublicoInput {
   plantioKgHaLanco: number | null;
   plantioSementesCovaBase: number | null;
   plantioPms: number | null;
-  /** = resolverPlantioParaProduto(...).vc — só exibição no card (Fornecedor > VC% > Validade). */
+  /** = resolverPlantioParaProduto(...).vc — só exibição no card (Fornecedor > VC% > PMS > Validade). */
   plantioVc: number | null;
+  /** = resolverPlantioParaProduto(...).pmsManual — PMS cru desse lote, nunca o base da Parametrização. */
+  plantioPmsManual: string | null;
   plantioValidade: string | null;
+  plantioMargemTolerancia: number;
   ordem: number;
 }
 
@@ -652,7 +655,9 @@ export async function publicarCatalogoOnline(
         plantio_sementes_cova_base: item.plantioSementesCovaBase,
         plantio_pms: item.plantioPms,
         plantio_vc: item.plantioVc,
+        plantio_pms_manual: item.plantioPmsManual,
         plantio_validade: item.plantioValidade,
+        plantio_margem_tolerancia: item.plantioMargemTolerancia,
         ordem: item.ordem,
       })),
     );
@@ -682,7 +687,9 @@ export interface CatalogoPublico {
     plantioSementesCovaBase: number | null;
     plantioPms: number | null;
     plantioVc: number | null;
+    plantioPmsManual: string | null;
     plantioValidade: string | null;
+    plantioMargemTolerancia: number | null;
   }[];
 }
 
@@ -719,7 +726,9 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       plantioSementesCovaBase: i.plantio_sementes_cova_base,
       plantioPms: i.plantio_pms,
       plantioVc: i.plantio_vc,
+      plantioPmsManual: i.plantio_pms_manual,
       plantioValidade: i.plantio_validade,
+      plantioMargemTolerancia: i.plantio_margem_tolerancia,
     })),
   };
 }
