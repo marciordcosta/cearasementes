@@ -871,40 +871,48 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           conforme o carrinho tem item ou não); PDF e Calculadora têm sua própria posição fixa
           também (right-36/right-20), sem depender de quem mais está visível. */}
       {data && (
-        <button
-          type="button"
-          onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
-          title="Salvar tabela em PDF"
-          className="fixed right-36 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
-        >
-          <FileText size={20} />
-        </button>
+        <div className="fixed right-36 top-5 z-[190] flex flex-col items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
+            title="Salvar tabela em PDF"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+          >
+            <FileText size={20} />
+          </button>
+          <span className="text-[9px] font-semibold leading-none text-[#67718a]">PDF</span>
+        </div>
       )}
 
       {temDadosPlantio && (
-        <button
-          type="button"
-          onClick={() => setCalculadoraAberta(true)}
-          title="Calculadora de plantio"
-          className="fixed right-20 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
-        >
-          <Calculator size={20} />
-        </button>
+        <div className="fixed right-20 top-5 z-[190] flex flex-col items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => setCalculadoraAberta(true)}
+            title="Calculadora de plantio"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+          >
+            <Calculator size={20} />
+          </button>
+          <span className="text-[9px] font-semibold leading-none text-[#67718a]">Plantio</span>
+        </div>
       )}
 
-      {carrinho.size > 0 && (
-        <button
-          type="button"
-          onClick={() => setOrcamentoAberto(true)}
-          title="Ver orçamento"
-          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
-        >
-          <ShoppingCart size={20} />
+      {/* Sempre visível (não só quando tem item) — fica parado no canto (right-5) o tempo todo, sem
+          entrar/sumir e sem os outros dois (PDF/Calculadora) precisarem reagir à presença dele. */}
+      <button
+        type="button"
+        onClick={() => setOrcamentoAberto(true)}
+        title="Ver orçamento"
+        className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+      >
+        <ShoppingCart size={20} />
+        {carrinho.size > 0 && (
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
             {carrinho.size}
           </span>
-        </button>
-      )}
+        )}
+      </button>
 
       {data?.whatsapp && (
         <button
