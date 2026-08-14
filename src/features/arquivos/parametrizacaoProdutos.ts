@@ -142,13 +142,18 @@ function palavrasParecidas(a: string, b: string): boolean {
  * posição de palavra (1ª/3ª) não reconcilia os dois formatos ao mesmo
  * tempo; comparar se as palavras do laudo aparecem soltas no nome da Tabela
  * de Preço funciona nos dois formatos, sem precisar saber qual é o gênero.
+ *
+ * Remove `*negrito*`/`_itálico_` do nome da Tabela de Preço antes de comparar (ver
+ * NomeComDestaque.tsx — marcação digitada no cadastro, não faz parte da palavra em si): sem isso, um
+ * asterisco colado ("*planaltina*") desloca a comparação de prefixo em palavrasParecidas e o
+ * casamento falha bem na palavra que mais importa (o Cultivar, quase sempre o que fica em negrito).
  */
 export function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: string): boolean {
   const termosLaudo = normalizarNome(nomeLaudo)
     .split(' ')
     .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
   if (termosLaudo.length === 0) return false;
-  const palavrasPreco = normalizarNome(nomeProdutoPreco).split(' ');
+  const palavrasPreco = normalizarNome(nomeProdutoPreco.replace(/[*_]/g, '')).split(' ');
   return termosLaudo.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
 }
 
