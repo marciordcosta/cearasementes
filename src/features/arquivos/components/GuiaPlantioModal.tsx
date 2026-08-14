@@ -1023,6 +1023,8 @@ export function GuiaPlantioModal({
                       // sementesPorMetroLinearModoLinha), sem trocar o layout do card (Covas nunca vira
                       // "semeadura contínua" sozinho — pra isso existe o modo Linha, independente).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
+                      const germinacaoFinalAtual = germinacaoFinalSemeadura(laudo, produtos, fatorModoItem, fatorCondicaoAtual);
+                      const plantulasPorM2 = r.sementesPorM2 !== null && germinacaoFinalAtual !== null ? r.sementesPorM2 * (germinacaoFinalAtual / 100) : null;
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -1102,7 +1104,7 @@ export function GuiaPlantioModal({
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
                               <p
-                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}`}
+                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}\nPlântulas/m²: ${plantulasPorM2 === null ? '—' : formatarCovas(plantulasPorM2)}`}
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
                                 {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
@@ -1117,6 +1119,7 @@ export function GuiaPlantioModal({
                   {item.modo === 'linha' &&
                     (() => {
                       const sementesPorMetroLinear = sementesPorMetroLinearModoLinha(r.sementesPorM2, item.corredor);
+                      const plantulasPorM2 = plantulasPorM2ModoLinhaViaCovas(laudo.nomeProduto, produtos);
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -1150,7 +1153,7 @@ export function GuiaPlantioModal({
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
                               <p
-                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}`}
+                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}\nPlântulas/m²: ${plantulasPorM2 === null ? '—' : formatarCovas(plantulasPorM2)}`}
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
                                 {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
