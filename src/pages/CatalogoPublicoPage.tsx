@@ -207,18 +207,23 @@ function ModalOrcamento({
           ) : (
             <div className="flex flex-col divide-y divide-[#e2e6ed]">
               {itens.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-[#1a2233]">
+                <div key={item.id} className="flex flex-col gap-1.5 py-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm leading-snug text-[#1a2233]">
                       <NomeComDestaque nome={item.nome} />
+                      {item.fornecedorNome && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</span>}
                     </p>
-                    <p className="text-[11px] text-[#67718a]">R$ {fmtR(item.preco)}/un.</p>
+                    <button type="button" onClick={() => onAtualizarQtd(item.id, 0)} title="Remover" className="shrink-0 text-[#67718a] hover:text-[#c24444]">
+                      <X size={16} />
+                    </button>
                   </div>
-                  <QuantidadeInput valor={item.qtd} onAlterar={(v) => onAtualizarQtd(item.id, v)} />
-                  <p className="num w-20 shrink-0 text-right text-sm font-semibold text-[#1a2233]">R$ {fmtR(item.preco * item.qtd)}</p>
-                  <button type="button" onClick={() => onAtualizarQtd(item.id, 0)} title="Remover" className="shrink-0 text-[#67718a] hover:text-[#c24444]">
-                    <X size={16} />
-                  </button>
+                  <div className="flex items-center justify-between gap-3">
+                    <QuantidadeInput valor={item.qtd} onAlterar={(v) => onAtualizarQtd(item.id, v)} />
+                    <div className="text-right">
+                      <p className="num text-sm font-semibold text-[#1a2233]">R$ {fmtR(item.preco * item.qtd)}</p>
+                      <p className="text-[11px] text-[#67718a]">R$ {fmtR(item.preco)}/un.</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
