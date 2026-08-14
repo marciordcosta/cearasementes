@@ -56,8 +56,8 @@ interface ItemGuia {
 
 const OPCOES_MODO: { valor: Modo; rotulo: string }[] = [
   { valor: 'lanco', rotulo: 'A Lanço' },
-  { valor: 'linha', rotulo: 'Linha' },
   { valor: 'linha_cova', rotulo: 'Covas' },
+  { valor: 'linha', rotulo: 'Linha' },
 ];
 
 const OPCOES_CONDICAO: { valor: Condicao; rotulo: string }[] = [
