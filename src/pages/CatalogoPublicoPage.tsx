@@ -40,12 +40,10 @@ function linkWhatsApp(numero: string, texto?: string): string {
   return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
 }
 
-/** `frete === null` = canal Manual, sem Transportadora vinculada — sem referência real de frete pra calcular, então nem entra na mensagem/total (fica "a combinar", pedido à parte via botão "Cotação de frete"). */
-function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], frete: number | null, total: number): string {
+/** `freteDescricao` já vem pronto de descreverFrete() — cobre os 4 estados (cotação/não calculado/retirada/valor), então aqui só monta o texto, sem saber de onde veio. */
+function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], freteDescricao: string, total: number): string {
   const linhas = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')} — R$ ${fmtR(i.preco * i.qtd)}`);
-  const linhaFrete = frete === null ? 'Frete: a combinar (cotação à parte)' : `Frete: R$ ${fmtR(frete)}`;
-  const linhaTotal = frete === null ? `Total dos produtos: R$ ${fmtR(total)}` : `Total: R$ ${fmtR(total)}`;
-  return [`Orçamento — ${canalNome}`, '', ...linhas, '', linhaFrete, linhaTotal].join('\n');
+  return [`Orçamento — ${canalNome}`, '', ...linhas, '', `Frete: ${freteDescricao}`, `Total: R$ ${fmtR(total)}`].join('\n');
 }
 
 function montarMensagemCotacaoFrete(canalNome: string, itens: ItemCarrinho[]): string {
@@ -231,12 +229,29 @@ function ModalOrcamento({
 }) {
   const [concluirAberto, setConcluirAberto] = useState(false);
   const [observacaoWhatsAppAberta, setObservacaoWhatsAppAberta] = useState(false);
+  // Sempre nasce "não calculado" — some quando o Orçamento fecha (desmonta) e volta a pedir clique
+  // na próxima vez que abrir, mesmo pro mesmo carrinho. Só faz sentido quando temTransportadora (a
+  // "Cotação de frete" do canal Manual é um fluxo à parte, ver pedirCotacaoFrete).
+  const [estadoFrete, setEstadoFrete] = useState<'nao_calculado' | 'calculado' | 'retirada'>('nao_calculado');
 
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
   const freteBruto = pesoTotalUsado * freteKgEfetivo + (valorProdutos * fretePctEfetivo) / 100;
-  const frete = !temTransportadora ? null : itens.length === 0 ? 0 : Math.max(freteBruto, freteMinimo);
-  const total = valorProdutos + (frete ?? 0);
+  const freteCalculado = itens.length === 0 ? 0 : Math.max(freteBruto, freteMinimo);
+  const freteIncluidoNoTotal = temTransportadora && estadoFrete === 'calculado';
+  const total = valorProdutos + (freteIncluidoNoTotal ? freteCalculado : 0);
+
+  function alternarFrete() {
+    // 1º clique (nao_calculado) mostra o valor; daí em diante alterna valor <-> Retirar no local.
+    setEstadoFrete((atual) => (atual === 'calculado' ? 'retirada' : 'calculado'));
+  }
+
+  function descreverFrete(): string {
+    if (!temTransportadora) return 'a combinar (cotação à parte)';
+    if (estadoFrete === 'retirada') return 'Retirar no local';
+    if (estadoFrete === 'calculado') return `R$ ${fmtR(freteCalculado)}`;
+    return 'a calcular';
+  }
 
   function enviarWhatsApp() {
     setConcluirAberto(false);
@@ -258,7 +273,7 @@ function ModalOrcamento({
     gerarOrcamentoPdf(
       canalNome,
       itens.map((i) => ({ nome: i.nome, qtd: i.qtd, precoUnitario: i.preco, subtotal: i.preco * i.qtd })),
-      frete,
+      descreverFrete(),
       total,
     );
     setConcluirAberto(false);
@@ -313,18 +328,22 @@ function ModalOrcamento({
             </div>
             <div className="flex justify-between text-[#67718a]">
               <span>Frete</span>
-              {frete !== null ? (
-                <span className="num">R$ {fmtR(frete)}</span>
-              ) : whatsapp ? (
-                <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#0e9d74] underline">
-                  Cotação de frete
-                </button>
+              {!temTransportadora ? (
+                whatsapp ? (
+                  <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#0e9d74] underline">
+                    Cotação de frete
+                  </button>
+                ) : (
+                  <span className="text-xs">A combinar</span>
+                )
               ) : (
-                <span className="text-xs">A combinar</span>
+                <button type="button" onClick={alternarFrete} className={`text-xs ${estadoFrete === 'nao_calculado' ? 'font-semibold text-[#0e9d74] underline' : 'num text-[#67718a] underline'}`}>
+                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirar no local' : `R$ ${fmtR(freteCalculado)}`}
+                </button>
               )}
             </div>
             <div className="flex justify-between text-base font-bold text-[#1a2233]">
-              <span>{frete === null ? 'Total dos produtos' : 'Total'}</span>
+              <span>{freteIncluidoNoTotal ? 'Total' : 'Total dos produtos'}</span>
               <span className="num">R$ {fmtR(total)}</span>
             </div>
           </div>
@@ -342,7 +361,7 @@ function ModalOrcamento({
       {concluirAberto && <ModalConcluir onWhatsApp={enviarWhatsApp} onPdf={salvarPdf} onFechar={() => setConcluirAberto(false)} />}
       {observacaoWhatsAppAberta && (
         <ModalObservacaoWhatsApp
-          resumo={montarMensagemOrcamento(canalNome, itens, frete, total)}
+          resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), total)}
           onEnviar={confirmarEnvioWhatsApp}
           onFechar={() => setObservacaoWhatsAppAberta(false)}
         />

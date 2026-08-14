@@ -13,10 +13,10 @@ function f(v: number): string {
 
 /**
  * Orçamento montado pelo cliente no Catálogo Online (ver CatalogoPublicoPage.tsx) — janela de
- * impressão (mesmo fluxo de abrirEImprimir), não é gravado em lugar nenhum. `frete === null` =
- * canal Manual (sem Transportadora vinculada) — sai "a combinar" em vez de um valor.
+ * impressão (mesmo fluxo de abrirEImprimir), não é gravado em lugar nenhum. `freteDescricao` já vem
+ * pronto de descreverFrete() — cobre cotação/não calculado/retirada no local/valor calculado.
  */
-export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], frete: number | null, total: number): void {
+export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], freteDescricao: string, total: number): void {
   const linhas = itens
     .map(
       (item) => `
@@ -67,8 +67,8 @@ export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], 
         </thead>
         <tbody>${linhas}</tbody>
         <tfoot>
-          <tr><td colspan="3">Frete</td><td class="num">${frete === null ? 'A combinar' : `R$ ${f(frete)}`}</td></tr>
-          <tr class="total"><td colspan="3">${frete === null ? 'Total dos produtos' : 'Total'}</td><td class="num">R$ ${f(total)}</td></tr>
+          <tr><td colspan="3">Frete</td><td class="num">${escapeHtml(freteDescricao)}</td></tr>
+          <tr class="total"><td colspan="3">Total</td><td class="num">R$ ${f(total)}</td></tr>
         </tfoot>
       </table>
     </body>
