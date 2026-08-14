@@ -530,7 +530,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
       {mensagemWhatsAppAberta && data?.whatsapp && (
         <ModalMensagemWhatsApp
-          mensagemInicial={`Olá! Vim do catálogo online (${data.canalNome}).`}
+          mensagemInicial="Olá! Vim do catálogo online."
           onEnviar={(mensagem) => {
             window.open(linkWhatsApp(data.whatsapp!, mensagem), '_blank');
             setMensagemWhatsAppAberta(false);
