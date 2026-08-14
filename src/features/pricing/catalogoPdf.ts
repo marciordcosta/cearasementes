@@ -10,7 +10,7 @@ export function escapeHtml(texto: string): string {
 }
 
 /** SVG embutido (sem chamada de rede) — gerado localmente pra sempre imprimir, mesmo sem internet. */
-function gerarQrCodeSvg(url: string): string {
+export function gerarQrCodeSvg(url: string): string {
   const qr = qrcode(0, 'M');
   qr.addData(url);
   qr.make();

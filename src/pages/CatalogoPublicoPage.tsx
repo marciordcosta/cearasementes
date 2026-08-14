@@ -1,4 +1,4 @@
-import { Calculator, Loader2, Search, ShoppingCart, X } from 'lucide-react';
+import { Calculator, FileText, Loader2, Search, ShoppingCart, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
@@ -13,6 +13,7 @@ import {
 import { paraNumero } from '@/features/arquivos/metricas';
 import { chaveComparacaoNome } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
+import { gerarCatalogoPublicoPdf } from '@/features/pricing/catalogoPublicoPdf';
 import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
 
 type ItemCatalogo = CatalogoPublico['itens'][number];
@@ -801,12 +802,25 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         ))}
       </main>
 
+      {/* PDF e Calculadora ficam em posição FIXA (nunca mudam de lugar) — só o carrinho é que
+          "flutua": aparece/some e ajusta a posição conforme os outros dois estarem visíveis. */}
+      {data && (
+        <button
+          type="button"
+          onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
+          title="Salvar tabela em PDF"
+          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+        >
+          <FileText size={20} />
+        </button>
+      )}
+
       {temDadosPlantio && (
         <button
           type="button"
           onClick={() => setCalculadoraAberta(true)}
           title="Calculadora de plantio"
-          className={`fixed top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110 ${carrinho.size > 0 ? 'right-20' : 'right-5'}`}
+          className="fixed right-20 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
         >
           <Calculator size={20} />
         </button>
@@ -817,7 +831,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           type="button"
           onClick={() => setOrcamentoAberto(true)}
           title="Ver orçamento"
-          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+          className={`fixed top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110 ${temDadosPlantio ? 'right-36' : 'right-20'}`}
         >
           <ShoppingCart size={20} />
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
