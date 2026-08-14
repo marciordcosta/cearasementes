@@ -2,7 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import type { Produto } from '@/features/pricing/types';
-import { calcularKgPorHectareNumero, calcularSementesPorCova, calcularSementesPorM2, germinacaoFinalSemeadura } from '../calculoSemeadura';
+import {
+  calcularKgPorHectareNumero,
+  calcularSementesPorM2,
+  covasM2Alvo,
+  distanciaDeCovasM2,
+  espacamentoDeDistancia,
+  fatorDe,
+  germinacaoFinalSemeadura,
+  kgPorHaDeSementesCova,
+  sementesComAjustePorDistancia,
+  sementesCovaAtual,
+  validadeParaOrdenacao,
+} from '../calculoSemeadura';
 import { gerarGuiaPlantioPdf } from '../guiaPlantioPdf';
 import { calcularVC, paraNumero } from '../metricas';
 import {
@@ -66,10 +78,6 @@ const OPCOES_CONDICAO: { valor: Condicao; rotulo: string }[] = [
   { valor: 'ideal', rotulo: 'Ideal' },
 ];
 
-function fatorDe(fatores: FatorPlantio[], chave: string): number {
-  return paraNumero(fatores.find((f) => f.chave === chave)?.fator ?? null) ?? 1;
-}
-
 function formatarCovas(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
 }
@@ -95,16 +103,6 @@ function precisaPesoPorCova(laudo: Pick<ArquivoLaudo, 'processo'>): boolean {
   return (laudo.processo ?? '').toLowerCase().includes('tradicional');
 }
 
-/** Validade no formato "MM/AAAA" (texto livre, digitado pelo operador) — convertida num número comparável (ano×12+mês). Sem validade cadastrada vai pro fim da lista. */
-function validadeParaOrdenacao(validade: string | null): number {
-  const partes = (validade ?? '').split('/');
-  if (partes.length !== 2) return -Infinity;
-  const mes = Number(partes[0]);
-  const ano = Number(partes[1]);
-  if (!Number.isFinite(mes) || !Number.isFinite(ano)) return -Infinity;
-  return ano * 12 + mes;
-}
-
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
 function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): string | null {
   return laudo.pms || resolverPmsBaseTexto(laudo.nomeProduto, produtos);
@@ -121,61 +119,6 @@ function ehMilhoOuSorgo(nomeProduto: string): boolean {
   return normalizado.includes('milho') || normalizado.includes('sorgo');
 }
 
-/**
- * Sementes/cova (equivalente, sempre em SEMENTES mesmo pra Tradicional) que bate EXATAMENTE o Máx. de
- * plântulas/cova cadastrado (Parametrização), numa dada Germinação final — modelo da regra GERAL pro
- * modo Covas (Milho/Sorgo usam a regra própria, ver ehMilhoOuSorgo/covasM2AlvoMilhoSorgo), onde a
- * Densidade não serve de referência (ela funciona bem só pra "A Lanço"): a cultivar tem um teto físico
- * de plântulas por cova (competição dentro do buraco), então mira ESSE número direto, não um alvo
- * derivado da Densidade. Null sem Máx. cadastrado ou sem Germinação (VC/teste, Sobrevivência, Fatores).
- */
-function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
-  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
-  if (maxPlantulasCova === null || maxPlantulasCova <= 0) return null;
-  const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
-  return germinacaoFinal !== null && germinacaoFinal > 0 ? (maxPlantulasCova * 100) / germinacaoFinal : null;
-}
-
-// % de desconto na Sementes/cova por cm que o espaçamento efetivo (o menor entre Distância e Corredor
-// atuais) fica mais apertado que a distância ideal — evita superdimensionar a cova quando o espaçamento
-// aperta. Regra do "espaçamento mínimo", usada nas 2 regras (geral, ver sementesCovaAtual; Milho/Sorgo,
-// ver sementesCovaEfetivaMilhoSorgo), cada uma aplicando em cima da sua própria Sementes/cova. Sem teto —
-// a conta continua linear (nada empírico travando antes da hora); quem trava o espaçamento na Distância
-// mínima real (Parametrização, agora geral pra qualquer produto) é a correção do Corredor em Milho/Sorgo
-// (ver corrigirCorredorMilhoSorgo) — o modo Covas em si não tem mais troca automática pra linha; pra isso
-// existe o modo Linha, independente (ver corredorMaximoLinha/corrigirCorredorLinha).
-const TAXA_AJUSTE_SEMENTES_POR_CM = 1;
-
-/**
- * Desconta a Sementes/cova padrão quando o espaçamento efetivo fica mais apertado que a distância ideal
- * — 1%/cm de diferença, sem teto. Mais aberto que o ideal não faz nada (mantém o padrão, sem "prêmio"
- * por sobrar espaço).
- */
-function sementesComAjustePorDistancia(sementesPadrao: number, espacamentoAtual: number, distanciaIdeal: number): number {
-  const diferenca = distanciaIdeal - espacamentoAtual; // > 0: mais apertado (desconto); <= 0: sem ajuste
-  if (diferenca <= 0) return sementesPadrao;
-  const percentual = diferenca * TAXA_AJUSTE_SEMENTES_POR_CM;
-  return sementesPadrao * (1 - percentual / 100);
-}
-
-/**
- * Sementes/cova (equivalente, sempre em sementes) que o card usa AGORA pros produtos da regra GERAL
- * (Milho/Sorgo usam a regra própria — ver ehMilhoOuSorgo) — TRAVADA, nunca digitada manualmente: mira o
- * Máx. cadastrado (ver sementesPorCovaAlvo, ou o modelo por Densidade sem esse cadastro), descontada
- * conforme o espaçamento efetivo (o menor entre Distância e Corredor atuais) fica mais apertado que o
- * ideal do produto (ver sementesComAjustePorDistancia). Fica null quando falta algum dado (Germinação,
- * Máx./Densidade) ou o espaçamento não dá pra calcular.
- */
-function sementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, espacamentoAtual: number | null): number | null {
-  let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
-  if (sementesCova === null) {
-    const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
-    sementesCova = calcularSementesPorCova(sementesPorM2, covasM2Alvo());
-  }
-  if (sementesCova === null || espacamentoAtual === null) return sementesCova;
-  return sementesComAjustePorDistancia(sementesCova, espacamentoAtual, distanciaIdealProduto());
-}
-
 /** Igual sementesCovaAtual, já formatado pra exibir — "Sementes/cova" (inteiro) ou "Peso/cova (g)" (Tradicional, via PMS), conforme o Processo do laudo (ver precisaPesoPorCova). '' quando falta algum dado. Só regra geral — Milho/Sorgo usa campo editável (ver ItemGuia.sementesCova). */
 function formatarSementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, espacamentoAtual: number | null): string {
   const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoValor, espacamentoAtual);
@@ -183,52 +126,6 @@ function formatarSementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParamet
   if (!precisaPesoPorCova(laudo)) return String(Math.round(sementesCova));
   const pms = pmsNumericoDoLaudo(laudo, produtos);
   return pms !== null && pms > 0 ? formatarCovas((sementesCova * pms) / 1000) : '';
-}
-
-/**
- * kg/ha a partir de Covas/m² × Sementes/cova (equivalente) × PMS — a conta "de verdade" em modo Covas,
- * usada pelas 2 regras (geral e Milho/Sorgo) — nunca pela Densidade sozinha, que em Covas só serve de
- * estimativa de fallback (regra geral) ou é a própria referência (Milho/Sorgo, ver
- * covasM2AlvoMilhoSorgo).
- */
-function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number | null, pms: number | null): number | null {
-  return covasPorM2 !== null && sementesCova !== null && pms !== null && pms > 0 ? (covasPorM2 * sementesCova * pms) / 100 : null;
-}
-
-/**
- * Covas/m² TRAVADO — regra GERAL (Milho/Sorgo usa a regra própria, ver covasM2AlvoMilhoSorgo). PADRONIZADO
- * em 4 (equivalente ao 50×50 de sempre) pra qualquer capim — não é mais um campo por produto: só os
- * capins usam essa condição, e todos os cadastrados até hoje já usavam o mesmo valor na prática (a conta
- * por Densidade ÷ Máx.plântulas/cova dava número diferente e nunca foi usada de propósito). Não é
- * editável de jeito nenhum. Único grau de liberdade que sobra pro operador é o Corredor — Distância é
- * sempre derivada dele pra manter esse valor fixo (ver distanciaDerivada).
- */
-function covasM2Alvo(): number {
-  return 4;
-}
-
-/** Distância (cm) no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de desconto" pra sementesComAjustePorDistancia (regra geral). Valor EXATO (sem arredondar pro centímetro fechado, diferente de corredorPadrao), pra a curva ficar contínua. */
-function distanciaIdealProduto(): number {
-  return Math.sqrt(10000 / covasM2Alvo());
-}
-
-/** Distância (cm) a partir de um Covas/m² alvo já resolvido e do Corredor digitado — Distância = 10000 ÷ (Corredor × Covas/m² alvo). Primitivo compartilhado pelas 2 regras (geral, ver distanciaDerivada; Milho/Sorgo, ver covasM2AlvoMilhoSorgo). Null com Corredor ou Covas/m² inválido. */
-function distanciaDeCovasM2(covasM2: number | null, corredorTexto: string): number | null {
-  const corredor = paraNumero(corredorTexto);
-  if (corredor === null || corredor <= 0 || covasM2 === null || covasM2 <= 0) return null;
-  return 10000 / (corredor * covasM2);
-}
-
-/**
- * O menor entre Distância e Corredor atuais — quem estiver mais apertado é quem realmente limita a
- * competição entre plantas (seja ao longo da linha, seja entre linhas vizinhas), então é esse valor (não
- * só a Distância sozinha) que entra no desconto por espaçamento mínimo das 2 regras (ver
- * sementesComAjustePorDistancia/sementesCovaEfetivaMilhoSorgo). Primitivo compartilhado (ver
- * espacamentoEfetivo). Null com Corredor inválido.
- */
-function espacamentoDeDistancia(distancia: number | null, corredorTexto: string): number | null {
-  const corredor = paraNumero(corredorTexto);
-  return distancia === null || corredor === null ? null : Math.min(distancia, corredor);
 }
 
 /** Distância (cm) — SEMPRE derivada do Corredor pra manter o Covas/m² travado (regra geral, ver covasM2Alvo). Nunca editável, nunca guardada — impossível o espaçamento "descolar" do alvo. Null com Corredor inválido. */

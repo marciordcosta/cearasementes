@@ -239,6 +239,12 @@ export interface Database {
           peso: number;
           /** = ResultadoCalculo.pesoUsado (cubado quando a Cubagem estiver preenchida) — base do cálculo de Frete no Orçamento, não necessariamente igual a `peso` (que é sempre o cadastrado, pra exibição). */
           peso_usado: number;
+          /** = PlantioPublicoResultado.kgHaLanco (calculoSemeadura.ts) — Taxa de Semeadura (kg/ha) em modo A Lanço, condição "Média", já pronta. Null sem laudo correspondente pra esse produto. */
+          plantio_kg_ha_lanco: number | null;
+          /** = PlantioPublicoResultado.sementesCovaBase — Sementes/cova em modo Covas ANTES do ajuste por espaçamento (Corredor padrão); a calculadora pública recalcula ao vivo a partir daqui conforme o Corredor digitado. */
+          plantio_sementes_cova_base: number | null;
+          /** = PlantioPublicoResultado.pms — PMS do laudo usado no cálculo de plantio, pra converter Sementes/cova em kg/ha na calculadora pública. */
+          plantio_pms: number | null;
           ordem: number;
           atualizado_em: string;
         };

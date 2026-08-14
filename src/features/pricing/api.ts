@@ -590,6 +590,10 @@ export interface ItemCatalogoPublicoInput {
   preco: number;
   peso: number;
   pesoUsado: number;
+  /** = resolverPlantioParaProduto(...).kgHaLanco (calculoSemeadura.ts) — null sem laudo correspondente. */
+  plantioKgHaLanco: number | null;
+  plantioSementesCovaBase: number | null;
+  plantioPms: number | null;
   ordem: number;
 }
 
@@ -638,6 +642,9 @@ export async function publicarCatalogoOnline(
         preco: item.preco,
         peso: item.peso,
         peso_usado: item.pesoUsado,
+        plantio_kg_ha_lanco: item.plantioKgHaLanco,
+        plantio_sementes_cova_base: item.plantioSementesCovaBase,
+        plantio_pms: item.plantioPms,
         ordem: item.ordem,
       })),
     );
@@ -653,7 +660,19 @@ export interface CatalogoPublico {
   freteMinimo: number;
   temTransportadora: boolean;
   whatsapp: string | null;
-  itens: { id: string; nome: string; categoriaNome: string; subcategoriaNome: string | null; fornecedorNome: string | null; preco: number; peso: number; pesoUsado: number }[];
+  itens: {
+    id: string;
+    nome: string;
+    categoriaNome: string;
+    subcategoriaNome: string | null;
+    fornecedorNome: string | null;
+    preco: number;
+    peso: number;
+    pesoUsado: number;
+    plantioKgHaLanco: number | null;
+    plantioSementesCovaBase: number | null;
+    plantioPms: number | null;
+  }[];
 }
 
 /**
@@ -684,6 +703,9 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       preco: i.preco,
       peso: i.peso,
       pesoUsado: i.peso_usado,
+      plantioKgHaLanco: i.plantio_kg_ha_lanco,
+      plantioSementesCovaBase: i.plantio_sementes_cova_base,
+      plantioPms: i.plantio_pms,
     })),
   };
 }

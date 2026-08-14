@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
+import { fetchArquivosLaudos, fetchFatoresPlantio, fetchParametrizacaoProdutos } from '@/features/arquivos/api';
+import { resolverPlantioParaProduto } from '@/features/arquivos/calculoSemeadura';
 import { agregarItens } from '@/features/bi/aggregate';
 import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { aplicarTransportadoraNoCanal, fetchTransportadoras } from '@/features/fretes/api';
@@ -426,9 +428,17 @@ export function PricingPage() {
       const elegiveis = produtosExibidos.filter(
         (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedor(p.fornecedorId)?.visivelPdf ?? true),
       );
+      // Dados de plantio (Guia de Plantio) só buscados aqui, no momento de publicar — não fazem parte
+      // da carga normal da Precificação (ver resolverPlantioParaProduto em calculoSemeadura.ts).
+      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
+        fetchArquivosLaudos(),
+        fetchParametrizacaoProdutos(),
+        fetchFatoresPlantio(),
+      ]);
       const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => {
         const categoria = getCategoria(p.categoriaId);
         const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
+        const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio);
         return {
           produtoId: p.id,
           nome: p.nome,
@@ -438,6 +448,9 @@ export function PricingPage() {
           preco: r.preco,
           peso: p.peso,
           pesoUsado: r.pesoUsado,
+          plantioKgHaLanco: plantio.kgHaLanco,
+          plantioSementesCovaBase: plantio.sementesCovaBase,
+          plantioPms: plantio.pms,
           ordem: indice,
         };
       });

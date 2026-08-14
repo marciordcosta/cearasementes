@@ -1,7 +1,16 @@
-import { Loader2, Search, ShoppingCart, X } from 'lucide-react';
+import { Calculator, Loader2, Search, ShoppingCart, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
+import {
+  covasM2Alvo,
+  distanciaDeCovasM2,
+  distanciaIdealProduto,
+  espacamentoDeDistancia,
+  kgPorHaDeSementesCova,
+  sementesComAjustePorDistancia,
+} from '@/features/arquivos/calculoSemeadura';
+import { paraNumero } from '@/features/arquivos/metricas';
 import { chaveComparacaoNome } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
 import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
@@ -371,6 +380,200 @@ function ModalOrcamento({
 }
 
 /**
+ * kg/ha em modo Covas a partir do Corredor digitado pelo cliente — mesma conta do Guia interno
+ * (regra GERAL, ver sementesCovaAtual/kgPorHaDeSementesCova em calculoSemeadura.ts), só que aqui
+ * partindo do snapshot publicado (`sementesCovaBase`, já resolvido "no espaçamento padrão"/50cm)
+ * em vez de recalcular germinação/densidade a cada tecla — a página pública nunca vê laudo algum.
+ */
+function kgHaCovas(sementesCovaBase: number, pms: number, corredorTexto: string): number | null {
+  const distancia = distanciaDeCovasM2(covasM2Alvo(), corredorTexto);
+  const espacamentoAtual = espacamentoDeDistancia(distancia, corredorTexto);
+  if (espacamentoAtual === null) return null;
+  const sementesAjustada = sementesComAjustePorDistancia(sementesCovaBase, espacamentoAtual, distanciaIdealProduto());
+  return kgPorHaDeSementesCova(covasM2Alvo(), sementesAjustada, pms);
+}
+
+type ModoPlantio = 'lanco' | 'covas';
+
+/**
+ * Calculadora de plantio do Catálogo Online — mesmo cálculo do Guia de Plantio interno (kg/ha),
+ * condição sempre "Média" (sem seletor aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com
+ * Sementes/cova editável nem modo Linha, ver resolverPlantioParaProduto em calculoSemeadura.ts).
+ * Busca só entre os itens já publicados desse catálogo que têm dado de plantio (nunca mostra
+ * lote/laudo) — resultado é só Taxa de Semeadura (kg/ha) e Total pra área informada.
+ */
+function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCatalogo[]; whatsapp: string | null; onFechar: () => void }) {
+  const [busca, setBusca] = useState('');
+  const [itemSelecionado, setItemSelecionado] = useState<ItemCatalogo | null>(null);
+  const [modo, setModo] = useState<ModoPlantio>('lanco');
+  const [corredor, setCorredor] = useState('50');
+  const [area, setArea] = useState('');
+
+  const itensComPlantio = useMemo(() => itens.filter((i) => i.plantioKgHaLanco !== null || i.plantioSementesCovaBase !== null), [itens]);
+
+  const resultadosBusca = useMemo(() => {
+    const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (palavras.length === 0) return [];
+    return itensComPlantio
+      .filter((i) => {
+        const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''}`.toLowerCase();
+        return palavras.every((palavra) => descricao.includes(palavra));
+      })
+      .slice(0, 8);
+  }, [itensComPlantio, busca]);
+
+  function selecionar(item: ItemCatalogo) {
+    setItemSelecionado(item);
+    setModo(item.plantioKgHaLanco !== null ? 'lanco' : 'covas');
+    setCorredor('50');
+    setArea('');
+    setBusca('');
+  }
+
+  const temOsDoisModos =
+    itemSelecionado !== null && itemSelecionado.plantioKgHaLanco !== null && itemSelecionado.plantioSementesCovaBase !== null && itemSelecionado.plantioPms !== null;
+
+  const kgPorHa =
+    itemSelecionado === null
+      ? null
+      : modo === 'lanco'
+        ? itemSelecionado.plantioKgHaLanco
+        : itemSelecionado.plantioSementesCovaBase !== null && itemSelecionado.plantioPms !== null
+          ? kgHaCovas(itemSelecionado.plantioSementesCovaBase, itemSelecionado.plantioPms, corredor)
+          : null;
+
+  const areaNum = paraNumero(area);
+  const totalKg = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
+
+  function mensagemConsultor(): string {
+    return `Olá! Vim da calculadora de plantio do catálogo online e gostaria de falar com um consultor sobre o plantio${itemSelecionado ? ` de ${itemSelecionado.nome.replace(/[*_]/g, '')}` : ''}.`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex items-center justify-between border-b border-[#e2e6ed] px-4 py-3.5">
+          <p className="text-sm font-bold text-[#1a2233]">Calculadora de plantio</p>
+          <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#67718a]" />
+            <input
+              type="text"
+              inputMode="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar produto…"
+              className="w-full rounded-md border border-[#e2e6ed] bg-[#f5f7fa] py-2 pl-8 pr-8 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+            />
+          </div>
+
+          {busca.trim() && (
+            <div className="mt-2 overflow-hidden rounded-md border border-[#e2e6ed]">
+              {resultadosBusca.length === 0 ? (
+                <p className="px-3 py-2.5 text-xs text-[#67718a]">Nenhum produto com cálculo de plantio disponível pra essa busca.</p>
+              ) : (
+                resultadosBusca.map((item, i) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selecionar(item)}
+                    className={`block w-full px-3 py-2 text-left text-sm text-[#1a2233] hover:bg-[#f5f7fa] ${i > 0 ? 'border-t border-[#e2e6ed]' : ''}`}
+                  >
+                    <NomeComDestaque nome={item.nome} />
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          {itemSelecionado && (
+            <div className="mt-3 space-y-3 rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-3">
+              <p className="text-sm font-semibold text-[#1a2233]">
+                <NomeComDestaque nome={itemSelecionado.nome} />
+              </p>
+
+              {temOsDoisModos && (
+                <div className="flex gap-1.5">
+                  {(['lanco', 'covas'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModo(m)}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${modo === m ? 'bg-[#10233f] text-white' : 'bg-white text-[#67718a]'}`}
+                    >
+                      {m === 'lanco' ? 'A Lanço' : 'Covas'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {modo === 'covas' && (
+                <label className="block text-xs text-[#67718a]">
+                  Espaçamento entre linhas (cm)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={corredor}
+                    onChange={(e) => setCorredor(e.target.value)}
+                    className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
+                  />
+                </label>
+              )}
+
+              <label className="block text-xs text-[#67718a]">
+                Área (ha)
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  placeholder="Ex.: 10"
+                  className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+                />
+              </label>
+
+              <div className="rounded-md bg-white p-2.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-[#67718a]">Taxa de semeadura</span>
+                  <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
+                </div>
+                {totalKg !== null && (
+                  <div className="mt-1 flex justify-between text-sm">
+                    <span className="text-[#67718a]">Total necessário</span>
+                    <span className="num font-bold text-[#0e9d74]">{Math.ceil(totalKg)} kg</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-[#e2e6ed] pt-2.5 text-[11px] leading-snug text-[#67718a]">
+                <p>A indicação do sistema é uma forma básica e superficial. Para uma melhor precisão nos dados, consulte um de nossos consultores.</p>
+                {whatsapp && (
+                  <a
+                    href={linkWhatsApp(whatsapp, mensagemConsultor())}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-block font-semibold text-[#0e9d74] underline"
+                  >
+                    Falar com um consultor
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!itemSelecionado && !busca.trim() && <p className="py-6 text-center text-sm text-[#67718a]">Busque um produto pra calcular a quantidade de sementes necessária.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Link público (sem login) de UMA Tabela de Preço — lê só de `catalogo_publico_itens`/
  * `catalogo_publico_canais` (nome, preço, peso, fornecedor, frete e whatsapp já prontos,
  * publicados pelo operador em Precificação > Exportar > 🌐 Catálogo Online), nunca de
@@ -411,6 +614,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   const [carrinho, setCarrinho] = useState<Map<string, number>>(new Map());
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [mensagemWhatsAppAberta, setMensagemWhatsAppAberta] = useState(false);
+  const [calculadoraAberta, setCalculadoraAberta] = useState(false);
 
   function alternarSelecao(itemId: string) {
     setCarrinho((prev) => {
@@ -485,6 +689,8 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       })
       .filter((x): x is ItemCarrinho => x !== null);
   }, [carrinho, data]);
+
+  const temDadosPlantio = useMemo(() => data?.itens.some((i) => i.plantioKgHaLanco !== null || i.plantioSementesCovaBase !== null) ?? false, [data]);
 
   const semNadaAindaCarregando = isLoading && !data;
 
@@ -568,6 +774,17 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         ))}
       </main>
 
+      {temDadosPlantio && (
+        <button
+          type="button"
+          onClick={() => setCalculadoraAberta(true)}
+          title="Calculadora de plantio"
+          className={`fixed top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110 ${carrinho.size > 0 ? 'right-20' : 'right-5'}`}
+        >
+          <Calculator size={20} />
+        </button>
+      )}
+
       {carrinho.size > 0 && (
         <button
           type="button"
@@ -603,6 +820,8 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           onFechar={() => setMensagemWhatsAppAberta(false)}
         />
       )}
+
+      {calculadoraAberta && data && <ModalCalculadoraPlantio itens={data.itens} whatsapp={data.whatsapp} onFechar={() => setCalculadoraAberta(false)} />}
 
       {orcamentoAberto && data && (
         <ModalOrcamento

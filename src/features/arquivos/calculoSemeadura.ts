@@ -1,7 +1,15 @@
 import { calcularVCNumero, paraNumero } from './metricas';
-import { resolverDensidadeBase, resolverIndiceSobrevivencia, resolverPmsBase, resolverPmsDoLaudo } from './parametrizacaoProdutos';
+import {
+  laudoCasaComNomePreco,
+  resolverDensidadeBase,
+  resolverFatorCondicao,
+  resolverIndiceSobrevivencia,
+  resolverMaxPlantulasCova,
+  resolverPmsBase,
+  resolverPmsDoLaudo,
+} from './parametrizacaoProdutos';
 import { resultadoTesteNumero } from './testeGerminacao';
-import type { ArquivoLaudo, ProdutoParametrizacao } from './types';
+import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from './types';
 
 type LaudoParaSemeadura = Pick<
   ArquivoLaudo,
@@ -102,4 +110,140 @@ export function calcularCovasPorM2(covaCm: number | null, corredorCm: number | n
 export function calcularSementesPorCova(sementesPorM2: number | null, covasPorM2: number | null): number | null {
   if (sementesPorM2 === null || covasPorM2 === null || covasPorM2 <= 0) return null;
   return sementesPorM2 / covasPorM2;
+}
+
+/** Valor de um Fator (Modo ou Condição) cadastrado em `arquivos_fatores_plantio`, pela `chave` — 1 se não cadastrado (sem efeito na conta). */
+export function fatorDe(fatores: FatorPlantio[], chave: string): number {
+  return paraNumero(fatores.find((f) => f.chave === chave)?.fator ?? null) ?? 1;
+}
+
+/** Validade no formato "MM/AAAA" (texto livre, digitado pelo operador) — convertida num número comparável (ano×12+mês). Sem validade cadastrada vai pro fim da lista (usado pra ordenar laudos do mais recente pro mais antigo). */
+export function validadeParaOrdenacao(validade: string | null): number {
+  const partes = (validade ?? '').split('/');
+  if (partes.length !== 2) return -Infinity;
+  const mes = Number(partes[0]);
+  const ano = Number(partes[1]);
+  if (!Number.isFinite(mes) || !Number.isFinite(ano)) return -Infinity;
+  return ano * 12 + mes;
+}
+
+/**
+ * Covas por m² TRAVADO — regra GERAL do modo Covas (Milho/Sorgo usa a regra própria em
+ * GuiaPlantioModal.tsx, ver covasM2AlvoMilhoSorgo). PADRONIZADO em 4 (equivalente ao 50×50 de
+ * sempre) — não é campo por produto. Não é editável de jeito nenhum; o único grau de liberdade é o
+ * Corredor (Distância é sempre derivada dele pra manter esse valor fixo, ver distanciaDeCovasM2).
+ */
+export function covasM2Alvo(): number {
+  return 4;
+}
+
+/** Distância (cm) no espaçamento padrão (grade quadrada no Covas/m² alvo, ver covasM2Alvo) — referência de "0% de desconto" pra sementesComAjustePorDistancia (regra geral). Valor EXATO (sem arredondar pro centímetro fechado), pra a curva ficar contínua. */
+export function distanciaIdealProduto(): number {
+  return Math.sqrt(10000 / covasM2Alvo());
+}
+
+/** Distância (cm) a partir de um Covas/m² alvo já resolvido e do Corredor digitado — Distância = 10000 ÷ (Corredor × Covas/m² alvo). Null com Corredor ou Covas/m² inválido. */
+export function distanciaDeCovasM2(covasM2: number | null, corredorTexto: string): number | null {
+  const corredor = paraNumero(corredorTexto);
+  if (corredor === null || corredor <= 0 || covasM2 === null || covasM2 <= 0) return null;
+  return 10000 / (corredor * covasM2);
+}
+
+/** O menor entre Distância e Corredor atuais — quem estiver mais apertado é quem realmente limita a competição entre plantas, então é esse valor que entra no desconto por espaçamento mínimo (ver sementesComAjustePorDistancia). Null com Corredor inválido. */
+export function espacamentoDeDistancia(distancia: number | null, corredorTexto: string): number | null {
+  const corredor = paraNumero(corredorTexto);
+  return distancia === null || corredor === null ? null : Math.min(distancia, corredor);
+}
+
+// % de desconto na Sementes/cova por cm que o espaçamento efetivo (o menor entre Distância e
+// Corredor atuais) fica mais apertado que a distância ideal — evita superdimensionar a cova quando
+// o espaçamento aperta. Sem teto — a conta continua linear (nada empírico travando antes da hora).
+const TAXA_AJUSTE_SEMENTES_POR_CM = 1;
+
+/** Desconta a Sementes/cova padrão quando o espaçamento efetivo fica mais apertado que a distância ideal — 1%/cm de diferença, sem teto. Mais aberto que o ideal não faz nada (mantém o padrão, sem "prêmio" por sobrar espaço). */
+export function sementesComAjustePorDistancia(sementesPadrao: number, espacamentoAtual: number, distanciaIdeal: number): number {
+  const diferenca = distanciaIdeal - espacamentoAtual; // > 0: mais apertado (desconto); <= 0: sem ajuste
+  if (diferenca <= 0) return sementesPadrao;
+  const percentual = diferenca * TAXA_AJUSTE_SEMENTES_POR_CM;
+  return sementesPadrao * (1 - percentual / 100);
+}
+
+/**
+ * Sementes/cova (equivalente, sempre em SEMENTES) que bate EXATAMENTE o Máx. de plântulas/cova
+ * cadastrado (Parametrização), numa dada Germinação final — regra GERAL pro modo Covas (Milho/Sorgo
+ * usa a regra própria em GuiaPlantioModal.tsx), onde a Densidade não serve de referência (ela
+ * funciona bem só pra "A Lanço"). Null sem Máx. cadastrado ou sem Germinação.
+ */
+export function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
+  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
+  if (maxPlantulasCova === null || maxPlantulasCova <= 0) return null;
+  const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
+  return germinacaoFinal !== null && germinacaoFinal > 0 ? (maxPlantulasCova * 100) / germinacaoFinal : null;
+}
+
+/**
+ * Sementes/cova (equivalente, sempre em sementes) da regra GERAL do modo Covas — mira o Máx.
+ * cadastrado (ver sementesPorCovaAlvo, ou o modelo por Densidade sem esse cadastro), descontada
+ * conforme o espaçamento efetivo fica mais apertado que o ideal do produto (ver
+ * sementesComAjustePorDistancia). `espacamentoAtual = null` devolve o valor SEM esse desconto (a
+ * base "no espaçamento padrão"). Null quando falta algum dado (Germinação, Máx./Densidade).
+ */
+export function sementesCovaAtual(
+  laudo: ArquivoLaudo,
+  produtos: ProdutoParametrizacao[],
+  fatorModo: number,
+  fatorCondicaoValor: number,
+  espacamentoAtual: number | null,
+): number | null {
+  let sementesCova = sementesPorCovaAlvo(laudo, produtos, fatorModo, fatorCondicaoValor);
+  if (sementesCova === null) {
+    const sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoValor);
+    sementesCova = calcularSementesPorCova(sementesPorM2, covasM2Alvo());
+  }
+  if (sementesCova === null || espacamentoAtual === null) return sementesCova;
+  return sementesComAjustePorDistancia(sementesCova, espacamentoAtual, distanciaIdealProduto());
+}
+
+/**
+ * kg/ha a partir de Covas/m² × Sementes/cova (equivalente) × PMS — a conta "de verdade" em modo
+ * Covas, nunca só da Densidade (que em Covas só serve de estimativa de fallback).
+ */
+export function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: number | null, pms: number | null): number | null {
+  return covasPorM2 !== null && sementesCova !== null && pms !== null && pms > 0 ? (covasPorM2 * sementesCova * pms) / 100 : null;
+}
+
+/** Laudo de maior Validade entre os que casam o nome desse produto da Tabela de Preço (ver laudoCasaComNomePreco) — igual à ordenação já usada no Guia de Plantio. Null sem nenhum laudo batendo. */
+export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[]): ArquivoLaudo | null {
+  const candidatos = arquivos.filter((a) => laudoCasaComNomePreco(a.nomeProduto, nomeProdutoPreco));
+  if (candidatos.length === 0) return null;
+  return [...candidatos].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
+}
+
+export interface PlantioPublicoResultado {
+  kgHaLanco: number | null;
+  /** Sementes/cova ANTES do ajuste por espaçamento (Corredor no padrão, 50cm) — a página pública do Catálogo Online recalcula ao vivo a partir daqui conforme o Corredor que o cliente digitar (ver sementesComAjustePorDistancia). */
+  sementesCovaBase: number | null;
+  pms: number | null;
+}
+
+/**
+ * Snapshot de plantio pro Catálogo Online (calculadora pública, ver CatalogoPublicoPage.tsx) —
+ * condição sempre "Média" (sem seletor lá), regra GERAL de Covas pra qualquer produto (mesmo
+ * Milho/Sorgo, que no Guia interno tem Sementes/cova editável — simplificação combinada com o
+ * usuário pra essa calculadora pública). Calculado no momento de "Publicar" (autenticado, com os
+ * laudos/Parametrização em mãos); a página pública só lê o resultado, nunca o laudo em si.
+ */
+export function resolverPlantioParaProduto(
+  nomeProdutoPreco: string,
+  arquivos: ArquivoLaudo[],
+  produtos: ProdutoParametrizacao[],
+  fatores: FatorPlantio[],
+): PlantioPublicoResultado {
+  const laudo = encontrarLaudoParaProduto(nomeProdutoPreco, arquivos);
+  if (!laudo) return { kgHaLanco: null, sementesCovaBase: null, pms: null };
+  const fatorCondicaoMedia = resolverFatorCondicao(laudo.nomeProduto, 'media', produtos, fatores);
+  const kgHaLanco = calcularKgPorHectareNumero(laudo, produtos, fatorDe(fatores, 'lanco'), fatorCondicaoMedia);
+  const sementesCovaBase = sementesCovaAtual(laudo, produtos, fatorDe(fatores, 'linha_cova'), fatorCondicaoMedia, null);
+  const pms = resolverPmsDoLaudo(laudo, produtos);
+  return { kgHaLanco, sementesCovaBase, pms };
 }
