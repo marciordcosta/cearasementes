@@ -30,6 +30,8 @@ export interface HistoricoSafra {
   /** Margem bruta como % do Valor Médio (não dos R$) — comparável em pontos percentuais com a margem de hoje, mesmo quando a margem em R$ daquela safra é pequena. Calculada sobre o Valor Médio LÍQUIDO (vlr_com_desc) — ver PricingTable.tsx pra a versão "regrossada" (com o desconto somado de volta) usada na comparação por Safra. */
   margemBrutaPct: number;
   qtd: number;
+  /** Desconto médio REAL dado nessa Safra (soma de vlr_desc ÷ valor SEM desconto), direto do 396 — ver resolverDescontoUltimaSafra/construirDescontoUltimaSafraPorCanal, que usam isso como fonte primária do Encargos "Desconto" em vez do valor cadastrado no Canal. */
+  descontoMedioPct: number;
 }
 
 /**
@@ -48,14 +50,15 @@ export function construirHistoricoPorCodigo(
   const resultado = new Map<string, Map<string, HistoricoSafra>>();
   for (const item of items) {
     if (!item.codInterno) continue;
-    const porSafra = new Map<string, { qtd: number; valorVendido: number; custoTotal: number }>();
+    const porSafra = new Map<string, { qtd: number; valorVendido: number; custoTotal: number; descontoTotal: number }>();
     for (const m of item.monthly) {
       if (m.tabela.trim().toLowerCase() !== alvo) continue;
       const key = getPeriodKeyFor(ctx, m.year, m.month);
-      const acc = porSafra.get(key) ?? { qtd: 0, valorVendido: 0, custoTotal: 0 };
+      const acc = porSafra.get(key) ?? { qtd: 0, valorVendido: 0, custoTotal: 0, descontoTotal: 0 };
       acc.qtd += m.qtd;
       acc.valorVendido += m.valorVendido;
       acc.custoTotal += m.custoTotal;
+      acc.descontoTotal += m.descontoTotal;
       porSafra.set(key, acc);
     }
     if (porSafra.size === 0) continue;
@@ -65,11 +68,60 @@ export function construirHistoricoPorCodigo(
       const custoMedio = acc.custoTotal / acc.qtd;
       const valorMedio = acc.valorVendido / acc.qtd;
       const margemBrutaPct = valorMedio > 0 ? ((valorMedio - custoMedio) / valorMedio) * 100 : 0;
-      mapaSafras.set(key, { key, label: getPeriodLabel(ctx, key), custoMedio, valorMedio, margemBrutaPct, qtd: acc.qtd });
+      // valorVendido já é líquido de desconto (vlr_com_desc) — o "sem desconto" é valorVendido + descontoTotal.
+      const valorSemDesconto = acc.valorVendido + acc.descontoTotal;
+      const descontoMedioPct = valorSemDesconto > 0 ? (acc.descontoTotal / valorSemDesconto) * 100 : 0;
+      mapaSafras.set(key, { key, label: getPeriodLabel(ctx, key), custoMedio, valorMedio, margemBrutaPct, qtd: acc.qtd, descontoMedioPct });
     });
     if (mapaSafras.size > 0) resultado.set(item.codInterno, mapaSafras);
   }
   return resultado;
+}
+
+/** A Safra mais recente com dado (key mais alta) — usada como "última Safra" pra desconto médio, custo, etc. Null se o mapa estiver vazio. */
+function safraMaisRecente(porSafra: Map<string, HistoricoSafra>): HistoricoSafra | null {
+  let maisRecente: HistoricoSafra | null = null;
+  porSafra.forEach((h) => {
+    if (!maisRecente || h.key > maisRecente.key) maisRecente = h;
+  });
+  return maisRecente;
+}
+
+/**
+ * Desconto médio real (última Safra com venda) desse produto, cadastrado por Código — null sem
+ * Código ou sem histórico nessa Tabela (o chamador cai pro Canal.desconto cadastrado nesse caso,
+ * ver resolverDescontoEfetivo).
+ */
+export function resolverDescontoUltimaSafra(historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>, codigo: string | null): number | null {
+  if (!codigo) return null;
+  const porSafra = historicoPorCodigo.get(codigoCanonico(codigo));
+  if (!porSafra) return null;
+  return safraMaisRecente(porSafra)?.descontoMedioPct ?? null;
+}
+
+/**
+ * canalId -> codigoCanonico -> desconto médio (última Safra) — precomputado 1x por render (não por
+ * produto) pra alimentar `resolverDescontoBi` em `calcularCanal` na grade principal (múltiplos
+ * canais lado a lado, ver PricingPage.tsx), reaproveitando `construirHistoricoPorCodigo` por canal.
+ */
+export function construirDescontoUltimaSafraPorCanal(canais: Canal[], items: ItemAgg[], ctx: PeriodContext = SAFRA_PADRAO): Map<string, Map<string, number>> {
+  const resultado = new Map<string, Map<string, number>>();
+  for (const canal of canais) {
+    const historicoPorCodigo = construirHistoricoPorCodigo(items, canal.nome, ctx);
+    const porCodigo = new Map<string, number>();
+    historicoPorCodigo.forEach((porSafra, codigo) => {
+      const h = safraMaisRecente(porSafra);
+      if (h) porCodigo.set(codigo, h.descontoMedioPct);
+    });
+    resultado.set(canal.id, porCodigo);
+  }
+  return resultado;
+}
+
+/** Lookup pronto sobre o mapa de construirDescontoUltimaSafraPorCanal — null sem Código ou sem dado do BI pra esse canal+produto (o chamador cai pro Canal.desconto cadastrado). */
+export function resolverDescontoEfetivo(mapa: Map<string, Map<string, number>>, canalId: string, codigo: string | null): number | null {
+  if (!codigo) return null;
+  return mapa.get(canalId)?.get(codigoCanonico(codigo)) ?? null;
 }
 
 /** Quantas Safras mostrar como coluna — mais que isso lota a grade de tela cheia. */
@@ -431,13 +483,14 @@ export function calcularMargemAtualProjetada(
     if (qtdMedia <= 0) continue;
     const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
     const subcategoria = subcategorias.find((s) => s.id === produto.subcategoriaId);
-    const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
+    const resolverDescontoBi = (c: Canal, p: Produto) => (c.id === canal.id ? resolverDescontoUltimaSafra(historicoPorCodigo, p.codigo) : null);
+    const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi);
     valorProjetado += r.preco * qtdMedia;
     margemProjetada += (r.preco - produto.custo) * qtdMedia;
     margemLiquidaProjetada += r.margemReais * qtdMedia;
     if (freteConsiderado) freteProjetado += r.freteReais * qtdMedia;
     encargosProjetado += r.impostoReais * qtdMedia;
-    descontoProjetado += ((r.preco * canal.desconto) / 100) * qtdMedia;
+    descontoProjetado += ((r.preco * r.descontoPct) / 100) * qtdMedia;
   }
   return {
     valorProjetado,

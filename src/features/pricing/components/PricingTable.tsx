@@ -85,6 +85,13 @@ interface PricingTableProps {
   representatividadePorProduto?: Map<string, Representatividade>;
   /** Igual acima, só que somando a média de cada produto em TODAS as Tabelas — alimenta a coluna "Repres. Geral (%)", logo depois de Custo. */
   representatividadeGeralPorProduto?: Map<string, Representatividade>;
+  /**
+   * Desconto médio REAL (última Safra vendida, ver historicoBi.ts) pra usar em vez do Canal.desconto
+   * cadastrado, quando existir — passado por quem já tem o histórico do BI carregado (grade
+   * principal: por canal+código; tela cheia por canal: só o canal em questão). Sem essa prop,
+   * `calcularCanal` cai sempre no Canal.desconto cadastrado (comportamento de antes).
+   */
+  resolverDescontoBi?: (canal: Canal, produto: Produto) => number | null;
   /** true quando `produtos` já vem ordenado por Representação (ABC) — a divisória verde entre
    * grupos passa a marcar troca de Classe (A/B/C) em vez de troca de Categoria, já que a lista
    * não está mais agrupada por categoria nesse modo. */
@@ -138,6 +145,7 @@ export function PricingTable({
   margemAgregadaPorSafra,
   representatividadePorProduto,
   representatividadeGeralPorProduto,
+  resolverDescontoBi,
   ordenadoPorRepresentacao = false,
   onAbrirGraficoRepresentacao,
   onAbrirGraficoProduto,
@@ -431,7 +439,7 @@ export function PricingTable({
           if (precisaAjuste) return null;
           const categoria = getCategoria(p.categoriaId);
           const subcategoria = getSubcategoria(p.subcategoriaId);
-          const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
+          const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi);
           const manual = p.precos[canal.id]?.manual ?? false;
           return (
             <div className="flex items-center gap-1" title={manual ? `Sugestão: R$ ${fmtR(r.precoSugerido)}` : undefined}>
@@ -472,7 +480,7 @@ export function PricingTable({
               render: (p: Produto) => {
                 if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
                 const categoria = getCategoria(p.categoriaId);
-                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
+                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
                 const freteIncluso = canal.freteIncluso !== false;
                 return (
                   <span className={`num ${freteIncluso ? '' : 'text-[var(--color-text-soft)] line-through opacity-80'}`} title={montarTituloFrete(r, freteIncluso)}>
@@ -490,7 +498,7 @@ export function PricingTable({
               render: (p: Produto) => {
                 if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
                 const categoria = getCategoria(p.categoriaId);
-                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
+                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
                 return (
                   <span className="num" title={montarTituloEncargos(canal, r)}>
                     R$ {fmtR(r.impostoReais)}
@@ -509,7 +517,7 @@ export function PricingTable({
           const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
           if (precisaAjuste) return null;
           const categoria = getCategoria(p.categoriaId);
-          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId);
+          const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
           const classe = margemClasse(r.margemPct, r.margemAlvo);
           const alerta = alertaTolerancia(r.margemPct, r.margemAlvoTolerancia, r.toleranciaPct);
           const margemBrutaPct = r.preco > 0 ? ((r.preco - p.custo) / r.preco) * 100 : 0;
@@ -545,7 +553,7 @@ export function PricingTable({
                 if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
                 const categoria = getCategoria(p.categoriaId);
                 const subcategoria = getSubcategoria(p.subcategoriaId);
-                const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId);
+                const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi);
                 return <span className="num">R$ {fmtR(r.margemReais)}</span>;
               },
             } satisfies ColunaDef,
@@ -658,7 +666,7 @@ export function PricingTable({
                 if (!hist) return <span className="text-[var(--color-text-soft)]">—</span>;
                 const canal = canaisVisiveis[0];
                 const categoria = getCategoria(produto.categoriaId);
-                const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
+                const r = calcularCanal(produto, canal, categoria, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
                 // O Preço de hoje já é o preço de tabela cheio (o desconto entra na conta da própria
                 // grade principal, não aqui) — quem precisa de ajuste é o histórico: `hist.valorMedio` já
                 // vem líquido do desconto real dado naquela safra (vlr_com_desc), então "regrossa" ele

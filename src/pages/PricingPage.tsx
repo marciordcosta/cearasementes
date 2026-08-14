@@ -67,8 +67,10 @@ import {
   calcularMargemAtualProjetada,
   calcularRepresentatividadeGeral,
   calcularRepresentatividadePorCanal,
+  construirDescontoUltimaSafraPorCanal,
   construirHistoricoPorCodigo,
   listarTodasSafrasGeral,
+  resolverDescontoEfetivo,
   type CriterioRepresentacao,
 } from '@/features/pricing/historicoBi';
 import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
@@ -169,6 +171,14 @@ export function PricingPage() {
   const { data: itensBi = [] } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens });
   const itemsAgregadosBi = useMemo(() => agregarItens(vendasBi, itensBi), [vendasBi, itensBi]);
   const canaisPorId = useMemo(() => new Map(canais.map((c) => [c.id, c])), [canais]);
+  // Desconto médio REAL (última Safra, ver historicoBi.ts) por canal+produto — fonte primária do
+  // Encargos "Desconto" em calcularCanal, no lugar do Canal.desconto cadastrado; sem dado do BI pra
+  // esse canal+produto, calcularCanal cai sozinho pro cadastrado (ver resolverDescontoEfetivo).
+  const descontoBiPorCanalECodigo = useMemo(() => construirDescontoUltimaSafraPorCanal(canais, itemsAgregadosBi), [canais, itemsAgregadosBi]);
+  const resolverDescontoBi = useMemo(
+    () => (canal: Canal, produto: Produto) => resolverDescontoEfetivo(descontoBiPorCanalECodigo, canal.id, produto.codigo),
+    [descontoBiPorCanalECodigo],
+  );
   // Coluna "Repres. Geral (%)" — soma a média de valor vendido de cada produto em TODAS as
   // Tabelas (não só uma), então precisa rodar de novo só quando produtos/canais/histórico mudam.
   const representatividadeGeralPorProduto = useMemo(
@@ -832,6 +842,7 @@ export function PricingPage() {
               onRemoverProduto={onRemoverProduto}
               onAbrirCanalTelaCheia={(canal) => setCanalTelaCheiaId(canal.id)}
               representatividadeGeralPorProduto={representatividadeGeralPorProduto}
+              resolverDescontoBi={resolverDescontoBi}
               ordenadoPorRepresentacao={ordenarPorRepresentacao}
               onAbrirGraficoRepresentacao={() => setGraficoRepresentacaoAberto(true)}
               onAbrirGraficoProduto={setProdutoGraficoLinha}
@@ -941,9 +952,9 @@ export function PricingPage() {
         onConfirmar={(canal) => {
           setModalPdfAberto(false);
           if (modoExportacaoPdf === 'gerenciamento') {
-            gerarCatalogoGerenciamentoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId);
+            gerarCatalogoGerenciamentoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi);
           } else {
-            gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId);
+            gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi);
           }
         }}
       />

@@ -86,6 +86,7 @@ export function gerarCatalogoPDF(
   fornecedores: Fornecedor[],
   todosCanais: Canal[],
   transportadoraPorId: Map<string, Transportadora>,
+  resolverDescontoBi?: (canal: Canal, produto: Produto) => number | null,
 ): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
@@ -124,7 +125,7 @@ export function gerarCatalogoPDF(
     const itens = [...(categoriasPresentes.get(cat.id) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     let linhas = '';
     itens.forEach((produto, indice) => {
-      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
+      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
       const fornecedor = getFornecedor(produto.fornecedorId);
       const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
       // Mesma regra da Tabela de Preços: linha divisória mais espessa quando o produto "muda"
@@ -269,6 +270,7 @@ export function gerarCatalogoGerenciamentoPDF(
   fornecedores: Fornecedor[],
   todosCanais: Canal[],
   transportadoraPorId: Map<string, Transportadora>,
+  resolverDescontoBi?: (canal: Canal, produto: Produto) => number | null,
 ): void {
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
@@ -302,7 +304,7 @@ export function gerarCatalogoGerenciamentoPDF(
     const itens = [...(categoriasPresentes.get(cat.id) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     let linhas = '';
     itens.forEach((produto, indice) => {
-      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId);
+      const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
       const fornecedor = getFornecedor(produto.fornecedorId);
       const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
       const produtoMudou = indice > 0 && chaveComparacaoNome(produto.nome) !== chaveComparacaoNome(itens[indice - 1].nome);

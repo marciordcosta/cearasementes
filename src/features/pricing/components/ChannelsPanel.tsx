@@ -38,9 +38,9 @@ interface ChannelsPanelProps {
   acaoTitulo?: React.ReactNode;
 }
 
-function CampoRow({ label, children }: { label: string; children: React.ReactNode }) {
+function CampoRow({ label, children, title }: { label: string; children: React.ReactNode; title?: string }) {
   return (
-    <div className="flex items-center justify-between gap-1.5">
+    <div className="flex items-center justify-between gap-1.5" title={title}>
       <label className="whitespace-nowrap text-[11px] text-[var(--color-text-soft)]">{label}</label>
       {children}
     </div>
@@ -128,7 +128,10 @@ export function ChannelsPanel({
                   <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Frete Incluso na Margem</span>
                   <input type="checkbox" checked={canal.freteIncluso} onChange={(e) => onToggleFreteIncluso(canal.id, e.target.checked)} className="accent-accent" />
                 </label>
-                <CampoRow label="Média de Desconto (%)">
+                <CampoRow
+                  label="Média de Desconto (%)"
+                  title="Só usado quando não há desconto real medido no BI (última Safra vendida) pra um produto — a fonte primária agora é o histórico de vendas, não mais esse valor cadastrado."
+                >
                   <input type="number" step="0.1" min="0" defaultValue={canal.desconto} onBlur={(e) => onAtualizarCampo(canal.id, 'desconto', parseFloat(e.target.value) || 0)} className={inputClass} />
                 </CampoRow>
                 <CampoRow label="Comissão Vendedor (%)">

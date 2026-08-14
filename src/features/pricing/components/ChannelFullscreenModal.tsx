@@ -11,6 +11,7 @@ import {
   construirMargemBrutaAgregadaPorSafra,
   listarSafrasDisponiveis,
   listarTodasSafras,
+  resolverDescontoUltimaSafra,
   type CriterioRepresentacao,
   type HistoricoSafra,
   type MargemBrutaAgregada,
@@ -98,6 +99,12 @@ export function ChannelFullscreenModal({
     if (!canal) return new Map();
     return construirHistoricoPorCodigo(itemsAgregados, canal.nome);
   }, [itemsAgregados, canal]);
+  // Escopado a ESSE canal só — se `canal` (self/referência dentro de calcularCanal) for outro, não
+  // tem histórico carregado aqui pra ele (só busca o BI pro canal em tela cheia), cai pro cadastrado.
+  const resolverDescontoBi = useMemo(
+    () => (canalArg: Canal, produto: Produto) => (canal && canalArg.id === canal.id ? resolverDescontoUltimaSafra(historicoPorCodigo, produto.codigo) : null),
+    [canal, historicoPorCodigo],
+  );
   const safrasDisponiveis = useMemo(() => listarSafrasDisponiveis(historicoPorCodigo), [historicoPorCodigo]);
   // Sem o limite de MAX_SAFRAS_EXIBIDAS de safrasDisponiveis (essa é só pro seletor "ver uma safra específica" do gráfico).
   const todasSafrasDisponiveis = useMemo(() => listarTodasSafras(historicoPorCodigo), [historicoPorCodigo]);
@@ -219,6 +226,7 @@ export function ChannelFullscreenModal({
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}
             representatividadePorProduto={representatividadePorProduto}
+            resolverDescontoBi={resolverDescontoBi}
             ordenadoPorRepresentacao={ordenarPorRepresentacao}
             onAbrirGraficoRepresentacao={() => setGraficoAberto(true)}
             onAbrirGraficoProduto={setProdutoGraficoLinha}

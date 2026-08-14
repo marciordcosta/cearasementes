@@ -123,6 +123,9 @@ export interface ResultadoCalculo {
   toleranciaPct: number | undefined;
   impostoPct: number;
   encargosPct: number;
+  /** A parcela "Desconto" dentro de encargosPct — vem do BI (desconto médio real da última Safra pra esse produto+canal) quando há dado; senão cai pro Canal.desconto cadastrado (ver descontoFonte). */
+  descontoPct: number;
+  descontoFonte: 'bi' | 'cadastro';
   outrosEncargos: number;
   freteBruto: number;
   freteAdicionalReais: number;

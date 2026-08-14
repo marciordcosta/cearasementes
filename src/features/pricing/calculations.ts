@@ -92,6 +92,13 @@ export function chaveComparacaoProduto(produto: { nome: string; subcategoriaId: 
  * resolver a meta, a chamada recursiva pra Tabela de referência sempre usa
  * `false`, ignorando a própria referência DELA (nunca uma cadeia A→B→C, só 1
  * nível).
+ *
+ * `resolverDescontoBi` (opcional): quando informado, é chamado pra CADA canal envolvido (o próprio
+ * e, se houver, o de referência) pra tentar achar o desconto médio REAL desse produto (última
+ * Safra vendida, ver historicoBi.ts) — null = sem dado do BI pra esse canal+produto, cai pro
+ * `Canal.desconto` cadastrado. Callback (não um Map pronto) porque a fonte do dado (BI) mora num
+ * módulo diferente (pricing/historicoBi.ts importa daqui, então essa função não pode importar de
+ * lá de volta) e porque precisa resolver pra mais de 1 canal (self + referência) na mesma chamada.
  */
 export function calcularCanal(
   produto: Produto,
@@ -101,6 +108,7 @@ export function calcularCanal(
   transportadoraPorId: Map<string, Transportadora>,
   canaisPorId: Map<string, Canal>,
   permitirReferencia = true,
+  resolverDescontoBi?: (canal: Canal, produto: Produto) => number | null,
 ): ResultadoCalculo {
   const transportadora = canal.transportadoraId ? transportadoraPorId.get(canal.transportadoraId) : undefined;
   const freteKgEfetivo = transportadora ? transportadora.valorPorKg : canal.freteKg;
@@ -108,7 +116,10 @@ export function calcularCanal(
 
   const impostoPct = canal.tipoImposto === 'interestadual' ? categoria.interestadual : categoria.estadual;
   const margemAlvo = subcategoria?.margens[canal.id] ?? categoria.margens[canal.id] ?? 0;
-  const encargosPct = canal.desconto + canal.comissao + canal.cartao;
+  const descontoBi = resolverDescontoBi?.(canal, produto) ?? null;
+  const descontoPct = descontoBi ?? canal.desconto;
+  const descontoFonte: 'bi' | 'cadastro' = descontoBi !== null ? 'bi' : 'cadastro';
+  const encargosPct = descontoPct + canal.comissao + canal.cartao;
   const outrosEncargos = canal.outrosEncargos || 0;
   const freteConsiderado = canal.freteIncluso !== false;
 
@@ -147,7 +158,7 @@ export function calcularCanal(
   let margemAlvoTolerancia = margemAlvo;
   let precoSugerido: number;
   if (canalReferencia && canalReferencia.id !== canal.id) {
-    const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false);
+    const referencia = calcularCanal(produto, canalReferencia, categoria, subcategoria, transportadoraPorId, canaisPorId, false, resolverDescontoBi);
     // Ajuste "por dentro" (mesma convenção do resto do sistema): o % representa uma fração
     // da PRÓPRIA meta, não da margem de referência — tirando esse % da meta, volta pra
     // margem da referência. Por isso divide (não multiplica) pelo complemento do %.
@@ -184,6 +195,8 @@ export function calcularCanal(
     toleranciaPct,
     impostoPct,
     encargosPct,
+    descontoPct,
+    descontoFonte,
     outrosEncargos,
     freteBruto,
     freteAdicionalReais,
@@ -229,7 +242,7 @@ export function montarTituloFrete(r: ResultadoCalculo, freteIncluso: boolean): s
 /** Discrimina o que compõe a coluna "Encargos (R$)" — imposto + cada encargo do canal (só os que existirem). */
 export function montarTituloEncargos(canal: Canal, r: ResultadoCalculo): string {
   const partes: string[] = [`Imposto ${r.impostoPct.toFixed(1)}%`];
-  if (canal.desconto) partes.push(`Desconto ${canal.desconto.toFixed(1)}%`);
+  if (r.descontoPct) partes.push(`Desconto ${r.descontoPct.toFixed(1)}% (${r.descontoFonte === 'bi' ? 'real, última Safra' : 'cadastrado'})`);
   if (canal.comissao) partes.push(`Comissão ${canal.comissao.toFixed(1)}%`);
   if (canal.cartao) partes.push(`Cartão ${canal.cartao.toFixed(1)}%`);
   if (r.outrosEncargos) partes.push(`Outros Encargos R$ ${r.outrosEncargos.toFixed(2)}`);
