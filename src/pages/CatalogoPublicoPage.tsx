@@ -140,6 +140,38 @@ function ModalConcluir({
   );
 }
 
+/** Composição livre antes de sair pro WhatsApp — o clique no ícone flutuante não navega direto, só abre isso; o navegador só é aberto de fato ao confirmar "Enviar", pra não tirar o cliente do catálogo à toa. */
+function ModalMensagemWhatsApp({ mensagemInicial, onEnviar, onFechar }: { mensagemInicial: string; onEnviar: (mensagem: string) => void; onFechar: () => void }) {
+  const [mensagem, setMensagem] = useState(mensagemInicial);
+  return (
+    <div className="fixed inset-0 z-[220] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-bold text-[#1a2233]">Mensagem pro WhatsApp</p>
+          <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
+            <X size={18} />
+          </button>
+        </div>
+        <textarea
+          value={mensagem}
+          onChange={(e) => setMensagem(e.target.value)}
+          rows={5}
+          className="w-full resize-none rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-2.5 text-sm text-[#1a2233]"
+        />
+        <button
+          type="button"
+          onClick={() => onEnviar(mensagem)}
+          disabled={!mensagem.trim()}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <IconeWhatsApp size={18} />
+          Enviar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ModalOrcamento({
   canalNome,
   itens,
@@ -309,6 +341,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   const [busca, setBusca] = useState('');
   const [carrinho, setCarrinho] = useState<Map<string, number>>(new Map());
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
+  const [mensagemWhatsAppAberta, setMensagemWhatsAppAberta] = useState(false);
 
   function alternarSelecao(itemId: string) {
     setCarrinho((prev) => {
@@ -481,15 +514,25 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       )}
 
       {data?.whatsapp && (
-        <a
-          href={linkWhatsApp(data.whatsapp, `Olá! Vim do catálogo online (${data.canalNome}).`)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={() => setMensagemWhatsAppAberta(true)}
           title="Falar no WhatsApp"
           className="fixed bottom-5 right-5 z-[190] flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg hover:brightness-95"
         >
           <IconeWhatsApp size={26} />
-        </a>
+        </button>
+      )}
+
+      {mensagemWhatsAppAberta && data?.whatsapp && (
+        <ModalMensagemWhatsApp
+          mensagemInicial={`Olá! Vim do catálogo online (${data.canalNome}).`}
+          onEnviar={(mensagem) => {
+            window.open(linkWhatsApp(data.whatsapp!, mensagem), '_blank');
+            setMensagemWhatsAppAberta(false);
+          }}
+          onFechar={() => setMensagemWhatsAppAberta(false)}
+        />
       )}
 
       {orcamentoAberto && data && (
