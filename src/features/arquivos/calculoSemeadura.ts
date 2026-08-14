@@ -1,6 +1,7 @@
 import { calcularVCNumero, paraNumero } from './metricas';
 import {
   laudoCasaComNomePrecoIgnorandoEspecie,
+  normalizarNome,
   resolverDensidadeBase,
   resolverFatorCondicao,
   resolverIndiceSobrevivencia,
@@ -216,11 +217,29 @@ export function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: n
   return covasPorM2 !== null && sementesCova !== null && pms !== null && pms > 0 ? (covasPorM2 * sementesCova * pms) / 100 : null;
 }
 
-/** Laudo de maior Validade entre os que casam o nome desse produto da Tabela de Preço (ver laudoCasaComNomePrecoIgnorandoEspecie) — igual à ordenação já usada no Guia de Plantio. Null sem nenhum laudo batendo. */
-export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[]): ArquivoLaudo | null {
+/** Fornecedor do laudo "bate" com o Fornecedor cadastrado no produto da Tabela de Preço — comparação frouxa (normalizada, uma string contida na outra) pra tolerar variações de escrita ("Barenbrug" x "Barenbrug Sementes"). Null de qualquer lado nunca bate. */
+function fornecedorCasaComProduto(fornecedorLaudo: string | null, fornecedorProduto: string | null): boolean {
+  if (!fornecedorLaudo || !fornecedorProduto) return false;
+  const a = normalizarNome(fornecedorLaudo);
+  const b = normalizarNome(fornecedorProduto);
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+/**
+ * Laudo de maior Validade entre os que casam o nome desse produto da Tabela de Preço (ver
+ * laudoCasaComNomePrecoIgnorandoEspecie) — igual à ordenação já usada no Guia de Plantio. Quando o
+ * produto tem Fornecedor cadastrado, PREFERE os laudos cujo Fornecedor também bate (mais preciso,
+ * desambigua 2 fornecedores da mesma variedade) — sem nenhum casando por Fornecedor (laudo antigo
+ * sem esse campo ainda, ou produto sem Fornecedor cadastrado), cai pro conjunto por nome mesmo, pra
+ * não perder o casamento por causa de um dado que só passou a existir agora. Null sem nenhum laudo
+ * batendo por nome.
+ */
+export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[], fornecedorProduto: string | null = null): ArquivoLaudo | null {
   const candidatos = arquivos.filter((a) => laudoCasaComNomePrecoIgnorandoEspecie(a, nomeProdutoPreco));
   if (candidatos.length === 0) return null;
-  return [...candidatos].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
+  const porFornecedor = fornecedorProduto ? candidatos.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto)) : [];
+  const finalistas = porFornecedor.length > 0 ? porFornecedor : candidatos;
+  return [...finalistas].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
 }
 
 export interface PlantioPublicoResultado {
@@ -228,26 +247,33 @@ export interface PlantioPublicoResultado {
   /** Sementes/cova ANTES do ajuste por espaçamento (Corredor no padrão, 50cm) — a página pública do Catálogo Online recalcula ao vivo a partir daqui conforme o Corredor que o cliente digitar (ver sementesComAjustePorDistancia). */
   sementesCovaBase: number | null;
   pms: number | null;
+  /** VC% do laudo escolhido — manual (Pureza × Germinação) quando o laudo tem, senão o VC% padrão cadastrado no grupo (Parametrização, ver resolverVcPadrao). Só pra EXIBIÇÃO no card do Catálogo Online; o cálculo de kg/ha já aplica essa mesma prioridade por baixo (ver germinacaoParaSemeadura). */
+  vc: number | null;
+  /** Validade do laudo escolhido, como veio cadastrada (ex.: "07/2027") — só pra exibição. */
+  validade: string | null;
 }
 
 /**
- * Snapshot de plantio pro Catálogo Online (calculadora pública, ver CatalogoPublicoPage.tsx) —
- * condição sempre "Média" (sem seletor lá), regra GERAL de Covas pra qualquer produto (mesmo
- * Milho/Sorgo, que no Guia interno tem Sementes/cova editável — simplificação combinada com o
- * usuário pra essa calculadora pública). Calculado no momento de "Publicar" (autenticado, com os
- * laudos/Parametrização em mãos); a página pública só lê o resultado, nunca o laudo em si.
+ * Snapshot de plantio pro Catálogo Online (calculadora + informação discreta no card, ver
+ * CatalogoPublicoPage.tsx) — condição sempre "Média" (sem seletor lá), regra GERAL de Covas pra
+ * qualquer produto (mesmo Milho/Sorgo, que no Guia interno tem Sementes/cova editável —
+ * simplificação combinada com o usuário pra essa calculadora pública). Calculado no momento de
+ * "Publicar" (autenticado, com os laudos/Parametrização em mãos); a página pública só lê o
+ * resultado, nunca o laudo em si.
  */
 export function resolverPlantioParaProduto(
   nomeProdutoPreco: string,
   arquivos: ArquivoLaudo[],
   produtos: ProdutoParametrizacao[],
   fatores: FatorPlantio[],
+  fornecedorProduto: string | null = null,
 ): PlantioPublicoResultado {
-  const laudo = encontrarLaudoParaProduto(nomeProdutoPreco, arquivos);
-  if (!laudo) return { kgHaLanco: null, sementesCovaBase: null, pms: null };
+  const laudo = encontrarLaudoParaProduto(nomeProdutoPreco, arquivos, fornecedorProduto);
+  if (!laudo) return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, validade: null };
   const fatorCondicaoMedia = resolverFatorCondicao(laudo.nomeProduto, 'media', produtos, fatores);
   const kgHaLanco = calcularKgPorHectareNumero(laudo, produtos, fatorDe(fatores, 'lanco'), fatorCondicaoMedia);
   const sementesCovaBase = sementesCovaAtual(laudo, produtos, fatorDe(fatores, 'linha_cova'), fatorCondicaoMedia, null);
   const pms = resolverPmsDoLaudo(laudo, produtos);
-  return { kgHaLanco, sementesCovaBase, pms };
+  const vc = calcularVCNumero(laudo) ?? resolverVcPadrao(laudo.nomeProduto, produtos);
+  return { kgHaLanco, sementesCovaBase, pms, vc, validade: laudo.validade };
 }

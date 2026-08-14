@@ -69,8 +69,20 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
   );
 }
 
-/** 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado" (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de texto quebrar sozinho. */
+/**
+ * 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado"
+ * (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo
+ * do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de
+ * texto quebrar sozinho. Quando há dado de plantio (laudo casado, ver resolverPlantioParaProduto em
+ * calculoSemeadura.ts), VC% e Validade entram na MESMA linha discreta, nessa ordem: Fornecedor > VC% > Validade.
+ */
 function LinhaProduto({ item, selecionado, onClick }: { item: ItemCatalogo; selecionado: boolean; onClick: () => void }) {
+  const infoPartes = [
+    item.fornecedorNome,
+    item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
+    item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
+  ].filter((parte): parte is string => !!parte);
+
   return (
     <button
       type="button"
@@ -81,7 +93,7 @@ function LinhaProduto({ item, selecionado, onClick }: { item: ItemCatalogo; sele
         <p className="line-clamp-2 text-sm leading-snug text-[#1a2233]">
           <NomeComDestaque nome={item.nome} />
         </p>
-        {item.fornecedorNome && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</p>}
+        {infoPartes.length > 0 && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{infoPartes.join(' · ')}</p>}
       </div>
       <div className="shrink-0 text-right">
         <p className="num text-base font-bold text-[#0e9d74]">R$ {fmtR(item.preco)}</p>

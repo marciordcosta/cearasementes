@@ -245,6 +245,10 @@ export interface Database {
           plantio_sementes_cova_base: number | null;
           /** = PlantioPublicoResultado.pms — PMS do laudo usado no cálculo de plantio, pra converter Sementes/cova em kg/ha na calculadora pública. */
           plantio_pms: number | null;
+          /** = PlantioPublicoResultado.vc — VC% do laudo usado no cálculo de plantio (manual, ou padrão da Parametrização quando o laudo não tem) — só exibição, ordem Fornecedor > VC% > Validade no card. */
+          plantio_vc: number | null;
+          /** = PlantioPublicoResultado.validade — Validade do laudo usado no cálculo de plantio, como veio cadastrada (ex.: "07/2027") — só exibição. */
+          plantio_validade: string | null;
           ordem: number;
           atualizado_em: string;
         };

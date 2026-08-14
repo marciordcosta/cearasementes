@@ -766,7 +766,7 @@ export function GuiaPlantioModal({
                       onClick={() => selecionar(a)}
                       className="flex w-full flex-col px-3 py-1 pl-4 text-left text-xs font-normal text-[var(--color-text-soft)] hover:bg-[var(--color-accent)]/15 hover:text-[var(--color-text)]"
                     >
-                      Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'}
+                      Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'} · {a.fornecedor ?? '—'}
                     </button>
                   ))}
                 </div>

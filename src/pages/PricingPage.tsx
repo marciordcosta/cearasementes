@@ -438,19 +438,22 @@ export function PricingPage() {
       const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => {
         const categoria = getCategoria(p.categoriaId);
         const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
-        const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio);
+        const fornecedorNome = getFornecedor(p.fornecedorId)?.nome ?? null;
+        const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome);
         return {
           produtoId: p.id,
           nome: p.nome,
           categoriaNome: categoria.nome,
           subcategoriaNome: getSubcategoria(p.subcategoriaId)?.nome ?? null,
-          fornecedorNome: getFornecedor(p.fornecedorId)?.nome ?? null,
+          fornecedorNome,
           preco: r.preco,
           peso: p.peso,
           pesoUsado: r.pesoUsado,
           plantioKgHaLanco: plantio.kgHaLanco,
           plantioSementesCovaBase: plantio.sementesCovaBase,
           plantioPms: plantio.pms,
+          plantioVc: plantio.vc,
+          plantioValidade: plantio.validade,
           ordem: indice,
         };
       });

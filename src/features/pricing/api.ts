@@ -594,6 +594,9 @@ export interface ItemCatalogoPublicoInput {
   plantioKgHaLanco: number | null;
   plantioSementesCovaBase: number | null;
   plantioPms: number | null;
+  /** = resolverPlantioParaProduto(...).vc — só exibição no card (Fornecedor > VC% > Validade). */
+  plantioVc: number | null;
+  plantioValidade: string | null;
   ordem: number;
 }
 
@@ -645,6 +648,8 @@ export async function publicarCatalogoOnline(
         plantio_kg_ha_lanco: item.plantioKgHaLanco,
         plantio_sementes_cova_base: item.plantioSementesCovaBase,
         plantio_pms: item.plantioPms,
+        plantio_vc: item.plantioVc,
+        plantio_validade: item.plantioValidade,
         ordem: item.ordem,
       })),
     );
@@ -672,6 +677,8 @@ export interface CatalogoPublico {
     plantioKgHaLanco: number | null;
     plantioSementesCovaBase: number | null;
     plantioPms: number | null;
+    plantioVc: number | null;
+    plantioValidade: string | null;
   }[];
 }
 
@@ -706,6 +713,8 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       plantioKgHaLanco: i.plantio_kg_ha_lanco,
       plantioSementesCovaBase: i.plantio_sementes_cova_base,
       plantioPms: i.plantio_pms,
+      plantioVc: i.plantio_vc,
+      plantioValidade: i.plantio_validade,
     })),
   };
 }

@@ -138,6 +138,7 @@ export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApag
                 </th>
               )}
               <th className="px-4 py-1.5 font-medium">Produto</th>
+              <th className="px-4 py-1.5 font-medium">Fornecedor</th>
               <th className="px-4 py-1.5 font-medium">Lote</th>
               <th className="px-4 py-1.5 font-medium">Ano Safra</th>
               <th className="px-4 py-1.5 font-medium">Validade</th>
@@ -159,6 +160,7 @@ export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApag
                   </td>
                 )}
                 <td className="whitespace-nowrap px-4 py-1 font-semibold text-[var(--color-text)]">{a.nomeProduto}</td>
+                <td className="whitespace-nowrap px-4 py-1 text-[var(--color-text-soft)]">{a.fornecedor || '—'}</td>
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{a.lote || '—'}</td>
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{a.anoSafra || '—'}</td>
                 <td className="px-4 py-1 text-[var(--color-text-soft)]">{a.validade || '—'}</td>
@@ -202,7 +204,7 @@ export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApag
             ))}
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={modoSelecao ? 12 : 11} className="px-4 py-6 text-center text-[var(--color-text-soft)]">
+                <td colSpan={modoSelecao ? 13 : 12} className="px-4 py-6 text-center text-[var(--color-text-soft)]">
                   Nenhum laudo encontrado.
                 </td>
               </tr>
