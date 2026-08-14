@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { useTheme } from '@/hooks/useTheme';
 
 interface TopbarProps {
@@ -11,6 +12,7 @@ interface TopbarProps {
 
 export function Topbar({ title, actions, navy = false }: TopbarProps) {
   const { isDark, toggleTheme } = useTheme();
+  const { session, sair } = useAuth();
 
   return (
     <header
@@ -21,6 +23,11 @@ export function Topbar({ title, actions, navy = false }: TopbarProps) {
       <div className="min-w-0 flex-1 text-base font-semibold">{title}</div>
       <div className="flex shrink-0 items-center gap-2">
         {actions}
+        {session?.user.email && (
+          <span className={`hidden truncate text-xs sm:inline ${navy ? 'text-white/70' : 'text-[var(--color-text-soft)]'}`} title={session.user.email}>
+            {session.user.email}
+          </span>
+        )}
         <button
           type="button"
           onClick={toggleTheme}
@@ -31,6 +38,18 @@ export function Topbar({ title, actions, navy = false }: TopbarProps) {
           }
         >
           {isDark ? 'Modo claro' : 'Modo escuro'}
+        </button>
+        <button
+          type="button"
+          onClick={sair}
+          title="Sair"
+          className={
+            navy
+              ? 'rounded-md border border-white/40 px-3 py-1.5 text-sm text-white hover:bg-white/12'
+              : 'rounded-md border border-[var(--color-line)] px-3 py-1.5 text-sm text-[var(--color-text-soft)] hover:bg-[var(--color-line)]/40'
+          }
+        >
+          Sair
         </button>
       </div>
     </header>

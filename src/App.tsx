@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from './features/auth/AuthProvider';
+import { LoginPage } from './features/auth/LoginPage';
 import { ArquivosPage } from './pages/ArquivosPage';
 import { ConciliacaoPage } from './pages/ConciliacaoPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -29,10 +31,14 @@ const PAGINAS = [
 export default function App() {
   const location = useLocation();
   const [visitadas, setVisitadas] = useState<Set<string>>(() => new Set([location.pathname]));
+  const { session, carregando } = useAuth();
 
   useEffect(() => {
     setVisitadas((prev) => (prev.has(location.pathname) ? prev : new Set(prev).add(location.pathname)));
   }, [location.pathname]);
+
+  if (carregando) return null;
+  if (!session) return <LoginPage />;
 
   return (
     <div className="relative min-h-screen">
