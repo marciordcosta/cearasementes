@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { AutocompleteInput } from '@/features/fretes/components/AutocompleteInput';
+import type { Fornecedor } from '@/features/pricing/types';
 import type { ArquivoLaudo } from '../types';
 
 export interface PatchLaudo {
@@ -20,6 +22,8 @@ export interface PatchLaudo {
 
 interface EditarLaudoModalProps {
   laudo: ArquivoLaudo | null;
+  /** Fornecedores já cadastrados na Precificação — sugeridos no autocomplete do campo Fornecedor, pra manter o nome igual ao usado lá (o casamento laudo↔produto por Fornecedor, ver calculoSemeadura.ts, depende disso). */
+  fornecedores: Fornecedor[];
   onFechar: () => void;
   onSalvar: (id: string, patch: PatchLaudo) => void;
 }
@@ -37,7 +41,7 @@ function Campo({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** O arquivo pode ter sido salvo com dados errados ou faltando (detecção automática não pega tudo em PDF) — aqui corrige os metadados, sem reenviar o arquivo. */
-export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModalProps) {
+export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: EditarLaudoModalProps) {
   const [nomeProduto, setNomeProduto] = useState('');
   const [lote, setLote] = useState('');
   const [anoSafra, setAnoSafra] = useState('');
@@ -122,9 +126,10 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
           />
         </Campo>
         <Campo label="Fornecedor">
-          <input
+          <AutocompleteInput
             value={fornecedor}
-            onChange={(e) => setFornecedor(e.target.value)}
+            onChangeTexto={setFornecedor}
+            opcoes={fornecedores.map((f) => ({ valor: f.nome }))}
             className={campoClasse}
             placeholder="Ex.: Barenbrug (lido do laudo quando o documento traz)"
           />

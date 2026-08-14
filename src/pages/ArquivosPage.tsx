@@ -40,7 +40,7 @@ import { TesteModal } from '@/features/arquivos/components/TesteModal';
 import { VisualizarArquivoModal } from '@/features/arquivos/components/VisualizarArquivoModal';
 import { gerarGuiaTestePdf } from '@/features/arquivos/guiaTestePdf';
 import type { ArquivoLaudo, ManualPlantio, NovoLaudoInput } from '@/features/arquivos/types';
-import { fetchProdutos } from '@/features/pricing/api';
+import { fetchFornecedores, fetchProdutos } from '@/features/pricing/api';
 import { mensagemDeErro } from '@/lib/errors';
 
 export function ArquivosPage() {
@@ -51,6 +51,9 @@ export function ArquivosPage() {
   const { data: checklist = [] } = useQuery({ queryKey: ['arquivos_checklist_plantio'], queryFn: fetchChecklistPlantio });
   const { data: manual = null } = useQuery({ queryKey: ['arquivos_manual_plantio'], queryFn: fetchManualPlantio });
   const { data: produtosPreco = [] } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
+  // Mesma queryKey já usada em PricingPage.tsx — cache compartilhado (fornecedores cadastrados na
+  // Precificação), usado aqui só pra sugerir no autocomplete do campo Fornecedor de EditarLaudoModal.
+  const { data: fornecedoresPreco = [] } = useQuery({ queryKey: ['pricing', 'fornecedores'], queryFn: fetchFornecedores });
 
   const [busca, setBusca] = useState('');
   const [uploadAberto, setUploadAberto] = useState(false);
@@ -358,7 +361,7 @@ export function ArquivosPage() {
       </Modal>
 
       <VisualizarArquivoModal laudo={paraVisualizar} onFechar={() => setParaVisualizar(null)} />
-      <EditarLaudoModal laudo={paraEditar} onFechar={() => setParaEditar(null)} onSalvar={onSalvarEdicao} />
+      <EditarLaudoModal laudo={paraEditar} fornecedores={fornecedoresPreco} onFechar={() => setParaEditar(null)} onSalvar={onSalvarEdicao} />
       <TesteModal
         laudo={paraTeste}
         produtos={produtos}
