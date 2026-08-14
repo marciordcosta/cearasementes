@@ -866,14 +866,16 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         ))}
       </main>
 
-      {/* PDF e Calculadora ficam em posição FIXA (nunca mudam de lugar) — só o carrinho é que
-          "flutua": aparece/some e ajusta a posição conforme os outros dois estarem visíveis. */}
+      {/* Ordem da esquerda pra direita: PDF, Calculadora, Carrinho — o carrinho fica sempre no
+          canto (right-5, posição FIXA) porque é o único dos três que "flutua" (aparece/some
+          conforme o carrinho tem item ou não); PDF e Calculadora têm sua própria posição fixa
+          também (right-36/right-20), sem depender de quem mais está visível. */}
       {data && (
         <button
           type="button"
           onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
           title="Salvar tabela em PDF"
-          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+          className="fixed right-36 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
         >
           <FileText size={20} />
         </button>
@@ -895,7 +897,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           type="button"
           onClick={() => setOrcamentoAberto(true)}
           title="Ver orçamento"
-          className={`fixed top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110 ${temDadosPlantio ? 'right-36' : 'right-20'}`}
+          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
         >
           <ShoppingCart size={20} />
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
