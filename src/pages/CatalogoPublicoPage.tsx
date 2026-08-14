@@ -49,10 +49,20 @@ function linkWhatsApp(numero: string, texto?: string): string {
   return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
 }
 
-/** `freteDescricao` já vem pronto de descreverFrete() — cobre os 4 estados (cotação/não calculado/retirada/valor), então aqui só monta o texto, sem saber de onde veio. */
+/**
+ * `freteDescricao` já vem pronto de descreverFrete() — cobre os 4 estados (cotação/não
+ * calculado/retirada/valor), então aqui só monta o texto, sem saber de onde veio. Cada item em 2
+ * linhas — nome+peso+fornecedor, depois qtd × unitário = subtotal — com uma linha em branco
+ * separando um item do outro.
+ */
 function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], freteDescricao: string, total: number): string {
-  const linhas = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')} — R$ ${fmtR(i.preco * i.qtd)}`);
-  return [`Orçamento — ${canalNome}`, '', ...linhas, '', `Frete: ${freteDescricao}`, `Total: R$ ${fmtR(total)}`].join('\n');
+  const blocos = itens.map((i) => {
+    const nomeLimpo = i.nome.replace(/[*_]/g, '');
+    const linhaNome = [nomeLimpo, `${Math.round(i.peso)}kg`, i.fornecedorNome].filter(Boolean).join(' — ');
+    const linhaValores = `${i.qtd} x R$ ${fmtR(i.preco)} = R$ ${fmtR(i.preco * i.qtd)}`;
+    return `${linhaNome}\n${linhaValores}`;
+  });
+  return [`Orçamento — ${canalNome}`, '', blocos.join('\n\n'), '', `Frete: ${freteDescricao}`, `Total: R$ ${fmtR(total)}`].join('\n');
 }
 
 function montarMensagemCotacaoFrete(canalNome: string, itens: ItemCarrinho[]): string {
