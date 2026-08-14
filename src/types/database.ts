@@ -257,6 +257,8 @@ export interface Database {
           frete_minimo: number;
           /** DDI+DDD+número, só dígitos — usado no botão flutuante e no envio do Orçamento por esse canal. Null = sem WhatsApp cadastrado (esconde os botões). */
           whatsapp: string | null;
+          /** false = canal "Manual" (sem Transportadora vinculada, Frete Kg/% digitado à mão) — o Orçamento não calcula frete, mostra "Cotação de frete" (WhatsApp) em vez de um valor. */
+          tem_transportadora: boolean;
           atualizado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['catalogo_publico_canais']['Row'], 'atualizado_em'>;

@@ -606,13 +606,21 @@ export async function publicarCatalogoOnline(
   freteKgEfetivo: number,
   fretePctEfetivo: number,
   freteMinimo: number,
+  temTransportadora: boolean,
   whatsapp: string | null,
   itens: ItemCatalogoPublicoInput[],
 ): Promise<string> {
   const slug = paraSlugCatalogo(canalNome);
-  const { error: errSlug } = await supabase
-    .from('catalogo_publico_canais')
-    .upsert({ canal_id: canalId, slug, nome: canalNome, frete_kg_efetivo: freteKgEfetivo, frete_pct_efetivo: fretePctEfetivo, frete_minimo: freteMinimo, whatsapp });
+  const { error: errSlug } = await supabase.from('catalogo_publico_canais').upsert({
+    canal_id: canalId,
+    slug,
+    nome: canalNome,
+    frete_kg_efetivo: freteKgEfetivo,
+    frete_pct_efetivo: fretePctEfetivo,
+    frete_minimo: freteMinimo,
+    tem_transportadora: temTransportadora,
+    whatsapp,
+  });
   if (errSlug) throw errSlug;
 
   const { error: errDelete } = await supabase.from('catalogo_publico_itens').delete().eq('canal_id', canalId);
@@ -641,6 +649,7 @@ export interface CatalogoPublico {
   freteKgEfetivo: number;
   fretePctEfetivo: number;
   freteMinimo: number;
+  temTransportadora: boolean;
   whatsapp: string | null;
   itens: { id: string; nome: string; categoriaNome: string; fornecedorNome: string | null; preco: number; peso: number; pesoUsado: number }[];
 }
@@ -662,6 +671,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
     freteKgEfetivo: canalRow.frete_kg_efetivo,
     fretePctEfetivo: canalRow.frete_pct_efetivo,
     freteMinimo: canalRow.frete_minimo,
+    temTransportadora: canalRow.tem_transportadora,
     whatsapp: canalRow.whatsapp,
     itens: (itensRows ?? []).map((i) => ({
       id: i.id,

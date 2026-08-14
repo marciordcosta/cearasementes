@@ -40,9 +40,17 @@ function linkWhatsApp(numero: string, texto?: string): string {
   return texto ? `${base}?text=${encodeURIComponent(texto)}` : base;
 }
 
-function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], frete: number, total: number): string {
+/** `frete === null` = canal Manual, sem Transportadora vinculada — sem referência real de frete pra calcular, então nem entra na mensagem/total (fica "a combinar", pedido à parte via botão "Cotação de frete"). */
+function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], frete: number | null, total: number): string {
   const linhas = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')} — R$ ${fmtR(i.preco * i.qtd)}`);
-  return [`Orçamento — ${canalNome}`, '', ...linhas, '', `Frete: R$ ${fmtR(frete)}`, `Total: R$ ${fmtR(total)}`].join('\n');
+  const linhaFrete = frete === null ? 'Frete: a combinar (cotação à parte)' : `Frete: R$ ${fmtR(frete)}`;
+  const linhaTotal = frete === null ? `Total dos produtos: R$ ${fmtR(total)}` : `Total: R$ ${fmtR(total)}`;
+  return [`Orçamento — ${canalNome}`, '', ...linhas, '', linhaFrete, linhaTotal].join('\n');
+}
+
+function montarMensagemCotacaoFrete(canalNome: string, itens: ItemCarrinho[]): string {
+  const linhas = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')}`);
+  return [`Olá! Gostaria de uma cotação de frete — ${canalNome}`, '', ...linhas].join('\n');
 }
 
 /** Ícone oficial do WhatsApp (glifo público, mesmo usado em botões "fale conosco" pela web afora). */
@@ -138,6 +146,7 @@ function ModalOrcamento({
   freteKgEfetivo,
   fretePctEfetivo,
   freteMinimo,
+  temTransportadora,
   whatsapp,
   onAtualizarQtd,
   onFechar,
@@ -147,6 +156,8 @@ function ModalOrcamento({
   freteKgEfetivo: number;
   fretePctEfetivo: number;
   freteMinimo: number;
+  /** false = canal Manual (sem Transportadora) — Frete Kg/% digitado à mão não é uma referência real de frete, então não calcula: mostra "Cotação de frete" (WhatsApp) em vez de um valor. */
+  temTransportadora: boolean;
   whatsapp: string | null;
   onAtualizarQtd: (itemId: string, qtd: number) => void;
   onFechar: () => void;
@@ -156,13 +167,18 @@ function ModalOrcamento({
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
   const freteBruto = pesoTotalUsado * freteKgEfetivo + (valorProdutos * fretePctEfetivo) / 100;
-  const frete = itens.length === 0 ? 0 : Math.max(freteBruto, freteMinimo);
-  const total = valorProdutos + frete;
+  const frete = !temTransportadora ? null : itens.length === 0 ? 0 : Math.max(freteBruto, freteMinimo);
+  const total = valorProdutos + (frete ?? 0);
 
   function enviarWhatsApp() {
     if (!whatsapp) return;
     window.open(linkWhatsApp(whatsapp, montarMensagemOrcamento(canalNome, itens, frete, total)), '_blank');
     setConcluirAberto(false);
+  }
+
+  function pedirCotacaoFrete() {
+    if (!whatsapp) return;
+    window.open(linkWhatsApp(whatsapp, montarMensagemCotacaoFrete(canalNome, itens)), '_blank');
   }
 
   function salvarPdf() {
@@ -217,10 +233,18 @@ function ModalOrcamento({
             </div>
             <div className="flex justify-between text-[#67718a]">
               <span>Frete</span>
-              <span className="num">R$ {fmtR(frete)}</span>
+              {frete !== null ? (
+                <span className="num">R$ {fmtR(frete)}</span>
+              ) : whatsapp ? (
+                <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#0e9d74] underline">
+                  Cotação de frete
+                </button>
+              ) : (
+                <span className="text-xs">A combinar</span>
+              )}
             </div>
             <div className="flex justify-between text-base font-bold text-[#1a2233]">
-              <span>Total</span>
+              <span>{frete === null ? 'Total dos produtos' : 'Total'}</span>
               <span className="num">R$ {fmtR(total)}</span>
             </div>
           </div>
@@ -434,6 +458,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           freteKgEfetivo={data.freteKgEfetivo}
           fretePctEfetivo={data.fretePctEfetivo}
           freteMinimo={data.freteMinimo}
+          temTransportadora={data.temTransportadora}
           whatsapp={data.whatsapp}
           onAtualizarQtd={atualizarQtd}
           onFechar={() => setOrcamentoAberto(false)}

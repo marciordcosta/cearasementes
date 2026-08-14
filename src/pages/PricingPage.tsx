@@ -437,7 +437,16 @@ export function PricingPage() {
         };
       });
       const { freteKgEfetivo, fretePctEfetivo, freteMinimo } = resolverFreteEfetivo(canal, transportadoraPorId);
-      const slug = await publicarCatalogoOnline(canal.id, canal.nome, freteKgEfetivo, fretePctEfetivo, freteMinimo, canal.whatsapp, itens);
+      const slug = await publicarCatalogoOnline(
+        canal.id,
+        canal.nome,
+        freteKgEfetivo,
+        fretePctEfetivo,
+        freteMinimo,
+        canal.transportadoraId !== null,
+        canal.whatsapp,
+        itens,
+      );
       setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` });
     } catch (e) {
       alert(mensagemDeErro(e, 'Falha ao publicar o Catálogo Online.'));
