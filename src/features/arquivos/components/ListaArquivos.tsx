@@ -59,6 +59,8 @@ function imprimir(arquivo: ArquivoLaudo) {
 export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApagar, onVisualizar, onEditar, onAbrirTeste, onAbrirGuiaPlantio, onImprimirEtiqueta, onGerarGuiaTeste }: ListaArquivosProps) {
   const [modoSelecao, setModoSelecao] = useState(false);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  /** Realce visual (referência ao olhar a grade, não é seleção pra ação em lote) — igual ao clique de linha já usado na Tabela de Preço. */
+  const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
 
   // As caixas de seleção ficam escondidas por padrão (só a maioria das vezes
   // ninguém precisa selecionar nada) — o botão "Selecionar" liga o modo; ao
@@ -153,7 +155,11 @@ export function ListaArquivos({ arquivos, produtos, busca, onChangeBusca, onApag
           </thead>
           <tbody>
             {filtrados.map((a) => (
-              <tr key={a.id} className={`border-b border-[var(--color-line)] last:border-b-0 ${selecionados.has(a.id) ? 'bg-[var(--color-highlight-row)]' : ''}`}>
+              <tr
+                key={a.id}
+                onClick={() => setLinhaDestacada(a.id)}
+                className={`border-b border-[var(--color-line)] last:border-b-0 ${selecionados.has(a.id) || a.id === linhaDestacada ? 'bg-[var(--color-highlight-row)]' : ''}`}
+              >
                 {modoSelecao && (
                   <td className="px-4 py-1">
                     <input type="checkbox" checked={selecionados.has(a.id)} onChange={() => toggleSelecionado(a.id)} className="accent-[var(--color-navy)]" />
