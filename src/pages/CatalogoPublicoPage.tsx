@@ -174,6 +174,39 @@ function ModalMensagemWhatsApp({ mensagemInicial, onEnviar, onFechar }: { mensag
   );
 }
 
+/** Igual ModalMensagemWhatsApp (mesmo padrão de "compor antes de enviar"), só que pro Orçamento: o resumo calculado (itens/frete/total) fica travado (editar ali poderia descombinar do que o PDF mostra) — só a observação embaixo é livre, some do texto final se ficar em branco. */
+function ModalObservacaoWhatsApp({ resumo, onEnviar, onFechar }: { resumo: string; onEnviar: (mensagemFinal: string) => void; onFechar: () => void }) {
+  const [observacao, setObservacao] = useState('');
+  return (
+    <div className="fixed inset-0 z-[230] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-bold text-[#1a2233]">Mensagem pro WhatsApp</p>
+          <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
+            <X size={18} />
+          </button>
+        </div>
+        <pre className="mb-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#f5f7fa] p-2.5 font-sans text-xs text-[#1a2233]">{resumo}</pre>
+        <textarea
+          value={observacao}
+          onChange={(e) => setObservacao(e.target.value)}
+          rows={3}
+          placeholder="Adicionar observação…"
+          className="w-full resize-none rounded-md border border-[#e2e6ed] bg-white p-2.5 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+        />
+        <button
+          type="button"
+          onClick={() => onEnviar(observacao.trim() ? `${resumo}\n\nObs.: ${observacao.trim()}` : resumo)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95"
+        >
+          <IconeWhatsApp size={18} />
+          Enviar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ModalOrcamento({
   canalNome,
   itens,
@@ -197,6 +230,7 @@ function ModalOrcamento({
   onFechar: () => void;
 }) {
   const [concluirAberto, setConcluirAberto] = useState(false);
+  const [observacaoWhatsAppAberta, setObservacaoWhatsAppAberta] = useState(false);
 
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
@@ -205,9 +239,14 @@ function ModalOrcamento({
   const total = valorProdutos + (frete ?? 0);
 
   function enviarWhatsApp() {
-    if (!whatsapp) return;
-    window.open(linkWhatsApp(whatsapp, montarMensagemOrcamento(canalNome, itens, frete, total)), '_blank');
     setConcluirAberto(false);
+    setObservacaoWhatsAppAberta(true);
+  }
+
+  function confirmarEnvioWhatsApp(mensagemFinal: string) {
+    if (!whatsapp) return;
+    window.open(linkWhatsApp(whatsapp, mensagemFinal), '_blank');
+    setObservacaoWhatsAppAberta(false);
   }
 
   function pedirCotacaoFrete() {
@@ -301,6 +340,13 @@ function ModalOrcamento({
       </div>
 
       {concluirAberto && <ModalConcluir onWhatsApp={enviarWhatsApp} onPdf={salvarPdf} onFechar={() => setConcluirAberto(false)} />}
+      {observacaoWhatsAppAberta && (
+        <ModalObservacaoWhatsApp
+          resumo={montarMensagemOrcamento(canalNome, itens, frete, total)}
+          onEnviar={confirmarEnvioWhatsApp}
+          onFechar={() => setObservacaoWhatsAppAberta(false)}
+        />
+      )}
     </div>
   );
 }
