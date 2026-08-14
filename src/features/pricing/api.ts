@@ -625,9 +625,15 @@ export interface CatalogoPublico {
   itens: { id: string; nome: string; categoriaNome: string; preco: number; peso: number }[];
 }
 
-/** Leitura pública (sem login) — só essas 2 tabelas, nunca `produtos`/`canais_preco` com Custo/Margem. Null quando o slug não bate com nenhum canal publicado. */
+/**
+ * Leitura pública (sem login) — só essas 2 tabelas, nunca `produtos`/`canais_preco` com
+ * Custo/Margem. Null quando o slug não bate com nenhum canal publicado. `limit(1)` (não
+ * `maybeSingle`) — 2 Tabelas com nomes que gerem o MESMO slug (raro, mas possível) não têm nada
+ * que impeça isso no banco; melhor mostrar uma delas do que a página inteira quebrar.
+ */
 export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<CatalogoPublico | null> {
-  const { data: canalRow } = await supabase.from('catalogo_publico_canais').select('canal_id, nome').eq('slug', slug).maybeSingle();
+  const { data: canalRows } = await supabase.from('catalogo_publico_canais').select('canal_id, nome').eq('slug', slug).order('atualizado_em', { ascending: false }).limit(1);
+  const canalRow = canalRows?.[0];
   if (!canalRow) return null;
   const { data: itensRows, error: errItens } = await supabase.from('catalogo_publico_itens').select('*').eq('canal_id', canalRow.canal_id).order('ordem');
   if (errItens) throw errItens;
