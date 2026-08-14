@@ -62,7 +62,7 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
   );
 }
 
-/** 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado" (variantes do mesmo produto, ver agruparPorProduto). O nome com destaque e o fornecedor ficam no MESMO parágrafo, em fluxo normal de texto — o fornecedor cai embaixo do nome quando ele é curto, ou do lado quando o nome já ocupa a 1ª linha inteira, sem precisar calcular nada: é só como texto/inline-block quebra sozinho. `line-clamp-2` trava em no máximo 2 linhas pra nunca deixar o card crescer demais. */
+/** 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado" (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de texto quebrar sozinho. */
 function LinhaProduto({ item, selecionado, onClick }: { item: ItemCatalogo; selecionado: boolean; onClick: () => void }) {
   return (
     <button
@@ -70,10 +70,12 @@ function LinhaProduto({ item, selecionado, onClick }: { item: ItemCatalogo; sele
       onClick={onClick}
       className={`flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition ${selecionado ? 'bg-[#e4f6ef]' : 'bg-white active:bg-[#f5f7fa]'}`}
     >
-      <p className="line-clamp-2 min-w-0 flex-1 text-sm leading-snug text-[#1a2233]">
-        <NomeComDestaque nome={item.nome} />
-        {item.fornecedorNome && <span className="ml-1.5 align-middle text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</span>}
-      </p>
+      <div className="min-w-0 flex-1">
+        <p className="line-clamp-2 text-sm leading-snug text-[#1a2233]">
+          <NomeComDestaque nome={item.nome} />
+        </p>
+        {item.fornecedorNome && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</p>}
+      </div>
       <div className="shrink-0 text-right">
         <p className="num text-base font-bold text-[#0e9d74]">R$ {fmtR(item.preco)}</p>
         <p className="text-[11px] text-[#67718a]">{Math.round(item.peso)}kg</p>
@@ -241,10 +243,12 @@ function ModalOrcamento({
               {itens.map((item) => (
                 <div key={item.id} className="flex flex-col gap-1.5 py-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm leading-snug text-[#1a2233]">
-                      <NomeComDestaque nome={item.nome} />
-                      {item.fornecedorNome && <span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</span>}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-snug text-[#1a2233]">
+                        <NomeComDestaque nome={item.nome} />
+                      </p>
+                      {item.fornecedorNome && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</p>}
+                    </div>
                     <button type="button" onClick={() => onAtualizarQtd(item.id, 0)} title="Remover" className="shrink-0 text-[#67718a] hover:text-[#c24444]">
                       <X size={16} />
                     </button>
