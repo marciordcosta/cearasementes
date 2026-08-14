@@ -409,7 +409,9 @@ function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCat
   const [corredor, setCorredor] = useState('50');
   const [area, setArea] = useState('');
 
-  const itensComPlantio = useMemo(() => itens.filter((i) => i.plantioKgHaLanco !== null || i.plantioSementesCovaBase !== null), [itens]);
+  // "!= null" (frouxo) — mesmo motivo de temDadosPlantio em CatalogoPublicoPage: trata cache velho
+  // (campo ausente, undefined) igual a "sem dado" (null).
+  const itensComPlantio = useMemo(() => itens.filter((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null), [itens]);
 
   const resultadosBusca = useMemo(() => {
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -424,21 +426,21 @@ function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCat
 
   function selecionar(item: ItemCatalogo) {
     setItemSelecionado(item);
-    setModo(item.plantioKgHaLanco !== null ? 'lanco' : 'covas');
+    setModo(item.plantioKgHaLanco != null ? 'lanco' : 'covas');
     setCorredor('50');
     setArea('');
     setBusca('');
   }
 
   const temOsDoisModos =
-    itemSelecionado !== null && itemSelecionado.plantioKgHaLanco !== null && itemSelecionado.plantioSementesCovaBase !== null && itemSelecionado.plantioPms !== null;
+    itemSelecionado !== null && itemSelecionado.plantioKgHaLanco != null && itemSelecionado.plantioSementesCovaBase != null && itemSelecionado.plantioPms != null;
 
   const kgPorHa =
     itemSelecionado === null
       ? null
       : modo === 'lanco'
-        ? itemSelecionado.plantioKgHaLanco
-        : itemSelecionado.plantioSementesCovaBase !== null && itemSelecionado.plantioPms !== null
+        ? (itemSelecionado.plantioKgHaLanco ?? null)
+        : itemSelecionado.plantioSementesCovaBase != null && itemSelecionado.plantioPms != null
           ? kgHaCovas(itemSelecionado.plantioSementesCovaBase, itemSelecionado.plantioPms, corredor)
           : null;
 
@@ -690,7 +692,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       .filter((x): x is ItemCarrinho => x !== null);
   }, [carrinho, data]);
 
-  const temDadosPlantio = useMemo(() => data?.itens.some((i) => i.plantioKgHaLanco !== null || i.plantioSementesCovaBase !== null) ?? false, [data]);
+  // "!= null" (frouxo) de propósito — cache local (localStorage) salvo antes desses campos existirem
+  // não tem essa chave (undefined), não `null`; "!== null" deixava passar esse caso e piscava o botão
+  // no carregamento (cache velho "tem dado"), sumindo assim que o fetch de verdade chegava.
+  const temDadosPlantio = useMemo(() => data?.itens.some((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null) ?? false, [data]);
 
   const semNadaAindaCarregando = isLoading && !data;
 
