@@ -23,11 +23,24 @@ export function Topbar({ title, actions, navy = false }: TopbarProps) {
       <div className="min-w-0 flex-1 text-base font-semibold">{title}</div>
       <div className="flex shrink-0 items-center gap-2">
         {actions}
-        {session?.user.email && (
-          <span className={`hidden truncate text-xs sm:inline ${navy ? 'text-white/70' : 'text-[var(--color-text-soft)]'}`} title={session.user.email}>
-            {session.user.email}
-          </span>
-        )}
+        {session?.user.email &&
+          (session.user.user_metadata?.avatar_url ? (
+            <img
+              src={session.user.user_metadata.avatar_url}
+              alt={session.user.email}
+              title={session.user.email}
+              className={`h-7 w-7 shrink-0 rounded-full ${navy ? 'ring-1 ring-white/40' : 'ring-1 ring-[var(--color-line)]'}`}
+            />
+          ) : (
+            <span
+              title={session.user.email}
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase ${
+                navy ? 'bg-white/15 text-white' : 'bg-[var(--color-page)] text-[var(--color-text-soft)]'
+              }`}
+            >
+              {session.user.email[0]}
+            </span>
+          ))}
         <button
           type="button"
           onClick={toggleTheme}
