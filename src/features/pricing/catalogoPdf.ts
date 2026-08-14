@@ -5,7 +5,7 @@ import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from './type
 
 const LINK_CATALOGO = 'https://linktr.ee/cearasementes';
 
-function escapeHtml(texto: string): string {
+export function escapeHtml(texto: string): string {
   return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 

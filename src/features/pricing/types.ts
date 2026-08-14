@@ -21,6 +21,8 @@ export interface Canal {
   transportadoraId: string | null;
   /** true = a margem alvo (%) da categoria/subcategoria é ignorada — o preço sugerido mira o mesmo valor de Margem R$ que OUTRA Tabela calcula, usando os encargos/frete/imposto DESTE canal. Qual Tabela referenciar (e o ajuste %) é escolhido por Categoria — ver Categoria.referenciaCanalId/referenciaAjustePct. */
   margemPorReferencia: boolean;
+  /** Número de WhatsApp (com DDI+DDD, só dígitos) usado no Catálogo Online desse canal — botão flutuante e envio de orçamento. Cada Tabela tem o seu, null = sem WhatsApp cadastrado (esconde o botão no link público). */
+  whatsapp: string | null;
 }
 
 export interface Categoria {

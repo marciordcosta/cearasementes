@@ -46,7 +46,7 @@ import {
   upsertSubcategoriaMargem,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
-import { calcularCanal, ordenarProdutos } from '@/features/pricing/calculations';
+import { calcularCanal, ordenarProdutos, resolverFreteEfetivo } from '@/features/pricing/calculations';
 import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
@@ -425,9 +425,19 @@ export function PricingPage() {
       const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => {
         const categoria = getCategoria(p.categoriaId);
         const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
-        return { produtoId: p.id, nome: p.nome, categoriaNome: categoria.nome, preco: r.preco, peso: p.peso, ordem: indice };
+        return {
+          produtoId: p.id,
+          nome: p.nome,
+          categoriaNome: categoria.nome,
+          fornecedorNome: getFornecedor(p.fornecedorId)?.nome ?? null,
+          preco: r.preco,
+          peso: p.peso,
+          pesoUsado: r.pesoUsado,
+          ordem: indice,
+        };
       });
-      const slug = await publicarCatalogoOnline(canal.id, canal.nome, itens);
+      const { freteKgEfetivo, fretePctEfetivo, freteMinimo } = resolverFreteEfetivo(canal, transportadoraPorId);
+      const slug = await publicarCatalogoOnline(canal.id, canal.nome, freteKgEfetivo, fretePctEfetivo, freteMinimo, canal.whatsapp, itens);
       setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` });
     } catch (e) {
       alert(mensagemDeErro(e, 'Falha ao publicar o Catálogo Online.'));
@@ -440,6 +450,12 @@ export function PricingPage() {
   function onAtualizarCampoCanal(canalId: string, campo: CampoNumericoCanal, valor: number) {
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, [campo]: valor } : c)));
     debounced(`canal-${canalId}-${campo}`, () => atualizarCanal(canalId, { [CAMPO_PARA_COLUNA[campo]]: valor }));
+  }
+
+  function onAtualizarWhatsappCanal(canalId: string, valor: string) {
+    const whatsapp = valor || null;
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, whatsapp } : c)));
+    atualizarCanal(canalId, { whatsapp });
   }
 
   async function onSelecionarTransportadora(canalId: string, transportadoraId: string | null) {
@@ -1101,6 +1117,7 @@ export function PricingPage() {
             transportadoras={transportadoras}
             onSelecionarTransportadora={onSelecionarTransportadora}
             onAtualizarCampo={onAtualizarCampoCanal}
+            onAtualizarWhatsapp={onAtualizarWhatsappCanal}
             onAtualizarTipoImposto={onAtualizarTipoImposto}
             onAtualizarFreteAdicionalTipo={onAtualizarFreteAdicionalTipo}
             onToggleVisivel={onToggleVisivel}

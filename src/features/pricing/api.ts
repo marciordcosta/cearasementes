@@ -30,6 +30,7 @@ function canalFromRow(row: CanalRow): Canal {
     ordem: row.ordem,
     transportadoraId: row.transportadora_id,
     margemPorReferencia: row.margem_por_referencia,
+    whatsapp: row.whatsapp,
   };
 }
 
@@ -584,21 +585,34 @@ export interface ItemCatalogoPublicoInput {
   produtoId: string;
   nome: string;
   categoriaNome: string;
+  fornecedorNome: string | null;
   preco: number;
   peso: number;
+  pesoUsado: number;
   ordem: number;
 }
 
 /**
  * "Publicar" o Catálogo Online de UM canal — apaga o snapshot anterior desse canal inteiro e
  * insere os itens já calculados (preço pronto, nunca custo/margem) de uma vez só, mais o slug
- * (link "bonito", derivado do nome do canal) usado pra achar esse canal na leitura pública. Sempre
- * chamado autenticado (o operador já está logado quando clica "Publicar" na Precificação); a
- * leitura pública (fetchCatalogoPublicoPorSlug) não passa por aqui. Devolve o slug pra montar o link.
+ * (link "bonito") e os dados de Frete/WhatsApp desse canal (ver resolverFreteEfetivo em
+ * calculations.ts — base do cálculo de frete do Orçamento). Sempre chamado autenticado (o operador
+ * já está logado quando clica "Publicar" na Precificação); a leitura pública
+ * (fetchCatalogoPublicoPorSlug) não passa por aqui. Devolve o slug pra montar o link.
  */
-export async function publicarCatalogoOnline(canalId: string, canalNome: string, itens: ItemCatalogoPublicoInput[]): Promise<string> {
+export async function publicarCatalogoOnline(
+  canalId: string,
+  canalNome: string,
+  freteKgEfetivo: number,
+  fretePctEfetivo: number,
+  freteMinimo: number,
+  whatsapp: string | null,
+  itens: ItemCatalogoPublicoInput[],
+): Promise<string> {
   const slug = paraSlugCatalogo(canalNome);
-  const { error: errSlug } = await supabase.from('catalogo_publico_canais').upsert({ canal_id: canalId, slug, nome: canalNome });
+  const { error: errSlug } = await supabase
+    .from('catalogo_publico_canais')
+    .upsert({ canal_id: canalId, slug, nome: canalNome, frete_kg_efetivo: freteKgEfetivo, frete_pct_efetivo: fretePctEfetivo, frete_minimo: freteMinimo, whatsapp });
   if (errSlug) throw errSlug;
 
   const { error: errDelete } = await supabase.from('catalogo_publico_itens').delete().eq('canal_id', canalId);
@@ -610,8 +624,10 @@ export async function publicarCatalogoOnline(canalId: string, canalNome: string,
         produto_id: item.produtoId,
         nome: item.nome,
         categoria_nome: item.categoriaNome,
+        fornecedor_nome: item.fornecedorNome,
         preco: item.preco,
         peso: item.peso,
+        peso_usado: item.pesoUsado,
         ordem: item.ordem,
       })),
     );
@@ -622,7 +638,11 @@ export async function publicarCatalogoOnline(canalId: string, canalNome: string,
 
 export interface CatalogoPublico {
   canalNome: string | null;
-  itens: { id: string; nome: string; categoriaNome: string; preco: number; peso: number }[];
+  freteKgEfetivo: number;
+  fretePctEfetivo: number;
+  freteMinimo: number;
+  whatsapp: string | null;
+  itens: { id: string; nome: string; categoriaNome: string; fornecedorNome: string | null; preco: number; peso: number; pesoUsado: number }[];
 }
 
 /**
@@ -632,13 +652,25 @@ export interface CatalogoPublico {
  * que impeça isso no banco; melhor mostrar uma delas do que a página inteira quebrar.
  */
 export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<CatalogoPublico | null> {
-  const { data: canalRows } = await supabase.from('catalogo_publico_canais').select('canal_id, nome').eq('slug', slug).order('atualizado_em', { ascending: false }).limit(1);
+  const { data: canalRows } = await supabase.from('catalogo_publico_canais').select('*').eq('slug', slug).order('atualizado_em', { ascending: false }).limit(1);
   const canalRow = canalRows?.[0];
   if (!canalRow) return null;
   const { data: itensRows, error: errItens } = await supabase.from('catalogo_publico_itens').select('*').eq('canal_id', canalRow.canal_id).order('ordem');
   if (errItens) throw errItens;
   return {
     canalNome: canalRow.nome,
-    itens: (itensRows ?? []).map((i) => ({ id: i.id, nome: i.nome, categoriaNome: i.categoria_nome, preco: i.preco, peso: i.peso })),
+    freteKgEfetivo: canalRow.frete_kg_efetivo,
+    fretePctEfetivo: canalRow.frete_pct_efetivo,
+    freteMinimo: canalRow.frete_minimo,
+    whatsapp: canalRow.whatsapp,
+    itens: (itensRows ?? []).map((i) => ({
+      id: i.id,
+      nome: i.nome,
+      categoriaNome: i.categoria_nome,
+      fornecedorNome: i.fornecedor_nome,
+      preco: i.preco,
+      peso: i.peso,
+      pesoUsado: i.peso_usado,
+    })),
   };
 }

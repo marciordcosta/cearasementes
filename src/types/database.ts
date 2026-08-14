@@ -146,9 +146,11 @@ export interface Database {
           transportadora_id: string | null;
           /** true = essa Tabela ignora a margem % da categoria/subcategoria — mira o mesmo Margem R$ de outra Tabela, escolhida por Categoria (ver categoria_margens.referencia_canal_id). */
           margem_por_referencia: boolean;
+          /** Número de WhatsApp (DDI+DDD+número, só dígitos) usado no Catálogo Online desse canal — null = sem WhatsApp cadastrado. */
+          whatsapp: string | null;
           criado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em'>;
+        Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em' | 'whatsapp'> & { whatsapp?: string | null };
         Update: Partial<Database['public']['Tables']['canais_preco']['Insert']>;
         Relationships: [];
       };
@@ -229,8 +231,12 @@ export interface Database {
           produto_id: string;
           nome: string;
           categoria_nome: string;
+          /** Cadastrado em Parametrização de Fornecedores — só o nome, exibição discreta (ver CatalogoPublicoPage.tsx). Null = sem fornecedor cadastrado. */
+          fornecedor_nome: string | null;
           preco: number;
           peso: number;
+          /** = ResultadoCalculo.pesoUsado (cubado quando a Cubagem estiver preenchida) — base do cálculo de Frete no Orçamento, não necessariamente igual a `peso` (que é sempre o cadastrado, pra exibição). */
+          peso_usado: number;
           ordem: number;
           atualizado_em: string;
         };
@@ -238,9 +244,21 @@ export interface Database {
         Update: Partial<Omit<Database['public']['Tables']['catalogo_publico_itens']['Row'], 'id'>>;
         Relationships: [];
       };
-      // Slug (link "bonito") de cada canal publicado — 1 linha por canal_id, ver publicarCatalogoOnline.
+      // Slug (link "bonito") + dados de Frete/WhatsApp de cada canal publicado — 1 linha por canal_id, ver publicarCatalogoOnline.
       catalogo_publico_canais: {
-        Row: { canal_id: string; slug: string; nome: string; atualizado_em: string };
+        Row: {
+          canal_id: string;
+          slug: string;
+          nome: string;
+          /** = resolverFreteEfetivo(canal).freteKgEfetivo (calculations.ts) — R$/kg já resolvido (Transportadora vinculada ou o valor manual do canal). */
+          frete_kg_efetivo: number;
+          frete_pct_efetivo: number;
+          /** = resolverFreteEfetivo(canal).freteMinimo — piso do frete TOTAL do pedido (não por item), só quando há Transportadora vinculada. */
+          frete_minimo: number;
+          /** DDI+DDD+número, só dígitos — usado no botão flutuante e no envio do Orçamento por esse canal. Null = sem WhatsApp cadastrado (esconde os botões). */
+          whatsapp: string | null;
+          atualizado_em: string;
+        };
         Insert: Omit<Database['public']['Tables']['catalogo_publico_canais']['Row'], 'atualizado_em'>;
         Update: Partial<Omit<Database['public']['Tables']['catalogo_publico_canais']['Row'], 'canal_id'>>;
         Relationships: [];

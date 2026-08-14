@@ -100,6 +100,22 @@ export function chaveComparacaoProduto(produto: { nome: string; subcategoriaId: 
  * módulo diferente (pricing/historicoBi.ts importa daqui, então essa função não pode importar de
  * lá de volta) e porque precisa resolver pra mais de 1 canal (self + referência) na mesma chamada.
  */
+/**
+ * Frete Kg/% "de verdade" pra esse canal — da Transportadora vinculada (módulo Fretes, ao vivo) ou
+ * do valor manual do próprio canal, sem Transportadora. `freteMinimo` só existe quando há
+ * Transportadora vinculada (é cadastro dela, não do canal) — usado hoje só no Catálogo Online
+ * (Orçamento, ver publicarCatalogoOnline em pricing/api.ts), NÃO entra no cálculo interno de preço
+ * (calcularCanal nunca aplicou piso de frete, e isso não muda aqui).
+ */
+export function resolverFreteEfetivo(canal: Canal, transportadoraPorId: Map<string, Transportadora>): { freteKgEfetivo: number; fretePctEfetivo: number; freteMinimo: number } {
+  const transportadora = canal.transportadoraId ? transportadoraPorId.get(canal.transportadoraId) : undefined;
+  return {
+    freteKgEfetivo: transportadora ? transportadora.valorPorKg : canal.freteKg,
+    fretePctEfetivo: transportadora && transportadora.valorPorNfTipo === 'percentual' ? transportadora.valorPorNf * 100 : canal.fretePct,
+    freteMinimo: transportadora?.freteMinimo ?? 0,
+  };
+}
+
 export function calcularCanal(
   produto: Produto,
   canal: Canal,
@@ -110,9 +126,7 @@ export function calcularCanal(
   permitirReferencia = true,
   resolverDescontoBi?: (canal: Canal, produto: Produto) => number | null,
 ): ResultadoCalculo {
-  const transportadora = canal.transportadoraId ? transportadoraPorId.get(canal.transportadoraId) : undefined;
-  const freteKgEfetivo = transportadora ? transportadora.valorPorKg : canal.freteKg;
-  const fretePctEfetivo = transportadora && transportadora.valorPorNfTipo === 'percentual' ? transportadora.valorPorNf * 100 : canal.fretePct;
+  const { freteKgEfetivo, fretePctEfetivo } = resolverFreteEfetivo(canal, transportadoraPorId);
 
   const impostoPct = canal.tipoImposto === 'interestadual' ? categoria.interestadual : categoria.estadual;
   const margemAlvo = subcategoria?.margens[canal.id] ?? categoria.margens[canal.id] ?? 0;
