@@ -7,8 +7,8 @@ import type { Canal } from '../types';
 interface ExportPdfModalProps {
   open: boolean;
   canaisVisiveis: Canal[];
-  /** 'gerenciamento' expõe Custo/Frete/Encargos/Margem no PDF — só ajusta o texto do modal, quem gera o HTML é o chamador. */
-  modo?: 'padrao' | 'gerenciamento';
+  /** 'gerenciamento' expõe Custo/Frete/Encargos/Margem no PDF; 'online' publica o Catálogo Online (link público) em vez de gerar PDF — só ajusta o texto do modal, quem executa a ação é o chamador. */
+  modo?: 'padrao' | 'gerenciamento' | 'online';
   onFechar: () => void;
   onConfirmar: (canal: Canal) => void;
 }
@@ -28,7 +28,7 @@ export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar
   return (
     <Modal
       open={open}
-      title={modo === 'gerenciamento' ? 'Exportar Relatório de Gerenciamento' : 'Exportar Catálogo em PDF'}
+      title={modo === 'gerenciamento' ? 'Exportar Relatório de Gerenciamento' : modo === 'online' ? 'Publicar Catálogo Online' : 'Exportar Catálogo em PDF'}
       onClose={onFechar}
       footer={
         <>
@@ -36,7 +36,7 @@ export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar
             Cancelar
           </Button>
           <Button variant="action" onClick={confirmar}>
-            Confirmar Impressão
+            {modo === 'online' ? 'Publicar' : 'Confirmar Impressão'}
           </Button>
         </>
       }
@@ -44,7 +44,9 @@ export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar
       <p className="mb-3 text-sm text-[var(--color-text-soft)]">
         {modo === 'gerenciamento'
           ? 'Escolha qual Tabela de Preço será usada no relatório — ele traz Custo/Frete/Encargos/Margem R$ além de Valor e Peso, uso interno (não é pra ir pro cliente). Respeita o filtro de Classe/Categoria atualmente selecionado na tela.'
-          : 'Escolha qual Tabela de Preço será usada como coluna "Valor (R$)" no catálogo. O relatório respeitará o filtro de Classe/Categoria atualmente selecionado na tela.'}
+          : modo === 'online'
+            ? 'Escolha qual Tabela de Preço vira o link público — mostra só nome, peso e preço dos produtos marcados "Imprimir" (com Código cadastrado). Publicar de novo substitui o que estava no link antes.'
+            : 'Escolha qual Tabela de Preço será usada como coluna "Valor (R$)" no catálogo. O relatório respeitará o filtro de Classe/Categoria atualmente selecionado na tela.'}
       </p>
       {canaisVisiveis.length === 0 ? (
         <p className="text-sm text-[var(--color-text-soft)]">

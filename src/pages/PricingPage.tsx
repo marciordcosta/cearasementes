@@ -37,6 +37,7 @@ import {
   inserirFornecedor,
   inserirProduto,
   inserirSubcategoria,
+  publicarCatalogoOnline,
   upsertCategoriaMargem,
   upsertCategoriaMargemTolerancia,
   upsertCategoriaReferencia,
@@ -45,7 +46,7 @@ import {
   upsertSubcategoriaMargem,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
-import { ordenarProdutos } from '@/features/pricing/calculations';
+import { calcularCanal, ordenarProdutos } from '@/features/pricing/calculations';
 import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
@@ -141,7 +142,9 @@ export function PricingPage() {
   const [canalTelaCheiaId, setCanalTelaCheiaId] = useState<string | null>(null);
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
   const [modalPdfAberto, setModalPdfAberto] = useState(false);
-  const [modoExportacaoPdf, setModoExportacaoPdf] = useState<'padrao' | 'gerenciamento'>('padrao');
+  const [modoExportacaoPdf, setModoExportacaoPdf] = useState<'padrao' | 'gerenciamento' | 'online'>('padrao');
+  const [linkCatalogoPublicado, setLinkCatalogoPublicado] = useState<{ canalNome: string; url: string } | null>(null);
+  const [publicandoCatalogo, setPublicandoCatalogo] = useState(false);
   const [modalLimparAberto, setModalLimparAberto] = useState(false);
   const [limpandoTabela, setLimpandoTabela] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -401,6 +404,36 @@ export function PricingPage() {
       }).then(invalidarProdutosPreco),
     );
     setProdutoEditandoId(null);
+  }
+
+  /**
+   * "Publicar" o Catálogo Online desse canal — calcula o preço de cada produto elegível AGORA
+   * (autenticado, com Custo/Margem em mãos com segurança) e salva só nome+preço+peso já prontos
+   * (ver publicarCatalogoOnline em pricing/api.ts) — a página pública nunca lê Custo/Margem.
+   * Mesmo filtro do PDF de catálogo (Imprimir + Fornecedor visível no PDF + sem "precisa ajuste"
+   * nesse canal), mais Código cadastrado (produto sem Código não teria como ligar ao snapshot).
+   */
+  async function publicarCatalogo(canal: Canal) {
+    setPublicandoCatalogo(true);
+    try {
+      const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
+      const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
+      const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
+      const elegiveis = produtosExibidos.filter(
+        (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedor(p.fornecedorId)?.visivelPdf ?? true),
+      );
+      const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => {
+        const categoria = getCategoria(p.categoriaId);
+        const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
+        return { produtoId: p.id, nome: p.nome, categoriaNome: categoria.nome, preco: r.preco, peso: p.peso, ordem: indice };
+      });
+      await publicarCatalogoOnline(canal.id, itens);
+      setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${canal.id}` });
+    } catch (e) {
+      alert(mensagemDeErro(e, 'Falha ao publicar o Catálogo Online.'));
+    } finally {
+      setPublicandoCatalogo(false);
+    }
   }
 
   // ---------- Canais ----------
@@ -739,6 +772,10 @@ export function PricingPage() {
               setModoExportacaoPdf('gerenciamento');
               setModalPdfAberto(true);
             }}
+            onPublicarCatalogoOnline={() => {
+              setModoExportacaoPdf('online');
+              setModalPdfAberto(true);
+            }}
           />
           <Button variant="navy" onClick={() => setModalCompraAberto(true)} title="Planejamento de Compra por Fornecedor">
             <span className="inline-flex items-center gap-1.5">
@@ -964,11 +1001,48 @@ export function PricingPage() {
           setModalPdfAberto(false);
           if (modoExportacaoPdf === 'gerenciamento') {
             gerarCatalogoGerenciamentoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi);
+          } else if (modoExportacaoPdf === 'online') {
+            publicarCatalogo(canal);
           } else {
             gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi);
           }
         }}
       />
+
+      <Modal open={publicandoCatalogo} title="Publicando…" onClose={() => {}} widthClassName="max-w-[360px]">
+        <p className="text-sm text-[var(--color-text-soft)]">Calculando e salvando os preços do Catálogo Online…</p>
+      </Modal>
+
+      <Modal
+        open={linkCatalogoPublicado !== null}
+        title="Catálogo Online publicado"
+        onClose={() => setLinkCatalogoPublicado(null)}
+        widthClassName="max-w-[440px]"
+        footer={
+          <Button variant="primary" onClick={() => setLinkCatalogoPublicado(null)}>
+            Fechar
+          </Button>
+        }
+      >
+        {linkCatalogoPublicado && (
+          <div className="space-y-2.5 text-sm">
+            <p className="text-[var(--color-text-soft)]">
+              Link público de <strong className="text-[var(--color-text)]">{linkCatalogoPublicado.canalNome}</strong> atualizado — mande esse link pro cliente:
+            </p>
+            <div className="flex items-center gap-2">
+              <input readOnly value={linkCatalogoPublicado.url} onFocus={(e) => e.target.select()} className="num flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-2.5 py-1.5 text-xs text-[var(--color-text)]" />
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(linkCatalogoPublicado.url);
+                }}
+              >
+                Copiar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={modalLimparAberto}

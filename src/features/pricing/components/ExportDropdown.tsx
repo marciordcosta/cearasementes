@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 interface ExportDropdownProps {
   onExportarPdf: () => void;
   onExportarGerenciamento: () => void;
+  onPublicarCatalogoOnline: () => void;
 }
 
-export function ExportDropdown({ onExportarPdf, onExportarGerenciamento }: ExportDropdownProps) {
+export function ExportDropdown({ onExportarPdf, onExportarGerenciamento, onPublicarCatalogoOnline }: ExportDropdownProps) {
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -48,6 +49,16 @@ export function ExportDropdown({ onExportarPdf, onExportarGerenciamento }: Expor
             className="block w-full border-t border-[var(--color-line)] px-3.5 py-2.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-page)]"
           >
             📊 PDF (Gerenciamento)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAberto(false);
+              onPublicarCatalogoOnline();
+            }}
+            className="block w-full border-t border-[var(--color-line)] px-3.5 py-2.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-page)]"
+          >
+            🌐 Catálogo Online
           </button>
         </div>
       )}

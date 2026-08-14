@@ -566,3 +566,59 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
 
   return { criados: novosItens.length, atualizados };
 }
+
+// ---------- Catálogo Online (link público, ver 0069_catalogo_publico.sql) ----------
+
+export interface ItemCatalogoPublicoInput {
+  produtoId: string;
+  nome: string;
+  categoriaNome: string;
+  preco: number;
+  peso: number;
+  ordem: number;
+}
+
+/**
+ * "Publicar" o Catálogo Online de UM canal — apaga o snapshot anterior desse canal inteiro e
+ * insere os itens já calculados (preço pronto, nunca custo/margem) de uma vez só. Sempre chamado
+ * autenticado (o operador já está logado quando clica "Publicar" na Precificação); a leitura
+ * pública (fetchCatalogoPublico) não passa por aqui.
+ */
+export async function publicarCatalogoOnline(canalId: string, itens: ItemCatalogoPublicoInput[]): Promise<void> {
+  const { error: errDelete } = await supabase.from('catalogo_publico_itens').delete().eq('canal_id', canalId);
+  if (errDelete) throw errDelete;
+  if (itens.length === 0) return;
+  const { error: errInsert } = await supabase.from('catalogo_publico_itens').insert(
+    itens.map((item) => ({
+      canal_id: canalId,
+      produto_id: item.produtoId,
+      nome: item.nome,
+      categoria_nome: item.categoriaNome,
+      preco: item.preco,
+      peso: item.peso,
+      ordem: item.ordem,
+    })),
+  );
+  if (errInsert) throw errInsert;
+}
+
+export interface CatalogoPublico {
+  canalNome: string | null;
+  atualizadoEm: string | null;
+  itens: { id: string; nome: string; categoriaNome: string; preco: number; peso: number }[];
+}
+
+/** Leitura pública (sem login) — só essa tabela, nunca `produtos`/`canais_preco` com Custo/Margem. */
+export async function fetchCatalogoPublico(canalId: string): Promise<CatalogoPublico> {
+  const [{ data: canalRow }, { data: itensRows, error: errItens }] = await Promise.all([
+    supabase.from('canais_preco').select('nome').eq('id', canalId).maybeSingle(),
+    supabase.from('catalogo_publico_itens').select('*').eq('canal_id', canalId).order('ordem'),
+  ]);
+  if (errItens) throw errItens;
+  const itens = itensRows ?? [];
+  return {
+    canalNome: canalRow?.nome ?? null,
+    atualizadoEm: itens[0]?.atualizado_em ?? null,
+    itens: itens.map((i) => ({ id: i.id, nome: i.nome, categoriaNome: i.categoria_nome, preco: i.preco, peso: i.peso })),
+  };
+}

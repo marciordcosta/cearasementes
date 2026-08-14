@@ -3,12 +3,16 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from './features/auth/AuthProvider';
 import { LoginPage } from './features/auth/LoginPage';
 import { ArquivosPage } from './pages/ArquivosPage';
+import { CatalogoPublicoPage } from './pages/CatalogoPublicoPage';
 import { ConciliacaoPage } from './pages/ConciliacaoPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FretesPage } from './pages/FretesPage';
 import { TesteCampoPage } from './pages/TesteCampoPage';
 import { UploadsPage } from './pages/UploadsPage';
 import { PricingPage } from './pages/PricingPage';
+
+// Único caminho público (sem login) — antes de qualquer checagem de sessão, ver publicarCatalogoOnline em pricing/api.ts.
+const REGEX_CATALOGO_PUBLICO = /^\/catalogo\/([^/]+)\/?$/;
 
 const PAGINAS = [
   { path: '/', Componente: DashboardPage },
@@ -36,6 +40,9 @@ export default function App() {
   useEffect(() => {
     setVisitadas((prev) => (prev.has(location.pathname) ? prev : new Set(prev).add(location.pathname)));
   }, [location.pathname]);
+
+  const matchCatalogoPublico = REGEX_CATALOGO_PUBLICO.exec(location.pathname);
+  if (matchCatalogoPublico) return <CatalogoPublicoPage canalId={matchCatalogoPublico[1]} />;
 
   if (carregando) return null;
   if (!session) return <LoginPage />;

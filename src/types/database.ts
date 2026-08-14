@@ -219,6 +219,25 @@ export interface Database {
         Update: Partial<Omit<Database['public']['Tables']['produtos']['Row'], 'id' | 'criado_em'>>;
         Relationships: [];
       };
+      // Snapshot público (Catálogo Online) — só nome/preço/peso já calculados, nunca custo/margem.
+      // "Publicar" (ver publicarCatalogoOnline em pricing/api.ts) apaga e reinsere tudo daquele
+      // canal_id de uma vez, então não tem Update de verdade em uso, só Insert em lote.
+      catalogo_publico_itens: {
+        Row: {
+          id: string;
+          canal_id: string;
+          produto_id: string;
+          nome: string;
+          categoria_nome: string;
+          preco: number;
+          peso: number;
+          ordem: number;
+          atualizado_em: string;
+        };
+        Insert: Omit<Database['public']['Tables']['catalogo_publico_itens']['Row'], 'id' | 'atualizado_em'>;
+        Update: Partial<Omit<Database['public']['Tables']['catalogo_publico_itens']['Row'], 'id'>>;
+        Relationships: [];
+      };
       fornecedores: {
         // visivel_grade/visivel_pdf têm default true no banco — opcionais no Insert.
         Row: { id: string; nome: string; ordem: number; visivel_grade: boolean; visivel_pdf: boolean };
