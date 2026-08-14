@@ -52,13 +52,13 @@ function linkWhatsApp(numero: string, texto?: string): string {
 /**
  * `freteDescricao` já vem pronto de descreverFrete() — cobre os 4 estados (cotação/não
  * calculado/retirada/valor), então aqui só monta o texto, sem saber de onde veio. Cada item em 2
- * linhas — nome+peso+fornecedor, depois qtd × unitário = subtotal — com uma linha em branco
+ * linhas — nome+fornecedor+peso, depois qtd × unitário = subtotal — com uma linha em branco
  * separando um item do outro.
  */
 function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], freteDescricao: string, total: number): string {
   const blocos = itens.map((i) => {
     const nomeLimpo = i.nome.replace(/[*_]/g, '');
-    const linhaNome = [nomeLimpo, `${Math.round(i.peso)}kg`, i.fornecedorNome].filter(Boolean).join(' — ');
+    const linhaNome = [nomeLimpo, i.fornecedorNome, `${Math.round(i.peso)}kg`].filter(Boolean).join(' ');
     const linhaValores = `${i.qtd} x R$ ${fmtR(i.preco)} = R$ ${fmtR(i.preco * i.qtd)}`;
     return `${linhaNome}\n${linhaValores}`;
   });
