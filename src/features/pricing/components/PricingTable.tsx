@@ -599,34 +599,33 @@ export function PricingTable({
             } satisfies ColunaDef,
           ]
         : []),
-      ...(modoResumo
-        ? []
-        : [
-            {
-              chave: `${canal.id}:ajuste`,
-              rotulo: '',
-              larguraPadrao: defaults['col:ajuste'],
-              larguraChave: 'col:ajuste',
-              canalId: canal.id,
-              render: (p: Produto) => {
-                const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
-                return (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
-                    }}
-                    title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-                    className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
-                  >
-                    ✕
-                  </button>
-                );
-              },
-            } satisfies ColunaDef,
-          ]),
+      // Diferente de Frete/Encargos/ML($) (essas sim somem no modo Resumido), essa coluna fica
+      // visível SEMPRE — é como o operador desativa um produto daquele canal (some do PDF), não é
+      // um detalhe a mais, então precisa continuar acessível mesmo na grade compacta.
+      {
+        chave: `${canal.id}:ajuste`,
+        rotulo: '',
+        larguraPadrao: defaults['col:ajuste'],
+        larguraChave: 'col:ajuste',
+        canalId: canal.id,
+        render: (p: Produto) => {
+          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          return (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
+              }}
+              title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
+              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+            >
+              ✕
+            </button>
+          );
+        },
+      } satisfies ColunaDef,
     ];
     }),
     ...(historicoSafras && historicoSafras.length > 0 && historicoPorCodigo
