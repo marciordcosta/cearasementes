@@ -42,7 +42,7 @@ export default function App() {
   }, [location.pathname]);
 
   const matchCatalogoPublico = REGEX_CATALOGO_PUBLICO.exec(location.pathname);
-  if (matchCatalogoPublico) return <CatalogoPublicoPage canalId={matchCatalogoPublico[1]} />;
+  if (matchCatalogoPublico) return <CatalogoPublicoPage slug={matchCatalogoPublico[1]} />;
 
   if (carregando) return null;
   if (!session) return <LoginPage />;

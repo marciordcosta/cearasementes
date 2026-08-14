@@ -427,8 +427,8 @@ export function PricingPage() {
         const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
         return { produtoId: p.id, nome: p.nome, categoriaNome: categoria.nome, preco: r.preco, peso: p.peso, ordem: indice };
       });
-      await publicarCatalogoOnline(canal.id, itens);
-      setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${canal.id}` });
+      const slug = await publicarCatalogoOnline(canal.id, canal.nome, itens);
+      setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` });
     } catch (e) {
       alert(mensagemDeErro(e, 'Falha ao publicar o Catálogo Online.'));
     } finally {

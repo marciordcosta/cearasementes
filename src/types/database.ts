@@ -238,6 +238,13 @@ export interface Database {
         Update: Partial<Omit<Database['public']['Tables']['catalogo_publico_itens']['Row'], 'id'>>;
         Relationships: [];
       };
+      // Slug (link "bonito") de cada canal publicado — 1 linha por canal_id, ver publicarCatalogoOnline.
+      catalogo_publico_canais: {
+        Row: { canal_id: string; slug: string; nome: string; atualizado_em: string };
+        Insert: Omit<Database['public']['Tables']['catalogo_publico_canais']['Row'], 'atualizado_em'>;
+        Update: Partial<Omit<Database['public']['Tables']['catalogo_publico_canais']['Row'], 'canal_id'>>;
+        Relationships: [];
+      };
       fornecedores: {
         // visivel_grade/visivel_pdf têm default true no banco — opcionais no Insert.
         Row: { id: string; nome: string; ordem: number; visivel_grade: boolean; visivel_pdf: boolean };
