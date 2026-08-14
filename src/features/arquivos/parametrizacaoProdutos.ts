@@ -102,8 +102,8 @@ export function resolverFatorCondicao(
   return paraNumero(fatoresGlobais.find((f) => f.chave === condicao)?.fator ?? null) ?? 1;
 }
 
-/** Modo de plantio padrão do produto (Cova ou Lanço) — só pré-seleciona o modo ao adicionar no Guia de Plantio, nunca entra em cálculo. Null = sem preferência cadastrada. */
-export function resolverModoPlantio(nomeProduto: string, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | null {
+/** Modo de plantio padrão do produto (Cova, Lanço ou Linha) — só pré-seleciona o modo ao adicionar no Guia de Plantio, nunca entra em cálculo. Null = sem preferência cadastrada. */
+export function resolverModoPlantio(nomeProduto: string, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | 'linha' | null {
   return encontrarProduto(nomeProduto, produtos)?.modoPlantio ?? null;
 }
 

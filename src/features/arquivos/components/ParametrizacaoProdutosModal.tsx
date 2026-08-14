@@ -23,7 +23,7 @@ interface CamposProduto {
   indiceSobrevivencia: string;
   perdaMedia: string;
   perdaBaixa: string;
-  modoPlantio: 'cova' | 'lanco' | null;
+  modoPlantio: 'cova' | 'lanco' | 'linha' | null;
   margemTolerancia: string;
   observacaoEtiqueta: string;
 }
@@ -46,7 +46,7 @@ interface ParametrizacaoProdutosModalProps {
     indiceSobrevivencia: string;
     perdaMedia: string;
     perdaBaixa: string;
-    modoPlantio: 'cova' | 'lanco' | null;
+    modoPlantio: 'cova' | 'lanco' | 'linha' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
   }) => void;
@@ -375,7 +375,7 @@ export function ParametrizacaoProdutosModal({
                 <input
                   defaultValue={camposAtuais.maxPlantulasMetroLinear}
                   placeholder="sem limite"
-                  title="Máx. de plântulas pretendidas por metro linear — usada em Covas linear (Milho/Sorgo)"
+                  title="Máx. de plântulas pretendidas por metro linear — usada em Milho/Sorgo e no modo Linha"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
                     if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor });
@@ -424,11 +424,12 @@ export function ParametrizacaoProdutosModal({
                 />
                 <select
                   value={camposAtuais.modoPlantio ?? 'lanco'}
-                  onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' })}
+                  onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' | 'linha' })}
                   title="Modo de plantio padrão"
                   className={`w-[74px] shrink-0 ${campoClasse}`}
                 >
                   <option value="lanco">Lanço</option>
+                  <option value="linha">Linha</option>
                   <option value="cova">Cova</option>
                 </select>
                 <input

@@ -196,7 +196,7 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
     perdaMedia: row.perda_media,
     perdaBaixa: row.perda_baixa,
     maxPlantulasMetroLinear: row.max_plantulas_metro_linear,
-    modoPlantio: row.modo_plantio === 'cova' || row.modo_plantio === 'lanco' ? row.modo_plantio : null,
+    modoPlantio: row.modo_plantio === 'cova' || row.modo_plantio === 'lanco' || row.modo_plantio === 'linha' ? row.modo_plantio : null,
     margemTolerancia: row.margem_tolerancia,
     observacaoEtiqueta: row.observacao_etiqueta,
   };
@@ -226,7 +226,7 @@ export async function salvarParametrizacaoProduto(produto: {
   perdaMedia: string;
   perdaBaixa: string;
   maxPlantulasMetroLinear: string;
-  modoPlantio: 'cova' | 'lanco' | null;
+  modoPlantio: 'cova' | 'lanco' | 'linha' | null;
   margemTolerancia: string;
   observacaoEtiqueta: string;
 }): Promise<void> {

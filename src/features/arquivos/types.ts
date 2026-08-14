@@ -82,15 +82,13 @@ export interface ProdutoParametrizacao {
   /**
    * Máximo de plântulas ESTABELECIDAS por metro linear de linha (pós-perdas) — 3ª dimensão de
    * densidade, junto com densidadeBase (por m²) e maxPlantulasCova (por cova): cada modo de plantio usa
-   * a coluna correspondente (A Lanço → densidadeBase; Covas discretas → maxPlantulasCova; Covas
-   * linear/Milho-Sorgo → esta). Equivale a uma distância mínima em cm (100 ÷ esse valor) entre plântulas
-   * na linha — usada pra travar o Corredor sozinho em Milho/Sorgo, ou pra trocar o card pro modo
-   * "Semeadura contínua" nos demais produtos, quando o espaçamento efetivo aperta demais (ver
-   * GuiaPlantioModal.tsx). Null = sem limite cadastrado, sem essa trava.
+   * a coluna correspondente (A Lanço → densidadeBase; Covas discretas → maxPlantulasCova; Milho/Sorgo →
+   * esta, trava o Corredor sozinho; Linha → esta + densidadeBase juntas, trava o Corredor no máximo que
+   * ainda cabe nessa Densidade — ver GuiaPlantioModal.tsx). Null = sem limite cadastrado, sem essa trava.
    */
   maxPlantulasMetroLinear: string | null;
-  /** Modo de plantio padrão do grupo (Cova ou Lanço) — só pré-seleciona o modo ao adicionar o produto no Guia de Plantio, não entra em nenhum cálculo. Null = sem preferência cadastrada (o Guia cai no padrão dele, Lanço). */
-  modoPlantio: 'cova' | 'lanco' | null;
+  /** Modo de plantio padrão do grupo (Cova, Lanço ou Linha) — só pré-seleciona o modo ao adicionar o produto no Guia de Plantio, não entra em nenhum cálculo. Null = sem preferência cadastrada (o Guia cai no padrão dele, Lanço). */
+  modoPlantio: 'cova' | 'lanco' | 'linha' | null;
   /** Margem de tolerância (%) pra arredondar sacos — até essa % de saco faltando ainda arredonda pra baixo, acima arredonda pra cima. Texto cru (ex.: "25"); null cai no padrão de 25%. */
   margemTolerancia: string | null;
   /** Texto livre impresso na linha "Observação" do Selo (ex.: registro RENASEM do produtor) — fixo por grupo, não muda por lote. */

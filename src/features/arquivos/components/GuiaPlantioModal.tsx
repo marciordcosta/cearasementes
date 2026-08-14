@@ -32,7 +32,7 @@ interface GuiaPlantioModalProps {
   onFechar: () => void;
 }
 
-type Modo = 'linha_cova' | 'lanco';
+type Modo = 'linha_cova' | 'lanco' | 'linha';
 type Condicao = 'ideal' | 'media' | 'baixa';
 
 interface ItemGuia {
@@ -56,6 +56,7 @@ interface ItemGuia {
 
 const OPCOES_MODO: { valor: Modo; rotulo: string }[] = [
   { valor: 'lanco', rotulo: 'A Lanço' },
+  { valor: 'linha', rotulo: 'Linha' },
   { valor: 'linha_cova', rotulo: 'Covas' },
 ];
 
@@ -141,7 +142,8 @@ function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizaca
 // ver sementesCovaEfetivaMilhoSorgo), cada uma aplicando em cima da sua própria Sementes/cova. Sem teto —
 // a conta continua linear (nada empírico travando antes da hora); quem trava o espaçamento na Distância
 // mínima real (Parametrização, agora geral pra qualquer produto) é a correção do Corredor em Milho/Sorgo
-// (ver corrigirCorredorMilhoSorgo), ou a troca pro modo linear contínuo nos demais (ver modoLinearCapim).
+// (ver corrigirCorredorMilhoSorgo) — o modo Covas em si não tem mais troca automática pra linha; pra isso
+// existe o modo Linha, independente (ver corredorMaximoLinha/corrigirCorredorLinha).
 const TAXA_AJUSTE_SEMENTES_POR_CM = 1;
 
 /**
@@ -240,25 +242,29 @@ function espacamentoEfetivo(corredorTexto: string): number | null {
 }
 
 /**
- * True quando a quantidade de PLÂNTULAS esperadas por metro linear (Sementes/m linear × Germinação
- * final ÷ 100 — nem toda semente vira plântula) chega ou passa do Máx. de plântulas/metro linear
- * cadastrado (Parametrização, regra GERAL — Milho/Sorgo nunca chega aqui, o Corredor se corrige sozinho
- * antes, ver corrigirCorredorMilhoSorgo). Comparar direto em plântulas/m (não em cm de distância) evita
- * o descompasso de unidade entre a Distância derivada e o que o campo cadastrado realmente representa.
- * A partir daí não faz mais sentido pensar em "covas" discretas (buracos colados demais pra caber
- * fisicamente) — o plantio vira, na prática, semeadura contínua na linha: a UI esconde Sem./cova e
- * Distância, e destaca Sementes/m (linear) — SEM mudar a conta de kg/ha (que já é a mesma, Sementes/m
- * linear só é outra forma de mostrar o mesmo resultado). Volta ao normal sozinho se o Corredor abrir de
- * novo. Sem Máx. plântulas/metro cadastrado, ou sem Sementes/m linear calculável, sempre false.
+ * Corredor MÁXIMO (cm) que ainda cabe no Máx. plântulas/metro linear cadastrado, pra uma dada Densidade
+ * — regra PRÓPRIA do modo Linha (independente de Covas/Milho-Sorgo). Plântulas/m linear = Densidade
+ * (plantas/m²) × Corredor(m) — a Germinação cancela dos dois lados (Sementes/m² já é Densidade÷Germinação,
+ * × Germinação/100 volta pra Densidade), por isso não entra aqui. Corredor maior que esse teto exigiria
+ * mais plântulas por metro de linha do que o cadastrado permite fisicamente. Null sem os 2 cadastros
+ * (Densidade, Máx. plântulas/metro linear).
  */
-function modoLinearCapim(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, sementesPorMetroLinear: number | null): boolean {
-  if (sementesPorMetroLinear === null) return false;
-  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo.nomeProduto, produtos);
-  if (maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return false;
-  const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
-  if (germinacaoFinal === null || germinacaoFinal <= 0) return false;
-  const plantulasPorMetroLinear = sementesPorMetroLinear * (germinacaoFinal / 100);
-  return plantulasPorMetroLinear >= maxPlantulasMetroLinear;
+function corredorMaximoLinha(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  const densidade = resolverDensidadeBase(nomeProduto, produtos);
+  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(nomeProduto, produtos);
+  if (densidade === null || densidade <= 0 || maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return null;
+  return (100 * maxPlantulasMetroLinear) / densidade;
+}
+
+/**
+ * Sementes/m linear (modo Linha) — mesma Sementes/m² do modo A Lanço (Densidade ÷ Germinação final,
+ * ver calcularSementesPorM2), só multiplicada pelo Corredor (m) pra virar taxa por metro de linha —
+ * referência pra calibrar a plantadeira, não entra em kg/ha (que já é por área, independente de como a
+ * linha é espaçada). Null sem Sementes/m² ou Corredor válido.
+ */
+function sementesPorMetroLinearModoLinha(sementesPorM2: number | null, corredorTexto: string): number | null {
+  const corredor = paraNumero(corredorTexto);
+  return sementesPorM2 === null || corredor === null || corredor <= 0 ? null : sementesPorM2 * (corredor / 100);
 }
 
 /**
@@ -322,8 +328,19 @@ function sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada: number, espacamento
   return sementesComAjustePorDistancia(sementesCovaDigitada, espacamentoAtual, distanciaIdeal);
 }
 
-/** Corredor padrão (cm) ao adicionar o produto — grade quadrada (lado = √(10000 ÷ Covas/m² alvo)), arredondado pra cima. Milho/Sorgo usa a regra própria (Densidade + 1 semente/cova de partida, ver covasM2AlvoMilhoSorgo); os demais usam o Covas/m² cadastrado (ver covasM2Alvo). Só o PONTO DE PARTIDA — o operador ajusta o Corredor livremente depois, Distância acompanha sozinha. */
-function corredorPadrao(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): string {
+/**
+ * Corredor padrão (cm) ao adicionar o produto — só o PONTO DE PARTIDA, o operador ajusta livremente
+ * depois. Cada modo tem sua própria regra, independente: Linha usa o teto do Máx. plântulas/metro linear
+ * pra essa Densidade (ver corredorMaximoLinha — já nasce no máximo que ainda cabe, sem precisar de
+ * correção automática de cara); Covas usa grade quadrada (lado = √(10000 ÷ Covas/m² alvo)) — Milho/Sorgo
+ * com a regra própria (Densidade + 1 semente/cova de partida, ver covasM2AlvoMilhoSorgo), os demais com o
+ * Covas/m² cadastrado (ver covasM2Alvo).
+ */
+function corredorPadrao(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, modo: Modo): string {
+  if (modo === 'linha') {
+    const max = corredorMaximoLinha(laudo.nomeProduto, produtos);
+    return String(max !== null && max > 0 ? Math.floor(max) : 50);
+  }
   const covasM2 = ehMilhoOuSorgo(laudo.nomeProduto) ? covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, 1) : covasM2Alvo();
   const lado = Math.ceil(Math.sqrt(10000 / (covasM2 !== null && covasM2 > 0 ? covasM2 : 4)));
   return String(lado > 0 ? lado : 50);
@@ -379,20 +396,12 @@ export function GuiaPlantioModal({
   const [confirmarImpressaoAberto, setConfirmarImpressaoAberto] = useState(false);
   /**
    * Balão flutuante (não empurra o card) avisando que o Corredor foi corrigido sozinho ao sair do campo
-   * (só Milho/Sorgo, ver corrigirCorredorMilhoSorgo) — por laudoId, some ao editar Corredor ou
-   * Sementes/cova de novo. Não é reativo a cada render (senão apareceria já digitando, antes de sair do
-   * campo) — só liga no próprio blur, quando a correção de fato acontece.
+   * (Milho/Sorgo, ver corrigirCorredorMilhoSorgo; ou modo Linha, ver corrigirCorredorLinha) — por
+   * laudoId, some ao editar Corredor ou Sementes/cova de novo. Não é reativo a cada render (senão
+   * apareceria já digitando, antes de sair do campo) — só liga no próprio blur, quando a correção de
+   * fato acontece.
    */
   const [avisoCorredorCorrigido, setAvisoCorredorCorrigido] = useState<Record<string, boolean>>({});
-  /**
-   * Corredor "confirmado" — só atualiza no blur/Enter do campo (regra geral, capim), pra decidir se o
-   * card mostra modo Covas ou "Semeadura contínua" (ver modoLinearCapim): evita o card trocar de layout
-   * no meio da digitação (ex.: já viraria linear ao digitar só "2" de "20", antes de terminar). Os
-   * NÚMEROS (kg/ha, Sementes/m linear etc.) continuam recalculando ao vivo a partir de item.corredor —
-   * só a decisão de QUAL layout mostrar espera o operador terminar de editar. Ausente = usa item.corredor
-   * (estado inicial, antes de qualquer edição).
-   */
-  const [corredorConfirmadoCapim, setCorredorConfirmadoCapim] = useState<Record<string, string>>({});
 
   /**
    * Peso do pacote (kg) — prioriza o que o próprio laudo traz (Peso por
@@ -433,13 +442,14 @@ export function GuiaPlantioModal({
       setBuscaAberta(false);
       return;
     }
-    // Modo padrão vem da Parametrização (Cova ou Lanço, cadastrado por
-    // grupo) — só o ponto de partida do item, o operador ainda troca à
-    // vontade depois de adicionado (pills "A Lanço"/"Covas" no card).
-    const modoPadrao: Modo = resolverModoPlantio(a.nomeProduto, produtos) === 'cova' ? 'linha_cova' : 'lanco';
-    // Ponto de partida do Corredor (ver corredorPadrao) — Distância nunca é guardada, é sempre derivada
-    // dele pra manter o Covas/m² no alvo (ver distanciaDerivada).
-    const corredorInicial = corredorPadrao(a, produtos, fatorDe(fatores, modoPadrao), resolverFatorCondicao(a.nomeProduto, condicao, produtos, fatores));
+    // Modo padrão vem da Parametrização (Cova, Lanço ou Linha, cadastrado
+    // por grupo) — só o ponto de partida do item, o operador ainda troca à
+    // vontade depois de adicionado (pills no card).
+    const modoCadastrado = resolverModoPlantio(a.nomeProduto, produtos);
+    const modoPadrao: Modo = modoCadastrado === 'cova' ? 'linha_cova' : modoCadastrado === 'linha' ? 'linha' : 'lanco';
+    // Ponto de partida do Corredor (ver corredorPadrao) — Distância (Covas) ou Sementes/m linear (Linha)
+    // nunca são guardadas, são sempre derivadas dele.
+    const corredorInicial = corredorPadrao(a, produtos, fatorDe(fatores, modoPadrao), resolverFatorCondicao(a.nomeProduto, condicao, produtos, fatores), modoPadrao);
     setItens((prev) => [
       ...prev,
       {
@@ -454,10 +464,6 @@ export function GuiaPlantioModal({
         sementesCova: '1',
       },
     ]);
-    // Nasce já "confirmado" nesse valor (ver corredorConfirmadoCapim) — senão, antes do primeiro
-    // blur/Enter, a decisão de layout (Covas x Semeadura contínua) cairia no valor AO VIVO sendo
-    // digitado, trocando de estrutura já no primeiro dígito.
-    setCorredorConfirmadoCapim((prev) => ({ ...prev, [a.id]: corredorInicial }));
     setBusca('');
     setBuscaAberta(false);
   }
@@ -490,11 +496,6 @@ export function GuiaPlantioModal({
   function atualizarCorredor(item: ItemGuia, valorTexto: string) {
     atualizarItem(item.laudoId, { corredor: valorTexto });
     limparAvisoCorredor(item.laudoId);
-  }
-
-  /** Ao sair do campo Corredor (regra geral, capim), "confirma" o valor pra decidir o layout do card (Covas x Semeadura contínua, ver modoLinearCapim/corredorConfirmadoCapim) — só nesse momento, não a cada tecla digitada. */
-  function confirmarCorredorCapim(item: ItemGuia) {
-    setCorredorConfirmadoCapim((prev) => ({ ...prev, [item.laudoId]: item.corredor }));
   }
 
   /** Sementes/cova editável (só Milho/Sorgo, ver ehMilhoOuSorgo) — teto é o Máx. plântulas/cova cadastrado (Parametrização); sem esse cadastro, aceita qualquer inteiro positivo. Mínimo 1 (não existe cova sem semente). */
@@ -546,6 +547,21 @@ export function GuiaPlantioModal({
     }
     if (corredorCorrigido === null || corredorCorrigido <= 0 || Math.round(corredorCorrigido) === Math.round(corredorAtual)) return;
     atualizarItem(item.laudoId, { corredor: String(Math.round(corredorCorrigido)) });
+    setAvisoCorredorCorrigido((prev) => ({ ...prev, [item.laudoId]: true }));
+  }
+
+  /**
+   * Ao sair do campo Corredor (modo Linha), se ultrapassar o máximo que ainda cabe no Máx.
+   * plântulas/metro linear cadastrado pra essa Densidade (ver corredorMaximoLinha), corrige pra esse
+   * teto — corredor maior exigiria mais plântulas por metro de linha do que o cadastrado permite. Só
+   * corrige pra CIMA do teto (corredor menor sempre cabe, só deixa a linha mais adensada, o que não é
+   * problema). Sem os 2 campos cadastrados (Densidade, Máx. plântulas/metro linear), não corrige nada.
+   */
+  function corrigirCorredorLinha(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], item: ItemGuia) {
+    const max = corredorMaximoLinha(laudo.nomeProduto, produtos);
+    const corredorAtual = paraNumero(item.corredor);
+    if (max === null || max <= 0 || corredorAtual === null || corredorAtual <= max) return;
+    atualizarItem(item.laudoId, { corredor: String(Math.round(max)) });
     setAvisoCorredorCorrigido((prev) => ({ ...prev, [item.laudoId]: true }));
   }
 
@@ -613,6 +629,9 @@ export function GuiaPlantioModal({
       sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
     } else {
+      // A Lanço e Linha usam exatamente a mesma referência (Densidade cadastrada ÷ Germinação final) —
+      // Linha só ACRESCENTA a exibição de Sementes/m linear (ver sementesPorMetroLinearModoLinha, na
+      // renderização do card), não muda kg/ha nem Sementes/m² em nada.
       kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
       sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
     }
@@ -723,7 +742,9 @@ export function GuiaPlantioModal({
           espacamento:
             item.modo === 'linha_cova'
               ? `${distanciaItem === null ? '—' : Math.round(distanciaItem)}×${item.corredor || '—'} cm`
-              : null,
+              : item.modo === 'linha'
+                ? `${item.corredor || '—'} cm`
+                : null,
           sementesPorCovaLabel: item.modo === 'linha_cova' ? (precisaPesoPorCova(laudo) ? 'Peso/cova (g)' : 'Sem./cova') : null,
           sementesPorCovaValor,
         },
@@ -882,7 +903,7 @@ export function GuiaPlantioModal({
                 <div className="overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]">
                 <div
                   className={`grid ${
-                    item.modo === 'linha_cova'
+                    item.modo === 'linha_cova' || item.modo === 'linha'
                       ? 'grid-cols-[minmax(160px,1.1fr)_minmax(140px,0.9fr)_minmax(160px,1.2fr)]'
                       : 'grid-cols-[minmax(160px,1.1fr)_minmax(160px,2.1fr)]'
                   }`}
@@ -954,53 +975,11 @@ export function GuiaPlantioModal({
                         espacamentoAtual = espacamentoEfetivo(item.corredor);
                         sementesCovaNum = sementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoAtual);
                       }
-                      // Sementes por metro linear de linha (covas por metro × Sementes/cova) — sempre calculado
-                      // (útil pra calibrar plantadeira), mas só vira a informação PRINCIPAL quando o espaçamento
-                      // deixa de comportar covas discretas (ver modoLinearCapim, regra geral) ou pra plantas
-                      // unitárias (Milho, Sorgo), onde é mais direto que "Sementes/cova" (quase sempre 1).
+                      // Sementes por metro linear de linha (covas por metro × Sementes/cova) — só informativo,
+                      // útil pra calibrar plantadeira (mesma ideia do modo Linha, ver
+                      // sementesPorMetroLinearModoLinha), sem trocar o layout do card (Covas nunca vira
+                      // "semeadura contínua" sozinho — pra isso existe o modo Linha, independente).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
-                      // Layout (Covas x Semeadura contínua) decide pelo Corredor CONFIRMADO (último blur/Enter),
-                      // não pelo item.corredor ao vivo — senão o card trocaria de estrutura no meio da digitação.
-                      const corredorConfirmado = corredorConfirmadoCapim[item.laudoId] ?? item.corredor;
-                      let sementesPorMetroLinearConfirmado: number | null = null;
-                      if (!milhoSorgo) {
-                        const distanciaConfirmada = distanciaDerivada(corredorConfirmado);
-                        const espacamentoConfirmado = espacamentoEfetivo(corredorConfirmado);
-                        const sementesCovaConfirmada = sementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoConfirmado);
-                        sementesPorMetroLinearConfirmado =
-                          distanciaConfirmada !== null && distanciaConfirmada > 0 && sementesCovaConfirmada !== null ? (100 / distanciaConfirmada) * sementesCovaConfirmada : null;
-                      }
-                      const linearCapim = !milhoSorgo && modoLinearCapim(laudo, produtos, fatorModoItem, fatorCondicaoAtual, sementesPorMetroLinearConfirmado);
-                      if (linearCapim) {
-                        return (
-                          <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
-                            <p
-                              title="Covas coladas demais pra esse espaçamento — o plantio vira semeadura contínua na linha (Distância/Sem./cova deixam de fazer sentido); calibre pela Sementes/m (linear). Abrindo o Corredor de novo, volta ao modo Covas."
-                              className="rounded-md bg-[var(--color-page)] px-1.5 py-1 text-center text-[9px] font-medium text-[var(--color-text-soft)]"
-                            >
-                              Semeadura contínua (linha)
-                            </p>
-                            <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
-                              <input
-                                value={item.corredor}
-                                onChange={(e) => atualizarCorredor(item, e.target.value)}
-                                onBlur={() => confirmarCorredorCapim(item)}
-                                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                                inputMode="decimal"
-                                title="Único campo editável do espaçamento"
-                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
-                              />
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
-                              <p className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]">
-                                {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      }
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -1022,7 +1001,7 @@ export function GuiaPlantioModal({
                               <input
                                 value={item.corredor}
                                 onChange={(e) => atualizarCorredor(item, e.target.value)}
-                                onBlur={milhoSorgo ? () => corrigirCorredorMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, item) : () => confirmarCorredorCapim(item)}
+                                onBlur={milhoSorgo ? () => corrigirCorredorMilhoSorgo(laudo, produtos, fatorModoItem, fatorCondicaoAtual, item) : undefined}
                                 onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                                 inputMode="decimal"
                                 title={
@@ -1076,6 +1055,54 @@ export function GuiaPlantioModal({
                                 </p>
                               )}
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
+                              <p
+                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}`}
+                                className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
+                              >
+                                {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                  {/* Coluna 2 (modo Linha): Corredor + Sementes/m linear — regra própria, independente de Covas (ver corredorMaximoLinha/corrigirCorredorLinha). */}
+                  {item.modo === 'linha' &&
+                    (() => {
+                      const sementesPorMetroLinear = sementesPorMetroLinearModoLinha(r.sementesPorM2, item.corredor);
+                      return (
+                        <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div className="relative">
+                              <p className="text-[10px] text-[var(--color-text-soft)]">Corredor (cm)</p>
+                              <input
+                                value={item.corredor}
+                                onChange={(e) => atualizarCorredor(item, e.target.value)}
+                                onBlur={() => corrigirCorredorLinha(laudo, produtos, item)}
+                                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                                inputMode="decimal"
+                                title="Espaçamento entre linhas — usado só pra calcular Sementes/m linear (não muda kg/ha); se passar do Máx. plântulas/metro linear cadastrado pra essa Densidade, corrige sozinho ao sair do campo"
+                                className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
+                              />
+                              {avisoCorredorCorrigido[item.laudoId] && (
+                                <div className="absolute left-1/2 top-full z-40 mt-1 w-max max-w-[170px] -translate-x-1/2 rounded-md bg-bad py-1 pl-2 pr-1 text-[9px] leading-tight text-white shadow-lg">
+                                  <div className="flex items-start gap-1">
+                                    <span className="flex-1">Corredor acima do máximo — já ajustado pro Máx. plântulas/metro linear cadastrado</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => limparAvisoCorredor(item.laudoId)}
+                                      title="Fechar aviso"
+                                      className="shrink-0 px-0.5 text-white/80 hover:text-white"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>

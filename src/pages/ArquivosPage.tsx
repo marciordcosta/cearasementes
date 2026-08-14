@@ -160,7 +160,7 @@ export function ArquivosPage() {
     perdaMedia: string;
     perdaBaixa: string;
     maxPlantulasMetroLinear: string;
-    modoPlantio: 'cova' | 'lanco' | null;
+    modoPlantio: 'cova' | 'lanco' | 'linha' | null;
     margemTolerancia: string;
     observacaoEtiqueta: string;
   }) {
