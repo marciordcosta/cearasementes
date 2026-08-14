@@ -425,7 +425,18 @@ type ModoPlantio = 'lanco' | 'covas';
  * Busca só entre os itens já publicados desse catálogo que têm dado de plantio (nunca mostra
  * lote/laudo) — resultado é só Taxa de Semeadura (kg/ha) e Total pra área informada.
  */
-function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCatalogo[]; whatsapp: string | null; onFechar: () => void }) {
+function ModalCalculadoraPlantio({
+  itens,
+  whatsapp,
+  onAdicionarAoCarrinho,
+  onFechar,
+}: {
+  itens: ItemCatalogo[];
+  whatsapp: string | null;
+  /** Define a quantidade do item no carrinho pro nº de embalagens calculado (mesmo onAtualizarQtd de ModalOrcamento — sobrescreve, não soma, o que já estava lá). */
+  onAdicionarAoCarrinho: (itemId: string, qtd: number) => void;
+  onFechar: () => void;
+}) {
   const [busca, setBusca] = useState('');
   const [itemSelecionado, setItemSelecionado] = useState<ItemCatalogo | null>(null);
   const [modo, setModo] = useState<ModoPlantio>('lanco');
@@ -469,6 +480,23 @@ function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCat
 
   const areaNum = paraNumero(area);
   const totalKg = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
+
+  // Distância entre covas (cm) — mesma referência do Guia interno (Covas/m² alvo travado em 4, ver
+  // covasM2Alvo), só informativo ao lado do Corredor: quem trava o espaçamento é o Corredor mesmo.
+  const distanciaCovas = modo === 'covas' ? distanciaDeCovasM2(covasM2Alvo(), corredor) : null;
+
+  // Nº de embalagens = Total necessário ÷ peso da embalagem desse produto (já cadastrado, o mesmo
+  // peso mostrado no card) — arredondado pra cima, mesma filosofia de "compra um pouco a mais" do
+  // resto do sistema (ver arredondarSacos em GuiaPlantioModal.tsx, aqui simplificado sem margem de
+  // tolerância).
+  const qtdEmbalagens = totalKg !== null && itemSelecionado && itemSelecionado.peso > 0 ? Math.ceil(totalKg / itemSelecionado.peso) : null;
+  const valorTotalPedido = qtdEmbalagens !== null && itemSelecionado ? qtdEmbalagens * itemSelecionado.preco : null;
+
+  function adicionarAoCarrinho() {
+    if (qtdEmbalagens === null || !itemSelecionado) return;
+    onAdicionarAoCarrinho(itemSelecionado.id, qtdEmbalagens);
+    onFechar();
+  }
 
   function mensagemConsultor(): string {
     return `Olá! Vim da calculadora de plantio do catálogo online e gostaria de falar com um consultor sobre o plantio${itemSelecionado ? ` de ${itemSelecionado.nome.replace(/[*_]/g, '')}` : ''}.`;
@@ -547,6 +575,7 @@ function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCat
                     onChange={(e) => setCorredor(e.target.value)}
                     className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
                   />
+                  {distanciaCovas !== null && <span className="mt-1 block text-[11px] text-[#67718a]">Distância entre covas: {Math.round(distanciaCovas)}cm</span>}
                 </label>
               )}
 
@@ -573,7 +602,30 @@ function ModalCalculadoraPlantio({ itens, whatsapp, onFechar }: { itens: ItemCat
                     <span className="num font-bold text-[#0e9d74]">{Math.ceil(totalKg)} kg</span>
                   </div>
                 )}
+                {itemSelecionado && qtdEmbalagens !== null && valorTotalPedido !== null && (
+                  <>
+                    <div className="mt-1 flex justify-between text-sm">
+                      <span className="text-[#67718a]">Valor unitário</span>
+                      <span className="num text-[#1a2233]">
+                        R$ {fmtR(itemSelecionado.preco)} <span className="text-[11px] text-[#67718a]">({Math.round(itemSelecionado.peso)}kg)</span>
+                      </span>
+                    </div>
+                    <div className="mt-1 flex justify-between text-sm">
+                      <span className="text-[#67718a]">Valor total do pedido</span>
+                      <span className="num font-bold text-[#0e9d74]">R$ {fmtR(valorTotalPedido)}</span>
+                    </div>
+                  </>
+                )}
               </div>
+
+              <button
+                type="button"
+                disabled={qtdEmbalagens === null}
+                onClick={adicionarAoCarrinho}
+                className="w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Adicionar ao carrinho{qtdEmbalagens !== null ? ` (${qtdEmbalagens})` : ''}
+              </button>
 
               <div className="border-t border-[#e2e6ed] pt-2.5 text-[11px] leading-snug text-[#67718a]">
                 <p>A indicação do sistema é uma forma básica e superficial. Para uma melhor precisão nos dados, consulte um de nossos consultores.</p>
@@ -862,7 +914,9 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         />
       )}
 
-      {calculadoraAberta && data && <ModalCalculadoraPlantio itens={data.itens} whatsapp={data.whatsapp} onFechar={() => setCalculadoraAberta(false)} />}
+      {calculadoraAberta && data && (
+        <ModalCalculadoraPlantio itens={data.itens} whatsapp={data.whatsapp} onAdicionarAoCarrinho={atualizarQtd} onFechar={() => setCalculadoraAberta(false)} />
+      )}
 
       {orcamentoAberto && data && (
         <ModalOrcamento
