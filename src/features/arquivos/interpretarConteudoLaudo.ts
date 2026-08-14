@@ -107,6 +107,7 @@ export function interpretarConteudoLaudo(conteudo: ConteudoExtraido): CamposDoCo
   const camposDeTexto: Record<string, string[]> = {
     Categoria: ['categoria'],
     Processo: ['processo'],
+    Fornecedor: ['fornecedor'],
   };
   for (const [rotuloExibido, variacoes] of Object.entries(camposDeTexto)) {
     const valor = buscarRotulo(linhas, variacoes) ?? buscarRotuloEmTabelas(tabelas, variacoes);

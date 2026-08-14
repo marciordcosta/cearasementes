@@ -544,6 +544,8 @@ export interface Database {
           especie: string | null;
           /** Processo (ex.: "Tradicional", "Incrustado") — lido do laudo quando o documento traz ("Processo: ..."), editável em "Editar Laudo" quando não. Usada no Selo impresso. */
           processo: string | null;
+          /** Fornecedor (ex.: "Barenbrug") — lido do laudo quando o documento traz ("Fornecedor: ..."), editável em "Editar Laudo" quando não. */
+          fornecedor: string | null;
           /** Peso por Embalagem (kg) — lido do Boletim de Análise quando o documento traz, editável em "Editar Laudo" quando não. Linha PESO do Selo impresso; tem prioridade sobre o peso casado por nome na Tabela de Preço. Não confundir com "pms" (Peso de Mil Sementes). */
           peso_embalagem: string | null;
           /** Peso de Mil Sementes — quando preenchido, sobrescreve (só pra esse lote) o PMS base da Parametrização de Produtos. */

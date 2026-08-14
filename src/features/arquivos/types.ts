@@ -18,6 +18,8 @@ export interface ArquivoLaudo {
   especie: string | null;
   /** Processo (ex.: "Tradicional", "Incrustado") — lido do laudo quando o documento traz ("Processo: ..."), editável em EditarLaudoModal quando não. Usada só no Selo impresso (ver etiqueta.ts). */
   processo: string | null;
+  /** Fornecedor (ex.: "Barenbrug") — lido do laudo quando o documento traz ("Fornecedor: ..."), editável em EditarLaudoModal quando não. */
+  fornecedor: string | null;
   /** Peso por Embalagem (kg) — lido do Boletim de Análise quando o documento traz, editável em EditarLaudoModal quando não. Linha PESO do Selo impresso, com prioridade sobre o peso casado por nome na Tabela de Preço (ver etiqueta.ts). Não confundir com "pms" (Peso de Mil Sementes). */
   pesoEmbalagem: string | null;
   /** Peso de Mil Sementes — editado junto com Pureza/Germinação/Validade, ou direto na grade. Quando preenchido, sobrescreve (só pra esse lote) o PMS base cadastrado na Parametrização de Produtos (ver parametrizacaoProdutos.ts); em branco, a grade mostra e o cálculo usa o PMS base. */
@@ -55,6 +57,7 @@ export interface NovoLaudoInput {
   categoria?: string;
   especie?: string;
   processo?: string;
+  fornecedor?: string;
   pesoEmbalagem?: string;
 }
 

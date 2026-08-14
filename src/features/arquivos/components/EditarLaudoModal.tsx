@@ -13,6 +13,7 @@ export interface PatchLaudo {
   validade: string;
   categoria: string;
   processo: string;
+  fornecedor: string;
   pesoEmbalagem: string;
   pms: string;
 }
@@ -45,6 +46,7 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
   const [validade, setValidade] = useState('');
   const [categoria, setCategoria] = useState('');
   const [processo, setProcesso] = useState('');
+  const [fornecedor, setFornecedor] = useState('');
   const [pesoEmbalagem, setPesoEmbalagem] = useState('');
   const [pms, setPms] = useState('');
 
@@ -58,6 +60,7 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
     setValidade(laudo.validade ?? '');
     setCategoria(laudo.categoria ?? '');
     setProcesso(laudo.processo ?? '');
+    setFornecedor(laudo.fornecedor ?? '');
     setPesoEmbalagem(laudo.pesoEmbalagem ?? '');
     setPms(laudo.pms ?? '');
   }, [laudo]);
@@ -73,6 +76,7 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
       validade: validade.trim(),
       categoria: categoria.trim(),
       processo: processo.trim(),
+      fornecedor: fornecedor.trim(),
       pesoEmbalagem: pesoEmbalagem.trim(),
       pms: pms.trim(),
     });
@@ -115,6 +119,14 @@ export function EditarLaudoModal({ laudo, onFechar, onSalvar }: EditarLaudoModal
             onChange={(e) => setCategoria(e.target.value)}
             className={campoClasse}
             placeholder="Ex.: S2 (lido do laudo quando o documento traz)"
+          />
+        </Campo>
+        <Campo label="Fornecedor">
+          <input
+            value={fornecedor}
+            onChange={(e) => setFornecedor(e.target.value)}
+            className={campoClasse}
+            placeholder="Ex.: Barenbrug (lido do laudo quando o documento traz)"
           />
         </Campo>
         <Campo label="Peso por Embalagem (kg)">

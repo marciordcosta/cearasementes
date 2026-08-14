@@ -28,6 +28,7 @@ function fromRow(row: ArquivoRow): ArquivoLaudo {
     categoria: row.categoria,
     especie: row.especie,
     processo: row.processo,
+    fornecedor: row.fornecedor,
     pesoEmbalagem: row.peso_embalagem,
     pms: row.pms,
     testeForma: row.teste_forma,
@@ -71,6 +72,7 @@ export async function enviarLaudo(input: NovoLaudoInput): Promise<ArquivoLaudo> 
       categoria: input.categoria || null,
       especie: input.especie || null,
       processo: input.processo || null,
+      fornecedor: input.fornecedor || null,
       peso_embalagem: input.pesoEmbalagem || null,
       pms: null,
       teste_forma: null,
@@ -100,6 +102,7 @@ export async function atualizarLaudo(
     validade: string;
     categoria: string;
     processo: string;
+    fornecedor: string;
     pesoEmbalagem: string;
     pms: string;
   },
@@ -115,6 +118,7 @@ export async function atualizarLaudo(
       validade: patch.validade || null,
       categoria: patch.categoria || null,
       processo: patch.processo || null,
+      fornecedor: patch.fornecedor || null,
       peso_embalagem: patch.pesoEmbalagem || null,
       pms: patch.pms || null,
     })

@@ -128,6 +128,7 @@ export function ArquivosPage() {
       validade: string;
       categoria: string;
       processo: string;
+      fornecedor: string;
       pesoEmbalagem: string;
       pms: string;
     },
