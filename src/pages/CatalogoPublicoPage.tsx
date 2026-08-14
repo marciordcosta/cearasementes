@@ -1,4 +1,4 @@
-import { Loader2, ShoppingCart, X } from 'lucide-react';
+import { Loader2, Search, ShoppingCart, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
@@ -301,6 +301,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   }, [data, slug]);
 
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
   const [carrinho, setCarrinho] = useState<Map<string, number>>(new Map());
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
 
@@ -336,8 +337,16 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   const itensFiltrados = useMemo(() => {
     if (!data) return [];
-    return categoriaFiltro ? data.itens.filter((i) => i.categoriaNome === categoriaFiltro) : data.itens;
-  }, [data, categoriaFiltro]);
+    const porCategoria = categoriaFiltro ? data.itens.filter((i) => i.categoriaNome === categoriaFiltro) : data.itens;
+    // Mesma lógica de busca da grade interna (PricingPage.tsx): cada palavra digitada precisa
+    // aparecer em algum lugar do nome+fornecedor (qualquer ordem, sem acentuação especial).
+    const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (palavras.length === 0) return porCategoria;
+    return porCategoria.filter((i) => {
+      const descricao = `${i.nome} ${i.fornecedorNome ?? ''}`.toLowerCase();
+      return palavras.every((palavra) => descricao.includes(palavra));
+    });
+  }, [data, categoriaFiltro, busca]);
 
   // Categoria -> blocos "colados" (mesmo produto/variantes, ver chaveComparacaoNome — mesma regra
   // do PDF de catálogo) -> itens. Produto diferente do anterior sempre inicia um bloco novo (espaço
@@ -390,6 +399,25 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         )}
       </header>
 
+      <div className="border-b border-[#e2e6ed] bg-white px-3 py-2.5">
+        <div className="relative">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#67718a]" />
+          <input
+            type="text"
+            inputMode="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar produto…"
+            className="w-full rounded-md border border-[#e2e6ed] bg-[#f5f7fa] py-2 pl-8 pr-8 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+          />
+          {busca && (
+            <button type="button" onClick={() => setBusca('')} title="Limpar busca" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#67718a] hover:text-[#1a2233]">
+              <X size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {categorias.length > 1 && (
         <div className="flex gap-1.5 overflow-x-auto border-b border-[#e2e6ed] bg-white px-3 py-2.5">
           <button
@@ -419,6 +447,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
         {!semNadaAindaCarregando && !isError && data && data.itens.length === 0 && (
           <p className="text-sm text-[#67718a]">Esse catálogo ainda não tem produtos publicados.</p>
+        )}
+
+        {!semNadaAindaCarregando && !isError && data && data.itens.length > 0 && itensFiltrados.length === 0 && (
+          <p className="text-sm text-[#67718a]">Nenhum produto encontrado com esse filtro/busca.</p>
         )}
 
         {grupos.map((grupo) => (
