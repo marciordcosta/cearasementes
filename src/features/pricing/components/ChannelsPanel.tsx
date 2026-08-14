@@ -28,6 +28,8 @@ interface ChannelsPanelProps {
   onAtualizarCampo: (canalId: string, campo: CampoNumerico, valor: number) => void;
   /** WhatsApp desse canal (DDI+DDD+número, só dígitos) — usado no Catálogo Online (botão flutuante + envio de orçamento). */
   onAtualizarWhatsapp: (canalId: string, valor: string) => void;
+  /** true = card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor. */
+  onAtualizarMostrarDetalhes: (canalId: string, valor: boolean) => void;
   onAtualizarTipoImposto: (canalId: string, valor: TipoImposto) => void;
   onAtualizarFreteAdicionalTipo: (canalId: string, valor: FreteAdicionalTipo) => void;
   onToggleVisivel: (canalId: string, valor: boolean) => void;
@@ -57,6 +59,7 @@ export function ChannelsPanel({
   transportadoras,
   onAtualizarCampo,
   onAtualizarWhatsapp,
+  onAtualizarMostrarDetalhes,
   onAtualizarTipoImposto,
   onAtualizarFreteAdicionalTipo,
   onToggleVisivel,
@@ -210,6 +213,18 @@ export function ChannelsPanel({
                     <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
                   </select>
                 </CampoRow>
+                <label
+                  className="flex items-center justify-between gap-1.5 border-t border-dashed border-[var(--color-line)] pt-1.5 text-[11px]"
+                  title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
+                >
+                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostrar detalhes (VC%/Validade)</span>
+                  <input
+                    type="checkbox"
+                    checked={canal.mostrarDetalhesPlantio}
+                    onChange={(e) => onAtualizarMostrarDetalhes(canal.id, e.target.checked)}
+                    className="accent-[var(--color-navy)]"
+                  />
+                </label>
                 <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — DDI+DDD+número, só dígitos, ex.: 5585999999999">
                   <input
                     type="text"

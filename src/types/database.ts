@@ -148,9 +148,14 @@ export interface Database {
           margem_por_referencia: boolean;
           /** Número de WhatsApp (DDI+DDD+número, só dígitos) usado no Catálogo Online desse canal — null = sem WhatsApp cadastrado. */
           whatsapp: string | null;
+          /** true = card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — padrão false (só nome+Fornecedor). */
+          mostrar_detalhes_plantio: boolean;
           criado_em: string;
         };
-        Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em' | 'whatsapp'> & { whatsapp?: string | null };
+        Insert: Omit<Database['public']['Tables']['canais_preco']['Row'], 'id' | 'criado_em' | 'whatsapp' | 'mostrar_detalhes_plantio'> & {
+          whatsapp?: string | null;
+          mostrar_detalhes_plantio?: boolean;
+        };
         Update: Partial<Database['public']['Tables']['canais_preco']['Insert']>;
         Relationships: [];
       };
@@ -271,6 +276,8 @@ export interface Database {
           whatsapp: string | null;
           /** false = canal "Manual" (sem Transportadora vinculada, Frete Kg/% digitado à mão) — o Orçamento não calcula frete, mostra "Cotação de frete" (WhatsApp) em vez de um valor. */
           tem_transportadora: boolean;
+          /** = Canal.mostrarDetalhesPlantio — true mostra VC%/Validade no card do item (além do Fornecedor), false mostra só o Fornecedor. */
+          mostrar_detalhes_plantio: boolean;
           atualizado_em: string;
         };
         Insert: Omit<Database['public']['Tables']['catalogo_publico_canais']['Row'], 'atualizado_em'>;

@@ -466,6 +466,7 @@ export function PricingPage() {
         freteMinimo,
         canal.transportadoraId !== null,
         canal.whatsapp,
+        canal.mostrarDetalhesPlantio,
         itens,
       );
       setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` });
@@ -486,6 +487,11 @@ export function PricingPage() {
     const whatsapp = valor || null;
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, whatsapp } : c)));
     atualizarCanal(canalId, { whatsapp });
+  }
+
+  function onAtualizarMostrarDetalhesCanal(canalId: string, valor: boolean) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, mostrarDetalhesPlantio: valor } : c)));
+    atualizarCanal(canalId, { mostrar_detalhes_plantio: valor });
   }
 
   async function onSelecionarTransportadora(canalId: string, transportadoraId: string | null) {
@@ -1148,6 +1154,7 @@ export function PricingPage() {
             onSelecionarTransportadora={onSelecionarTransportadora}
             onAtualizarCampo={onAtualizarCampoCanal}
             onAtualizarWhatsapp={onAtualizarWhatsappCanal}
+            onAtualizarMostrarDetalhes={onAtualizarMostrarDetalhesCanal}
             onAtualizarTipoImposto={onAtualizarTipoImposto}
             onAtualizarFreteAdicionalTipo={onAtualizarFreteAdicionalTipo}
             onToggleVisivel={onToggleVisivel}

@@ -31,6 +31,7 @@ function canalFromRow(row: CanalRow): Canal {
     transportadoraId: row.transportadora_id,
     margemPorReferencia: row.margem_por_referencia,
     whatsapp: row.whatsapp,
+    mostrarDetalhesPlantio: row.mostrar_detalhes_plantio,
   };
 }
 
@@ -616,6 +617,7 @@ export async function publicarCatalogoOnline(
   freteMinimo: number,
   temTransportadora: boolean,
   whatsapp: string | null,
+  mostrarDetalhesPlantio: boolean,
   itens: ItemCatalogoPublicoInput[],
 ): Promise<string> {
   const slug = paraSlugCatalogo(canalNome);
@@ -628,6 +630,7 @@ export async function publicarCatalogoOnline(
     frete_minimo: freteMinimo,
     tem_transportadora: temTransportadora,
     whatsapp,
+    mostrar_detalhes_plantio: mostrarDetalhesPlantio,
   });
   if (errSlug) throw errSlug;
 
@@ -665,6 +668,7 @@ export interface CatalogoPublico {
   freteMinimo: number;
   temTransportadora: boolean;
   whatsapp: string | null;
+  mostrarDetalhesPlantio: boolean;
   itens: {
     id: string;
     nome: string;
@@ -701,6 +705,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
     freteMinimo: canalRow.frete_minimo,
     temTransportadora: canalRow.tem_transportadora,
     whatsapp: canalRow.whatsapp,
+    mostrarDetalhesPlantio: canalRow.mostrar_detalhes_plantio,
     itens: (itensRows ?? []).map((i) => ({
       id: i.id,
       nome: i.nome,

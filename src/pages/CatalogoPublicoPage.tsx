@@ -84,14 +84,15 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
  * 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado"
  * (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo
  * do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de
- * texto quebrar sozinho. Quando há dado de plantio (laudo casado, ver resolverPlantioParaProduto em
- * calculoSemeadura.ts), VC% e Validade entram na MESMA linha discreta, nessa ordem: Fornecedor > VC% > Validade.
+ * texto quebrar sozinho. `mostrarDetalhes` (Canal.mostrarDetalhesPlantio, ver ChannelsPanel.tsx) —
+ * só quando ligado pra essa Tabela, VC% e Validade entram na mesma linha discreta, nessa ordem:
+ * Fornecedor > VC% > Validade; desligado (padrão), mostra só o Fornecedor.
  */
-function LinhaProduto({ item, selecionado, onClick }: { item: ItemCatalogo; selecionado: boolean; onClick: () => void }) {
+function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: ItemCatalogo; selecionado: boolean; mostrarDetalhes: boolean; onClick: () => void }) {
   const infoPartes = [
     item.fornecedorNome,
-    item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
-    item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
+    mostrarDetalhes && item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
+    mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
   ].filter((parte): parte is string => !!parte);
 
   return (
@@ -844,7 +845,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
                 <div key={bloco.chave + i} className="overflow-hidden rounded-lg border border-[#e2e6ed] shadow-sm">
                   {bloco.itens.map((item, j) => (
                     <div key={item.id} className={j > 0 ? 'border-t border-[#e2e6ed]' : ''}>
-                      <LinhaProduto item={item} selecionado={carrinho.has(item.id)} onClick={() => alternarSelecao(item.id)} />
+                      <LinhaProduto
+                        item={item}
+                        selecionado={carrinho.has(item.id)}
+                        mostrarDetalhes={data?.mostrarDetalhesPlantio ?? false}
+                        onClick={() => alternarSelecao(item.id)}
+                      />
                     </div>
                   ))}
                 </div>

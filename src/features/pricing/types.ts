@@ -23,6 +23,8 @@ export interface Canal {
   margemPorReferencia: boolean;
   /** Número de WhatsApp (com DDI+DDD, só dígitos) usado no Catálogo Online desse canal — botão flutuante e envio de orçamento. Cada Tabela tem o seu, null = sem WhatsApp cadastrado (esconde o botão no link público). */
   whatsapp: string | null;
+  /** true = o card do Catálogo Online desse canal mostra VC%/Validade (além de Fornecedor) — false (padrão) mostra só o nome e o Fornecedor, sem esses detalhes agronômicos. Por Tabela, porque o público de cada uma pode ser diferente (produtor final x revenda). */
+  mostrarDetalhesPlantio: boolean;
 }
 
 export interface Categoria {
