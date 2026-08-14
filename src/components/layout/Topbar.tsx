@@ -36,8 +36,15 @@ function ThemeToggleButton({ navy }: { navy: boolean }) {
   );
 }
 
+function AvatarImg({ email, avatarUrl, className }: { email: string; avatarUrl: string | null; className: string }) {
+  if (avatarUrl) return <img src={avatarUrl} alt={email} className={`rounded-full ${className}`} />;
+  return (
+    <span className={`flex items-center justify-center rounded-full bg-[var(--color-page)] text-[var(--color-text-soft)] ${className}`}>{email[0]?.toUpperCase()}</span>
+  );
+}
+
 function UserMenu({ navy }: { navy: boolean }) {
-  const { session, sair } = useAuth();
+  const { session, sair, usuariosOnline } = useAuth();
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -52,11 +59,11 @@ function UserMenu({ navy }: { navy: boolean }) {
 
   const email = session?.user.email;
   if (!email) return null;
-  const avatarUrl = session.user.user_metadata?.avatar_url as string | undefined;
+  const avatarUrl = (session.user.user_metadata?.avatar_url as string | undefined) ?? null;
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setAberto((v) => !v)} title={email} className="block shrink-0">
+      <button type="button" onClick={() => setAberto((v) => !v)} title={email} className="relative block shrink-0">
         {avatarUrl ? (
           <img src={avatarUrl} alt={email} className={`h-8 w-8 rounded-full ${navy ? 'ring-1 ring-white/40' : 'ring-1 ring-[var(--color-line)]'}`} />
         ) : (
@@ -68,9 +75,19 @@ function UserMenu({ navy }: { navy: boolean }) {
             {email[0]}
           </span>
         )}
+        {usuariosOnline.length > 0 && (
+          <span
+            title={`${usuariosOnline.length} online agora`}
+            className={`absolute -bottom-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 bg-good px-0.5 text-[9px] font-bold leading-none text-white ${
+              navy ? 'border-[var(--color-navy)]' : 'border-[var(--color-surface)]'
+            }`}
+          >
+            {usuariosOnline.length}
+          </span>
+        )}
       </button>
       {aberto && (
-        <div className="absolute top-[calc(100%+6px)] right-0 z-[70] min-w-[190px] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl">
+        <div className="absolute top-[calc(100%+6px)] right-0 z-[70] min-w-[220px] overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl">
           <p className="truncate border-b border-[var(--color-line)] px-3.5 py-2 text-xs text-[var(--color-text-soft)]" title={email}>
             {email}
           </p>
@@ -80,10 +97,23 @@ function UserMenu({ navy }: { navy: boolean }) {
               setAberto(false);
               sair();
             }}
-            className="block w-full px-3.5 py-2.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-page)]"
+            className="block w-full border-b border-[var(--color-line)] px-3.5 py-2.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-page)]"
           >
             Sair
           </button>
+          <p className="px-3.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-soft)]">
+            {usuariosOnline.length} online agora
+          </p>
+          <div className="max-h-[180px] overflow-y-auto py-1">
+            {usuariosOnline.map((u) => (
+              <div key={u.id} className="flex items-center gap-2 px-3.5 py-1.5">
+                <AvatarImg email={u.email} avatarUrl={u.avatarUrl} className="h-6 w-6 shrink-0 text-[10px] font-semibold" />
+                <span className="truncate text-xs text-[var(--color-text)]" title={u.email}>
+                  {u.email}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
