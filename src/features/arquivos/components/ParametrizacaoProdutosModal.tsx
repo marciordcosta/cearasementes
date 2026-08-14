@@ -20,6 +20,8 @@ interface CamposProduto {
   densidadeBase: string;
   maxPlantulasMetroLinear: string;
   maxPlantulasCova: string;
+  /** VC% padrão do grupo — reserva pro cálculo de kg/ha quando o laudo não tem Pureza/Germinação preenchidas (ver germinacaoParaSemeadura em calculoSemeadura.ts). */
+  vcPadrao: string;
   indiceSobrevivencia: string;
   perdaMedia: string;
   perdaBaixa: string;
@@ -43,6 +45,7 @@ interface ParametrizacaoProdutosModalProps {
     densidadeBase: string;
     maxPlantulasMetroLinear: string;
     maxPlantulasCova: string;
+    vcPadrao: string;
     indiceSobrevivencia: string;
     perdaMedia: string;
     perdaBaixa: string;
@@ -305,6 +308,7 @@ export function ParametrizacaoProdutosModal({
           <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
               <span className="flex-1">Grupo</span>
+              <span className="w-16 shrink-0 text-center">VC%</span>
               <span className="w-16 shrink-0 text-center">PMS</span>
               <span className="w-16 shrink-0 text-center">Plant/m²</span>
               <span className="w-16 shrink-0 text-center">Plant/linear</span>
@@ -324,6 +328,7 @@ export function ParametrizacaoProdutosModal({
                 densidadeBase: existente?.densidadeBase ?? '',
                 maxPlantulasMetroLinear: existente?.maxPlantulasMetroLinear ?? '',
                 maxPlantulasCova: existente?.maxPlantulasCova ?? '',
+                vcPadrao: existente?.vcPadrao ?? '',
                 indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
                 perdaMedia: existente?.perdaMedia ?? '',
                 perdaBaixa: existente?.perdaBaixa ?? '',
@@ -353,6 +358,16 @@ export function ParametrizacaoProdutosModal({
                     {grupo}
                   </span>
                 )}
+                <input
+                  defaultValue={camposAtuais.vcPadrao}
+                  placeholder="sem laudo"
+                  title="VC% padrão (Pureza × Germinação/100) — usado no cálculo de kg/ha só quando o laudo escolhido não tem Pureza/Germinação preenchidas (nem teste de campo)"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.vcPadrao) onSalvar({ ...camposAtuais, vcPadrao: valor });
+                  }}
+                  className={`w-16 shrink-0 ${campoClasse}`}
+                />
                 <input
                   defaultValue={camposAtuais.pmsBase}
                   title="Peso de Mil Sementes (g)"

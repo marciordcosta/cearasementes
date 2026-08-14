@@ -56,6 +56,11 @@ export function resolverPmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pm
   return paraNumero(laudo.pms) ?? resolverPmsBase(laudo.nomeProduto, produtos);
 }
 
+/** VC% padrão do grupo (Pureza × Germinação/100) — reserva pro cálculo de kg/ha (ver germinacaoParaSemeadura em calculoSemeadura.ts) quando o laudo em questão não tem Pureza/Germinação preenchidas. Null se não cadastrado. */
+export function resolverVcPadrao(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(nomeProduto, produtos)?.vcPadrao ?? null);
+}
+
 /** Densidade base do produto, como texto cru — não é editável por lote, então isso é sempre o que a grade mostra. */
 export function resolverDensidadeBaseTexto(nomeProduto: string, produtos: ProdutoParametrizacao[]): string | null {
   return encontrarProduto(nomeProduto, produtos)?.densidadeBase ?? null;
@@ -150,4 +155,22 @@ export function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: strin
 /** Acha o produto da Tabela de Preço (módulo Precificação) que corresponde ao nome de um laudo — usado pra puxar peso do saco/valor sem precisar cadastrar essa ligação manualmente (ver laudoCasaComNomePreco). */
 export function encontrarProdutoPreco(nomeProduto: string, produtosPreco: Produto[]): Produto | null {
   return produtosPreco.find((p) => laudoCasaComNomePreco(nomeProduto, p.nome)) ?? null;
+}
+
+/**
+ * Igual laudoCasaComNomePreco, mas IGNORANDO as palavras da Espécie no início do nome do laudo
+ * (nomeProduto = Espécie + Cultivar, ver interpretarConteudoLaudo.ts) — quando o laudo é do modelo
+ * "Termo de Conformidade" (que traz Espécie separada), o nome do produto vira o nome científico
+ * completo ("Andropogon Gayanus Planaltina"), mas a Tabela de Preço costuma usar só o nome
+ * comercial mais curto ("Andropogon Planaltina", sem "Gayanus") — laudoCasaComNomePreco então
+ * nunca casava (exige TODA palavra do laudo, e "gayanus" não aparece na Tabela). Mesma ideia já
+ * usada pra separar o Cultivar no Selo (ver derivarCultivar em etiqueta.ts), aplicada aqui pro
+ * casamento com a Tabela de Preço. Sem Espécie cadastrada nesse laudo, cai no comportamento de
+ * sempre (nomeProduto inteiro, laudos do modelo antigo já não traziam o gênero nele mesmo).
+ */
+export function laudoCasaComNomePrecoIgnorandoEspecie(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie'>, nomeProdutoPreco: string): boolean {
+  const palavras = laudo.nomeProduto.trim().split(/\s+/).filter(Boolean);
+  const palavrasEspecie = laudo.especie ? laudo.especie.trim().split(/\s+/).filter(Boolean).length : 0;
+  const nomeSemEspecie = palavras.slice(palavrasEspecie).join(' ');
+  return laudoCasaComNomePreco(nomeSemEspecie || laudo.nomeProduto, nomeProdutoPreco);
 }

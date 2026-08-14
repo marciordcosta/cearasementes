@@ -573,6 +573,8 @@ export interface Database {
           nome_produto: string;
           pms_base: string | null;
           densidade_base: string | null;
+          /** VC% padrão do grupo (Pureza × Germinação/100) — reserva pro cálculo de kg/ha quando o laudo não tem Pureza/Germinação (nem teste de campo). Ver germinacaoParaSemeadura em calculoSemeadura.ts. */
+          vc_padrao: string | null;
           indice_sobrevivencia: string | null;
           max_plantulas_cova: string | null;
           perda_media: string | null;

@@ -1,12 +1,13 @@
 import { calcularVCNumero, paraNumero } from './metricas';
 import {
-  laudoCasaComNomePreco,
+  laudoCasaComNomePrecoIgnorandoEspecie,
   resolverDensidadeBase,
   resolverFatorCondicao,
   resolverIndiceSobrevivencia,
   resolverMaxPlantulasCova,
   resolverPmsBase,
   resolverPmsDoLaudo,
+  resolverVcPadrao,
 } from './parametrizacaoProdutos';
 import { resultadoTesteNumero } from './testeGerminacao';
 import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from './types';
@@ -24,14 +25,17 @@ type LaudoParaSemeadura = Pick<
  *   verdade, então já reflete a sobrevivência real — usa direto, sem
  *   multiplicar mais nada por cima.
  * - Sem teste de campo: cai pro VC do laudo (Pureza × Germinação, medidos em
- *   laboratório) corrigido pelo Índice de Sobrevivência do produto — o
+ *   laboratório) — sem isso também (laudo sem Pureza/Germinação preenchidas),
+ *   cai pro VC% padrão cadastrado por grupo em Parametrização (ver
+ *   resolverVcPadrao), pra sempre ter algo pra calcular. Corrigido pelo
+ *   Índice de Sobrevivência do produto nos 2 casos (laudo ou padrão) — o
  *   laboratório não capta perdas de campo (seca, praga, forma de plantio),
  *   por isso a correção só entra aqui, nunca em cima do teste de campo.
  */
 export function germinacaoParaSemeadura(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
   const doTeste = resultadoTesteNumero(a, resolverPmsDoLaudo(a, produtos));
   if (doTeste !== null) return doTeste;
-  const vc = calcularVCNumero(a);
+  const vc = calcularVCNumero(a) ?? resolverVcPadrao(a.nomeProduto, produtos);
   if (vc === null) return null;
   const sobrevivencia = resolverIndiceSobrevivencia(a.nomeProduto, produtos);
   return sobrevivencia === null ? vc : vc * sobrevivencia;
@@ -212,9 +216,9 @@ export function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: n
   return covasPorM2 !== null && sementesCova !== null && pms !== null && pms > 0 ? (covasPorM2 * sementesCova * pms) / 100 : null;
 }
 
-/** Laudo de maior Validade entre os que casam o nome desse produto da Tabela de Preço (ver laudoCasaComNomePreco) — igual à ordenação já usada no Guia de Plantio. Null sem nenhum laudo batendo. */
+/** Laudo de maior Validade entre os que casam o nome desse produto da Tabela de Preço (ver laudoCasaComNomePrecoIgnorandoEspecie) — igual à ordenação já usada no Guia de Plantio. Null sem nenhum laudo batendo. */
 export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[]): ArquivoLaudo | null {
-  const candidatos = arquivos.filter((a) => laudoCasaComNomePreco(a.nomeProduto, nomeProdutoPreco));
+  const candidatos = arquivos.filter((a) => laudoCasaComNomePrecoIgnorandoEspecie(a, nomeProdutoPreco));
   if (candidatos.length === 0) return null;
   return [...candidatos].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
 }
