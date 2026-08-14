@@ -242,25 +242,53 @@ function espacamentoEfetivo(corredorTexto: string): number | null {
 }
 
 /**
- * Corredor MÁXIMO (cm) que ainda cabe no Máx. plântulas/metro linear cadastrado, pra uma dada Densidade
- * — regra PRÓPRIA do modo Linha (independente de Covas/Milho-Sorgo). Plântulas/m linear = Densidade
- * (plantas/m²) × Corredor(m) — a Germinação cancela dos dois lados (Sementes/m² já é Densidade÷Germinação,
- * × Germinação/100 volta pra Densidade), por isso não entra aqui. Corredor maior que esse teto exigiria
- * mais plântulas por metro de linha do que o cadastrado permite fisicamente. Null sem os 2 cadastros
- * (Densidade, Máx. plântulas/metro linear).
+ * Plântulas/m² que a regra GERAL de Covas mira (Covas/m² alvo travado × Máx.plântulas/cova cadastrado —
+ * mesma referência de sementesPorCovaAlvo/covasM2Alvo, mas em plântulas, não em sementes; a Germinação
+ * não entra, cancela). É a densidade "de verdade" que ocupa 1 m² sob a regra de Covas — usada como base
+ * do modo Linha (em vez da Densidade cadastrada de A Lanço, ver sementesPorM2ModoLinhaViaCovas/
+ * corredorMaximoLinha). Sem Máx.plântulas/cova cadastrado, cai na própria Densidade — o mesmo fallback
+ * que a regra de Covas já usa (ver sementesCovaAtual), então nesse caso o modo Linha se comporta
+ * exatamente como antes (igual A Lanço).
  */
-function corredorMaximoLinha(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  const densidade = resolverDensidadeBase(nomeProduto, produtos);
-  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(nomeProduto, produtos);
-  if (densidade === null || densidade <= 0 || maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return null;
-  return (100 * maxPlantulasMetroLinear) / densidade;
+function plantulasPorM2ModoLinhaViaCovas(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  const maxPlantulasCova = resolverMaxPlantulasCova(nomeProduto, produtos);
+  if (maxPlantulasCova !== null && maxPlantulasCova > 0) return covasM2Alvo() * maxPlantulasCova;
+  return resolverDensidadeBase(nomeProduto, produtos);
 }
 
 /**
- * Sementes/m linear (modo Linha) — mesma Sementes/m² do modo A Lanço (Densidade ÷ Germinação final,
- * ver calcularSementesPorM2), só multiplicada pelo Corredor (m) pra virar taxa por metro de linha —
- * referência pra calibrar a plantadeira, não entra em kg/ha (que já é por área, independente de como a
- * linha é espaçada). Null sem Sementes/m² ou Corredor válido.
+ * Corredor MÁXIMO (cm) que ainda cabe no Máx. plântulas/metro linear cadastrado, pra essa densidade de
+ * Covas (ver plantulasPorM2ModoLinhaViaCovas) — regra PRÓPRIA do modo Linha (independente de
+ * Covas/Milho-Sorgo em si, só reaproveita a mesma densidade-alvo). Plântulas/m linear =
+ * plantulasPorM2ModoLinhaViaCovas × Corredor(m). Corredor maior que esse teto exigiria mais plântulas por
+ * metro de linha do que o cadastrado permite fisicamente. Null sem os 2 cadastros (Máx.plântulas/cova ou
+ * Densidade como fallback, e Máx. plântulas/metro linear).
+ */
+function corredorMaximoLinha(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
+  const plantulasPorM2 = plantulasPorM2ModoLinhaViaCovas(nomeProduto, produtos);
+  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(nomeProduto, produtos);
+  if (plantulasPorM2 === null || plantulasPorM2 <= 0 || maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return null;
+  return (100 * maxPlantulasMetroLinear) / plantulasPorM2;
+}
+
+/**
+ * Sementes/m² do modo Linha — plantulasPorM2ModoLinhaViaCovas ÷ Germinação final (mesma forma de
+ * calcularSementesPorM2, só com a densidade de Covas no lugar da Densidade de A Lanço). Entra em kg/ha e
+ * em Sementes/m linear (ver calcularResultado/sementesPorMetroLinearModoLinha). Null sem densidade ou
+ * Germinação.
+ */
+function sementesPorM2ModoLinhaViaCovas(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
+  const plantulasPorM2 = plantulasPorM2ModoLinhaViaCovas(laudo.nomeProduto, produtos);
+  const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
+  if (plantulasPorM2 === null || germinacaoFinal === null || germinacaoFinal <= 0) return null;
+  return (plantulasPorM2 * 100) / germinacaoFinal;
+}
+
+/**
+ * Sementes/m linear (modo Linha) — Sementes/m² do modo Linha (ver sementesPorM2ModoLinhaViaCovas)
+ * multiplicada pelo Corredor (m) pra virar taxa por metro de linha — referência pra calibrar a
+ * plantadeira, não entra em kg/ha (que já é por área, independente de como a linha é espaçada). Null sem
+ * Sementes/m² ou Corredor válido.
  */
 function sementesPorMetroLinearModoLinha(sementesPorM2: number | null, corredorTexto: string): number | null {
   const corredor = paraNumero(corredorTexto);
@@ -552,10 +580,12 @@ export function GuiaPlantioModal({
 
   /**
    * Ao sair do campo Corredor (modo Linha), se ultrapassar o máximo que ainda cabe no Máx.
-   * plântulas/metro linear cadastrado pra essa Densidade (ver corredorMaximoLinha), corrige pra esse
-   * teto — corredor maior exigiria mais plântulas por metro de linha do que o cadastrado permite. Só
-   * corrige pra CIMA do teto (corredor menor sempre cabe, só deixa a linha mais adensada, o que não é
-   * problema). Sem os 2 campos cadastrados (Densidade, Máx. plântulas/metro linear), não corrige nada.
+   * plântulas/metro linear cadastrado pra essa densidade — a mesma que a regra de Covas mira, ver
+   * corredorMaximoLinha/plantulasPorM2ModoLinhaViaCovas — corrige pra esse teto: corredor maior exigiria
+   * mais plântulas por metro de linha do que o cadastrado permite. Só corrige pra CIMA do teto (corredor
+   * menor sempre cabe, só deixa a linha mais adensada, o que não é problema). Sem os cadastros
+   * necessários (Máx.plântulas/cova ou Densidade como fallback, e Máx. plântulas/metro linear), não
+   * corrige nada.
    */
   function corrigirCorredorLinha(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], item: ItemGuia) {
     const max = corredorMaximoLinha(laudo.nomeProduto, produtos);
@@ -628,10 +658,15 @@ export function GuiaPlantioModal({
       const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoItem, espacamentoAtual);
       sementesPorM2 = covasPorM2 !== null && sementesCova !== null ? covasPorM2 * sementesCova : null;
       kgPorHa = kgPorHaDeSementesCova(covasPorM2, sementesCova, pmsNumericoDoLaudo(laudo, produtos));
+    } else if (item.modo === 'linha') {
+      // Linha usa a densidade que a regra de Covas mira (ver plantulasPorM2ModoLinhaViaCovas), não a
+      // Densidade de A Lanço — Covas/m² alvo × Máx.plântulas/cova cadastrado, convertido em Sementes/m²
+      // pela Germinação final. Sem Máx.plântulas/cova cadastrado, cai na própria Densidade (mesmo
+      // fallback da regra de Covas), então nesse caso vira idêntico ao cálculo de A Lanço.
+      sementesPorM2 = sementesPorM2ModoLinhaViaCovas(laudo, produtos, fatorModo, fatorCondicaoItem);
+      const pms = pmsNumericoDoLaudo(laudo, produtos);
+      kgPorHa = sementesPorM2 !== null && pms !== null && pms > 0 ? (sementesPorM2 * pms) / 100 : null;
     } else {
-      // A Lanço e Linha usam exatamente a mesma referência (Densidade cadastrada ÷ Germinação final) —
-      // Linha só ACRESCENTA a exibição de Sementes/m linear (ver sementesPorMetroLinearModoLinha, na
-      // renderização do card), não muda kg/ha nem Sementes/m² em nada.
       kgPorHa = calcularKgPorHectareNumero(laudo, produtos, fatorModo, fatorCondicaoItem);
       sementesPorM2 = calcularSementesPorM2(laudo, produtos, fatorModo, fatorCondicaoItem);
     }
@@ -661,13 +696,21 @@ export function GuiaPlantioModal({
    */
   function kgPorHaOutrasCondicoes(laudo: ArquivoLaudo, item: ItemGuia): { rotulo: string; kgPorHa: number | null }[] {
     const fatorModo = fatorDe(fatores, item.modo);
-    if (item.modo !== 'linha_cova') {
+    if (item.modo === 'lanco') {
       return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => ({
         rotulo: o.rotulo,
         kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores)),
       }));
     }
     const pms = pmsNumericoDoLaudo(laudo, produtos);
+    if (item.modo === 'linha') {
+      return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
+        const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
+        const sementesPorM2 = sementesPorM2ModoLinhaViaCovas(laudo, produtos, fatorModo, fatorCondicaoAlt);
+        const kgPorHa = sementesPorM2 !== null && pms !== null && pms > 0 ? (sementesPorM2 * pms) / 100 : null;
+        return { rotulo: o.rotulo, kgPorHa };
+      });
+    }
     if (ehMilhoOuSorgo(laudo.nomeProduto)) {
       const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
       return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
@@ -1085,7 +1128,7 @@ export function GuiaPlantioModal({
                                 onBlur={() => corrigirCorredorLinha(laudo, produtos, item)}
                                 onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                                 inputMode="decimal"
-                                title="Espaçamento entre linhas — usado só pra calcular Sementes/m linear (não muda kg/ha); se passar do Máx. plântulas/metro linear cadastrado pra essa Densidade, corrige sozinho ao sair do campo"
+                                title="Espaçamento entre linhas — usado só pra calcular Sementes/m linear; se passar do Máx. plântulas/metro linear cadastrado pra essa densidade, corrige sozinho ao sair do campo"
                                 className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                               />
                               {avisoCorredorCorrigido[item.laudoId] && (
