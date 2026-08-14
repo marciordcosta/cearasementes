@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Gauge, Truck } from 'lucide-react';
+import { Gauge, Loader2, Truck } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -168,8 +168,11 @@ export function PricingPage() {
   // Selo "MB atual" na barra de ferramentas — mesma conta do modal de tela cheia por canal (ver
   // historicoBi.ts), só que somando TODAS as Tabelas visíveis de uma vez. Mesma queryKey do
   // Dashboard/modal, então reaproveita o cache se algum dos dois já tiver sido aberto na sessão.
-  const { data: vendasBi = [] } = useQuery({ queryKey: ['bi', 'vendas'], queryFn: fetchVendas });
-  const { data: itensBi = [] } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens });
+  const { data: vendasBi = [], isLoading: carregandoVendasBi } = useQuery({ queryKey: ['bi', 'vendas'], queryFn: fetchVendas });
+  const { data: itensBi = [], isLoading: carregandoItensBi } = useQuery({ queryKey: ['bi', 'itens'], queryFn: fetchVendaItens });
+  // Enquanto isso não termina, MB/M.C./Repres./Desconto real ainda mostram os valores "sem BI"
+  // (fallback automático, ver resolverDescontoBi) — o ícone da barra de ferramentas avisa disso.
+  const carregandoBi = carregandoVendasBi || carregandoItensBi;
   const itemsAgregadosBi = useMemo(() => agregarItens(vendasBi, itensBi), [vendasBi, itensBi]);
   const canaisPorId = useMemo(() => new Map(canais.map((c) => [c.id, c])), [canais]);
   // Desconto médio REAL (última Safra, ver historicoBi.ts) por canal+produto — fonte primária do
@@ -818,14 +821,15 @@ export function PricingPage() {
                 }}
                 onDesativarOrdenacao={() => setOrdenarPorRepresentacao(false)}
               />
-              {margemAtualTotalValor > 0 && (
+              {(carregandoBi || margemAtualTotalValor > 0) && (
                 <button
                   type="button"
                   onClick={() => setModalMargemAberto(true)}
-                  title="Ver margens (MB atual / M.C prevista)"
-                  className="shrink-0 rounded-full bg-[var(--color-navy)] p-1.5 text-white hover:brightness-110"
+                  disabled={carregandoBi}
+                  title={carregandoBi ? 'Carregando dados do BI (MB/M.C./Desconto real)…' : 'Ver margens (MB atual / M.C prevista)'}
+                  className={`shrink-0 rounded-full bg-[var(--color-navy)] p-1.5 text-white ${carregandoBi ? 'cursor-wait opacity-70' : 'hover:brightness-110'}`}
                 >
-                  <Gauge size={16} />
+                  {carregandoBi ? <Loader2 size={16} className="animate-spin" /> : <Gauge size={16} />}
                 </button>
               )}
             </div>
