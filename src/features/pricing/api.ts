@@ -585,6 +585,7 @@ export interface ItemCatalogoPublicoInput {
   produtoId: string;
   nome: string;
   categoriaNome: string;
+  subcategoriaNome: string | null;
   fornecedorNome: string | null;
   preco: number;
   peso: number;
@@ -632,6 +633,7 @@ export async function publicarCatalogoOnline(
         produto_id: item.produtoId,
         nome: item.nome,
         categoria_nome: item.categoriaNome,
+        subcategoria_nome: item.subcategoriaNome,
         fornecedor_nome: item.fornecedorNome,
         preco: item.preco,
         peso: item.peso,
@@ -651,7 +653,7 @@ export interface CatalogoPublico {
   freteMinimo: number;
   temTransportadora: boolean;
   whatsapp: string | null;
-  itens: { id: string; nome: string; categoriaNome: string; fornecedorNome: string | null; preco: number; peso: number; pesoUsado: number }[];
+  itens: { id: string; nome: string; categoriaNome: string; subcategoriaNome: string | null; fornecedorNome: string | null; preco: number; peso: number; pesoUsado: number }[];
 }
 
 /**
@@ -677,6 +679,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       id: i.id,
       nome: i.nome,
       categoriaNome: i.categoria_nome,
+      subcategoriaNome: i.subcategoria_nome,
       fornecedorNome: i.fornecedor_nome,
       preco: i.preco,
       peso: i.peso,

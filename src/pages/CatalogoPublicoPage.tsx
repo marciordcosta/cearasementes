@@ -344,11 +344,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     if (!data) return [];
     const porCategoria = categoriaFiltro ? data.itens.filter((i) => i.categoriaNome === categoriaFiltro) : data.itens;
     // Mesma lógica de busca da grade interna (PricingPage.tsx): cada palavra digitada precisa
-    // aparecer em algum lugar do nome+fornecedor (qualquer ordem, sem acentuação especial).
+    // aparecer em algum lugar do nome+fornecedor+categoria+subcategoria (qualquer ordem, sem
+    // acentuação especial) — nem todo nome de produto carrega a Categoria/Classe dele.
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (palavras.length === 0) return porCategoria;
     return porCategoria.filter((i) => {
-      const descricao = `${i.nome} ${i.fornecedorNome ?? ''}`.toLowerCase();
+      const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
   }, [data, categoriaFiltro, busca]);
@@ -390,18 +391,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       <header className="relative border-b border-[#e2e6ed] bg-[#10233f] px-4 py-4 text-white">
         <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ceará Sementes</p>
         <h1 className="mt-0.5 truncate text-lg font-bold pr-14">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</h1>
-        {isFetching && <Loader2 size={16} className="absolute right-14 top-4 animate-spin text-white/70" aria-label="Atualizando…" />}
-        {carrinho.size > 0 && (
-          <button
-            type="button"
-            onClick={() => setOrcamentoAberto(true)}
-            title="Ver orçamento"
-            className="absolute right-4 top-3.5 flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-          >
-            <ShoppingCart size={17} />
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0e9d74] px-0.5 text-[9px] font-bold leading-none">{carrinho.size}</span>
-          </button>
-        )}
+        {isFetching && <Loader2 size={16} className="absolute right-4 top-4 animate-spin text-white/70" aria-label="Atualizando…" />}
       </header>
 
       <div className="border-b border-[#e2e6ed] bg-white px-3 py-2.5">
@@ -475,6 +465,20 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           </section>
         ))}
       </main>
+
+      {carrinho.size > 0 && (
+        <button
+          type="button"
+          onClick={() => setOrcamentoAberto(true)}
+          title="Ver orçamento"
+          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+        >
+          <ShoppingCart size={20} />
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
+            {carrinho.size}
+          </span>
+        </button>
+      )}
 
       {data?.whatsapp && (
         <a

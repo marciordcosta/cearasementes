@@ -718,8 +718,9 @@ export function PricingTable({
   // começar — Excluir+Editar+Produto+Peso+Custo sempre, + Classe/ID quando "Mais detalhes" está
   // ligado, + Repres. Geral quando além disso houver dado pra ela.
   const colSpanColunasFixas = 5 + (mostrarMaisDetalhes ? 2 : 0) + (mostrarMaisDetalhes && representatividadeGeralPorProduto ? 1 : 0);
-  // Preço+Frete+Encargos+ML%+ML$+Ajuste (6) e mais Repres. quando essa coluna existir — no modo Resumo, só Preço+ML%.
-  const colSpanPorCanal = modoResumo ? 2 : 6 + (representatividadePorProduto ? 1 : 0);
+  // Preço+Frete+Encargos+ML%+ML$+Ajuste (6) e mais Repres. quando essa coluna existir — no modo
+  // Resumo, Preço+ML%+Ajuste (Ajuste fica visível nos dois modos, ver colunas do canal acima).
+  const colSpanPorCanal = modoResumo ? 3 : 6 + (representatividadePorProduto ? 1 : 0);
 
   return (
     <div className="relative" ref={containerRef}>

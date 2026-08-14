@@ -231,6 +231,8 @@ export interface Database {
           produto_id: string;
           nome: string;
           categoria_nome: string;
+          /** Classe do produto (Categoria.subcategorias) — só entra na busca (ver CatalogoPublicoPage.tsx), não é exibida sozinha em lugar nenhum. Null = produto sem Subcategoria. */
+          subcategoria_nome: string | null;
           /** Cadastrado em Parametrização de Fornecedores — só o nome, exibição discreta (ver CatalogoPublicoPage.tsx). Null = sem fornecedor cadastrado. */
           fornecedor_nome: string | null;
           preco: number;
