@@ -124,6 +124,16 @@ export function resolverDescontoEfetivo(mapa: Map<string, Map<string, number>>, 
   return mapa.get(canalId)?.get(codigoCanonico(codigo)) ?? null;
 }
 
+/** Tem desconto médio real (em QUALQUER canal) pra esse produto? — usada só pra decidir se o checkbox "Usar desconto real" aparece no Editar Produto (ver EditProductModal.tsx); sem isso, marcar o produto não faria diferença nenhuma. */
+export function temDescontoBiParaProduto(mapa: Map<string, Map<string, number>>, codigo: string | null): boolean {
+  if (!codigo) return false;
+  const alvo = codigoCanonico(codigo);
+  for (const porCodigo of mapa.values()) {
+    if (porCodigo.has(alvo)) return true;
+  }
+  return false;
+}
+
 /** Quantas Safras mostrar como coluna — mais que isso lota a grade de tela cheia. */
 export const MAX_SAFRAS_EXIBIDAS = 3;
 
@@ -483,7 +493,7 @@ export function calcularMargemAtualProjetada(
     if (qtdMedia <= 0) continue;
     const categoria = categorias.find((c) => c.id === produto.categoriaId) ?? categorias[0];
     const subcategoria = subcategorias.find((s) => s.id === produto.subcategoriaId);
-    const resolverDescontoBi = (c: Canal, p: Produto) => (c.id === canal.id ? resolverDescontoUltimaSafra(historicoPorCodigo, p.codigo) : null);
+    const resolverDescontoBi = (c: Canal, p: Produto) => (c.id === canal.id && p.usarDescontoReal ? resolverDescontoUltimaSafra(historicoPorCodigo, p.codigo) : null);
     const r = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi);
     valorProjetado += r.preco * qtdMedia;
     margemProjetada += (r.preco - produto.custo) * qtdMedia;

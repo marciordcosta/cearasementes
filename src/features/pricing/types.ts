@@ -104,6 +104,8 @@ export interface Produto {
   subcategoriaId: string | null;
   /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. Padrão true. */
   imprimir: boolean;
+  /** true = Encargos "Desconto" usa o desconto médio real do BI (última Safra, ver historicoBi.ts) pra esse produto, quando houver dado; false (padrão) = sempre usa o Canal.desconto cadastrado, mesmo com dado disponível — opt-in, não é mais automático. */
+  usarDescontoReal: boolean;
   /** canalId -> preço sugerido/manual daquele canal */
   precos: Record<string, PrecoCanal>;
 }

@@ -71,6 +71,7 @@ import {
   construirHistoricoPorCodigo,
   listarTodasSafrasGeral,
   resolverDescontoEfetivo,
+  temDescontoBiParaProduto,
   type CriterioRepresentacao,
 } from '@/features/pricing/historicoBi';
 import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
@@ -175,8 +176,10 @@ export function PricingPage() {
   // Encargos "Desconto" em calcularCanal, no lugar do Canal.desconto cadastrado; sem dado do BI pra
   // esse canal+produto, calcularCanal cai sozinho pro cadastrado (ver resolverDescontoEfetivo).
   const descontoBiPorCanalECodigo = useMemo(() => construirDescontoUltimaSafraPorCanal(canais, itemsAgregadosBi), [canais, itemsAgregadosBi]);
+  // Opt-in por produto (ver EditProductModal.tsx) — sem marcar "Usar desconto real", calcularCanal
+  // sempre cai pro Canal.desconto cadastrado, mesmo com dado do BI disponível pra esse produto.
   const resolverDescontoBi = useMemo(
-    () => (canal: Canal, produto: Produto) => resolverDescontoEfetivo(descontoBiPorCanalECodigo, canal.id, produto.codigo),
+    () => (canal: Canal, produto: Produto) => (produto.usarDescontoReal ? resolverDescontoEfetivo(descontoBiPorCanalECodigo, canal.id, produto.codigo) : null),
     [descontoBiPorCanalECodigo],
   );
   // Coluna "Repres. Geral (%)" — soma a média de valor vendido de cada produto em TODAS as
@@ -351,6 +354,7 @@ export function PricingPage() {
     cubagem: string | null;
     fornecedorId: string | null;
     imprimir: boolean;
+    usarDescontoReal: boolean;
   }) {
     if (!produtoEditandoId) return;
     setProdutos((prev) =>
@@ -370,6 +374,7 @@ export function PricingPage() {
                 cubagem: patch.cubagem,
                 fornecedorId: patch.fornecedorId,
                 imprimir: patch.imprimir,
+                usarDescontoReal: patch.usarDescontoReal,
               }
             : p,
         ),
@@ -389,6 +394,7 @@ export function PricingPage() {
         cubagem: patch.cubagem,
         fornecedor_id: patch.fornecedorId,
         imprimir: patch.imprimir,
+        usar_desconto_real: patch.usarDescontoReal,
       }).then(invalidarProdutosPreco),
     );
     setProdutoEditandoId(null);
@@ -904,6 +910,7 @@ export function PricingPage() {
         categorias={categorias}
         subcategorias={subcategorias}
         fornecedores={fornecedores}
+        temDescontoBi={temDescontoBiParaProduto(descontoBiPorCanalECodigo, produtoEditando?.codigo ?? null)}
         onFechar={() => setProdutoEditandoId(null)}
         onSalvar={onSalvarEdicaoProduto}
       />

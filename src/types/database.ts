@@ -210,6 +210,8 @@ export interface Database {
           subcategoria_id: string | null;
           /** false = produto some do catálogo em PDF (Exportar), mas continua normal em todo o resto do sistema. */
           imprimir: boolean;
+          /** true = Encargos "Desconto" usa o desconto médio real do BI (última Safra) pra esse produto, quando houver dado; false (padrão) = sempre usa o Canal.desconto cadastrado. */
+          usar_desconto_real: boolean;
           criado_em: string;
           atualizado_em: string;
         };

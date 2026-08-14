@@ -101,8 +101,10 @@ export function ChannelFullscreenModal({
   }, [itemsAgregados, canal]);
   // Escopado a ESSE canal só — se `canal` (self/referência dentro de calcularCanal) for outro, não
   // tem histórico carregado aqui pra ele (só busca o BI pro canal em tela cheia), cai pro cadastrado.
+  // Opt-in por produto (ver EditProductModal.tsx) — sem "Usar desconto real", sempre cai pro cadastrado.
   const resolverDescontoBi = useMemo(
-    () => (canalArg: Canal, produto: Produto) => (canal && canalArg.id === canal.id ? resolverDescontoUltimaSafra(historicoPorCodigo, produto.codigo) : null),
+    () => (canalArg: Canal, produto: Produto) =>
+      canal && canalArg.id === canal.id && produto.usarDescontoReal ? resolverDescontoUltimaSafra(historicoPorCodigo, produto.codigo) : null,
     [canal, historicoPorCodigo],
   );
   const safrasDisponiveis = useMemo(() => listarSafrasDisponiveis(historicoPorCodigo), [historicoPorCodigo]);

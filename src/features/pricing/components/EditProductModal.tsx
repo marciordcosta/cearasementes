@@ -8,6 +8,8 @@ interface EditProductModalProps {
   categorias: Categoria[];
   subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
+  /** true = esse produto tem desconto médio real (BI) em pelo menos 1 canal — só nesse caso o checkbox "Usar desconto real" aparece (ver temDescontoBiParaProduto em historicoBi.ts). */
+  temDescontoBi: boolean;
   onFechar: () => void;
   onSalvar: (patch: {
     nome: string;
@@ -21,6 +23,7 @@ interface EditProductModalProps {
     cubagem: string | null;
     fornecedorId: string | null;
     imprimir: boolean;
+    usarDescontoReal: boolean;
   }) => void;
 }
 
@@ -36,7 +39,7 @@ function Linha({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function EditProductModal({ produto, categorias, subcategorias, fornecedores, onFechar, onSalvar }: EditProductModalProps) {
+export function EditProductModal({ produto, categorias, subcategorias, fornecedores, temDescontoBi, onFechar, onSalvar }: EditProductModalProps) {
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
@@ -49,6 +52,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
   const [cubagemA, setCubagemA] = useState('');
   const [fornecedorId, setFornecedorId] = useState('');
   const [imprimir, setImprimir] = useState(true);
+  const [usarDescontoReal, setUsarDescontoReal] = useState(false);
 
   useEffect(() => {
     if (!produto) return;
@@ -65,6 +69,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
     setCubagemA(partes[2]?.trim() ?? '');
     setFornecedorId(produto.fornecedorId ?? '');
     setImprimir(produto.imprimir);
+    setUsarDescontoReal(produto.usarDescontoReal);
   }, [produto]);
 
   // Valor do select de Classe: "sub:ID" quando o produto tem subcategoria, senão "cat:ID" — mesmo
@@ -111,6 +116,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
       cubagem: cubagemPreenchida ? `${cubagemC.trim()}x${cubagemL.trim()}x${cubagemA.trim()}` : null,
       fornecedorId: fornecedorId || null,
       imprimir,
+      usarDescontoReal,
     });
   }
 
@@ -232,6 +238,16 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
           <input type="checkbox" checked={imprimir} onChange={(e) => setImprimir(e.target.checked)} className="accent-[var(--color-accent)]" />
           Imprimir
         </label>
+
+        {temDescontoBi && (
+          <label
+            className="flex items-center gap-2 text-xs text-[var(--color-text)]"
+            title="Encargos 'Desconto' passa a usar o desconto médio real da última Safra vendida (BI), em vez do valor cadastrado no Canal — só disponível porque esse produto tem esse dado."
+          >
+            <input type="checkbox" checked={usarDescontoReal} onChange={(e) => setUsarDescontoReal(e.target.checked)} className="accent-[var(--color-accent)]" />
+            Usar desconto real
+          </label>
+        )}
       </div>
     </Modal>
   );
