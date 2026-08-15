@@ -783,38 +783,41 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-[#f5f7fa] pb-20">
-      <header className="relative border-b border-[#e2e6ed] bg-[#10233f] px-4 py-4 text-white">
+      <header className="border-b border-[#e2e6ed] bg-[#10233f] px-4 py-4 text-white">
         <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ceará Sementes</p>
-        <h1 className="mt-0.5 truncate text-lg font-bold pr-32">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</h1>
-        {/* Rola junto com o resto da página (topbar), diferente do carrinho — esses dois aqui não acompanham o scroll. */}
-        <div className="absolute right-3 top-3 flex items-start gap-1.5">
-          {isFetching && <Loader2 size={16} className="mt-1.5 shrink-0 animate-spin text-white/70" aria-label="Atualizando…" />}
-          {data && (
-            <div className="flex flex-col items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
-                title="Salvar tabela em PDF"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-              >
-                <FileText size={15} />
-              </button>
-              <span className="text-[8px] font-semibold leading-none text-white/70">PDF</span>
-            </div>
-          )}
-          {temDadosPlantio && (
-            <div className="flex flex-col items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => setCalculadoraAberta(true)}
-                title="Calculadora de plantio"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-              >
-                <Calculator size={15} />
-              </button>
-              <span className="text-[8px] font-semibold leading-none text-white/70">Plantio</span>
-            </div>
-          )}
+        {/* Ícones ao lado do nome da Tabela, dentro do topbar — rolam junto com o resto da página
+            (diferente do carrinho, que fica sozinho fixo no canto, ver botão do caminhão). */}
+        <div className="mt-0.5 flex items-center gap-2">
+          <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</h1>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {isFetching && <Loader2 size={16} className="animate-spin text-white/70" aria-label="Atualizando…" />}
+            {data && (
+              <div className="flex flex-col items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
+                  title="Salvar tabela em PDF"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+                >
+                  <FileText size={15} />
+                </button>
+                <span className="text-[8px] font-semibold leading-none text-white/70">PDF</span>
+              </div>
+            )}
+            {temDadosPlantio && (
+              <div className="flex flex-col items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setCalculadoraAberta(true)}
+                  title="Calculadora de plantio"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+                >
+                  <Calculator size={15} />
+                </button>
+                <span className="text-[8px] font-semibold leading-none text-white/70">Plantio</span>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
