@@ -606,6 +606,30 @@ export interface ItemCatalogoPublicoInput {
   ordem: number;
 }
 
+/** Mapeia um item calculado (ver ItemCatalogoPublicoInput) pra linha de `catalogo_publico_itens` — compartilhado entre publicarCatalogoOnline (lote) e atualizarItemCatalogoPublico (1 item só). */
+function itemCatalogoParaRow(canalId: string, item: ItemCatalogoPublicoInput) {
+  return {
+    canal_id: canalId,
+    produto_id: item.produtoId,
+    nome: item.nome,
+    categoria_nome: item.categoriaNome,
+    subcategoria_nome: item.subcategoriaNome,
+    fornecedor_nome: item.fornecedorNome,
+    preco: item.preco,
+    peso: item.peso,
+    peso_usado: item.pesoUsado,
+    plantio_kg_ha_lanco: item.plantioKgHaLanco,
+    plantio_sementes_cova_base: item.plantioSementesCovaBase,
+    plantio_pms: item.plantioPms,
+    plantio_vc: item.plantioVc,
+    plantio_pms_manual: item.plantioPmsManual,
+    plantio_validade: item.plantioValidade,
+    plantio_margem_tolerancia: item.plantioMargemTolerancia,
+    plantio_precisa_peso_por_cova: item.plantioPrecisaPesoPorCova,
+    ordem: item.ordem,
+  };
+}
+
 /**
  * "Publicar" o Catálogo Online de UM canal — apaga o snapshot anterior desse canal inteiro e
  * insere os itens já calculados (preço pronto, nunca custo/margem) de uma vez só, mais o slug
@@ -642,31 +666,27 @@ export async function publicarCatalogoOnline(
   const { error: errDelete } = await supabase.from('catalogo_publico_itens').delete().eq('canal_id', canalId);
   if (errDelete) throw errDelete;
   if (itens.length > 0) {
-    const { error: errInsert } = await supabase.from('catalogo_publico_itens').insert(
-      itens.map((item) => ({
-        canal_id: canalId,
-        produto_id: item.produtoId,
-        nome: item.nome,
-        categoria_nome: item.categoriaNome,
-        subcategoria_nome: item.subcategoriaNome,
-        fornecedor_nome: item.fornecedorNome,
-        preco: item.preco,
-        peso: item.peso,
-        peso_usado: item.pesoUsado,
-        plantio_kg_ha_lanco: item.plantioKgHaLanco,
-        plantio_sementes_cova_base: item.plantioSementesCovaBase,
-        plantio_pms: item.plantioPms,
-        plantio_vc: item.plantioVc,
-        plantio_pms_manual: item.plantioPmsManual,
-        plantio_validade: item.plantioValidade,
-        plantio_margem_tolerancia: item.plantioMargemTolerancia,
-        plantio_precisa_peso_por_cova: item.plantioPrecisaPesoPorCova,
-        ordem: item.ordem,
-      })),
-    );
+    const { error: errInsert } = await supabase.from('catalogo_publico_itens').insert(itens.map((item) => itemCatalogoParaRow(canalId, item)));
     if (errInsert) throw errInsert;
   }
   return slug;
+}
+
+/**
+ * Atualiza só UM item já publicado (ou publica ele pela 1ª vez nesse canal) sem mexer no resto do
+ * snapshot — pro botão 🌐 na tela cheia por canal (ver ChannelFullscreenModal.tsx/PricingTable.tsx),
+ * quando só 1 produto mudou e não vale republicar a Tabela inteira. Preserva a `ordem` já salva
+ * (se o item já existia); item nunca publicado nesse canal entra no fim da lista.
+ */
+export async function atualizarItemCatalogoPublico(canalId: string, item: ItemCatalogoPublicoInput): Promise<void> {
+  const { data: existente } = await supabase.from('catalogo_publico_itens').select('ordem').eq('canal_id', canalId).eq('produto_id', item.produtoId).maybeSingle();
+  let ordem = existente?.ordem;
+  if (ordem == null) {
+    const { count } = await supabase.from('catalogo_publico_itens').select('*', { count: 'exact', head: true }).eq('canal_id', canalId);
+    ordem = count ?? 0;
+  }
+  const { error } = await supabase.from('catalogo_publico_itens').upsert(itemCatalogoParaRow(canalId, { ...item, ordem }), { onConflict: 'canal_id,produto_id' });
+  if (error) throw error;
 }
 
 export interface CatalogoPublico {

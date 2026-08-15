@@ -106,6 +106,8 @@ interface PricingTableProps {
    * colunas de editar/remover produto, igual ao original.
    */
   somenteCanal?: boolean;
+  /** Ícone 🌐 por produto (só aparece com somenteCanal) — atualiza só ESSE item no Catálogo Online já publicado desse canal, sem republicar a Tabela inteira. Devolve se deu certo. */
+  onAtualizarItemCatalogo?: (produtoId: string, canal: Canal) => Promise<boolean>;
 }
 
 function AlcaRedimensionar({ onMouseDown, claro }: { onMouseDown: (e: React.MouseEvent) => void; claro?: boolean }) {
@@ -150,6 +152,7 @@ export function PricingTable({
   onAbrirGraficoRepresentacao,
   onAbrirGraficoProduto,
   somenteCanal = false,
+  onAtualizarItemCatalogo,
 }: PricingTableProps) {
   // Modo compacto (só Preço + ML (%) em cada Tabela) é o padrão — "Mais detalhes" ligado mostra tudo.
   const modoResumo = !mostrarMaisDetalhes;
@@ -160,6 +163,25 @@ export function PricingTable({
   const canaisPorId = useMemo(() => new Map(todosCanais.map((c) => [c.id, c])), [todosCanais]);
   // Focar num campo de custo/preço (ou clicar na linha) destaca a linha inteira — igual ao original.
   const [linhaDestacada, setLinhaDestacada] = useState<string | null>(null);
+  // Feedback do ícone 🌐 (atualizar 1 item no Catálogo Online) — só visual, por produtoId (nunca 2
+  // canais nessa grade ao mesmo tempo, já que essa coluna só existe com somenteCanal). Some sozinho
+  // depois de um tempo, não precisa de clique pra fechar.
+  const [statusAtualizarCatalogo, setStatusAtualizarCatalogo] = useState<Record<string, 'carregando' | 'sucesso' | 'erro'>>({});
+
+  async function clicarAtualizarCatalogo(produtoId: string, canal: Canal) {
+    if (!onAtualizarItemCatalogo) return;
+    setStatusAtualizarCatalogo((prev) => ({ ...prev, [produtoId]: 'carregando' }));
+    const ok = await onAtualizarItemCatalogo(produtoId, canal);
+    setStatusAtualizarCatalogo((prev) => ({ ...prev, [produtoId]: ok ? 'sucesso' : 'erro' }));
+    setTimeout(() => {
+      setStatusAtualizarCatalogo((prev) => {
+        if (!(produtoId in prev)) return prev;
+        const proximo = { ...prev };
+        delete proximo[produtoId];
+        return proximo;
+      });
+    }, 1800);
+  }
   // Clicar fora da tabela inteira limpa o destaque — ouve o documento (não só onBlur) porque
   // clicar numa <tr> sem focar nenhum input não dispara blur nenhum.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -238,6 +260,7 @@ export function PricingTable({
     'col:mlvalor': 100,
     'col:representacao': 112,
     'col:ajuste': 52,
+    'col:atualizar-catalogo': 40,
     'safra:espacador': 10,
     representacaoGeral: 112,
   };
@@ -626,6 +649,35 @@ export function PricingTable({
           );
         },
       } satisfies ColunaDef,
+      ...(somenteCanal && onAtualizarItemCatalogo
+        ? [
+            {
+              chave: `${canal.id}:atualizar-catalogo`,
+              rotulo: '',
+              larguraPadrao: defaults['col:atualizar-catalogo'],
+              larguraChave: 'col:atualizar-catalogo',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                const status = statusAtualizarCatalogo[p.id];
+                return (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    disabled={status === 'carregando'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clicarAtualizarCatalogo(p.id, canal);
+                    }}
+                    title="Atualizar só este produto no Catálogo Online já publicado (sem republicar a Tabela inteira)"
+                    className="rounded px-1.5 py-0.5 text-[var(--color-text-soft)] hover:bg-[var(--color-line)] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {status === 'carregando' ? '⏳' : status === 'sucesso' ? '✅' : status === 'erro' ? '⚠️' : '🌐'}
+                  </button>
+                );
+              },
+            } satisfies ColunaDef,
+          ]
+        : []),
     ];
     }),
     ...(historicoSafras && historicoSafras.length > 0 && historicoPorCodigo

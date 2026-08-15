@@ -48,6 +48,8 @@ interface ChannelFullscreenModalProps {
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
   onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
+  /** Ícone 🌐 por produto (só aqui, na tela cheia por canal) — atualiza só ESSE item no Catálogo Online já publicado, sem republicar a Tabela inteira. Devolve se deu certo. */
+  onAtualizarItemCatalogo?: (produtoId: string, canal: Canal) => Promise<boolean>;
 }
 
 export function ChannelFullscreenModal({
@@ -66,6 +68,7 @@ export function ChannelFullscreenModal({
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
   onAtualizarValorKg,
+  onAtualizarItemCatalogo,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
@@ -224,6 +227,7 @@ export function ChannelFullscreenModal({
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
             onAtualizarValorKg={onAtualizarValorKg}
+            onAtualizarItemCatalogo={onAtualizarItemCatalogo}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}

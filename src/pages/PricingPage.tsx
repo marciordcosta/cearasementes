@@ -24,6 +24,7 @@ import {
   atualizarCategoria,
   atualizarCustoPersonalizado,
   atualizarFornecedor,
+  atualizarItemCatalogoPublico,
   atualizarPrecisaAjuste,
   atualizarProduto,
   atualizarSubcategoria,
@@ -46,6 +47,7 @@ import {
   upsertCategoriaReferenciaAjuste,
   upsertProdutoPreco,
   upsertSubcategoriaMargem,
+  type ItemCatalogoPublicoInput,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
 import { calcularCanal, ordenarProdutos, resolverFreteEfetivo } from '@/features/pricing/calculations';
@@ -412,6 +414,44 @@ export function PricingPage() {
     setProdutoEditandoId(null);
   }
 
+  const getCategoriaCatalogo = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
+  const getSubcategoriaCatalogo = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
+  const getFornecedorCatalogo = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
+
+  /** Mesmo cálculo (preço + plantio) usado tanto na publicação em lote (publicarCatalogo) quanto na atualização de 1 item só (atualizarItemCatalogo) — nunca custo/margem, só o já resolvido. */
+  function construirItemCatalogo(
+    p: Produto,
+    canal: Canal,
+    indice: number,
+    arquivosLaudos: Awaited<ReturnType<typeof fetchArquivosLaudos>>,
+    parametrizacaoProdutos: Awaited<ReturnType<typeof fetchParametrizacaoProdutos>>,
+    fatoresPlantio: Awaited<ReturnType<typeof fetchFatoresPlantio>>,
+  ): ItemCatalogoPublicoInput {
+    const categoria = getCategoriaCatalogo(p.categoriaId);
+    const r = calcularCanal(p, canal, categoria, getSubcategoriaCatalogo(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
+    const fornecedorNome = getFornecedorCatalogo(p.fornecedorId)?.nome ?? null;
+    const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome);
+    return {
+      produtoId: p.id,
+      nome: p.nome,
+      categoriaNome: categoria.nome,
+      subcategoriaNome: getSubcategoriaCatalogo(p.subcategoriaId)?.nome ?? null,
+      fornecedorNome,
+      preco: r.preco,
+      peso: p.peso,
+      pesoUsado: r.pesoUsado,
+      plantioKgHaLanco: plantio.kgHaLanco,
+      plantioSementesCovaBase: plantio.sementesCovaBase,
+      plantioPms: plantio.pms,
+      plantioVc: plantio.vc,
+      plantioPmsManual: plantio.pmsManual,
+      plantioValidade: plantio.validade,
+      plantioMargemTolerancia: plantio.margemTolerancia,
+      plantioPrecisaPesoPorCova: plantio.precisaPesoPorCova,
+      ordem: indice,
+    };
+  }
+
   /**
    * "Publicar" o Catálogo Online desse canal — calcula o preço de cada produto elegível AGORA
    * (autenticado, com Custo/Margem em mãos com segurança) e salva só nome+preço+peso já prontos
@@ -422,11 +462,8 @@ export function PricingPage() {
   async function publicarCatalogo(canal: Canal) {
     setPublicandoCatalogo(true);
     try {
-      const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
-      const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
-      const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
       const elegiveis = produtosExibidos.filter(
-        (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedor(p.fornecedorId)?.visivelPdf ?? true),
+        (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedorCatalogo(p.fornecedorId)?.visivelPdf ?? true),
       );
       // Dados de plantio (Guia de Plantio) só buscados aqui, no momento de publicar — não fazem parte
       // da carga normal da Precificação (ver resolverPlantioParaProduto em calculoSemeadura.ts).
@@ -435,31 +472,7 @@ export function PricingPage() {
         fetchParametrizacaoProdutos(),
         fetchFatoresPlantio(),
       ]);
-      const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => {
-        const categoria = getCategoria(p.categoriaId);
-        const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
-        const fornecedorNome = getFornecedor(p.fornecedorId)?.nome ?? null;
-        const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome);
-        return {
-          produtoId: p.id,
-          nome: p.nome,
-          categoriaNome: categoria.nome,
-          subcategoriaNome: getSubcategoria(p.subcategoriaId)?.nome ?? null,
-          fornecedorNome,
-          preco: r.preco,
-          peso: p.peso,
-          pesoUsado: r.pesoUsado,
-          plantioKgHaLanco: plantio.kgHaLanco,
-          plantioSementesCovaBase: plantio.sementesCovaBase,
-          plantioPms: plantio.pms,
-          plantioVc: plantio.vc,
-          plantioPmsManual: plantio.pmsManual,
-          plantioValidade: plantio.validade,
-          plantioMargemTolerancia: plantio.margemTolerancia,
-          plantioPrecisaPesoPorCova: plantio.precisaPesoPorCova,
-          ordem: indice,
-        };
-      });
+      const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => construirItemCatalogo(p, canal, indice, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio));
       const { freteKgEfetivo, fretePctEfetivo, freteMinimo } = resolverFreteEfetivo(canal, transportadoraPorId);
       const slug = await publicarCatalogoOnline(
         canal.id,
@@ -477,6 +490,31 @@ export function PricingPage() {
       alert(mensagemDeErro(e, 'Falha ao publicar o Catálogo Online.'));
     } finally {
       setPublicandoCatalogo(false);
+    }
+  }
+
+  /**
+   * Atualiza só 1 produto no Catálogo Online já publicado desse canal (ver atualizarItemCatalogoPublico
+   * em pricing/api.ts) — pro botão 🌐 na tela cheia por canal, quando só esse item mudou e não vale
+   * republicar a Tabela inteira. Devolve se deu certo (pro botão mostrar ✓/⚠ sem precisar de alert
+   * pro caminho feliz). Não passa pelo filtro de elegibilidade do publicarCatalogo de propósito — o
+   * operador escolheu esse produto especificamente, mesmo que ele não apareça na publicação em lote.
+   */
+  async function atualizarItemCatalogo(produtoId: string, canal: Canal): Promise<boolean> {
+    const p = produtosExibidos.find((x) => x.id === produtoId);
+    if (!p) return false;
+    try {
+      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
+        fetchArquivosLaudos(),
+        fetchParametrizacaoProdutos(),
+        fetchFatoresPlantio(),
+      ]);
+      const item = construirItemCatalogo(p, canal, 0, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio);
+      await atualizarItemCatalogoPublico(canal.id, item);
+      return true;
+    } catch (e) {
+      alert(mensagemDeErro(e, 'Falha ao atualizar esse produto no Catálogo Online.'));
+      return false;
     }
   }
 
@@ -1027,6 +1065,7 @@ export function PricingPage() {
         onResetTodosPrecos={onResetTodosPrecos}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
         onAtualizarValorKg={onAtualizarValorKg}
+        onAtualizarItemCatalogo={atualizarItemCatalogo}
       />
 
       <OrderModal
