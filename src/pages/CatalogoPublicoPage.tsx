@@ -502,19 +502,22 @@ type ModoPlantio = 'lanco' | 'covas';
  */
 function ModalCalculadoraPlantio({
   itens,
+  itemInicial,
   whatsapp,
   onAdicionarAoCarrinho,
   onFechar,
 }: {
   itens: ItemCatalogo[];
+  /** Pré-seleciona o produto ao abrir (ver botão flutuante da calculadora, só some com exatamente 1 no carrinho) — evita o cliente ter que buscar de novo o mesmo produto que já marcou. */
+  itemInicial?: ItemCatalogo | null;
   whatsapp: string | null;
   /** Define a quantidade do item no carrinho pro nº de embalagens calculado (mesmo onAtualizarQtd de ModalOrcamento — sobrescreve, não soma, o que já estava lá). */
   onAdicionarAoCarrinho: (itemId: string, qtd: number) => void;
   onFechar: () => void;
 }) {
   const [busca, setBusca] = useState('');
-  const [itemSelecionado, setItemSelecionado] = useState<ItemCatalogo | null>(null);
-  const [modo, setModo] = useState<ModoPlantio>('lanco');
+  const [itemSelecionado, setItemSelecionado] = useState<ItemCatalogo | null>(itemInicial ?? null);
+  const [modo, setModo] = useState<ModoPlantio>(itemInicial?.plantioKgHaLanco != null ? 'lanco' : 'covas');
   const [corredor, setCorredor] = useState('50');
   const [area, setArea] = useState('1');
 
@@ -966,6 +969,9 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       .filter((x): x is ItemCarrinho => x !== null);
   }, [carrinho, data]);
 
+  // Só com EXATAMENTE 1 produto marcado (nem 0, nem 2+) — ver botão flutuante da calculadora abaixo.
+  const itemUnicoSelecionado = itensCarrinho.length === 1 ? itensCarrinho[0] : null;
+
   // "!= null" (frouxo) de propósito — cache local (localStorage) salvo antes desses campos existirem
   // não tem essa chave (undefined), não `null`; "!== null" deixava passar esse caso e piscava o botão
   // no carregamento (cache velho "tem dado"), sumindo assim que o fetch de verdade chegava.
@@ -1086,8 +1092,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         ))}
       </main>
 
-      {/* Único ícone que "flutua" de verdade (acompanha o scroll) — PDF/Calculadora ficam no
-          topbar (ver <header> acima) e rolam junto com a página. Só aparece com item no carrinho. */}
+      {/* Ícones que "flutuam" de verdade (acompanham o scroll) — PDF/Calculadora "genérica" (sem
+          produto pré-selecionado) ficam no topbar (ver <header> acima) e rolam junto com a página.
+          Carrinho só aparece com item marcado; a calculadora flutuante (embaixo do carrinho) só
+          aparece com EXATAMENTE 1 produto marcado — some ao desmarcar ou ao marcar um 2º. */}
       {carrinho.size > 0 && (
         <button
           type="button"
@@ -1099,6 +1107,17 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
             {carrinho.size}
           </span>
+        </button>
+      )}
+
+      {itemUnicoSelecionado && (
+        <button
+          type="button"
+          onClick={() => setCalculadoraAberta(true)}
+          title="Calculadora de plantio"
+          className="fixed right-5 top-20 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+        >
+          <Calculator size={20} />
         </button>
       )}
 
@@ -1125,7 +1144,13 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       )}
 
       {calculadoraAberta && data && (
-        <ModalCalculadoraPlantio itens={data.itens} whatsapp={data.whatsapp} onAdicionarAoCarrinho={atualizarQtd} onFechar={() => setCalculadoraAberta(false)} />
+        <ModalCalculadoraPlantio
+          itens={data.itens}
+          itemInicial={itemUnicoSelecionado}
+          whatsapp={data.whatsapp}
+          onAdicionarAoCarrinho={atualizarQtd}
+          onFechar={() => setCalculadoraAberta(false)}
+        />
       )}
 
       {pdfEscolhaAberta && data && (
