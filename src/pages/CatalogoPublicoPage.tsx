@@ -788,7 +788,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         {/* Ícones ao lado do nome da Tabela, dentro do topbar — rolam junto com o resto da página
             (diferente do carrinho, que fica sozinho fixo no canto, ver botão do caminhão). */}
         <div className="mt-0.5 flex items-center gap-2">
-          <h1 className="min-w-0 flex-1 truncate text-lg font-bold">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</h1>
+          <h1 className="min-w-0 max-w-[65%] truncate text-lg font-bold">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</h1>
           <div className="flex shrink-0 items-center gap-1.5">
             {isFetching && <Loader2 size={16} className="animate-spin text-white/70" aria-label="Atualizando…" />}
             {data && (
