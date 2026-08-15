@@ -839,7 +839,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return false;
     setPreparandoCompartilhamentoPdf(true);
     try {
-      const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensFiltrados);
+      const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensParaPdfWhatsApp);
       const nomeArquivo = `Catálogo ${data.canalNome ?? 'Ceará Sementes'}.pdf`;
       const file = new File([blob], nomeArquivo, { type: 'application/pdf' });
       if (!nav.canShare({ files: [file] })) return false;
@@ -863,7 +863,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     if (!data) return;
     setEnviandoPdfWhatsApp(true);
     try {
-      const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensFiltrados);
+      const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensParaPdfWhatsApp);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -906,6 +906,26 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       return palavras.every((palavra) => descricao.includes(palavra));
     });
   }, [data, categoriaFiltro, busca]);
+
+  // Mesmo formato usado no card da tela (ver LinhaProduto) — combina a permissão da Tabela (Canal) e
+  // do Produto pra decidir se VC%/PMS/Validade entram no PDF enviado por WhatsApp (ver
+  // gerarCatalogoPublicoPdfBlob), que também agrupa "colado" por produto e desenha o destaque em
+  // negrito do nome — mesma regra visual do catálogo oficial.
+  const itensParaPdfWhatsApp = useMemo(
+    () =>
+      itensFiltrados.map((item) => ({
+        nome: item.nome,
+        categoriaNome: item.categoriaNome,
+        fornecedorNome: item.fornecedorNome,
+        preco: item.preco,
+        peso: item.peso,
+        plantioVc: item.plantioVc,
+        plantioPmsManual: item.plantioPmsManual,
+        plantioValidade: item.plantioValidade,
+        mostrarDetalhes: (data?.mostrarDetalhesPlantio ?? false) && item.mostrarDetalhesCatalogo,
+      })),
+    [itensFiltrados, data?.mostrarDetalhesPlantio],
+  );
 
   // Categoria -> blocos "colados" (mesmo produto/variantes, ver chaveComparacaoNome — mesma regra
   // do PDF de catálogo) -> itens. Produto diferente do anterior sempre inicia um bloco novo (espaço
