@@ -117,6 +117,18 @@ export function PricingPage() {
     });
     return [...vistos].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [arquivosLaudosData]);
+  // Mesma ideia, pro campo Processo (ver EditProductModal.tsx) — substitui a antiga Subcategoria/
+  // Classe cadastrada solta: agora o Processo digitado no produto é que acha (ou cria) a Subcategoria
+  // por baixo dos panos (ver encontrarOuCriarSubcategoria), sempre puxando sugestão do que já existe
+  // nos laudos.
+  const processosLaudos = useMemo(() => {
+    const vistos = new Set<string>();
+    arquivosLaudosData.forEach((a) => {
+      const proc = (a.processo ?? '').trim();
+      if (proc) vistos.add(proc);
+    });
+    return [...vistos].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [arquivosLaudosData]);
 
   // Estado local "espelha" o Supabase uma única vez ao carregar (feito pra
   // edição instantânea, tipo planilha) — depois disso, a fonte da verdade
@@ -369,11 +381,29 @@ export function PricingPage() {
     }
   }
 
-  function onSalvarEdicaoProduto(patch: {
+  /**
+   * Acha a Subcategoria já cadastrada com esse nome (normalizado) dentro da Categoria, ou cria uma
+   * nova na hora — substitui a antiga criação manual (só pelo modal de Categorias, ver
+   * CategoryMarginsPanel.tsx): agora toda Subcategoria nasce a partir do campo Processo do Editar
+   * Produto (autocomplete sugerindo os Processos já usados nos laudos), nunca digitada solta. Nome
+   * em branco = sem Subcategoria (Categoria geral), igual sempre foi.
+   */
+  async function encontrarOuCriarSubcategoria(categoriaId: string, nomeProcesso: string): Promise<string | null> {
+    if (!nomeProcesso.trim()) return null;
+    const nomeLimpo = nomeProcesso.trim();
+    const existente = subcategorias.find((s) => s.categoriaId === categoriaId && s.nome.trim().toLowerCase() === nomeLimpo.toLowerCase());
+    if (existente) return existente.id;
+    const irmas = subcategorias.filter((s) => s.categoriaId === categoriaId);
+    const nova = await inserirSubcategoria({ categoriaId, nome: nomeLimpo, ordem: irmas.length });
+    setSubcategorias((prev) => [...prev, nova]);
+    return nova.id;
+  }
+
+  async function onSalvarEdicaoProduto(patch: {
     nome: string;
     codigo: string;
     categoriaId: string;
-    subcategoriaId: string | null;
+    processo: string;
     valorKg: number;
     custo: number;
     peso: number;
@@ -386,6 +416,13 @@ export function PricingPage() {
     cultivar: string | null;
   }) {
     if (!produtoEditandoId) return;
+    let subcategoriaId: string | null;
+    try {
+      subcategoriaId = await encontrarOuCriarSubcategoria(patch.categoriaId, patch.processo);
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Falha ao salvar o Processo do produto.'));
+      return;
+    }
     setProdutos((prev) =>
       ordenarProdutos(
         prev.map((p) =>
@@ -395,7 +432,7 @@ export function PricingPage() {
                 nome: patch.nome,
                 codigo: patch.codigo || null,
                 categoriaId: patch.categoriaId,
-                subcategoriaId: patch.subcategoriaId,
+                subcategoriaId,
                 valorKg: patch.valorKg,
                 custo: patch.custo,
                 peso: patch.peso,
@@ -417,7 +454,7 @@ export function PricingPage() {
         nome: patch.nome,
         codigo: patch.codigo || null,
         categoria_id: patch.categoriaId,
-        subcategoria_id: patch.subcategoriaId,
+        subcategoria_id: subcategoriaId,
         valor_kg: patch.valorKg,
         custo: patch.custo,
         peso: patch.peso,
@@ -747,20 +784,6 @@ export function PricingPage() {
   }
 
   // ---------- Subcategorias ----------
-  async function onAdicionarSubcategoria(categoriaId: string, nome: string) {
-    const irmas = subcategorias.filter((s) => s.categoriaId === categoriaId);
-    if (irmas.some((s) => s.nome.toLowerCase() === nome.toLowerCase())) {
-      setErro('Já existe uma subcategoria com esse nome nessa categoria.');
-      return;
-    }
-    try {
-      const subcategoria = await inserirSubcategoria({ categoriaId, nome, ordem: irmas.length });
-      setSubcategorias((prev) => [...prev, subcategoria]);
-    } catch (e) {
-      setErro(mensagemDeErro(e, 'Falha ao adicionar subcategoria.'));
-    }
-  }
-
   function onRenomearSubcategoria(id: string, nome: string) {
     setSubcategorias((prev) => prev.map((s) => (s.id === id ? { ...s, nome } : s)));
     salvarAgora(() => atualizarSubcategoria(id, { nome }));
@@ -1078,6 +1101,7 @@ export function PricingPage() {
         subcategorias={subcategorias}
         fornecedores={fornecedores}
         cultivaresLaudos={cultivaresLaudos}
+        processosLaudos={processosLaudos}
         temDescontoBi={temDescontoBiParaProduto(descontoBiPorCanalECodigo, produtoEditando?.codigo ?? null)}
         onFechar={() => setProdutoEditandoId(null)}
         onSalvar={onSalvarEdicaoProduto}
@@ -1255,7 +1279,6 @@ export function PricingPage() {
             onAtualizarTolerancia={onAtualizarTolerancia}
             onRemoverCategoria={onRemoverCategoria}
             onAdicionarCategoria={onAdicionarCategoria}
-            onAdicionarSubcategoria={onAdicionarSubcategoria}
             onRenomearSubcategoria={onRenomearSubcategoria}
             onRemoverSubcategoria={onRemoverSubcategoria}
             onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}

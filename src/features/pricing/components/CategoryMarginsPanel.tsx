@@ -38,7 +38,6 @@ interface CategoryMarginsPanelProps {
   onAtualizarTolerancia: (categoriaId: string, canalId: string, valor: number | null) => void;
   onRemoverCategoria: (categoriaId: string) => void;
   onAdicionarCategoria: (input: { nome: string; estadual: number; interestadual: number }) => void;
-  onAdicionarSubcategoria: (categoriaId: string, nome: string) => void;
   onRenomearSubcategoria: (id: string, nome: string) => void;
   onRemoverSubcategoria: (id: string) => void;
   /** valor null = apaga o override, volta a herdar a margem da categoria pai. */
@@ -60,7 +59,6 @@ export function CategoryMarginsPanel({
   onAtualizarTolerancia,
   onRemoverCategoria,
   onAdicionarCategoria,
-  onAdicionarSubcategoria,
   onRenomearSubcategoria,
   onRemoverSubcategoria,
   onAtualizarMargemSubcategoria,
@@ -71,8 +69,6 @@ export function CategoryMarginsPanel({
   const [nome, setNome] = useState('');
   const [estadual, setEstadual] = useState('');
   const [interestadual, setInterestadual] = useState('');
-  const [adicionandoSubDe, setAdicionandoSubDe] = useState<string | null>(null);
-  const [nomeSub, setNomeSub] = useState('');
 
   function submeter() {
     if (!nome.trim()) return;
@@ -84,13 +80,6 @@ export function CategoryMarginsPanel({
     setNome('');
     setEstadual('');
     setInterestadual('');
-  }
-
-  function submeterSub(categoriaId: string) {
-    if (!nomeSub.trim()) return;
-    onAdicionarSubcategoria(categoriaId, nomeSub.trim());
-    setNomeSub('');
-    setAdicionandoSubDe(null);
   }
 
   /**
@@ -158,17 +147,7 @@ export function CategoryMarginsPanel({
                   <Fragment key={cat.id}>
                     <tr className="border-t border-[var(--color-line)]">
                       <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] px-3 py-1 font-semibold text-[var(--color-text)]">
-                        <span className="inline-flex items-center gap-1.5">
-                          {cat.nome}
-                          <button
-                            type="button"
-                            onClick={() => setAdicionandoSubDe(adicionandoSubDe === cat.id ? null : cat.id)}
-                            title="Adicionar subcategoria"
-                            className="rounded px-1 text-[var(--color-text-soft)] hover:bg-[var(--color-line)] hover:text-[var(--color-text)]"
-                          >
-                            +
-                          </button>
-                        </span>
+                        {cat.nome}
                       </td>
                       <td className="w-28 px-2 py-1">
                         <input
@@ -292,29 +271,6 @@ export function CategoryMarginsPanel({
                         </td>
                       </tr>
                     ))}
-                    {adicionandoSubDe === cat.id && (
-                      <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                        <td colSpan={canais.length + 4} className="px-3 py-2">
-                          <div className="flex items-center gap-2 pl-8">
-                            <input
-                              type="text"
-                              autoFocus
-                              placeholder="Nome da subcategoria"
-                              value={nomeSub}
-                              onChange={(e) => setNomeSub(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && submeterSub(cat.id)}
-                              className="w-48 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text)]"
-                            />
-                            <Button variant="primary" onClick={() => submeterSub(cat.id)}>
-                              + Adicionar subcategoria
-                            </Button>
-                            <button type="button" onClick={() => setAdicionandoSubDe(null)} className="text-[var(--color-text-soft)] hover:text-[var(--color-text)]">
-                              Cancelar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </Fragment>
                 );
               })}

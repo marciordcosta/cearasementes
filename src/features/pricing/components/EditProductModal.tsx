@@ -11,6 +11,8 @@ interface EditProductModalProps {
   fornecedores: Fornecedor[];
   /** Cultivares já cadastrados nos laudos (Arquivos) — sugeridos no autocomplete do campo Cultivar, pra manter o texto igual ao usado lá (o casamento produto↔laudo, ver calculoSemeadura.ts, depende disso). */
   cultivaresLaudos: string[];
+  /** Processos já cadastrados nos laudos (Arquivos) — sugeridos no autocomplete do campo Processo, mesma ideia do Cultivar. */
+  processosLaudos: string[];
   /** true = esse produto tem desconto médio real (BI) em pelo menos 1 canal — só nesse caso o checkbox "Usar desconto real" aparece (ver temDescontoBiParaProduto em historicoBi.ts). */
   temDescontoBi: boolean;
   onFechar: () => void;
@@ -18,7 +20,8 @@ interface EditProductModalProps {
     nome: string;
     codigo: string;
     categoriaId: string;
-    subcategoriaId: string | null;
+    /** Texto livre — o chamador acha (ou cria na hora) a Subcategoria com esse nome dentro da Categoria escolhida (ver encontrarOuCriarSubcategoria em PricingPage.tsx). Vazio = sem Subcategoria/Processo (Categoria geral). */
+    processo: string;
     valorKg: number;
     custo: number;
     peso: number;
@@ -44,11 +47,11 @@ function Linha({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function EditProductModal({ produto, categorias, subcategorias, fornecedores, cultivaresLaudos, temDescontoBi, onFechar, onSalvar }: EditProductModalProps) {
+export function EditProductModal({ produto, categorias, subcategorias, fornecedores, cultivaresLaudos, processosLaudos, temDescontoBi, onFechar, onSalvar }: EditProductModalProps) {
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
-  const [subcategoriaId, setSubcategoriaId] = useState<string | null>(null);
+  const [processo, setProcesso] = useState('');
   const [valorKg, setValorKg] = useState('');
   const [peso, setPeso] = useState('');
   const [despesaValor, setDespesaValor] = useState('0');
@@ -66,7 +69,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
     setNome(produto.nome);
     setCodigo(produto.codigo ?? '');
     setCategoriaId(produto.categoriaId);
-    setSubcategoriaId(produto.subcategoriaId);
+    setProcesso((produto.subcategoriaId && subcategorias.find((s) => s.id === produto.subcategoriaId)?.nome) || '');
     setValorKg(produto.valorKg ? String(produto.valorKg) : '');
     setPeso(String(produto.peso));
     setDespesaValor(String(produto.despesaExtraValor || 0));
@@ -81,21 +84,6 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
     setCultivar(produto.cultivar ?? '');
   }, [produto]);
 
-  // Valor do select de Classe: "sub:ID" quando o produto tem subcategoria, senão "cat:ID" — mesmo
-  // esquema de prefixo usado no filtro da Tabela de Preços (PricingPage.tsx).
-  const classeValue = subcategoriaId ? `sub:${subcategoriaId}` : `cat:${categoriaId}`;
-  function onClasseChange(valor: string) {
-    if (valor.startsWith('sub:')) {
-      const subId = valor.slice(4);
-      const sub = subcategorias.find((s) => s.id === subId);
-      if (!sub) return;
-      setSubcategoriaId(sub.id);
-      setCategoriaId(sub.categoriaId);
-    } else {
-      setCategoriaId(valor.slice(4));
-      setSubcategoriaId(null);
-    }
-  }
 
   function salvar() {
     const pesoNum = parseFloat(peso);
@@ -117,7 +105,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
       nome: nome.trim(),
       codigo: codigo.trim(),
       categoriaId,
-      subcategoriaId,
+      processo: processo.trim(),
       valorKg: valorKgNum,
       custo: valorKgNum * pesoNum,
       peso: pesoNum,
@@ -167,23 +155,25 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
           />
         </Linha>
 
-        <Linha label="Classe">
-          <select value={classeValue} onChange={(e) => onClasseChange(e.target.value)} className={campoClasse}>
+        <Linha label="Categoria">
+          <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className={campoClasse}>
             {categorias.map((c) => (
-              <optgroup key={c.id} label={c.nome}>
-                <option value={`cat:${c.id}`} className="text-[var(--color-text)]">
-                  {c.nome} (geral)
-                </option>
-                {subcategorias
-                  .filter((s) => s.categoriaId === c.id)
-                  .map((s) => (
-                    <option key={s.id} value={`sub:${s.id}`} className="text-[var(--color-text)]">
-                      {s.nome}
-                    </option>
-                  ))}
-              </optgroup>
+              <option key={c.id} value={c.id} className="text-[var(--color-text)]">
+                {c.nome}
+              </option>
             ))}
           </select>
+        </Linha>
+
+        <Linha label="Processo">
+          <AutocompleteInput
+            value={processo}
+            onChangeTexto={setProcesso}
+            opcoes={processosLaudos.map((p) => ({ valor: p }))}
+            placeholder="Ex.: Tradicional, Incrustado (opcional)"
+            title="Antiga Subcategoria/Classe — acha (ou cria na hora) a Subcategoria com esse nome dentro da Categoria acima, com a margem própria dela. Em branco, o produto fica na Categoria geral."
+            className={campoClasse}
+          />
         </Linha>
 
         <Linha label="Fornecedor">
