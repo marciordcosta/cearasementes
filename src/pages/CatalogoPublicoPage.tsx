@@ -977,6 +977,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   // no carregamento (cache velho "tem dado"), sumindo assim que o fetch de verdade chegava.
   const temDadosPlantio = useMemo(() => data?.itens.some((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null) ?? false, [data]);
 
+  // O único item marcado pode não ter cálculo de plantio (produto sem laudo correspondente) — nesse
+  // caso o botão flutuante NÃO aparece (abriria a calculadora "travada" nesse produto, sempre em "—",
+  // sem chance de buscar outro); o ícone genérico do topbar continua disponível pra buscar um produto
+  // que tenha o cálculo.
+  const itemUnicoTemPlantio = itemUnicoSelecionado !== null && (itemUnicoSelecionado.plantioKgHaLanco != null || itemUnicoSelecionado.plantioSementesCovaBase != null);
+
   const semNadaAindaCarregando = isLoading && !data;
 
   return (
@@ -1002,7 +1008,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
               {preparandoCompartilhamentoPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
             </button>
           )}
-          {temDadosPlantio && !itemUnicoSelecionado && (
+          {temDadosPlantio && !itemUnicoTemPlantio && (
             <button
               type="button"
               onClick={() => setCalculadoraAberta(true)}
@@ -1110,7 +1116,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         </button>
       )}
 
-      {itemUnicoSelecionado && (
+      {itemUnicoTemPlantio && (
         <button
           type="button"
           onClick={() => setCalculadoraAberta(true)}
@@ -1146,7 +1152,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       {calculadoraAberta && data && (
         <ModalCalculadoraPlantio
           itens={data.itens}
-          itemInicial={itemUnicoSelecionado}
+          itemInicial={itemUnicoTemPlantio ? itemUnicoSelecionado : null}
           whatsapp={data.whatsapp}
           onAdicionarAoCarrinho={atualizarQtd}
           onFechar={() => setCalculadoraAberta(false)}

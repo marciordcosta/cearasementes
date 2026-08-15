@@ -954,7 +954,7 @@ export function PricingPage() {
               <input
                 value={buscaProduto}
                 onChange={(e) => setBuscaProduto(e.target.value)}
-                placeholder="Buscar produto pelo nome ou fornecedor…"
+                placeholder="Buscar por nome, fornecedor, categoria, processo ou cultivar…"
                 className="w-full max-w-xs rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)]"
               />
               <span className="text-xs font-semibold text-[var(--color-text-soft)]">Filtrar:</span>
