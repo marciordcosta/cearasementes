@@ -261,16 +261,18 @@ function identidadeDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' |
 /**
  * Laudo de maior Validade entre os que casam a identidade (Cultivar + Processo, ver
  * identidadeDoLaudo) desse produto da Tabela de Preço — igual à ordenação já usada no Guia de
- * Plantio. Quando o produto tem Fornecedor cadastrado, PREFERE os laudos cujo Fornecedor também
- * bate (mais preciso, desambigua 2 fornecedores da mesma variedade) — sem nenhum casando por
- * Fornecedor (laudo antigo sem esse campo ainda, ou produto sem Fornecedor cadastrado), cai pro
- * conjunto por nome mesmo. Null sem nenhum laudo batendo.
+ * Plantio. Quando o produto tem Fornecedor cadastrado, o Fornecedor do laudo é EXIGIDO também (não
+ * só preferido): Cultivar+Processo sozinhos não bastam pra distinguir o mesmo capim vendido por
+ * fornecedores diferentes (lotes/PMS/VC diferentes) — melhor não mostrar nada do que mostrar o dado
+ * errado. Sem nenhum laudo com Fornecedor batendo, retorna null (mesmo tendo laudo com Cultivar+
+ * Processo certos). Produto SEM Fornecedor cadastrado não tem o que exigir, cai no casamento só por
+ * Cultivar+Processo mesmo.
  */
 export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[], fornecedorProduto: string | null = null): ArquivoLaudo | null {
   const candidatos = arquivos.filter((a) => laudoCasaComNomePreco(identidadeDoLaudo(a), nomeProdutoPreco));
   if (candidatos.length === 0) return null;
-  const porFornecedor = fornecedorProduto ? candidatos.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto)) : [];
-  const finalistas = porFornecedor.length > 0 ? porFornecedor : candidatos;
+  const finalistas = fornecedorProduto ? candidatos.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto)) : candidatos;
+  if (finalistas.length === 0) return null;
   return [...finalistas].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
 }
 
