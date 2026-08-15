@@ -604,7 +604,7 @@ function ModalCalculadoraPlantio({
                 <div className="space-y-1.5">
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block text-xs text-[#67718a]">
-                      Espaçamento entre linhas (cm)
+                      Distância entre linhas (cm)
                       <input
                         type="number"
                         inputMode="decimal"
@@ -620,7 +620,7 @@ function ModalCalculadoraPlantio({
                         readOnly
                         disabled
                         value={distanciaCovas !== null ? Math.round(distanciaCovas) : '—'}
-                        title="Travada — segue o Espaçamento entre linhas, mantendo a densidade de covas por m² sempre igual"
+                        title="Travada — segue a Distância entre linhas, mantendo a densidade de covas por m² sempre igual"
                         className="num mt-1 w-full cursor-not-allowed rounded-md border border-[#e2e6ed] bg-[#eef1f5] px-2.5 py-2 text-sm text-[#67718a]"
                       />
                     </label>
