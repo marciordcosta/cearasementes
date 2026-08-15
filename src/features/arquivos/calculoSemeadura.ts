@@ -1,3 +1,4 @@
+import { derivarCultivar } from './etiqueta';
 import { calcularVCNumero, paraNumero } from './metricas';
 import {
   laudoCasaComNomePreco,
@@ -241,20 +242,32 @@ function fornecedorCasaComProduto(fornecedorLaudo: string | null, fornecedorProd
 }
 
 /**
- * Laudo de maior Validade entre os que casam o nome desse produto da Tabela de Preço (ver
- * laudoCasaComNomePreco — exige TODA palavra do laudo, de propósito: uma versão anterior aqui
- * descartava as palavras da Espécie antes de comparar, mas em produtos onde a Espécie cobre quase
- * tudo (ex.: "Brachiaria Decumbens") sobrava só o Processo, uma palavra genérica ("Incrustado"),
- * fazendo QUALQUER produto com esse Processo casar com o mesmo laudo — mesmo PMS/VC em produtos
- * diferentes. A correção real do caso que motivou isso, Andropogon, já vem de outro lugar: o nome
- * do produto carregava *negrito* que laudoCasaComNomePreco não removia, ver o comentário lá) —
- * igual à ordenação já usada no Guia de Plantio. Quando o produto tem Fornecedor cadastrado,
- * PREFERE os laudos cujo Fornecedor também bate (mais preciso, desambigua 2 fornecedores da mesma
- * variedade) — sem nenhum casando por Fornecedor (laudo antigo sem esse campo ainda, ou produto sem
- * Fornecedor cadastrado), cai pro conjunto por nome mesmo. Null sem nenhum laudo batendo por nome.
+ * Cultivar (ver derivarCultivar em etiqueta.ts — já usada pro Selo, isola o Cultivar descartando as
+ * palavras da Espécie) + Processo (campo próprio do laudo, não texto solto) — a "identidade" do
+ * laudo pra casar com a Tabela de Preço, DE PROPÓSITO sem o Gênero/Espécie: laudo e Tabela às vezes
+ * escrevem o Gênero de formas totalmente diferentes pra mesma planta (ex.: "U.Brizantha" no laudo x
+ * "Brach" na Tabela — Urochloa/Brachiaria é sinônimo taxonômico, reclassificação, não é só
+ * abreviação, não tem prefixo em comum) — exigir o Gênero bater fazia esses laudos nunca casarem
+ * com produto nenhum. Sem Cultivar isolável (raro — nomeProduto só tem a Espécie, nada sobra),
+ * cai pro nomeProduto inteiro mesmo, mais seguro que restar só o Processo sozinho (uma palavra só,
+ * genérica demais — casaria com qualquer produto que tenha esse Processo).
+ */
+function identidadeDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo'>): string {
+  const cultivar = derivarCultivar(laudo.nomeProduto, laudo.especie).trim();
+  if (!cultivar) return laudo.nomeProduto;
+  return laudo.processo ? `${cultivar} ${laudo.processo}` : cultivar;
+}
+
+/**
+ * Laudo de maior Validade entre os que casam a identidade (Cultivar + Processo, ver
+ * identidadeDoLaudo) desse produto da Tabela de Preço — igual à ordenação já usada no Guia de
+ * Plantio. Quando o produto tem Fornecedor cadastrado, PREFERE os laudos cujo Fornecedor também
+ * bate (mais preciso, desambigua 2 fornecedores da mesma variedade) — sem nenhum casando por
+ * Fornecedor (laudo antigo sem esse campo ainda, ou produto sem Fornecedor cadastrado), cai pro
+ * conjunto por nome mesmo. Null sem nenhum laudo batendo.
  */
 export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[], fornecedorProduto: string | null = null): ArquivoLaudo | null {
-  const candidatos = arquivos.filter((a) => laudoCasaComNomePreco(a.nomeProduto, nomeProdutoPreco));
+  const candidatos = arquivos.filter((a) => laudoCasaComNomePreco(identidadeDoLaudo(a), nomeProdutoPreco));
   if (candidatos.length === 0) return null;
   const porFornecedor = fornecedorProduto ? candidatos.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto)) : [];
   const finalistas = porFornecedor.length > 0 ? porFornecedor : candidatos;
