@@ -85,11 +85,13 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
  * 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado"
  * (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo
  * do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de
- * texto quebrar sozinho. `mostrarDetalhes` (Canal.mostrarDetalhesPlantio, ver ChannelsPanel.tsx) —
- * só quando ligado pra essa Tabela, VC%/Validade/PMS entram na mesma linha discreta, nessa ordem:
- * Fornecedor > VC% > Validade > PMS (Validade antes do PMS — em tela pequena, quando corta, é a
- * Validade que mais importa ficar visível); desligado (padrão), mostra só o Fornecedor. PMS aqui é
- * sempre o digitado NESSE laudo (plantioPmsManual) — nunca o base da Parametrização.
+ * texto quebrar sozinho. `mostrarDetalhes` (Canal.mostrarDetalhesPlantio E Produto.mostrarDetalhesCatalogo
+ * juntos, ver ChannelsPanel.tsx/EditProductModal.tsx — o produto SOBREPÕE a Tabela só pra esconder,
+ * nunca pra forçar mostrar quando a Tabela está desligada) — só quando os dois permitem, VC%/
+ * Validade/PMS entram na mesma linha discreta, nessa ordem: Fornecedor > VC% > Validade > PMS
+ * (Validade antes do PMS — em tela pequena, quando corta, é a Validade que mais importa ficar
+ * visível); desligado, mostra só o Fornecedor. PMS aqui é sempre o digitado NESSE laudo
+ * (plantioPmsManual) — nunca o base da Parametrização.
  */
 function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: ItemCatalogo; selecionado: boolean; mostrarDetalhes: boolean; onClick: () => void }) {
   const infoPartes = [
@@ -926,7 +928,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
                       <LinhaProduto
                         item={item}
                         selecionado={carrinho.has(item.id)}
-                        mostrarDetalhes={data?.mostrarDetalhesPlantio ?? false}
+                        mostrarDetalhes={(data?.mostrarDetalhesPlantio ?? false) && item.mostrarDetalhesCatalogo}
                         onClick={() => alternarSelecao(item.id)}
                       />
                     </div>

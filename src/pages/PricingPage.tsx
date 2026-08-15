@@ -369,6 +369,7 @@ export function PricingPage() {
     fornecedorId: string | null;
     imprimir: boolean;
     usarDescontoReal: boolean;
+    mostrarDetalhesCatalogo: boolean;
   }) {
     if (!produtoEditandoId) return;
     setProdutos((prev) =>
@@ -389,6 +390,7 @@ export function PricingPage() {
                 fornecedorId: patch.fornecedorId,
                 imprimir: patch.imprimir,
                 usarDescontoReal: patch.usarDescontoReal,
+                mostrarDetalhesCatalogo: patch.mostrarDetalhesCatalogo,
               }
             : p,
         ),
@@ -409,6 +411,7 @@ export function PricingPage() {
         fornecedor_id: patch.fornecedorId,
         imprimir: patch.imprimir,
         usar_desconto_real: patch.usarDescontoReal,
+        mostrar_detalhes_catalogo: patch.mostrarDetalhesCatalogo,
       }).then(invalidarProdutosPreco),
     );
     setProdutoEditandoId(null);
@@ -448,6 +451,7 @@ export function PricingPage() {
       plantioValidade: plantio.validade,
       plantioMargemTolerancia: plantio.margemTolerancia,
       plantioPrecisaPesoPorCova: plantio.precisaPesoPorCova,
+      mostrarDetalhesCatalogo: p.mostrarDetalhesCatalogo,
       ordem: indice,
     };
   }

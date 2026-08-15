@@ -388,6 +388,7 @@ export async function fetchProdutos(): Promise<Produto[]> {
       subcategoriaId: row.subcategoria_id,
       imprimir: row.imprimir,
       usarDescontoReal: row.usar_desconto_real,
+      mostrarDetalhesCatalogo: row.mostrar_detalhes_catalogo,
       precos,
     };
   });
@@ -413,6 +414,7 @@ export async function inserirProduto(
       subcategoria_id: null,
       imprimir: true,
       usar_desconto_real: false,
+      mostrar_detalhes_catalogo: true,
     })
     .select('*')
     .single();
@@ -441,6 +443,7 @@ export async function inserirProduto(
     subcategoriaId: data.subcategoria_id,
     imprimir: data.imprimir,
     usarDescontoReal: data.usar_desconto_real,
+    mostrarDetalhesCatalogo: data.mostrar_detalhes_catalogo,
     precos,
   };
 }
@@ -450,7 +453,19 @@ export async function atualizarProduto(
   patch: Partial<
     Pick<
       ProdutoRow,
-      'nome' | 'codigo' | 'categoria_id' | 'custo' | 'valor_kg' | 'peso' | 'despesa_extra_valor' | 'cubagem' | 'fornecedor_id' | 'subcategoria_id' | 'imprimir' | 'usar_desconto_real'
+      | 'nome'
+      | 'codigo'
+      | 'categoria_id'
+      | 'custo'
+      | 'valor_kg'
+      | 'peso'
+      | 'despesa_extra_valor'
+      | 'cubagem'
+      | 'fornecedor_id'
+      | 'subcategoria_id'
+      | 'imprimir'
+      | 'usar_desconto_real'
+      | 'mostrar_detalhes_catalogo'
     >
   >,
 ): Promise<void> {
@@ -554,6 +569,7 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
         subcategoria_id: null,
         imprimir: true,
         usar_desconto_real: false,
+        mostrar_detalhes_catalogo: true,
       });
     }
     const { data, error } = await supabase.from('produtos').insert(linhas).select('id');
@@ -603,6 +619,8 @@ export interface ItemCatalogoPublicoInput {
   plantioMargemTolerancia: number;
   /** = resolverPlantioParaProduto(...).precisaPesoPorCova — true: calculadora mostra Peso/cova (g) em vez de Sementes/cova no modo Covas. */
   plantioPrecisaPesoPorCova: boolean;
+  /** = Produto.mostrarDetalhesCatalogo — false SOBREPÕE Canal.mostrarDetalhesPlantio e esconde VC%/Validade/PMS no card só pra esse item. */
+  mostrarDetalhesCatalogo: boolean;
   ordem: number;
 }
 
@@ -626,6 +644,7 @@ function itemCatalogoParaRow(canalId: string, item: ItemCatalogoPublicoInput) {
     plantio_validade: item.plantioValidade,
     plantio_margem_tolerancia: item.plantioMargemTolerancia,
     plantio_precisa_peso_por_cova: item.plantioPrecisaPesoPorCova,
+    mostrar_detalhes_catalogo: item.mostrarDetalhesCatalogo,
     ordem: item.ordem,
   };
 }
@@ -714,6 +733,7 @@ export interface CatalogoPublico {
     plantioValidade: string | null;
     plantioMargemTolerancia: number | null;
     plantioPrecisaPesoPorCova: boolean;
+    mostrarDetalhesCatalogo: boolean;
   }[];
 }
 
@@ -754,6 +774,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       plantioValidade: i.plantio_validade,
       plantioMargemTolerancia: i.plantio_margem_tolerancia,
       plantioPrecisaPesoPorCova: i.plantio_precisa_peso_por_cova,
+      mostrarDetalhesCatalogo: i.mostrar_detalhes_catalogo,
     })),
   };
 }

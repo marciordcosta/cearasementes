@@ -219,6 +219,8 @@ export interface Database {
           imprimir: boolean;
           /** true = Encargos "Desconto" usa o desconto médio real do BI (última Safra) pra esse produto, quando houver dado; false (padrão) = sempre usa o Canal.desconto cadastrado. */
           usar_desconto_real: boolean;
+          /** true (padrão) = segue canais_preco.mostrar_detalhes_plantio da Tabela; false SOBREPÕE e esconde VC%/Validade/PMS no card do Catálogo Online só pra esse produto. */
+          mostrar_detalhes_catalogo: boolean;
           criado_em: string;
           atualizado_em: string;
         };
@@ -260,6 +262,8 @@ export interface Database {
           plantio_margem_tolerancia: number | null;
           /** = PlantioPublicoResultado.precisaPesoPorCova — true: modo Covas mostra "Peso/cova (g)" em vez de "Sementes/cova" (Sementes Tradicionais soltas não dá pra contar, só pesar). */
           plantio_precisa_peso_por_cova: boolean;
+          /** = Produto.mostrarDetalhesCatalogo — false SOBREPÕE canais_preco.mostrar_detalhes_plantio e esconde VC%/Validade/PMS no card só pra esse item, mesmo com a Tabela mostrando pros demais. */
+          mostrar_detalhes_catalogo: boolean;
           ordem: number;
           atualizado_em: string;
         };

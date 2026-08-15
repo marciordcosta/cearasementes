@@ -110,6 +110,8 @@ export interface Produto {
   imprimir: boolean;
   /** true = Encargos "Desconto" usa o desconto médio real do BI (última Safra, ver historicoBi.ts) pra esse produto, quando houver dado; false (padrão) = sempre usa o Canal.desconto cadastrado, mesmo com dado disponível — opt-in, não é mais automático. */
   usarDescontoReal: boolean;
+  /** true (padrão) = segue a configuração da Tabela (Canal.mostrarDetalhesPlantio) pra VC%/Validade/PMS no card do Catálogo Online; false SOBREPÕE a Tabela e esconde esses detalhes só pra ESSE produto, mesmo com a Tabela mostrando pros demais. */
+  mostrarDetalhesCatalogo: boolean;
   /** canalId -> preço sugerido/manual daquele canal */
   precos: Record<string, PrecoCanal>;
 }

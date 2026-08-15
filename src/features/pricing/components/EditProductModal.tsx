@@ -24,6 +24,7 @@ interface EditProductModalProps {
     fornecedorId: string | null;
     imprimir: boolean;
     usarDescontoReal: boolean;
+    mostrarDetalhesCatalogo: boolean;
   }) => void;
 }
 
@@ -53,6 +54,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
   const [fornecedorId, setFornecedorId] = useState('');
   const [imprimir, setImprimir] = useState(true);
   const [usarDescontoReal, setUsarDescontoReal] = useState(false);
+  const [mostrarDetalhesCatalogo, setMostrarDetalhesCatalogo] = useState(true);
 
   useEffect(() => {
     if (!produto) return;
@@ -70,6 +72,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
     setFornecedorId(produto.fornecedorId ?? '');
     setImprimir(produto.imprimir);
     setUsarDescontoReal(produto.usarDescontoReal);
+    setMostrarDetalhesCatalogo(produto.mostrarDetalhesCatalogo);
   }, [produto]);
 
   // Valor do select de Classe: "sub:ID" quando o produto tem subcategoria, senão "cat:ID" — mesmo
@@ -117,6 +120,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
       fornecedorId: fornecedorId || null,
       imprimir,
       usarDescontoReal,
+      mostrarDetalhesCatalogo,
     });
   }
 
@@ -237,6 +241,19 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
         <label className="flex items-center gap-2 text-xs text-[var(--color-text)]">
           <input type="checkbox" checked={imprimir} onChange={(e) => setImprimir(e.target.checked)} className="accent-[var(--color-accent)]" />
           Imprimir
+        </label>
+
+        <label
+          className="flex items-center gap-2 text-xs text-[var(--color-text)]"
+          title="Sobrepõe a configuração da Tabela (Parametrização > Tabelas > Mostrar detalhes): desmarcado, esconde VC%/Validade/PMS no card do Catálogo Online SÓ pra esse produto, mesmo com a Tabela mostrando pros demais."
+        >
+          <input
+            type="checkbox"
+            checked={mostrarDetalhesCatalogo}
+            onChange={(e) => setMostrarDetalhesCatalogo(e.target.checked)}
+            className="accent-[var(--color-accent)]"
+          />
+          Mostrar detalhes no catálogo
         </label>
 
         {temDescontoBi && (
