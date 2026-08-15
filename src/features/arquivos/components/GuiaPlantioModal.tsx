@@ -871,6 +871,11 @@ export function GuiaPlantioModal({
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
                       const germinacaoFinalAtual = germinacaoFinalSemeadura(laudo, produtos, fatorModoItem, fatorCondicaoAtual);
                       const plantulasPorM2 = r.sementesPorM2 !== null && germinacaoFinalAtual !== null ? r.sementesPorM2 * (germinacaoFinalAtual / 100) : null;
+                      // Nem toda semente lançada vira planta (germinação) — quantas realmente ESTABELECEM em
+                      // cada cova, pro tooltip de Sementes/Peso por cova (mesma ideia do Sem./m linear ao lado,
+                      // que já mostra Sementes/m² e Plântulas/m² juntos).
+                      const plantulasPorCova = sementesCovaNum !== null && germinacaoFinalAtual !== null ? sementesCovaNum * (germinacaoFinalAtual / 100) : null;
+                      const tituloPlantulasPorCova = `Plântulas/cova: ${plantulasPorCova === null ? '—' : formatarCovas(plantulasPorCova)}`;
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -932,14 +937,14 @@ export function GuiaPlantioModal({
                                   inputMode="numeric"
                                   title={
                                     maxPlantulasCova !== null
-                                      ? `Editável — quantas sementes vão em cada cova, até ${maxPlantulasCova} (Máx. plântulas/cova cadastrado)`
-                                      : 'Editável — quantas sementes vão em cada cova'
+                                      ? `Editável — quantas sementes vão em cada cova, até ${maxPlantulasCova} (Máx. plântulas/cova cadastrado)\n${tituloPlantulasPorCova}`
+                                      : `Editável — quantas sementes vão em cada cova\n${tituloPlantulasPorCova}`
                                   }
                                   className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-text)]"
                                 />
                               ) : (
                                 <p
-                                  title="Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada quando o espaçamento fica mais apertado que o ideal do produto (1%/cm)"
+                                  title={`Travada — quantidade ideal parametrizada pra Condição/Modo atuais, descontada quando o espaçamento fica mais apertado que o ideal do produto (1%/cm)\n${tituloPlantulasPorCova}`}
                                   className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                                 >
                                   {formatarSementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoAtual) || '—'}
