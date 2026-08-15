@@ -155,6 +155,17 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
           />
         </Linha>
 
+        <Linha label="Processo">
+          <AutocompleteInput
+            value={processo}
+            onChangeTexto={setProcesso}
+            opcoes={processosLaudos.map((p) => ({ valor: p }))}
+            placeholder="Ex.: Tradicional, Incrustado (opcional)"
+            title="Antiga Subcategoria/Classe — acha (ou cria na hora) a Subcategoria com esse nome dentro da Categoria abaixo, com a margem própria dela. Em branco, o produto fica na Categoria geral."
+            className={campoClasse}
+          />
+        </Linha>
+
         <Linha label="Categoria">
           <select value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)} className={campoClasse}>
             {categorias.map((c) => (
@@ -163,17 +174,6 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
               </option>
             ))}
           </select>
-        </Linha>
-
-        <Linha label="Processo">
-          <AutocompleteInput
-            value={processo}
-            onChangeTexto={setProcesso}
-            opcoes={processosLaudos.map((p) => ({ valor: p }))}
-            placeholder="Ex.: Tradicional, Incrustado (opcional)"
-            title="Antiga Subcategoria/Classe — acha (ou cria na hora) a Subcategoria com esse nome dentro da Categoria acima, com a margem própria dela. Em branco, o produto fica na Categoria geral."
-            className={campoClasse}
-          />
         </Linha>
 
         <Linha label="Fornecedor">
