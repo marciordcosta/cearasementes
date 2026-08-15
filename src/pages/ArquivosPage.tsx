@@ -14,6 +14,7 @@ import {
   atualizarFotosTeste,
   atualizarLaudo,
   atualizarOpcaoChecklist,
+  atualizarParametrizacaoProduto,
   atualizarPerguntaChecklist,
   atualizarResumoCondicao,
   atualizarTeste,
@@ -156,22 +157,30 @@ export function ArquivosPage() {
     }
   }
 
-  async function onSalvarProduto(produto: {
-    cultivar: string;
-    processo: string;
-    pmsBase: string;
-    densidadeBase: string;
-    indiceSobrevivencia: string;
-    maxPlantulasCova: string;
-    perdaMedia: string;
-    perdaBaixa: string;
-    maxPlantulasMetroLinear: string;
-    modoPlantio: 'cova' | 'lanco' | 'linha' | null;
-    margemTolerancia: string;
-    observacaoEtiqueta: string;
-  }) {
+  async function onSalvarProduto(
+    produto: {
+      cultivar: string;
+      processo: string;
+      pmsBase: string;
+      densidadeBase: string;
+      indiceSobrevivencia: string;
+      maxPlantulasCova: string;
+      perdaMedia: string;
+      perdaBaixa: string;
+      maxPlantulasMetroLinear: string;
+      modoPlantio: 'cova' | 'lanco' | 'linha' | null;
+      margemTolerancia: string;
+      observacaoEtiqueta: string;
+    },
+    idExistente: string | null,
+  ) {
     try {
-      await salvarParametrizacaoProduto(produto);
+      // Linha já cadastrada corrige por id (update); linha nova ainda não tem id, aí sim vale o
+      // upsert por Cultivar+Processo (ver salvarParametrizacaoProduto/atualizarParametrizacaoProduto
+      // em arquivos/api.ts) — usar upsert-por-conflito pra uma linha já existente criava uma
+      // duplicada em vez de corrigir a linha certa (bug real, corrigido).
+      if (idExistente) await atualizarParametrizacaoProduto(idExistente, produto);
+      else await salvarParametrizacaoProduto(produto);
       invalidarProdutos();
     } catch (e) {
       setErro(mensagemDeErro(e, 'Falha ao salvar o produto na parametrização.'));

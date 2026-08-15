@@ -219,15 +219,7 @@ export async function fetchParametrizacaoProdutos(): Promise<ProdutoParametrizac
   return data.map(produtoParametrizacaoFromRow);
 }
 
-/**
- * `(cultivar, processo)` é a chave de conflito (não `id`) — único por constraint no banco (migração
- * 0086, trocou a antiga constraint em `nome_produto`/grupoDoNome). Isso garante 1 linha por
- * Cultivar+Processo mesmo sob concorrência: editar PMS e Densidade em sequência rápida, cada um
- * antes do outro saber que a linha acabou de ser criada, não cria mais duas linhas — o segundo
- * upsert bate na mesma linha que o primeiro acabou de inserir. `nome_produto` continua salvo, só
- * como "Cultivar Processo" combinado — legado, só pra exibição/histórico.
- */
-export async function salvarParametrizacaoProduto(produto: {
+interface PatchParametrizacaoProduto {
   cultivar: string;
   processo: string;
   pmsBase: string;
@@ -240,25 +232,50 @@ export async function salvarParametrizacaoProduto(produto: {
   modoPlantio: 'cova' | 'lanco' | 'linha' | null;
   margemTolerancia: string;
   observacaoEtiqueta: string;
-}): Promise<void> {
-  const { error } = await supabase.from('arquivos_parametrizacao_produtos').upsert(
-    {
-      nome_produto: [produto.cultivar, produto.processo].filter(Boolean).join(' '),
-      cultivar: produto.cultivar,
-      processo: produto.processo,
-      pms_base: produto.pmsBase || null,
-      densidade_base: produto.densidadeBase || null,
-      indice_sobrevivencia: produto.indiceSobrevivencia || null,
-      max_plantulas_cova: produto.maxPlantulasCova || null,
-      perda_media: produto.perdaMedia || null,
-      perda_baixa: produto.perdaBaixa || null,
-      max_plantulas_metro_linear: produto.maxPlantulasMetroLinear || null,
-      modo_plantio: produto.modoPlantio,
-      margem_tolerancia: produto.margemTolerancia || null,
-      observacao_etiqueta: produto.observacaoEtiqueta || null,
-    },
-    { onConflict: 'cultivar,processo' },
-  );
+}
+
+function linhaParametrizacaoProdutoParaRow(produto: PatchParametrizacaoProduto) {
+  return {
+    nome_produto: [produto.cultivar, produto.processo].filter(Boolean).join(' '),
+    cultivar: produto.cultivar,
+    processo: produto.processo,
+    pms_base: produto.pmsBase || null,
+    densidade_base: produto.densidadeBase || null,
+    indice_sobrevivencia: produto.indiceSobrevivencia || null,
+    max_plantulas_cova: produto.maxPlantulasCova || null,
+    perda_media: produto.perdaMedia || null,
+    perda_baixa: produto.perdaBaixa || null,
+    max_plantulas_metro_linear: produto.maxPlantulasMetroLinear || null,
+    modo_plantio: produto.modoPlantio,
+    margem_tolerancia: produto.margemTolerancia || null,
+    observacao_etiqueta: produto.observacaoEtiqueta || null,
+  };
+}
+
+/**
+ * SÓ pra linha nova (sem `id` ainda, ver atualizarParametrizacaoProduto pra linha já existente).
+ * `(cultivar, processo)` é a chave de conflito — único por constraint no banco (migração 0086,
+ * trocou a antiga constraint em `nome_produto`/grupoDoNome). Isso garante 1 linha por Cultivar+
+ * Processo mesmo sob concorrência: editar PMS e Densidade em sequência rápida, cada um antes do
+ * outro saber que a linha acabou de ser criada, não cria mais duas linhas — o segundo upsert bate
+ * na mesma linha que o primeiro acabou de inserir.
+ */
+export async function salvarParametrizacaoProduto(produto: PatchParametrizacaoProduto): Promise<void> {
+  const { error } = await supabase
+    .from('arquivos_parametrizacao_produtos')
+    .upsert(linhaParametrizacaoProdutoParaRow(produto), { onConflict: 'cultivar,processo' });
+  if (error) throw error;
+}
+
+/**
+ * Corrige uma linha JÁ CADASTRADA, por `id` — precisa ser por `id` (não pelo upsert por
+ * Cultivar+Processo de salvarParametrizacaoProduto) porque é exatamente essa linha que está
+ * mudando de Cultivar/Processo: o upsert por conflito não acharia a linha antiga pra atualizar
+ * (o valor NOVO nunca bate com o valor ANTIGO gravado), e criaria uma linha duplicada em vez de
+ * corrigir a existente (bug real, corrigido).
+ */
+export async function atualizarParametrizacaoProduto(id: string, produto: PatchParametrizacaoProduto): Promise<void> {
+  const { error } = await supabase.from('arquivos_parametrizacao_produtos').update(linhaParametrizacaoProdutoParaRow(produto)).eq('id', id);
   if (error) throw error;
 }
 

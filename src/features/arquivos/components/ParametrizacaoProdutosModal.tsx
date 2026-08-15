@@ -38,20 +38,24 @@ interface ParametrizacaoProdutosModalProps {
   checklist: ChecklistPergunta[];
   manual: ManualPlantio | null;
   onFechar: () => void;
-  onSalvar: (produto: {
-    cultivar: string;
-    processo: string;
-    pmsBase: string;
-    densidadeBase: string;
-    maxPlantulasMetroLinear: string;
-    maxPlantulasCova: string;
-    indiceSobrevivencia: string;
-    perdaMedia: string;
-    perdaBaixa: string;
-    modoPlantio: 'cova' | 'lanco' | 'linha' | null;
-    margemTolerancia: string;
-    observacaoEtiqueta: string;
-  }) => void;
+  /** `idExistente` = id da linha já cadastrada (update por id) ou null pra linha nova (upsert por Cultivar+Processo) — ver onSalvarProduto em ArquivosPage.tsx. */
+  onSalvar: (
+    produto: {
+      cultivar: string;
+      processo: string;
+      pmsBase: string;
+      densidadeBase: string;
+      maxPlantulasMetroLinear: string;
+      maxPlantulasCova: string;
+      indiceSobrevivencia: string;
+      perdaMedia: string;
+      perdaBaixa: string;
+      modoPlantio: 'cova' | 'lanco' | 'linha' | null;
+      margemTolerancia: string;
+      observacaoEtiqueta: string;
+    },
+    idExistente: string | null,
+  ) => void;
   onApagar: (id: string) => void;
   onSalvarFator: (chave: string, fator: string) => void;
   onSalvarResumoCondicao: (chave: string, resumo: string) => void;
@@ -234,17 +238,17 @@ export function ParametrizacaoProdutosModal({
   const [novaPergunta, setNovaPergunta] = useState('');
   const [aba, setAba] = useState<Aba>('produtos');
   /** Linha cuja Observação (selo) está aberta no modal próprio — evita a coluna larga na grade. */
-  const [observacaoModal, setObservacaoModal] = useState<{ titulo: string; campos: CamposProduto } | null>(null);
+  const [observacaoModal, setObservacaoModal] = useState<{ titulo: string; campos: CamposProduto; idExistente: string | null } | null>(null);
   const [observacaoTexto, setObservacaoTexto] = useState('');
 
-  function abrirObservacao(titulo: string, campos: CamposProduto) {
-    setObservacaoModal({ titulo, campos });
+  function abrirObservacao(titulo: string, campos: CamposProduto, idExistente: string | null) {
+    setObservacaoModal({ titulo, campos, idExistente });
     setObservacaoTexto(campos.observacaoEtiqueta);
   }
 
   function salvarObservacao() {
     if (!observacaoModal) return;
-    onSalvar({ ...observacaoModal.campos, observacaoEtiqueta: observacaoTexto.trim() });
+    onSalvar({ ...observacaoModal.campos, observacaoEtiqueta: observacaoTexto.trim() }, observacaoModal.idExistente);
     setObservacaoModal(null);
   }
 
@@ -343,7 +347,7 @@ export function ParametrizacaoProdutosModal({
                   title="Ex.: Massai, Marandu — junto com Processo, é o que casa essa linha com o laudo certo"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor && valor !== camposAtuais.cultivar) onSalvar({ ...camposAtuais, cultivar: valor });
+                    if (valor && valor !== camposAtuais.cultivar) onSalvar({ ...camposAtuais, cultivar: valor }, existente?.id ?? null);
                   }}
                   className={`w-28 shrink-0 ${campoClasse}`}
                 />
@@ -353,7 +357,7 @@ export function ParametrizacaoProdutosModal({
                   title="Ex.: Tradicional, Incrustado — em branco vale só pra laudo sem Processo cadastrado"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.processo) onSalvar({ ...camposAtuais, processo: valor });
+                    if (valor !== camposAtuais.processo) onSalvar({ ...camposAtuais, processo: valor }, existente?.id ?? null);
                   }}
                   className={`w-24 shrink-0 ${campoClasse}`}
                 />
@@ -362,7 +366,7 @@ export function ParametrizacaoProdutosModal({
                   title="Peso de Mil Sementes (g)"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor });
+                    if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -372,7 +376,7 @@ export function ParametrizacaoProdutosModal({
                   title="Plântulas pretendidas por m² — usada em modo A Lanço"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor });
+                    if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -382,7 +386,7 @@ export function ParametrizacaoProdutosModal({
                   title="Máx. de plântulas pretendidas por metro linear — usada em Milho/Sorgo e no modo Linha"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor });
+                    if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -392,7 +396,7 @@ export function ParametrizacaoProdutosModal({
                   title="Plântulas pretendidas por cova — usada em modo Covas"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor });
+                    if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -402,7 +406,7 @@ export function ParametrizacaoProdutosModal({
                   title="Índice de Sobrevivência (%)"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor });
+                    if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -412,7 +416,7 @@ export function ParametrizacaoProdutosModal({
                   title="Perda (%) na Condição Média — em branco, usa o valor global"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.perdaMedia) onSalvar({ ...camposAtuais, perdaMedia: valor });
+                    if (valor !== camposAtuais.perdaMedia) onSalvar({ ...camposAtuais, perdaMedia: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
@@ -422,13 +426,13 @@ export function ParametrizacaoProdutosModal({
                   title="Perda (%) na Condição Baixa — em branco, usa o valor global"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.perdaBaixa) onSalvar({ ...camposAtuais, perdaBaixa: valor });
+                    if (valor !== camposAtuais.perdaBaixa) onSalvar({ ...camposAtuais, perdaBaixa: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <select
                   value={camposAtuais.modoPlantio ?? 'lanco'}
-                  onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' | 'linha' })}
+                  onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' | 'linha' }, existente?.id ?? null)}
                   title="Modo de plantio padrão"
                   className={`w-[74px] shrink-0 ${campoClasse}`}
                 >
@@ -442,13 +446,13 @@ export function ParametrizacaoProdutosModal({
                   title="Margem de tolerância (%) pra arredondar sacos"
                   onBlur={(e) => {
                     const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.margemTolerancia) onSalvar({ ...camposAtuais, margemTolerancia: valor });
+                    if (valor !== camposAtuais.margemTolerancia) onSalvar({ ...camposAtuais, margemTolerancia: valor }, existente?.id ?? null);
                   }}
                   className={`w-16 shrink-0 ${campoClasse}`}
                 />
                 <button
                   type="button"
-                  onClick={() => abrirObservacao(tituloObservacao, camposAtuais)}
+                  onClick={() => abrirObservacao(tituloObservacao, camposAtuais, existente?.id ?? null)}
                   title={camposAtuais.observacaoEtiqueta ? `Observação: ${camposAtuais.observacaoEtiqueta}` : 'Adicionar observação (texto impresso no Selo)'}
                   className={`w-8 shrink-0 text-center text-sm ${camposAtuais.observacaoEtiqueta ? 'text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'} hover:text-[var(--color-navy)]`}
                 >
