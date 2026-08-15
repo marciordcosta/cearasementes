@@ -86,12 +86,12 @@ function formatarCovas(n: number): string {
 
 
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
-function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): string | null {
-  return laudo.pms || resolverPmsBaseTexto(laudo.nomeProduto, produtos);
+function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo' | 'cultivar' | 'pms'>, produtos: ProdutoParametrizacao[]): string | null {
+  return laudo.pms || resolverPmsBaseTexto(laudo, produtos);
 }
 
 /** Igual pmsDoLaudo, já convertido pra número — usado pra converter Sementes/cova em Peso/cova (kg/ha, exibição em modo Tradicional). */
-function pmsNumericoDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): number | null {
+function pmsNumericoDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo' | 'cultivar' | 'pms'>, produtos: ProdutoParametrizacao[]): number | null {
   return paraNumero(pmsDoLaudo(laudo, produtos));
 }
 
@@ -133,9 +133,9 @@ function espacamentoEfetivo(corredorTexto: string): number | null {
  * baixo), reduzindo demais a Taxa de Semeadura calculada pro modo Linha. Densidade de A Lanço é a
  * referência certa.
  */
-function corredorMaximoLinha(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  const densidade = resolverDensidadeBase(nomeProduto, produtos);
-  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(nomeProduto, produtos);
+function corredorMaximoLinha(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo' | 'cultivar'>, produtos: ProdutoParametrizacao[]): number | null {
+  const densidade = resolverDensidadeBase(laudo, produtos);
+  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo, produtos);
   if (densidade === null || densidade <= 0 || maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return null;
   return (100 * maxPlantulasMetroLinear) / densidade;
 }
@@ -164,7 +164,7 @@ function sementesPorMetroLinearModoLinha(sementesPorM2: number | null, corredorT
  */
 function covasM2AlvoMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, sementesCovaDigitada: number): number | null {
   if (sementesCovaDigitada <= 0) return null;
-  const densidade = resolverDensidadeBase(laudo.nomeProduto, produtos);
+  const densidade = resolverDensidadeBase(laudo, produtos);
   if (densidade === null || densidade <= 0) return null;
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
   if (germinacaoFinal === null || germinacaoFinal <= 0) return null;
@@ -187,7 +187,7 @@ function covasM2AlvoMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametriza
  * teto nenhum (ver sementesComAjustePorDistancia).
  */
 function distanciaMinimaEfetivaMilhoSorgo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, sementesCovaDigitada: number): number | null {
-  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo.nomeProduto, produtos);
+  const maxPlantulasMetroLinear = resolverMaxPlantulasMetroLinear(laudo, produtos);
   if (maxPlantulasMetroLinear === null || maxPlantulasMetroLinear <= 0) return null;
   const distanciaMinimaCadastrada = 100 / maxPlantulasMetroLinear;
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
@@ -222,7 +222,7 @@ function sementesCovaEfetivaMilhoSorgo(sementesCovaDigitada: number, espacamento
  */
 function corredorPadrao(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number, modo: Modo): string {
   if (modo === 'linha') {
-    const max = corredorMaximoLinha(laudo.nomeProduto, produtos);
+    const max = corredorMaximoLinha(laudo, produtos);
     return String(max !== null && max > 0 ? Math.floor(max) : 50);
   }
   const covasM2 = ehMilhoOuSorgo(laudo.nomeProduto) ? covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoValor, 1) : covasM2Alvo();
@@ -329,11 +329,11 @@ export function GuiaPlantioModal({
     // Modo padrão vem da Parametrização (Cova, Lanço ou Linha, cadastrado
     // por grupo) — só o ponto de partida do item, o operador ainda troca à
     // vontade depois de adicionado (pills no card).
-    const modoCadastrado = resolverModoPlantio(a.nomeProduto, produtos);
+    const modoCadastrado = resolverModoPlantio(a, produtos);
     const modoPadrao: Modo = modoCadastrado === 'cova' ? 'linha_cova' : modoCadastrado === 'linha' ? 'linha' : 'lanco';
     // Ponto de partida do Corredor (ver corredorPadrao) — Distância (Covas) ou Sementes/m linear (Linha)
     // nunca são guardadas, são sempre derivadas dele.
-    const corredorInicial = corredorPadrao(a, produtos, fatorDe(fatores, modoPadrao), resolverFatorCondicao(a.nomeProduto, condicao, produtos, fatores), modoPadrao);
+    const corredorInicial = corredorPadrao(a, produtos, fatorDe(fatores, modoPadrao), resolverFatorCondicao(a, condicao, produtos, fatores), modoPadrao);
     setItens((prev) => [
       ...prev,
       {
@@ -442,7 +442,7 @@ export function GuiaPlantioModal({
    * problema). Sem os 2 campos cadastrados (Densidade, Máx. plântulas/metro linear), não corrige nada.
    */
   function corrigirCorredorLinha(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], item: ItemGuia) {
-    const max = corredorMaximoLinha(laudo.nomeProduto, produtos);
+    const max = corredorMaximoLinha(laudo, produtos);
     const corredorAtual = paraNumero(item.corredor);
     if (max === null || max <= 0 || corredorAtual === null || corredorAtual <= max) return;
     atualizarItem(item.laudoId, { corredor: String(Math.round(max)) });
@@ -488,7 +488,7 @@ export function GuiaPlantioModal({
 
   function calcularResultado(laudo: ArquivoLaudo, item: ItemGuia) {
     const fatorModo = fatorDe(fatores, item.modo);
-    const fatorCondicaoItem = resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores);
+    const fatorCondicaoItem = resolverFatorCondicao(laudo, condicao, produtos, fatores);
     let covasPorM2: number | null = null;
     let kgPorHa: number | null;
     let sementesPorM2: number | null;
@@ -529,7 +529,7 @@ export function GuiaPlantioModal({
     // Arredonda por margem de tolerância (Parametrização, 25% padrão) — não
     // por 0,5 nem sempre pra cima (Math.ceil antigo virava 1 saco a mais só
     // por faltar 1kg, um exagero em compras maiores).
-    const margemTolerancia = resolverMargemTolerancia(laudo.nomeProduto, produtos);
+    const margemTolerancia = resolverMargemTolerancia(laudo, produtos);
     const sacos = pesoTotal !== null && pesoSaco !== null && pesoSaco > 0 ? arredondarSacos(pesoTotal / pesoSaco, margemTolerancia / 100) : null;
     // Peso total REAL (o que efetivamente se compra/pesa) = sacos (arredondados) × peso do saco — diferente do
     // "Total previsto/necessário" (teórico, continuo) porque só dá pra comprar saco inteiro.
@@ -548,14 +548,14 @@ export function GuiaPlantioModal({
     if (item.modo !== 'linha_cova') {
       return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => ({
         rotulo: o.rotulo,
-        kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores)),
+        kgPorHa: calcularKgPorHectareNumero(laudo, produtos, fatorModo, resolverFatorCondicao(laudo, o.valor, produtos, fatores)),
       }));
     }
     const pms = pmsNumericoDoLaudo(laudo, produtos);
     if (ehMilhoOuSorgo(laudo.nomeProduto)) {
       const sementesCovaDigitada = paraNumero(item.sementesCova) ?? 1;
       return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
-        const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
+        const fatorCondicaoAlt = resolverFatorCondicao(laudo, o.valor, produtos, fatores);
         const covasPorM2 = covasM2AlvoMilhoSorgo(laudo, produtos, fatorModo, fatorCondicaoAlt, sementesCovaDigitada);
         const distancia = distanciaDeCovasM2(covasPorM2, item.corredor);
         const espacamentoAtual = espacamentoDeDistancia(distancia, item.corredor);
@@ -566,7 +566,7 @@ export function GuiaPlantioModal({
     const covasPorM2 = covasM2Alvo();
     const espacamentoAtual = espacamentoEfetivo(item.corredor);
     return OPCOES_CONDICAO.filter((o) => o.valor !== condicao).map((o) => {
-      const fatorCondicaoAlt = resolverFatorCondicao(laudo.nomeProduto, o.valor, produtos, fatores);
+      const fatorCondicaoAlt = resolverFatorCondicao(laudo, o.valor, produtos, fatores);
       const sementesCova = sementesCovaAtual(laudo, produtos, fatorModo, fatorCondicaoAlt, espacamentoAtual);
       return { rotulo: o.rotulo, kgPorHa: kgPorHaDeSementesCova(covasPorM2, sementesCova, pms) };
     });
@@ -606,7 +606,7 @@ export function GuiaPlantioModal({
           sementesPorCovaValor = String(Math.round(paraNumero(item.sementesCova) ?? 1));
         } else {
           const fatorModoItem = fatorDe(fatores, item.modo);
-          const fatorCondicaoAtual = resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores);
+          const fatorCondicaoAtual = resolverFatorCondicao(laudo, condicao, produtos, fatores);
           const espacamentoItem = espacamentoEfetivo(item.corredor);
           sementesPorCovaValor = formatarSementesCovaAtual(laudo, produtos, fatorModoItem, fatorCondicaoAtual, espacamentoItem) || '—';
         }
@@ -842,8 +842,8 @@ export function GuiaPlantioModal({
                       const semPmsParaPeso = pesoPorCova && pms === null;
                       const milhoSorgo = ehMilhoOuSorgo(laudo.nomeProduto);
                       const fatorModoItem = fatorDe(fatores, item.modo);
-                      const fatorCondicaoAtual = resolverFatorCondicao(laudo.nomeProduto, condicao, produtos, fatores);
-                      const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
+                      const fatorCondicaoAtual = resolverFatorCondicao(laudo, condicao, produtos, fatores);
+                      const maxPlantulasCova = resolverMaxPlantulasCova(laudo, produtos);
 
                       let distancia: number | null;
                       let espacamentoAtual: number | null;
@@ -962,7 +962,7 @@ export function GuiaPlantioModal({
                       const sementesPorMetroLinear = sementesPorMetroLinearModoLinha(r.sementesPorM2, item.corredor);
                       // Sementes/m² × Germinação/100 = Densidade cadastrada, por construção (ver calcularSementesPorM2)
                       // — mais direto pegar a própria Densidade do que recalcular via Germinação.
-                      const plantulasPorM2 = resolverDensidadeBase(laudo.nomeProduto, produtos);
+                      const plantulasPorM2 = resolverDensidadeBase(laudo, produtos);
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">

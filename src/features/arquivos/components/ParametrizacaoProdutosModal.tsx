@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { paraNumero } from '../metricas';
-import { grupoDoNome, normalizarNome } from '../parametrizacaoProdutos';
+import { cultivarDoLaudo, normalizarNome } from '../parametrizacaoProdutos';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 
 type Aba = 'produtos' | 'checklist' | 'plantio';
@@ -14,7 +14,8 @@ const ABAS: { valor: Aba; rotulo: string; icone: string }[] = [
 ];
 
 interface CamposProduto {
-  nomeProduto: string;
+  cultivar: string;
+  processo: string;
   pmsBase: string;
   /** As 3 colunas de densidade (m² → linear → cova) ficam juntas, nessa ordem — cada modo de plantio usa a que corresponde (ver ProdutoParametrizacao). */
   densidadeBase: string;
@@ -31,14 +32,15 @@ interface CamposProduto {
 interface ParametrizacaoProdutosModalProps {
   open: boolean;
   produtos: ProdutoParametrizacao[];
-  /** Laudos importados — a lista de grupos exibida aqui é derivada automaticamente do nome deles (ver linhasGrupo), não digitada à mão. Fonte é o laudo (não a Tabela de Preço) porque é o laudo quem precisa achar essa parametrização depois — usando a mesma redução dos dois lados, o casamento nunca falha por causa de gênero científico ou peso do pacote que só a Tabela de Preço tem. */
+  /** Laudos importados — sugere linhas de Cultivar+Processo ainda sem cadastro (ver linhasParametrizacao), a partir do Cultivar/Processo de cada laudo (campos próprios, ver cultivarDoLaudo). */
   arquivos: ArquivoLaudo[];
   fatores: FatorPlantio[];
   checklist: ChecklistPergunta[];
   manual: ManualPlantio | null;
   onFechar: () => void;
   onSalvar: (produto: {
-    nomeProduto: string;
+    cultivar: string;
+    processo: string;
     pmsBase: string;
     densidadeBase: string;
     maxPlantulasMetroLinear: string;
@@ -51,8 +53,6 @@ interface ParametrizacaoProdutosModalProps {
     observacaoEtiqueta: string;
   }) => void;
   onApagar: (id: string) => void;
-  /** Corrige o grupo de uma linha já cadastrada — pra quando a extração automática (1ª + 3ª palavra) não pega o nome certo. */
-  onRenomear: (id: string, novoNome: string) => void;
   onSalvarFator: (chave: string, fator: string) => void;
   onSalvarResumoCondicao: (chave: string, resumo: string) => void;
   onAdicionarPerguntaChecklist: (pergunta: string) => void;
@@ -210,7 +210,7 @@ function BlocoPerguntaChecklist({
   );
 }
 
-/** PMS base, Densidade base (plantas/m²) e Índice de Sobrevivência (%) por produto (nome) — cadastrado uma vez aqui, usado automaticamente no cálculo de kg/ha de todo laudo desse produto. */
+/** PMS base, Densidade base (plantas/m²) e Índice de Sobrevivência (%) por Cultivar+Processo — cadastrado uma vez aqui, usado automaticamente no cálculo de kg/ha de todo laudo desse Cultivar+Processo. */
 export function ParametrizacaoProdutosModal({
   open,
   produtos,
@@ -221,7 +221,6 @@ export function ParametrizacaoProdutosModal({
   onFechar,
   onSalvar,
   onApagar,
-  onRenomear,
   onSalvarFator,
   onSalvarResumoCondicao,
   onAdicionarPerguntaChecklist,
@@ -234,14 +233,12 @@ export function ParametrizacaoProdutosModal({
 }: ParametrizacaoProdutosModalProps) {
   const [novaPergunta, setNovaPergunta] = useState('');
   const [aba, setAba] = useState<Aba>('produtos');
-  /** id da linha (parametrização já cadastrada) cujo grupo está em edição — null quando nenhuma. */
-  const [editandoId, setEditandoId] = useState<string | null>(null);
   /** Linha cuja Observação (selo) está aberta no modal próprio — evita a coluna larga na grade. */
-  const [observacaoModal, setObservacaoModal] = useState<{ grupo: string; campos: CamposProduto } | null>(null);
+  const [observacaoModal, setObservacaoModal] = useState<{ titulo: string; campos: CamposProduto } | null>(null);
   const [observacaoTexto, setObservacaoTexto] = useState('');
 
-  function abrirObservacao(grupo: string, campos: CamposProduto) {
-    setObservacaoModal({ grupo, campos });
+  function abrirObservacao(titulo: string, campos: CamposProduto) {
+    setObservacaoModal({ titulo, campos });
     setObservacaoTexto(campos.observacaoEtiqueta);
   }
 
@@ -253,36 +250,34 @@ export function ParametrizacaoProdutosModal({
 
   const condicoes = fatores.filter((f) => f.categoria === 'condicao');
 
-  // Nada de cadastro manual — a lista de grupos vem AUTOMATICAMENTE dos
-  // LAUDOS importados (1ª + 3ª palavra do nome, ver grupoDoNome), não da
-  // Tabela de Preço: o laudo é quem vai precisar achar essa parametrização
-  // depois (resolverPmsBase etc.), e laudo do mesmo produto sempre chega com
-  // o mesmo nome — usando a mesma fonte/redução dos dois lados, o casamento
-  // nunca falha por causa de gênero científico ou peso do pacote, que só a
-  // Tabela de Preço tem (ex.: "Panicum Tanzania Tradicional 15KG" vs
-  // "Tanzania 1 Tradicional" no laudo — nomes de mundos diferentes). Junta
-  // também grupo já parametrizado que não bate com nenhum laudo atual (dado
-  // legado/órfão) — pra não sumir cadastro já feito.
-  const linhasGrupo = useMemo(() => {
-    const grupoPorChave = new Map<string, string>();
+  /**
+   * Cada linha já cadastrada (produtos) aparece sempre, mesmo com Cultivar/Processo ainda em branco
+   * (dado legado de antes da migração — sem Cultivar não casa com laudo nenhum, mas os valores de
+   * PMS/Densidade/etc. continuam visíveis pra copiar/ajustar em vez de perder). Some a isso uma
+   * linha SUGESTÃO (existente: null) pra cada combinação de Cultivar+Processo que já apareceu em
+   * algum laudo importado (ver cultivarDoLaudo) e ainda não tem cadastro — nunca duplica uma que já
+   * existe. Cultivar/Processo são campos PRÓPRIOS de cada lado agora (não mais "1ª+3ª palavra" do
+   * nome, ver derivarCultivar) — o casamento com o laudo compara os 2 direto, exato.
+   */
+  const linhasParametrizacao = useMemo(() => {
+    const linhas: { chave: string; cultivar: string; processo: string; existente: ProdutoParametrizacao | null }[] = produtos.map((p) => ({
+      chave: p.id,
+      cultivar: p.cultivar ?? '',
+      processo: p.processo ?? '',
+      existente: p,
+    }));
+    const chavesExistentes = new Set(produtos.filter((p) => p.cultivar).map((p) => `${normalizarNome(p.cultivar ?? '')}|${normalizarNome(p.processo ?? '')}`));
+    const vistosDeLaudo = new Set<string>();
     arquivos.forEach((a) => {
-      const grupo = grupoDoNome(a.nomeProduto);
-      grupoPorChave.set(normalizarNome(grupo), grupo);
+      const cultivar = cultivarDoLaudo(a);
+      if (!cultivar) return;
+      const processo = (a.processo ?? '').trim();
+      const chaveNormalizada = `${normalizarNome(cultivar)}|${normalizarNome(processo)}`;
+      if (chavesExistentes.has(chaveNormalizada) || vistosDeLaudo.has(chaveNormalizada)) return;
+      vistosDeLaudo.add(chaveNormalizada);
+      linhas.push({ chave: chaveNormalizada, cultivar, processo, existente: null });
     });
-    produtos.forEach((p) => {
-      const grupo = grupoDoNome(p.nomeProduto);
-      const chave = normalizarNome(grupo);
-      if (!grupoPorChave.has(chave)) grupoPorChave.set(chave, grupo);
-    });
-    return [...grupoPorChave.entries()]
-      .map(([chave, grupo]) => {
-        const existente = produtos.find((p) => normalizarNome(grupoDoNome(p.nomeProduto)) === chave) ?? null;
-        // Já cadastrado: mostra o nome de VERDADE salvo no cadastro (fonte de verdade — reflete uma
-        // correção de nome feita pelo ✎, ver onRenomear) em vez da extração automática do laudo, que
-        // só serve de SUGESTÃO de partida pra grupo ainda sem cadastro nenhum (existente === null).
-        return { grupo: existente?.nomeProduto ?? grupo, existente };
-      })
-      .sort((a, b) => a.grupo.localeCompare(b.grupo));
+    return linhas.sort((a, b) => a.cultivar.localeCompare(b.cultivar) || a.processo.localeCompare(b.processo));
   }, [produtos, arquivos]);
 
   return (
@@ -310,7 +305,8 @@ export function ParametrizacaoProdutosModal({
         <div className="space-y-3">
           <div className="max-h-[360px] space-y-1.5 overflow-y-auto">
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
-              <span className="flex-1">Grupo</span>
+              <span className="w-28 shrink-0">Cultivar</span>
+              <span className="w-24 shrink-0">Processo</span>
               <span className="w-16 shrink-0 text-center">PMS</span>
               <span className="w-16 shrink-0 text-center">Plant/m²</span>
               <span className="w-16 shrink-0 text-center">Plant/linear</span>
@@ -323,9 +319,10 @@ export function ParametrizacaoProdutosModal({
               <span className="w-8 shrink-0 text-center">Obs.</span>
               <span className="w-8 shrink-0" />
             </div>
-            {linhasGrupo.map(({ grupo, existente }) => {
+            {linhasParametrizacao.map(({ chave, cultivar, processo, existente }) => {
               const camposAtuais = {
-                nomeProduto: existente?.nomeProduto ?? grupo,
+                cultivar: existente?.cultivar ?? cultivar,
+                processo: existente?.processo ?? processo,
                 pmsBase: existente?.pmsBase ?? '',
                 densidadeBase: existente?.densidadeBase ?? '',
                 maxPlantulasMetroLinear: existente?.maxPlantulasMetroLinear ?? '',
@@ -337,28 +334,29 @@ export function ParametrizacaoProdutosModal({
                 margemTolerancia: existente?.margemTolerancia ?? '',
                 observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
               };
+              const tituloObservacao = [camposAtuais.cultivar, camposAtuais.processo].filter(Boolean).join(' ') || 'Sem Cultivar';
               return (
-              <div key={grupo} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
-                {existente && editandoId === existente.id ? (
-                  <input
-                    defaultValue={grupo}
-                    autoFocus
-                    onBlur={(e) => {
-                      const valor = e.target.value.trim();
-                      if (valor && valor !== grupo) onRenomear(existente.id, valor);
-                      setEditandoId(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.currentTarget.blur();
-                      if (e.key === 'Escape') setEditandoId(null);
-                    }}
-                    className={`min-w-0 flex-1 ${campoClasse}`}
-                  />
-                ) : (
-                  <span className="min-w-0 flex-1 truncate text-sm text-[var(--color-text)]" title={grupo}>
-                    {grupo}
-                  </span>
-                )}
+              <div key={chave} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
+                <input
+                  defaultValue={camposAtuais.cultivar}
+                  placeholder="Cultivar"
+                  title="Ex.: Massai, Marandu — junto com Processo, é o que casa essa linha com o laudo certo"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor && valor !== camposAtuais.cultivar) onSalvar({ ...camposAtuais, cultivar: valor });
+                  }}
+                  className={`w-28 shrink-0 ${campoClasse}`}
+                />
+                <input
+                  defaultValue={camposAtuais.processo}
+                  placeholder="(sem Processo)"
+                  title="Ex.: Tradicional, Incrustado — em branco vale só pra laudo sem Processo cadastrado"
+                  onBlur={(e) => {
+                    const valor = e.target.value.trim();
+                    if (valor !== camposAtuais.processo) onSalvar({ ...camposAtuais, processo: valor });
+                  }}
+                  className={`w-24 shrink-0 ${campoClasse}`}
+                />
                 <input
                   defaultValue={camposAtuais.pmsBase}
                   title="Peso de Mil Sementes (g)"
@@ -450,33 +448,23 @@ export function ParametrizacaoProdutosModal({
                 />
                 <button
                   type="button"
-                  onClick={() => abrirObservacao(grupo, camposAtuais)}
+                  onClick={() => abrirObservacao(tituloObservacao, camposAtuais)}
                   title={camposAtuais.observacaoEtiqueta ? `Observação: ${camposAtuais.observacaoEtiqueta}` : 'Adicionar observação (texto impresso no Selo)'}
                   className={`w-8 shrink-0 text-center text-sm ${camposAtuais.observacaoEtiqueta ? 'text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'} hover:text-[var(--color-navy)]`}
                 >
                   📝
                 </button>
                 {existente ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setEditandoId(existente.id)}
-                      title="Corrigir o nome do grupo (a extração automática errou o nome)"
-                      className="text-[var(--color-text-soft)] hover:text-[var(--color-text)]"
-                    >
-                      ✎
-                    </button>
-                    <button type="button" onClick={() => onApagar(existente.id)} title="Limpar parametrização deste grupo" className="text-[var(--color-text-soft)] hover:text-bad">
-                      🗑
-                    </button>
-                  </>
+                  <button type="button" onClick={() => onApagar(existente.id)} title="Excluir essa linha de parametrização" className="text-[var(--color-text-soft)] hover:text-bad">
+                    🗑
+                  </button>
                 ) : (
                   <span className="w-8 shrink-0" />
                 )}
               </div>
               );
             })}
-            {linhasGrupo.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum laudo importado ainda.</p>}
+            {linhasParametrizacao.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum laudo importado ainda.</p>}
           </div>
         </div>
         )}
@@ -576,7 +564,7 @@ export function ParametrizacaoProdutosModal({
     </Modal>
     <Modal
       open={observacaoModal !== null}
-      title={`Observação (selo) — ${observacaoModal?.grupo ?? ''}`}
+      title={`Observação (selo) — ${observacaoModal?.titulo ?? ''}`}
       onClose={() => setObservacaoModal(null)}
       widthClassName="max-w-[420px]"
       footer={

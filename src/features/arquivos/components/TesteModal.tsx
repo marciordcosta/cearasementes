@@ -149,7 +149,7 @@ export function TesteModal({ laudo, produtos, onFechar, onSalvar, onAdicionarFot
   const testeIniciado = laudo?.testeForma != null || data.trim() !== '' || plantadas.trim() !== '' || pesoPlantado.trim() !== '';
   const status = testeIniciado ? statusTeste({ testeForma: forma, testeGerminadas: germinadasNum }) : 'sem_teste';
   // Modo "Peso" precisa do PMS do lote (ou base da Parametrização) pra converter Peso plantado em nº de sementes.
-  const pms = laudo ? resolverPmsDoLaudo({ nomeProduto: laudo.nomeProduto, pms: laudo.pms }, produtos) : null;
+  const pms = laudo ? resolverPmsDoLaudo(laudo, produtos) : null;
   const resultado = testeIniciado
     ? resultadoTeste({ testeForma: forma, testePlantadas: plantadasNum, testeGerminadas: germinadasNum, testePesoPlantado: pesoPlantadoNum }, pms)
     : '—';

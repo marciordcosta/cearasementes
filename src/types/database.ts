@@ -597,7 +597,11 @@ export interface Database {
       arquivos_parametrizacao_produtos: {
         Row: {
           id: string;
+          /** Legado — "Cultivar Processo" combinado, salvo automaticamente só pra exibição. Não é mais chave de casamento. */
           nome_produto: string;
+          /** Junto com processo, é a chave de casamento com o laudo — ver cultivar em arquivos_laudos e cultivarDoLaudo/encontrarProduto em parametrizacaoProdutos.ts. Null = linha ainda não preenchida. */
+          cultivar: string | null;
+          processo: string | null;
           pms_base: string | null;
           densidade_base: string | null;
           indice_sobrevivencia: string | null;

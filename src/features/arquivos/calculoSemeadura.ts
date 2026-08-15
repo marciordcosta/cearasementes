@@ -1,7 +1,7 @@
-import { derivarCultivar } from './etiqueta';
 import { calcularVCNumero, paraNumero } from './metricas';
 import {
   cultivarCasaComNomePreco,
+  cultivarDoLaudo,
   normalizarNome,
   resolverDensidadeBase,
   resolverFatorCondicao,
@@ -16,7 +16,7 @@ import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from './types'
 
 type LaudoParaSemeadura = Pick<
   ArquivoLaudo,
-  'nomeProduto' | 'pms' | 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'testePesoPlantado' | 'pureza' | 'germinacao'
+  'nomeProduto' | 'especie' | 'processo' | 'cultivar' | 'pms' | 'testeForma' | 'testePlantadas' | 'testeGerminadas' | 'testePesoPlantado' | 'pureza' | 'germinacao'
 >;
 
 /**
@@ -40,7 +40,7 @@ export function germinacaoParaSemeadura(a: LaudoParaSemeadura, produtos: Produto
   if (doTeste !== null) return doTeste;
   const vc = calcularVCNumero(a);
   if (vc === null) return null;
-  const sobrevivencia = resolverIndiceSobrevivencia(a.nomeProduto, produtos);
+  const sobrevivencia = resolverIndiceSobrevivencia(a, produtos);
   return sobrevivencia === null ? vc : vc * sobrevivencia;
 }
 
@@ -68,7 +68,7 @@ export function germinacaoFinalSemeadura(a: LaudoParaSemeadura, produtos: Produt
  * sementes por m². Não depende de PMS nem de área — é uma taxa pura.
  */
 export function calcularSementesPorM2(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicao: number): number | null {
-  const densidade = resolverDensidadeBase(a.nomeProduto, produtos);
+  const densidade = resolverDensidadeBase(a, produtos);
   const germinacao = germinacaoFinalSemeadura(a, produtos, fatorModo, fatorCondicao);
   if (densidade === null || germinacao === null) return null;
   return (densidade * 100) / germinacao;
@@ -83,7 +83,7 @@ export function calcularSementesPorM2(a: LaudoParaSemeadura, produtos: ProdutoPa
  */
 export function calcularKgPorHectareNumero(a: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicao: number): number | null {
   const sementesPorM2 = calcularSementesPorM2(a, produtos, fatorModo, fatorCondicao);
-  const pms = paraNumero(a.pms) ?? resolverPmsBase(a.nomeProduto, produtos);
+  const pms = paraNumero(a.pms) ?? resolverPmsBase(a, produtos);
   if (sementesPorM2 === null || pms === null) return null;
   return (sementesPorM2 * pms) / 100;
 }
@@ -208,7 +208,7 @@ export function sementesComAjustePorDistancia(sementesPadrao: number, espacament
  * funciona bem só pra "A Lanço"). Null sem Máx. cadastrado ou sem Germinação.
  */
 export function sementesPorCovaAlvo(laudo: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicaoValor: number): number | null {
-  const maxPlantulasCova = resolverMaxPlantulasCova(laudo.nomeProduto, produtos);
+  const maxPlantulasCova = resolverMaxPlantulasCova(laudo, produtos);
   if (maxPlantulasCova === null || maxPlantulasCova <= 0) return null;
   const germinacaoFinal = germinacaoFinalSemeadura(laudo, produtos, fatorModo, fatorCondicaoValor);
   return germinacaoFinal !== null && germinacaoFinal > 0 ? (maxPlantulasCova * 100) / germinacaoFinal : null;
@@ -268,11 +268,6 @@ function mencionaProcessoConflitante(nomeProdutoPreco: string, laudo: Pick<Arqui
   const nomePrecoNorm = normalizarNome(nomeProdutoPreco);
   const nomeLaudoCompleto = normalizarNome(`${laudo.nomeProduto} ${laudo.processo ?? ''}`);
   return PROCESSOS_CONHECIDOS.some((proc) => nomePrecoNorm.includes(proc) && !nomeLaudoCompleto.includes(proc));
-}
-
-/** Cultivar do laudo — o cadastrado à mão (`laudo.cultivar`, ver ArquivoLaudo) quando existir; sem isso, derivado do Nome do Produto (ver derivarCultivar em etiqueta.ts, que já descarta Espécie E Processo). */
-function cultivarDoLaudo(laudo: ArquivoLaudo): string {
-  return (laudo.cultivar || derivarCultivar(laudo.nomeProduto, laudo.especie, laudo.processo)).trim();
 }
 
 /**
@@ -383,11 +378,11 @@ export function resolverPlantioParaProduto(
   if (!laudo) {
     return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25, precisaPesoPorCova: false };
   }
-  const fatorCondicaoMedia = resolverFatorCondicao(laudo.nomeProduto, 'media', produtos, fatores);
+  const fatorCondicaoMedia = resolverFatorCondicao(laudo, 'media', produtos, fatores);
   const kgHaLanco = calcularKgPorHectareNumero(laudo, produtos, fatorDe(fatores, 'lanco'), fatorCondicaoMedia);
   const sementesCovaBase = sementesCovaAtual(laudo, produtos, fatorDe(fatores, 'linha_cova'), fatorCondicaoMedia, null);
   const pms = resolverPmsDoLaudo(laudo, produtos);
   const vc = calcularVCNumero(laudo);
-  const margemTolerancia = resolverMargemTolerancia(laudo.nomeProduto, produtos);
+  const margemTolerancia = resolverMargemTolerancia(laudo, produtos);
   return { kgHaLanco, sementesCovaBase, pms, vc, pmsManual: laudo.pms, validade: laudo.validade, margemTolerancia, precisaPesoPorCova: precisaPesoPorCova(laudo) };
 }

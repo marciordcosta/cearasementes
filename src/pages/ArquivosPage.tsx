@@ -25,7 +25,6 @@ import {
   fetchParametrizacaoProdutos,
   inserirOpcaoChecklist,
   inserirPerguntaChecklist,
-  renomearParametrizacaoProduto,
   salvarManualPlantio,
   salvarParametrizacaoProduto,
   type PatchTeste,
@@ -157,7 +156,8 @@ export function ArquivosPage() {
   }
 
   async function onSalvarProduto(produto: {
-    nomeProduto: string;
+    cultivar: string;
+    processo: string;
     pmsBase: string;
     densidadeBase: string;
     indiceSobrevivencia: string;
@@ -183,15 +183,6 @@ export function ArquivosPage() {
       invalidarProdutos();
     } catch (e) {
       setErro(mensagemDeErro(e, 'Falha ao excluir o produto da parametrização.'));
-    }
-  }
-
-  async function onRenomearProduto(id: string, novoNome: string) {
-    try {
-      await renomearParametrizacaoProduto(id, novoNome);
-      invalidarProdutos();
-    } catch (e) {
-      setErro(mensagemDeErro(e, 'Falha ao renomear o grupo.'));
     }
   }
 
@@ -388,7 +379,6 @@ export function ArquivosPage() {
         onFechar={() => setParametrizacaoAberta(false)}
         onSalvar={onSalvarProduto}
         onApagar={onApagarProduto}
-        onRenomear={onRenomearProduto}
         onSalvarFator={onSalvarFator}
         onSalvarResumoCondicao={onSalvarResumoCondicao}
         onAdicionarPerguntaChecklist={onAdicionarPerguntaChecklist}

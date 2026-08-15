@@ -197,6 +197,8 @@ function produtoParametrizacaoFromRow(row: ProdutoParametrizacaoRow): ProdutoPar
   return {
     id: row.id,
     nomeProduto: row.nome_produto,
+    cultivar: row.cultivar,
+    processo: row.processo,
     pmsBase: row.pms_base,
     densidadeBase: row.densidade_base,
     indiceSobrevivencia: row.indice_sobrevivencia,
@@ -218,15 +220,16 @@ export async function fetchParametrizacaoProdutos(): Promise<ProdutoParametrizac
 }
 
 /**
- * `nome_produto` é a chave de conflito (não `id`) — é o "grupo" (ver
- * grupoDoNome), único por constraint no banco (migração 0040). Isso garante
- * 1 linha por grupo mesmo sob concorrência: editar PMS e Densidade em
- * sequência rápida, cada um antes do outro saber que o grupo acabou de ser
- * criado, não cria mais duas linhas — o segundo upsert bate na mesma linha
- * que o primeiro acabou de inserir.
+ * `(cultivar, processo)` é a chave de conflito (não `id`) — único por constraint no banco (migração
+ * 0086, trocou a antiga constraint em `nome_produto`/grupoDoNome). Isso garante 1 linha por
+ * Cultivar+Processo mesmo sob concorrência: editar PMS e Densidade em sequência rápida, cada um
+ * antes do outro saber que a linha acabou de ser criada, não cria mais duas linhas — o segundo
+ * upsert bate na mesma linha que o primeiro acabou de inserir. `nome_produto` continua salvo, só
+ * como "Cultivar Processo" combinado — legado, só pra exibição/histórico.
  */
 export async function salvarParametrizacaoProduto(produto: {
-  nomeProduto: string;
+  cultivar: string;
+  processo: string;
   pmsBase: string;
   densidadeBase: string;
   indiceSobrevivencia: string;
@@ -240,7 +243,9 @@ export async function salvarParametrizacaoProduto(produto: {
 }): Promise<void> {
   const { error } = await supabase.from('arquivos_parametrizacao_produtos').upsert(
     {
-      nome_produto: produto.nomeProduto,
+      nome_produto: [produto.cultivar, produto.processo].filter(Boolean).join(' '),
+      cultivar: produto.cultivar,
+      processo: produto.processo,
       pms_base: produto.pmsBase || null,
       densidade_base: produto.densidadeBase || null,
       indice_sobrevivencia: produto.indiceSobrevivencia || null,
@@ -252,14 +257,8 @@ export async function salvarParametrizacaoProduto(produto: {
       margem_tolerancia: produto.margemTolerancia || null,
       observacao_etiqueta: produto.observacaoEtiqueta || null,
     },
-    { onConflict: 'nome_produto' },
+    { onConflict: 'cultivar,processo' },
   );
-  if (error) throw error;
-}
-
-/** Corrige o grupo (nome_produto) de uma linha já cadastrada — usado quando a extração automática (1ª + 3ª palavra) não pegou o nome certo. */
-export async function renomearParametrizacaoProduto(id: string, novoNome: string): Promise<void> {
-  const { error } = await supabase.from('arquivos_parametrizacao_produtos').update({ nome_produto: novoNome }).eq('id', id);
   if (error) throw error;
 }
 

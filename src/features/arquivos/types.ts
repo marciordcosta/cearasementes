@@ -75,7 +75,12 @@ export interface NovoLaudoInput {
  */
 export interface ProdutoParametrizacao {
   id: string;
+  /** Legado — "Cultivar Processo" combinado, salvo automaticamente só pra exibição/histórico. Não é mais chave de casamento (ver cultivar/processo abaixo). */
   nomeProduto: string;
+  /** Cultivar (ex.: "Massai", "Marandu") — junto com `processo`, é a chave de casamento com o laudo (ver cultivarDoLaudo/encontrarProduto em parametrizacaoProdutos.ts). Null = linha ainda não preenchida (não casa com laudo nenhum). */
+  cultivar: string | null;
+  /** Processo (ex.: "Tradicional", "Incrustado", ou "" quando o laudo não tem Processo) — ver cultivar acima. */
+  processo: string | null;
   pmsBase: string | null;
   densidadeBase: string | null;
   indiceSobrevivencia: string | null;

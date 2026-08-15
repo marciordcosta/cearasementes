@@ -19,67 +19,90 @@ export function normalizarNome(nome: string): string {
     .replace(/\s+/g, ' ');
 }
 
+/** Identidade mínima que qualquer laudo precisa expor pra achar sua Parametrização (ver cultivarDoLaudo/encontrarProduto) — um Pick, não o ArquivoLaudo inteiro, porque alguns chamadores (ex.: TesteModal) só têm um objeto parcial em mãos. */
+export type IdentidadeLaudo = Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo' | 'cultivar'>;
+
 /**
- * Reduz um nome de produto ao "grupo" que importa pra Parametrização — 1ª e
- * 3ª palavra (geralmente Gênero + Tratamento, pulando a variedade/cultivar
- * específica no meio): "Panicum Mombaça Incrustado" -> "Panicum Incrustado",
- * "Brachiaria Decumbens Incrustado" -> "Brachiaria Incrustado", "Milho
- * Hibrido BRS2022" -> "Milho BRS2022". Nome com menos de 3 palavras não tem
- * o que reduzir (ex.: "Panicum Tradicional" fica igual). Um cadastro só de
- * grupo em Parametrização passa a valer pra qualquer produto — do laudo ou
- * da Tabela de Preço — que reduza pro mesmo grupo, sem precisar cadastrar
- * cada variedade separadamente.
+ * Cultivar do Selo/Parametrização sai direto do nome do produto do laudo (nomeProduto = Espécie +
+ * Cultivar + Processo, ver interpretarConteudoLaudo.ts), sem precisar de cadastro à parte: descarta
+ * as palavras da Espécie do início (ex.: "Andropogon Gayanus" = 2 palavras), sobrando só o Cultivar.
+ * Sem Espécie conhecida (laudo antigo, ou modelo de documento que não destaca Espécie à parte),
+ * assume 1 palavra de gênero só (comportamento antigo, ex.: "Andropogon Planaltina" -> descarta só
+ * "Andropogon"). Também descarta qualquer palavra que seja o Processo (`processo`, ex.:
+ * "Tradicional") — sem isso, sobrava colado no fim do Cultivar (nomeProduto termina com o Processo)
+ * e quem monta "Cultivar + Processo" a partir daqui acabava repetindo a palavra (bug real, corrigido
+ * — ver cultivarDoLaudo). Se alguma palavra do que sobrar contiver "incrustad" mesmo sem `processo`
+ * preenchido (modelo de documento antigo que não separa esse campo), essa palavra também sai.
  */
-export function grupoDoNome(nome: string): string {
-  const palavras = nome.trim().split(/\s+/).filter(Boolean);
-  if (palavras.length >= 3) return `${palavras[0]} ${palavras[2]}`;
-  return palavras.join(' ');
+export function derivarCultivar(nomeProduto: string, especie?: string | null, processo?: string | null): string {
+  const palavras = nomeProduto.trim().split(/\s+/).filter(Boolean);
+  const palavrasEspecie = especie ? especie.trim().split(/\s+/).filter(Boolean).length : 1;
+  const semGenero = palavras.slice(palavrasEspecie);
+  const palavrasProcesso = new Set((processo ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean));
+  return semGenero.filter((p) => !/incrustad/i.test(p) && !palavrasProcesso.has(p.toLowerCase())).join(' ');
 }
 
-function encontrarProduto(nomeProduto: string, produtos: ProdutoParametrizacao[]): ProdutoParametrizacao | null {
-  const alvo = normalizarNome(grupoDoNome(nomeProduto));
-  return produtos.find((p) => normalizarNome(grupoDoNome(p.nomeProduto)) === alvo) ?? null;
+/** Cultivar do laudo — o cadastrado à mão (`laudo.cultivar`, ver ArquivoLaudo) quando existir; sem isso, derivado do Nome do Produto (ver derivarCultivar). Usado tanto pra achar a Parametrização (ver encontrarProduto) quanto pro casamento com a Tabela de Preço (ver laudoCasaComProduto em calculoSemeadura.ts) e pro Cultivar do Selo (ver montarDadosEtiqueta em etiqueta.ts). */
+export function cultivarDoLaudo(laudo: IdentidadeLaudo): string {
+  return (laudo.cultivar || derivarCultivar(laudo.nomeProduto, laudo.especie, laudo.processo)).trim();
+}
+
+/**
+ * Acha a Parametrização cadastrada pro Cultivar+Processo desse laudo — comparação EXATA
+ * (normalizada, sem acento/caixa), sem heurística de nome nenhuma: Cultivar (ver cultivarDoLaudo) e
+ * Processo são campos PRÓPRIOS de cada lado (laudo e cadastro de Parametrização, ver
+ * ProdutoParametrizacao.cultivar/processo), então ou batem os dois ou não bate nada — nunca uma
+ * aproximação por posição de palavra (o antigo grupoDoNome, que reduzia o nome à 1ª+3ª palavra e
+ * podia juntar cultivares diferentes debaixo do mesmo "grupo", ou separar o mesmo cultivar em dois
+ * grupos por causa de uma palavra a mais/a menos no nome). Sem Cultivar isolável (raro), não casa
+ * com nada — melhor não achar Parametrização nenhuma do que achar a errada.
+ */
+function encontrarProduto(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): ProdutoParametrizacao | null {
+  const cultivar = normalizarNome(cultivarDoLaudo(laudo));
+  if (!cultivar) return null;
+  const processo = normalizarNome(laudo.processo ?? '');
+  return produtos.find((p) => normalizarNome(p.cultivar ?? '') === cultivar && normalizarNome(p.processo ?? '') === processo) ?? null;
 }
 
 /** PMS base do produto, como texto cru (pra exibir na grade exatamente como foi cadastrado) — null se não houver cadastro pra esse produto. */
-export function resolverPmsBaseTexto(nomeProduto: string, produtos: ProdutoParametrizacao[]): string | null {
-  return encontrarProduto(nomeProduto, produtos)?.pmsBase ?? null;
+export function resolverPmsBaseTexto(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): string | null {
+  return encontrarProduto(laudo, produtos)?.pmsBase ?? null;
 }
 
 /** PMS base do produto, já convertido pra número (pra entrar na conta de kg/ha). */
-export function resolverPmsBase(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(resolverPmsBaseTexto(nomeProduto, produtos));
+export function resolverPmsBase(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(resolverPmsBaseTexto(laudo, produtos));
 }
 
 /** PMS do lote (digitado em EditarLaudoModal/TesteModal) ou, em branco, o PMS base do produto na Parametrização — já como número, pronto pra conta (ver calculoSemeadura.ts e resultadoTesteNumero em testeGerminacao.ts). */
-export function resolverPmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(laudo.pms) ?? resolverPmsBase(laudo.nomeProduto, produtos);
+export function resolverPmsDoLaudo(laudo: IdentidadeLaudo & Pick<ArquivoLaudo, 'pms'>, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(laudo.pms) ?? resolverPmsBase(laudo, produtos);
 }
 
 /** Densidade base do produto, como texto cru — não é editável por lote, então isso é sempre o que a grade mostra. */
-export function resolverDensidadeBaseTexto(nomeProduto: string, produtos: ProdutoParametrizacao[]): string | null {
-  return encontrarProduto(nomeProduto, produtos)?.densidadeBase ?? null;
+export function resolverDensidadeBaseTexto(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): string | null {
+  return encontrarProduto(laudo, produtos)?.densidadeBase ?? null;
 }
 
 /** Densidade base do produto, já convertida pra número (pra entrar na conta de kg/ha). */
-export function resolverDensidadeBase(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(resolverDensidadeBaseTexto(nomeProduto, produtos));
+export function resolverDensidadeBase(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(resolverDensidadeBaseTexto(laudo, produtos));
 }
 
 /** Índice de Sobrevivência do produto, como fração (0 a 1) — ex.: cadastro "35" (%) vira 0.35. Null se não cadastrado. */
-export function resolverIndiceSobrevivencia(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  const percentual = paraNumero(encontrarProduto(nomeProduto, produtos)?.indiceSobrevivencia ?? null);
+export function resolverIndiceSobrevivencia(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): number | null {
+  const percentual = paraNumero(encontrarProduto(laudo, produtos)?.indiceSobrevivencia ?? null);
   return percentual === null ? null : percentual / 100;
 }
 
 /** Máximo de plântulas estabelecidas (pós-perdas) por cova, como número — usado pra calcular o espaçamento padrão do Guia de Plantio em modo Covas (ver calcularEspacamentoPadrao em GuiaPlantioModal.tsx). Null se não cadastrado. */
-export function resolverMaxPlantulasCova(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasCova ?? null);
+export function resolverMaxPlantulasCova(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(laudo, produtos)?.maxPlantulasCova ?? null);
 }
 
 /** Máximo de plântulas estabelecidas por metro linear de linha, como número — 3ª dimensão de densidade (junto com resolverDensidadeBase, por m², e resolverMaxPlantulasCova, por cova). Equivale a uma distância mínima em cm (100 ÷ esse valor) entre plântulas na linha, usada no Guia de Plantio (ver distanciaMinimaEfetivaMilhoSorgo/modoLinearCapim em GuiaPlantioModal.tsx). Null se não cadastrado. */
-export function resolverMaxPlantulasMetroLinear(nomeProduto: string, produtos: ProdutoParametrizacao[]): number | null {
-  return paraNumero(encontrarProduto(nomeProduto, produtos)?.maxPlantulasMetroLinear ?? null);
+export function resolverMaxPlantulasMetroLinear(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): number | null {
+  return paraNumero(encontrarProduto(laudo, produtos)?.maxPlantulasMetroLinear ?? null);
 }
 
 /**
@@ -89,13 +112,13 @@ export function resolverMaxPlantulasMetroLinear(nomeProduto: string, produtos: P
  * tem override em lugar nenhum — é sempre 0% de perda (fator 1) por definição.
  */
 export function resolverFatorCondicao(
-  nomeProduto: string,
+  laudo: IdentidadeLaudo,
   condicao: 'ideal' | 'media' | 'baixa',
   produtos: ProdutoParametrizacao[],
   fatoresGlobais: FatorPlantio[],
 ): number {
   if (condicao === 'ideal') return 1;
-  const produto = encontrarProduto(nomeProduto, produtos);
+  const produto = encontrarProduto(laudo, produtos);
   const perdaTexto = condicao === 'media' ? produto?.perdaMedia : produto?.perdaBaixa;
   const perdaProduto = paraNumero(perdaTexto ?? null);
   if (perdaProduto !== null) return 1 - perdaProduto / 100;
@@ -103,19 +126,19 @@ export function resolverFatorCondicao(
 }
 
 /** Modo de plantio padrão do produto (Cova, Lanço ou Linha) — só pré-seleciona o modo ao adicionar no Guia de Plantio, nunca entra em cálculo. Null = sem preferência cadastrada. */
-export function resolverModoPlantio(nomeProduto: string, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | 'linha' | null {
-  return encontrarProduto(nomeProduto, produtos)?.modoPlantio ?? null;
+export function resolverModoPlantio(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | 'linha' | null {
+  return encontrarProduto(laudo, produtos)?.modoPlantio ?? null;
 }
 
 /** Margem de tolerância (%) do produto pra arredondar sacos — 25% se não cadastrado (ver arredondarSacos em GuiaPlantioModal.tsx). */
-export function resolverMargemTolerancia(nomeProduto: string, produtos: ProdutoParametrizacao[]): number {
-  const percentual = paraNumero(encontrarProduto(nomeProduto, produtos)?.margemTolerancia ?? null);
+export function resolverMargemTolerancia(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): number {
+  const percentual = paraNumero(encontrarProduto(laudo, produtos)?.margemTolerancia ?? null);
   return percentual ?? 25;
 }
 
 /** Texto livre da linha "Observação" do Selo impresso (ex.: registro RENASEM do produtor). Null se não cadastrado. */
-export function resolverObservacaoEtiqueta(nomeProduto: string, produtos: ProdutoParametrizacao[]): string | null {
-  return encontrarProduto(nomeProduto, produtos)?.observacaoEtiqueta ?? null;
+export function resolverObservacaoEtiqueta(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): string | null {
+  return encontrarProduto(laudo, produtos)?.observacaoEtiqueta ?? null;
 }
 
 /** Duas palavras "iguais pra fins de nome" — idênticas, ou diferindo só na última letra (gênero: "incrustada" x "incrustado"). Exige pelo menos 4 caracteres pra não deixar palavra curta demais (ex.: "de", "do") crescer um falso positivo. */
