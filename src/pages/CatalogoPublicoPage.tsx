@@ -451,7 +451,7 @@ function ModalCalculadoraPlantio({
   const [itemSelecionado, setItemSelecionado] = useState<ItemCatalogo | null>(null);
   const [modo, setModo] = useState<ModoPlantio>('lanco');
   const [corredor, setCorredor] = useState('50');
-  const [area, setArea] = useState('');
+  const [area, setArea] = useState('1');
 
   // "!= null" (frouxo) — mesmo motivo de temDadosPlantio em CatalogoPublicoPage: trata cache velho
   // (campo ausente, undefined) igual a "sem dado" (null).
@@ -472,7 +472,7 @@ function ModalCalculadoraPlantio({
     setItemSelecionado(item);
     setModo(item.plantioKgHaLanco != null ? 'lanco' : 'covas');
     setCorredor('50');
-    setArea('');
+    setArea('1');
     setBusca('');
   }
 
@@ -595,8 +595,7 @@ function ModalCalculadoraPlantio({
                   inputMode="decimal"
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
-                  placeholder="Ex.: 10"
-                  className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+                  className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
                 />
               </label>
 
