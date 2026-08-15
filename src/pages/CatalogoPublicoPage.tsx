@@ -86,16 +86,17 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
  * (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo
  * do nome, mesmo quando o nome é curto e caberia do lado — padronizado, não depende do fluxo de
  * texto quebrar sozinho. `mostrarDetalhes` (Canal.mostrarDetalhesPlantio, ver ChannelsPanel.tsx) —
- * só quando ligado pra essa Tabela, VC%/PMS/Validade entram na mesma linha discreta, nessa ordem:
- * Fornecedor > VC% > PMS > Validade; desligado (padrão), mostra só o Fornecedor. PMS aqui é sempre
- * o digitado NESSE laudo (plantioPmsManual) — nunca o base da Parametrização.
+ * só quando ligado pra essa Tabela, VC%/Validade/PMS entram na mesma linha discreta, nessa ordem:
+ * Fornecedor > VC% > Validade > PMS (Validade antes do PMS — em tela pequena, quando corta, é a
+ * Validade que mais importa ficar visível); desligado (padrão), mostra só o Fornecedor. PMS aqui é
+ * sempre o digitado NESSE laudo (plantioPmsManual) — nunca o base da Parametrização.
  */
 function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: ItemCatalogo; selecionado: boolean; mostrarDetalhes: boolean; onClick: () => void }) {
   const infoPartes = [
     item.fornecedorNome,
     mostrarDetalhes && item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
-    mostrarDetalhes && item.plantioPmsManual ? `PMS ${item.plantioPmsManual}` : null,
     mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
+    mostrarDetalhes && item.plantioPmsManual ? `PMS ${item.plantioPmsManual}` : null,
   ].filter((parte): parte is string => !!parte);
 
   return (
