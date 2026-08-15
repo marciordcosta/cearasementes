@@ -494,8 +494,16 @@ function ModalCalculadoraPlantio({
   // Distância entre covas (cm) — mesma referência do Guia interno (Covas/m² alvo travado em 4, ver
   // covasM2Alvo), só informativo ao lado do Corredor: quem trava o espaçamento é o Corredor mesmo.
   const distanciaCovas = modo === 'covas' ? distanciaDeCovasM2(covasM2Alvo(), corredor) : null;
-  const sementesPorCova =
+  const sementesPorCovaBruta =
     modo === 'covas' && itemSelecionado?.plantioSementesCovaBase != null ? sementesCovaAjustada(itemSelecionado.plantioSementesCovaBase, corredor) : null;
+  // Sementes Tradicionais soltas não dá pra contar uma a uma pra colocar na cova, só pesar (ver
+  // precisaPesoPorCova em calculoSemeadura.ts) — mostra Peso/cova (g), via PMS, em vez da contagem
+  // crua; sem PMS nenhum (nem do lote, nem base da Parametrização), não dá pra converter em peso.
+  const pesoPorCovaGramas =
+    sementesPorCovaBruta !== null && itemSelecionado?.plantioPrecisaPesoPorCova && itemSelecionado.plantioPms != null && itemSelecionado.plantioPms > 0
+      ? (sementesPorCovaBruta * itemSelecionado.plantioPms) / 1000
+      : null;
+  const sementesPorCova = itemSelecionado?.plantioPrecisaPesoPorCova ? null : sementesPorCovaBruta;
 
   // Nº de embalagens = Total necessário ÷ peso da embalagem desse produto (já cadastrado, o mesmo
   // peso mostrado no card) — arredondado pela MESMA margem de tolerância por grupo do Guia de
@@ -620,6 +628,11 @@ function ModalCalculadoraPlantio({
                   {sementesPorCova !== null && (
                     <p className="text-xs text-[#67718a]">
                       Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
+                    </p>
+                  )}
+                  {pesoPorCovaGramas !== null && (
+                    <p className="text-xs text-[#67718a]">
+                      Peso por cova (g): <span className="font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
                     </p>
                   )}
                 </div>

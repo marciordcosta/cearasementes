@@ -258,6 +258,8 @@ export interface Database {
           plantio_validade: string | null;
           /** = PlantioPublicoResultado.margemTolerancia — % de tolerância do grupo pra arredondar embalagens na calculadora pública (ver arredondarSacos). Null = publicado antes dessa coluna existir, cai no padrão 25% na leitura. */
           plantio_margem_tolerancia: number | null;
+          /** = PlantioPublicoResultado.precisaPesoPorCova — true: modo Covas mostra "Peso/cova (g)" em vez de "Sementes/cova" (Sementes Tradicionais soltas não dá pra contar, só pesar). */
+          plantio_precisa_peso_por_cova: boolean;
           ordem: number;
           atualizado_em: string;
         };

@@ -138,6 +138,18 @@ export function fatorDe(fatores: FatorPlantio[], chave: string): number {
   return paraNumero(fatores.find((f) => f.chave === chave)?.fator ?? null) ?? 1;
 }
 
+/**
+ * Sementes Tradicionais (soltas, pequenas) não dá pra catar uma a uma pra colocar na cova — só
+ * pesar; Incrustadas (peletizadas) são grandes o bastante pra contar. Decide se o modo Covas mostra
+ * "Sementes/cova" (contagem) ou "Peso/cova (g)" (via PMS) — os dois fatores importam juntos: só o
+ * Processo não decide sozinho (uma Tradicional pura, com PMS cadastrado, ainda vira peso — PMS é
+ * quem permite converter a contagem em gramas; sem PMS nenhum, não dá pra mostrar peso, e mostrar a
+ * contagem crua seria enganoso pra uma semente que não dá pra contar no campo).
+ */
+export function precisaPesoPorCova(laudo: Pick<ArquivoLaudo, 'processo'>): boolean {
+  return (laudo.processo ?? '').toLowerCase().includes('tradicional');
+}
+
 /** Validade no formato "MM/AAAA" (texto livre, digitado pelo operador) — convertida num número comparável (ano×12+mês). Sem validade cadastrada vai pro fim da lista (usado pra ordenar laudos do mais recente pro mais antigo). */
 export function validadeParaOrdenacao(validade: string | null): number {
   const partes = (validade ?? '').split('/');
@@ -291,6 +303,8 @@ export interface PlantioPublicoResultado {
   validade: string | null;
   /** Margem de tolerância (%) do grupo pra arredondar embalagens (ver resolverMargemTolerancia/arredondarSacos) — 25 se não cadastrado, nunca null (a calculadora pública sempre tem algum valor pra arredondar). */
   margemTolerancia: number;
+  /** = precisaPesoPorCova(laudo) — true: modo Covas mostra "Peso/cova (g)" (via `pms`) em vez de "Sementes/cova" (contagem). Sementes Tradicionais soltas não dá pra contar uma a uma, só pesar. */
+  precisaPesoPorCova: boolean;
 }
 
 /**
@@ -309,12 +323,14 @@ export function resolverPlantioParaProduto(
   fornecedorProduto: string | null = null,
 ): PlantioPublicoResultado {
   const laudo = encontrarLaudoParaProduto(nomeProdutoPreco, arquivos, fornecedorProduto);
-  if (!laudo) return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25 };
+  if (!laudo) {
+    return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25, precisaPesoPorCova: false };
+  }
   const fatorCondicaoMedia = resolverFatorCondicao(laudo.nomeProduto, 'media', produtos, fatores);
   const kgHaLanco = calcularKgPorHectareNumero(laudo, produtos, fatorDe(fatores, 'lanco'), fatorCondicaoMedia);
   const sementesCovaBase = sementesCovaAtual(laudo, produtos, fatorDe(fatores, 'linha_cova'), fatorCondicaoMedia, null);
   const pms = resolverPmsDoLaudo(laudo, produtos);
   const vc = calcularVCNumero(laudo);
   const margemTolerancia = resolverMargemTolerancia(laudo.nomeProduto, produtos);
-  return { kgHaLanco, sementesCovaBase, pms, vc, pmsManual: laudo.pms, validade: laudo.validade, margemTolerancia };
+  return { kgHaLanco, sementesCovaBase, pms, vc, pmsManual: laudo.pms, validade: laudo.validade, margemTolerancia, precisaPesoPorCova: precisaPesoPorCova(laudo) };
 }

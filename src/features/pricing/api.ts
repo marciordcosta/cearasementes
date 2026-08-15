@@ -601,6 +601,8 @@ export interface ItemCatalogoPublicoInput {
   plantioPmsManual: string | null;
   plantioValidade: string | null;
   plantioMargemTolerancia: number;
+  /** = resolverPlantioParaProduto(...).precisaPesoPorCova — true: calculadora mostra Peso/cova (g) em vez de Sementes/cova no modo Covas. */
+  plantioPrecisaPesoPorCova: boolean;
   ordem: number;
 }
 
@@ -658,6 +660,7 @@ export async function publicarCatalogoOnline(
         plantio_pms_manual: item.plantioPmsManual,
         plantio_validade: item.plantioValidade,
         plantio_margem_tolerancia: item.plantioMargemTolerancia,
+        plantio_precisa_peso_por_cova: item.plantioPrecisaPesoPorCova,
         ordem: item.ordem,
       })),
     );
@@ -690,6 +693,7 @@ export interface CatalogoPublico {
     plantioPmsManual: string | null;
     plantioValidade: string | null;
     plantioMargemTolerancia: number | null;
+    plantioPrecisaPesoPorCova: boolean;
   }[];
 }
 
@@ -729,6 +733,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       plantioPmsManual: i.plantio_pms_manual,
       plantioValidade: i.plantio_validade,
       plantioMargemTolerancia: i.plantio_margem_tolerancia,
+      plantioPrecisaPesoPorCova: i.plantio_precisa_peso_por_cova,
     })),
   };
 }

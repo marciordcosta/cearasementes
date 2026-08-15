@@ -12,6 +12,7 @@ import {
   fatorDe,
   germinacaoFinalSemeadura,
   kgPorHaDeSementesCova,
+  precisaPesoPorCova,
   sementesComAjustePorDistancia,
   sementesCovaAtual,
   validadeParaOrdenacao,
@@ -83,11 +84,6 @@ function formatarCovas(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ',');
 }
 
-
-/** Sementes Tradicionais (soltas, pequenas) não dá pra catar uma a uma pra colocar na cova — só pesar; Incrustadas (peletizadas) são grandes o bastante pra contar. Decide qual campo o card mostra: "Sementes/cova" (Incrustado e demais) ou "Peso/cova (g)" (Tradicional). */
-function precisaPesoPorCova(laudo: Pick<ArquivoLaudo, 'processo'>): boolean {
-  return (laudo.processo ?? '').toLowerCase().includes('tradicional');
-}
 
 /** PMS do lote (se digitado) ou, em branco, o PMS base do produto na Parametrização — como texto cru (ex.: "4,5"), pra exibir igual foi cadastrado. */
 function pmsDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'pms'>, produtos: ProdutoParametrizacao[]): string | null {

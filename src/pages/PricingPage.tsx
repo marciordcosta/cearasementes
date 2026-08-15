@@ -456,6 +456,7 @@ export function PricingPage() {
           plantioPmsManual: plantio.pmsManual,
           plantioValidade: plantio.validade,
           plantioMargemTolerancia: plantio.margemTolerancia,
+          plantioPrecisaPesoPorCova: plantio.precisaPesoPorCova,
           ordem: indice,
         };
       });
