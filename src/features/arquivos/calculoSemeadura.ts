@@ -1,7 +1,7 @@
 import { derivarCultivar } from './etiqueta';
 import { calcularVCNumero, paraNumero } from './metricas';
 import {
-  laudoCasaComNomePreco,
+  cultivarCasaComNomePreco,
   normalizarNome,
   resolverDensidadeBase,
   resolverFatorCondicao,
@@ -272,22 +272,29 @@ function mencionaProcessoConflitante(nomeProdutoPreco: string, laudo: Pick<Arqui
 
 /**
  * Cultivar (ver derivarCultivar em etiqueta.ts — já usada pro Selo, isola o Cultivar descartando as
- * palavras da Espécie E do Processo) + Processo (campo próprio do laudo) — tentado primeiro; se não
- * bater, o Cultivar sozinho, MAS só quando a Tabela de Preço não menciona um Processo conflitante
- * (ver mencionaProcessoConflitante) — sem essa trava, um laudo "Incrustado" casava com o produto
- * "Tradicional" da mesma variedade só por causa do Cultivar em comum (bug real, corrigido). Tudo
- * isso é DE PROPÓSITO sem o Gênero/Espécie: laudo e Tabela às vezes escrevem o Gênero de formas
- * totalmente diferentes pra mesma planta (ex.: "U.Brizantha" no laudo x "Brach" na Tabela —
- * Urochloa/Brachiaria é sinônimo taxonômico, reclassificação, não é só abreviação, não tem prefixo
- * em comum) — exigir o Gênero bater fazia esses laudos nunca casarem com produto nenhum. Sem
- * Cultivar isolável (raro — nomeProduto só tem a Espécie, nada sobra), cai pro nomeProduto inteiro.
+ * palavras da Espécie E do Processo, os 2 campos PRÓPRIOS do laudo — nunca precisa reduzir o nome
+ * "na unha") + Processo — tentado primeiro; se não bater, o Cultivar sozinho, MAS só quando a Tabela
+ * de Preço não menciona um Processo conflitante (ver mencionaProcessoConflitante) — sem essa trava,
+ * um laudo "Incrustado" casava com o produto "Tradicional" da mesma variedade só por causa do
+ * Cultivar em comum (bug real, corrigido). O casamento em si usa cultivarCasaComNomePreco (núcleo
+ * sem o fallback de "descartar a 1ª palavra achando que é Gênero" que laudoCasaComNomePreco tem) —
+ * aqui a 1ª palavra JÁ é o Cultivar de verdade (Espécie já foi descartada por derivarCultivar), não
+ * um Gênero cru; reaplicar aquele fallback descartaria o próprio Cultivar e sobraria só o Processo,
+ * que casa com QUALQUER produto do mesmo Processo, espécie nenhuma a ver (bug real, corrigido — um
+ * laudo de Panicum Massai/Mombaça puxando dados pra um Brachiaria Decumbens sem laudo algum, só por
+ * os dois serem "Tradicional"). Tudo isso é DE PROPÓSITO sem o Gênero/Espécie: laudo e Tabela às
+ * vezes escrevem o Gênero de formas totalmente diferentes pra mesma planta (ex.: "U.Brizantha" no
+ * laudo x "Brach" na Tabela — Urochloa/Brachiaria é sinônimo taxonômico, reclassificação, não é só
+ * abreviação, não tem prefixo em comum) — exigir o Gênero bater fazia esses laudos nunca casarem com
+ * produto nenhum. Sem Cultivar isolável (raro — nomeProduto só tem a Espécie, nada sobra), cai pro
+ * nomeProduto inteiro.
  */
 function laudoCasaComProduto(laudo: ArquivoLaudo, nomeProdutoPreco: string): boolean {
   const cultivar = derivarCultivar(laudo.nomeProduto, laudo.especie, laudo.processo).trim();
   const base = cultivar || laudo.nomeProduto;
-  if (laudo.processo && laudoCasaComNomePreco(`${base} ${laudo.processo}`, nomeProdutoPreco)) return true;
+  if (laudo.processo && cultivarCasaComNomePreco(`${base} ${laudo.processo}`, nomeProdutoPreco)) return true;
   if (mencionaProcessoConflitante(nomeProdutoPreco, laudo)) return false;
-  return laudoCasaComNomePreco(base, nomeProdutoPreco);
+  return cultivarCasaComNomePreco(base, nomeProdutoPreco);
 }
 
 /**

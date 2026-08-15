@@ -125,23 +125,50 @@ function palavrasParecidas(a: string, b: string): boolean {
   return minLen >= 4 && a.slice(0, minLen - 1) === b.slice(0, minLen - 1);
 }
 
+/** "Panicum Tanzania Tradicional 15kg" -> ["panicum","tanzania","tradicional"] (ignora números soltos, tipo lote/peso, e palavras curtas demais). */
+function termosDeConteudo(nome: string): string[] {
+  return normalizarNome(nome)
+    .split(' ')
+    .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
+}
+
 /**
- * Casa o nome de um laudo com o nome de um produto da Tabela de Preço: toda
- * palavra de conteúdo do laudo (ignora números soltos, tipo número de lote)
- * precisa aparecer, em algum lugar, no nome da Tabela de Preço — não depende
- * de posição nem de reduzir os dois nomes do mesmo jeito. Necessário porque
- * a Tabela de Preço segue um padrão BEM diferente do laudo: tem gênero
- * científico na frente e peso do pacote no fim ("Panicum Tanzania
- * Tradicional 15kg"), enquanto o laudo só traz a variedade e o tratamento
- * ("Tanzania 1 Tradicional", o "1" é o número do lote) — comparar por
- * posição de palavra (1ª/3ª) não reconcilia os dois formatos ao mesmo
- * tempo; comparar se as palavras do laudo aparecem soltas no nome da Tabela
- * de Preço funciona nos dois formatos, sem precisar saber qual é o gênero.
+ * Núcleo do casamento: toda palavra de `termosLaudo` precisa aparecer, em algum lugar, no nome da
+ * Tabela de Preço — não depende de posição nem de reduzir os dois nomes do mesmo jeito. Necessário
+ * porque a Tabela de Preço segue um padrão BEM diferente do laudo: tem gênero científico na frente e
+ * peso do pacote no fim ("Panicum Tanzania Tradicional 15kg"), enquanto o laudo só traz a variedade e
+ * o tratamento — comparar por posição de palavra (1ª/3ª) não reconcilia os dois formatos ao mesmo
+ * tempo; comparar se as palavras aparecem soltas no nome da Tabela de Preço funciona nos dois
+ * formatos, sem precisar saber qual é o gênero.
  *
  * Remove `*negrito*`/`_itálico_` do nome da Tabela de Preço antes de comparar (ver
  * NomeComDestaque.tsx — marcação digitada no cadastro, não faz parte da palavra em si): sem isso, um
  * asterisco colado ("*planaltina*") desloca a comparação de prefixo em palavrasParecidas e o
  * casamento falha bem na palavra que mais importa (o Cultivar, quase sempre o que fica em negrito).
+ */
+function casamentoDeTermos(termosLaudo: string[], nomeProdutoPreco: string): boolean {
+  if (termosLaudo.length === 0) return false;
+  const palavrasPreco = normalizarNome(nomeProdutoPreco.replace(/[*_]/g, '')).split(' ');
+  return termosLaudo.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
+}
+
+/**
+ * Casa o Cultivar JÁ ISOLADO de um laudo (ver derivarCultivar em etiqueta.ts — Espécie e Processo já
+ * descartados) com o nome de um produto da Tabela de Preço — só o núcleo do casamento (ver
+ * casamentoDeTermos), SEM o fallback de "descartar a 1ª palavra achando que é Gênero" que
+ * laudoCasaComNomePreco tem: aqui a 1ª palavra JÁ é o próprio Cultivar (a mais importante pra
+ * distinguir uma variedade da outra), não um Gênero cru — descartá-la faria um Cultivar totalmente
+ * diferente (ex.: um laudo de "Massai" isolado só como "Tradicional" depois de perder a palavra que
+ * importava) casar com QUALQUER produto do mesmo Processo, espécie nenhuma a ver (bug real,
+ * corrigido — ver laudoCasaComProduto em calculoSemeadura.ts).
+ */
+export function cultivarCasaComNomePreco(cultivarOuCultivarProcesso: string, nomeProdutoPreco: string): boolean {
+  return casamentoDeTermos(termosDeConteudo(cultivarOuCultivarProcesso), nomeProdutoPreco);
+}
+
+/**
+ * Casa o nome CRU de um laudo (ainda com o Gênero na frente, ex.: "Tanzania 1 Tradicional" — o "1" é
+ * o número do lote) com o nome de um produto da Tabela de Preço — ver casamentoDeTermos pro núcleo.
  *
  * O Gênero (1ª palavra do laudo) às vezes é sinônimo taxonômico/abreviação BEM diferente do usado na
  * Tabela de Preço (ex.: "U.Brizantha" no laudo x "Brach" na Tabela — Urochloa/Brachiaria é a mesma
@@ -149,18 +176,14 @@ function palavrasParecidas(a: string, b: string): boolean {
  * tenta de novo SEM a 1ª palavra do laudo. Só usa esse resultado se sobrarem pelo menos 2 termos
  * depois de tirar o Gênero (Cultivar + Processo, por exemplo) — com só 1 termo genérico sobrando
  * (ex.: só "Incrustado"), esse laudo casaria com QUALQUER produto que tenha essa palavra, misturando
- * PMS/VC de produtos diferentes.
+ * PMS/VC de produtos diferentes. Só faz sentido pra nome CRU — usar isso com um Cultivar já isolado
+ * descartaria o próprio Cultivar achando que é Gênero (ver cultivarCasaComNomePreco).
  */
 export function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: string): boolean {
-  const termosLaudo = normalizarNome(nomeLaudo)
-    .split(' ')
-    .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
-  if (termosLaudo.length === 0) return false;
-  const palavrasPreco = normalizarNome(nomeProdutoPreco.replace(/[*_]/g, '')).split(' ');
-  const bateTodos = (termos: string[]) => termos.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
-  if (bateTodos(termosLaudo)) return true;
+  const termosLaudo = termosDeConteudo(nomeLaudo);
+  if (casamentoDeTermos(termosLaudo, nomeProdutoPreco)) return true;
   const semGenero = termosLaudo.slice(1);
-  return semGenero.length >= 2 && bateTodos(semGenero);
+  return semGenero.length >= 2 && casamentoDeTermos(semGenero, nomeProdutoPreco);
 }
 
 /** Acha o produto da Tabela de Preço (módulo Precificação) que corresponde ao nome de um laudo — usado pra puxar peso do saco/valor sem precisar cadastrar essa ligação manualmente (ver laudoCasaComNomePreco). */
