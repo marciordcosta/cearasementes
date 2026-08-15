@@ -530,7 +530,7 @@ function ModalCalculadoraPlantio({
     if (palavras.length === 0) return [];
     return itensComPlantio
       .filter((i) => {
-        const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''}`.toLowerCase();
+        const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''} ${i.cultivar ?? ''}`.toLowerCase();
         return palavras.every((palavra) => descricao.includes(palavra));
       })
       .slice(0, 8);
@@ -907,12 +907,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     if (!data) return [];
     const porCategoria = categoriaFiltro ? data.itens.filter((i) => i.categoriaNome === categoriaFiltro) : data.itens;
     // Mesma lógica de busca da grade interna (PricingPage.tsx): cada palavra digitada precisa
-    // aparecer em algum lugar do nome+fornecedor+categoria+subcategoria (qualquer ordem, sem
-    // acentuação especial) — nem todo nome de produto carrega a Categoria/Classe dele.
+    // aparecer em algum lugar do nome+fornecedor+categoria+subcategoria+cultivar (qualquer ordem, sem
+    // acentuação especial) — nem todo nome de produto carrega a Categoria/Classe/Cultivar dele.
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (palavras.length === 0) return porCategoria;
     return porCategoria.filter((i) => {
-      const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''}`.toLowerCase();
+      const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''} ${i.cultivar ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
   }, [data, categoriaFiltro, busca]);

@@ -269,9 +269,9 @@ export function PricingPage() {
       const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
       const categoria = categorias.find((c) => c.id === p.categoriaId);
       const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
-      // Nem todo nome de produto carrega a Categoria/Subcategoria dele (ex.: "Semente XYZ 123" na
-      // Classe "Milho") — busca também nesses nomes, não só no nome do produto e do fornecedor.
-      const descricao = `${p.nome} ${fornecedor?.nome ?? ''} ${categoria?.nome ?? ''} ${subcategoria?.nome ?? ''}`.toLowerCase();
+      // Nem todo nome de produto carrega a Categoria/Subcategoria/Cultivar dele (ex.: "Semente XYZ 123" na
+      // Classe "Milho", cultivar "Marandu") — busca também nesses campos, não só no nome do produto e do fornecedor.
+      const descricao = `${p.nome} ${fornecedor?.nome ?? ''} ${categoria?.nome ?? ''} ${subcategoria?.nome ?? ''} ${p.cultivar ?? ''}`.toLowerCase();
       return palavras.every((palavra) => descricao.includes(palavra));
     });
   // Só o rótulo do "Filtrar:" (Categoria/Subcategoria/Fornecedor) — sem a busca por nome. Reaproveitado
