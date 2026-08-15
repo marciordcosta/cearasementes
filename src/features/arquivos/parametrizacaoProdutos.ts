@@ -142,6 +142,14 @@ function palavrasParecidas(a: string, b: string): boolean {
  * NomeComDestaque.tsx — marcação digitada no cadastro, não faz parte da palavra em si): sem isso, um
  * asterisco colado ("*planaltina*") desloca a comparação de prefixo em palavrasParecidas e o
  * casamento falha bem na palavra que mais importa (o Cultivar, quase sempre o que fica em negrito).
+ *
+ * O Gênero (1ª palavra do laudo) às vezes é sinônimo taxonômico/abreviação BEM diferente do usado na
+ * Tabela de Preço (ex.: "U.Brizantha" no laudo x "Brach" na Tabela — Urochloa/Brachiaria é a mesma
+ * planta reclassificada, não dá pra aproximar por prefixo comum) — quando o casamento completo falha,
+ * tenta de novo SEM a 1ª palavra do laudo. Só usa esse resultado se sobrarem pelo menos 2 termos
+ * depois de tirar o Gênero (Cultivar + Processo, por exemplo) — com só 1 termo genérico sobrando
+ * (ex.: só "Incrustado"), esse laudo casaria com QUALQUER produto que tenha essa palavra, misturando
+ * PMS/VC de produtos diferentes.
  */
 export function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: string): boolean {
   const termosLaudo = normalizarNome(nomeLaudo)
@@ -149,7 +157,10 @@ export function laudoCasaComNomePreco(nomeLaudo: string, nomeProdutoPreco: strin
     .filter((palavra) => palavra.length >= 3 && !/^\d+$/.test(palavra));
   if (termosLaudo.length === 0) return false;
   const palavrasPreco = normalizarNome(nomeProdutoPreco.replace(/[*_]/g, '')).split(' ');
-  return termosLaudo.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
+  const bateTodos = (termos: string[]) => termos.every((termo) => palavrasPreco.some((palavra) => palavrasParecidas(termo, palavra)));
+  if (bateTodos(termosLaudo)) return true;
+  const semGenero = termosLaudo.slice(1);
+  return semGenero.length >= 2 && bateTodos(semGenero);
 }
 
 /** Acha o produto da Tabela de Preço (módulo Precificação) que corresponde ao nome de um laudo — usado pra puxar peso do saco/valor sem precisar cadastrar essa ligação manualmente (ver laudoCasaComNomePreco). */
