@@ -243,33 +243,35 @@ function fornecedorCasaComProduto(fornecedorLaudo: string | null, fornecedorProd
 
 /**
  * Cultivar (ver derivarCultivar em etiqueta.ts — já usada pro Selo, isola o Cultivar descartando as
- * palavras da Espécie) + Processo (campo próprio do laudo, não texto solto) — a "identidade" do
- * laudo pra casar com a Tabela de Preço, DE PROPÓSITO sem o Gênero/Espécie: laudo e Tabela às vezes
+ * palavras da Espécie), tentando primeiro JUNTO com o Processo (campo próprio do laudo) e, se isso
+ * não bater, o Cultivar sozinho — DE PROPÓSITO sem o Gênero/Espécie: laudo e Tabela às vezes
  * escrevem o Gênero de formas totalmente diferentes pra mesma planta (ex.: "U.Brizantha" no laudo x
  * "Brach" na Tabela — Urochloa/Brachiaria é sinônimo taxonômico, reclassificação, não é só
  * abreviação, não tem prefixo em comum) — exigir o Gênero bater fazia esses laudos nunca casarem
- * com produto nenhum. Sem Cultivar isolável (raro — nomeProduto só tem a Espécie, nada sobra),
- * cai pro nomeProduto inteiro mesmo, mais seguro que restar só o Processo sozinho (uma palavra só,
- * genérica demais — casaria com qualquer produto que tenha esse Processo).
+ * com produto nenhum. Processo entra só como tentativa EXTRA (mais específica), não obrigatória:
+ * nem toda Tabela de Preço repete o Processo no nome (ex.: "Andropogon Gayanus Planaltina" não diz
+ * "Tradicional", diferente de "Brach Decumbens Incrustado") — exigir ele também fazia esses laudos
+ * nunca casarem. Sem Cultivar isolável (raro — nomeProduto só tem a Espécie, nada sobra), cai pro
+ * nomeProduto inteiro mesmo, mais seguro que restar só o Processo sozinho (uma palavra só, genérica
+ * demais — casaria com qualquer produto que tenha esse Processo).
  */
-function identidadeDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo'>): string {
+function identidadesDoLaudo(laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'especie' | 'processo'>): string[] {
   const cultivar = derivarCultivar(laudo.nomeProduto, laudo.especie).trim();
-  if (!cultivar) return laudo.nomeProduto;
-  return laudo.processo ? `${cultivar} ${laudo.processo}` : cultivar;
+  if (!cultivar) return [laudo.nomeProduto];
+  return laudo.processo ? [`${cultivar} ${laudo.processo}`, cultivar] : [cultivar];
 }
 
 /**
- * Laudo de maior Validade entre os que casam a identidade (Cultivar + Processo, ver
- * identidadeDoLaudo) desse produto da Tabela de Preço — igual à ordenação já usada no Guia de
+ * Laudo de maior Validade entre os que casam alguma identidade (Cultivar+Processo, ou só Cultivar,
+ * ver identidadesDoLaudo) desse produto da Tabela de Preço — igual à ordenação já usada no Guia de
  * Plantio. Quando o produto tem Fornecedor cadastrado, o Fornecedor do laudo é EXIGIDO também (não
- * só preferido): Cultivar+Processo sozinhos não bastam pra distinguir o mesmo capim vendido por
- * fornecedores diferentes (lotes/PMS/VC diferentes) — melhor não mostrar nada do que mostrar o dado
- * errado. Sem nenhum laudo com Fornecedor batendo, retorna null (mesmo tendo laudo com Cultivar+
- * Processo certos). Produto SEM Fornecedor cadastrado não tem o que exigir, cai no casamento só por
- * Cultivar+Processo mesmo.
+ * só preferido): Cultivar sozinho não basta pra distinguir o mesmo capim vendido por fornecedores
+ * diferentes (lotes/PMS/VC diferentes) — melhor não mostrar nada do que mostrar o dado errado. Sem
+ * nenhum laudo com Fornecedor batendo, retorna null. Produto SEM Fornecedor cadastrado não tem o
+ * que exigir, cai no casamento só por Cultivar(+Processo) mesmo.
  */
 export function encontrarLaudoParaProduto(nomeProdutoPreco: string, arquivos: ArquivoLaudo[], fornecedorProduto: string | null = null): ArquivoLaudo | null {
-  const candidatos = arquivos.filter((a) => laudoCasaComNomePreco(identidadeDoLaudo(a), nomeProdutoPreco));
+  const candidatos = arquivos.filter((a) => identidadesDoLaudo(a).some((identidade) => laudoCasaComNomePreco(identidade, nomeProdutoPreco)));
   if (candidatos.length === 0) return null;
   const finalistas = fornecedorProduto ? candidatos.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto)) : candidatos;
   if (finalistas.length === 0) return null;
