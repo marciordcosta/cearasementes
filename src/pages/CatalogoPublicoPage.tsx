@@ -407,17 +407,23 @@ function ModalOrcamento({
 }
 
 /**
- * kg/ha em modo Covas a partir do Corredor digitado pelo cliente — mesma conta do Guia interno
- * (regra GERAL, ver sementesCovaAtual/kgPorHaDeSementesCova em calculoSemeadura.ts), só que aqui
- * partindo do snapshot publicado (`sementesCovaBase`, já resolvido "no espaçamento padrão"/50cm)
- * em vez de recalcular germinação/densidade a cada tecla — a página pública nunca vê laudo algum.
+ * Sementes/cova AJUSTADA ao Corredor digitado pelo cliente — mesma conta do Guia interno (regra
+ * GERAL, ver sementesCovaAtual em calculoSemeadura.ts), só que aqui partindo do snapshot publicado
+ * (`sementesCovaBase`, já resolvido "no espaçamento padrão"/50cm) em vez de recalcular germinação/
+ * densidade a cada tecla — a página pública nunca vê laudo algum. Usada tanto pro kg/ha (ver
+ * kgHaCovas) quanto pra exibir "Sementes por cova" (só informativo, sem edição).
  */
-function kgHaCovas(sementesCovaBase: number, pms: number, corredorTexto: string): number | null {
+function sementesCovaAjustada(sementesCovaBase: number, corredorTexto: string): number | null {
   const distancia = distanciaDeCovasM2(covasM2Alvo(), corredorTexto);
   const espacamentoAtual = espacamentoDeDistancia(distancia, corredorTexto);
   if (espacamentoAtual === null) return null;
-  const sementesAjustada = sementesComAjustePorDistancia(sementesCovaBase, espacamentoAtual, distanciaIdealProduto());
-  return kgPorHaDeSementesCova(covasM2Alvo(), sementesAjustada, pms);
+  return sementesComAjustePorDistancia(sementesCovaBase, espacamentoAtual, distanciaIdealProduto());
+}
+
+/** kg/ha em modo Covas — Sementes/cova ajustada (ver sementesCovaAjustada) × Covas/m² alvo × PMS. */
+function kgHaCovas(sementesCovaBase: number, pms: number, corredorTexto: string): number | null {
+  const sementesAjustada = sementesCovaAjustada(sementesCovaBase, corredorTexto);
+  return sementesAjustada === null ? null : kgPorHaDeSementesCova(covasM2Alvo(), sementesAjustada, pms);
 }
 
 type ModoPlantio = 'lanco' | 'covas';
@@ -488,6 +494,8 @@ function ModalCalculadoraPlantio({
   // Distância entre covas (cm) — mesma referência do Guia interno (Covas/m² alvo travado em 4, ver
   // covasM2Alvo), só informativo ao lado do Corredor: quem trava o espaçamento é o Corredor mesmo.
   const distanciaCovas = modo === 'covas' ? distanciaDeCovasM2(covasM2Alvo(), corredor) : null;
+  const sementesPorCova =
+    modo === 'covas' && itemSelecionado?.plantioSementesCovaBase != null ? sementesCovaAjustada(itemSelecionado.plantioSementesCovaBase, corredor) : null;
 
   // Nº de embalagens = Total necessário ÷ peso da embalagem desse produto (já cadastrado, o mesmo
   // peso mostrado no card) — arredondado pela MESMA margem de tolerância por grupo do Guia de
@@ -573,17 +581,36 @@ function ModalCalculadoraPlantio({
               )}
 
               {modo === 'covas' && (
-                <label className="block text-xs text-[#67718a]">
-                  Espaçamento entre linhas (cm)
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={corredor}
-                    onChange={(e) => setCorredor(e.target.value)}
-                    className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
-                  />
-                  {distanciaCovas !== null && <span className="mt-1 block text-[11px] text-[#67718a]">Distância entre covas: {Math.round(distanciaCovas)}cm</span>}
-                </label>
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-xs text-[#67718a]">
+                      Espaçamento entre linhas (cm)
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={corredor}
+                        onChange={(e) => setCorredor(e.target.value)}
+                        className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
+                      />
+                    </label>
+                    <label className="block text-xs text-[#67718a]">
+                      Distância entre covas (cm)
+                      <input
+                        type="text"
+                        readOnly
+                        disabled
+                        value={distanciaCovas !== null ? Math.round(distanciaCovas) : '—'}
+                        title="Travada — segue o Espaçamento entre linhas, mantendo a densidade de covas por m² sempre igual"
+                        className="num mt-1 w-full cursor-not-allowed rounded-md border border-[#e2e6ed] bg-[#eef1f5] px-2.5 py-2 text-sm text-[#67718a]"
+                      />
+                    </label>
+                  </div>
+                  {sementesPorCova !== null && (
+                    <p className="text-xs text-[#67718a]">
+                      Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
+                    </p>
+                  )}
+                </div>
               )}
 
               <label className="block text-xs text-[#67718a]">
