@@ -50,7 +50,12 @@ export function nomeComDestaqueHtml(nome: string): string {
   return resultado;
 }
 
-/** Abre a janela de impressão e dispara o diálogo — mesmo fluxo pro catálogo padrão e pro de gerenciamento. */
+/**
+ * Abre a janela de impressão e dispara o diálogo — mesmo fluxo pro catálogo padrão e pro de
+ * gerenciamento. `onafterprint` fecha a aba sozinha assim que o diálogo de impressão é dispensado
+ * (impresso/salvo OU cancelado) — sem isso, a aba fica pra trás mostrando o HTML cru (sem o CSS de
+ * tela, só o de impressão), parecendo uma segunda tela solta do navegador com "o mesmo documento".
+ */
 export function abrirEImprimir(html: string): void {
   const janela = window.open('', '_blank', 'width=900,height=1000');
   if (!janela) {
@@ -60,6 +65,7 @@ export function abrirEImprimir(html: string): void {
   janela.document.open();
   janela.document.write(html);
   janela.document.close();
+  janela.onafterprint = () => janela.close();
   // onload E o setTimeout de fallback (pra navegadores que não disparam onload de forma
   // confiável em document.write) podem disparar os dois — a flag garante só 1 diálogo de impressão.
   let impresso = false;

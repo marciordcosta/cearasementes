@@ -805,6 +805,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   const [pdfEscolhaAberta, setPdfEscolhaAberta] = useState(false);
   const [numeroPdfWhatsAppAberto, setNumeroPdfWhatsAppAberto] = useState(false);
   const [enviandoPdfWhatsApp, setEnviandoPdfWhatsApp] = useState(false);
+  const [preparandoCompartilhamentoPdf, setPreparandoCompartilhamentoPdf] = useState(false);
 
   function alternarSelecao(itemId: string) {
     setCarrinho((prev) => {
@@ -824,7 +825,41 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     });
   }
 
-  /** Baixa o PDF (jsPDF de verdade, ver gerarCatalogoPublicoPdfBlob) e abre a conversa nesse número — wa.me abre o app no celular, o WhatsApp Web no computador; nenhum dos dois aceita anexo automático sem a API paga do WhatsApp Business, então o cliente anexa o arquivo recém-baixado manualmente. */
+  /**
+   * Tenta o compartilhamento nativo do navegador (Web Share API com arquivo) — a mesma tela que
+   * abre pra compartilhar um comprovante de banco: já lista o WhatsApp entre os apps e deixa
+   * escolher o CONTATO ali dentro, sem precisar digitar número nenhum aqui. Só existe em navegador
+   * de celular (Android/iOS) com suporte a compartilhar arquivo; em navegador sem esse suporte
+   * (a maioria dos computadores) devolve `false` pra cair no fallback de baixar+abrir wa.me. Cancelar
+   * a tela nativa (usuário mudou de ideia) conta como "concluído", não como "sem suporte" — não faz
+   * sentido emendar o fallback logo depois de um cancelamento proposital.
+   */
+  async function tentarCompartilharPdf(): Promise<boolean> {
+    if (!data) return false;
+    const nav = navigator as Navigator & { canShare?: (dados?: { files?: File[] }) => boolean; share?: (dados: { files?: File[]; title?: string }) => Promise<void> };
+    if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return false;
+    setPreparandoCompartilhamentoPdf(true);
+    try {
+      const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensFiltrados);
+      const nomeArquivo = `Catálogo ${data.canalNome ?? 'Ceará Sementes'}.pdf`;
+      const file = new File([blob], nomeArquivo, { type: 'application/pdf' });
+      if (!nav.canShare({ files: [file] })) return false;
+      await nav.share({ files: [file], title: nomeArquivo });
+      return true;
+    } catch (erro) {
+      return erro instanceof Error && erro.name === 'AbortError';
+    } finally {
+      setPreparandoCompartilhamentoPdf(false);
+    }
+  }
+
+  /** Clique em "Enviar por WhatsApp" — tenta o compartilhamento nativo primeiro (ver tentarCompartilharPdf); sem suporte, cai no fallback de pedir o número e abrir a conversa manualmente. */
+  async function iniciarEnvioPdf() {
+    const concluido = await tentarCompartilharPdf();
+    if (!concluido) setNumeroPdfWhatsAppAberto(true);
+  }
+
+  /** Fallback sem Web Share (a maioria dos computadores): baixa o PDF (jsPDF de verdade, ver gerarCatalogoPublicoPdfBlob) e abre a conversa nesse número — wa.me abre o app no celular, o WhatsApp Web no computador; nenhum dos dois aceita anexo automático sem a API paga do WhatsApp Business, então o cliente anexa o arquivo recém-baixado manualmente. */
   async function enviarPdfWhatsApp(digitos: string) {
     if (!data) return;
     setEnviandoPdfWhatsApp(true);
@@ -926,10 +961,11 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
             <button
               type="button"
               onClick={() => setPdfEscolhaAberta(true)}
+              disabled={preparandoCompartilhamentoPdf}
               title="Salvar ou enviar tabela em PDF"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 disabled:opacity-60"
             >
-              <FileText size={18} />
+              {preparandoCompartilhamentoPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
             </button>
           )}
           {temDadosPlantio && (
@@ -1069,7 +1105,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           titulo="Como você quer o catálogo?"
           onWhatsApp={() => {
             setPdfEscolhaAberta(false);
-            setNumeroPdfWhatsAppAberto(true);
+            void iniciarEnvioPdf();
           }}
           onPdf={() => {
             gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados);
