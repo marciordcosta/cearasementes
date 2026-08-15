@@ -783,41 +783,36 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-[#f5f7fa] pb-20">
-      <header className="border-b border-[#e2e6ed] bg-[#10233f] px-4 py-4 text-white">
-        <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Ceará Sementes</p>
-        {/* Ícones ao lado do nome da Tabela, dentro do topbar — rolam junto com o resto da página
-            (diferente do carrinho, que fica sozinho fixo no canto, ver botão do caminhão). */}
-        <div className="mt-0.5 flex items-center gap-2">
-          <h1 className="min-w-0 max-w-[65%] truncate text-lg font-bold">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</h1>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {isFetching && <Loader2 size={16} className="animate-spin text-white/70" aria-label="Atualizando…" />}
-            {data && (
-              <div className="flex flex-col items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
-                  title="Salvar tabela em PDF"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-                >
-                  <FileText size={15} />
-                </button>
-                <span className="text-[8px] font-semibold leading-none text-white/70">PDF</span>
-              </div>
-            )}
-            {temDadosPlantio && (
-              <div className="flex flex-col items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setCalculadoraAberta(true)}
-                  title="Calculadora de plantio"
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-                >
-                  <Calculator size={15} />
-                </button>
-                <span className="text-[8px] font-semibold leading-none text-white/70">Plantio</span>
-              </div>
-            )}
-          </div>
+      {/* 1 linha só (nome da empresa colado no nome da Tabela, sem quebra) — topbar baixo de
+          propósito, pra não tomar espaço de tela; ícones do tamanho dessa linha inteira
+          (topo-a-piso), não pequenos flutuando soltos. */}
+      <header className="flex items-center gap-2 border-b border-[#e2e6ed] bg-[#10233f] px-4 py-2 text-white">
+        <h1 className="min-w-0 max-w-[65%] truncate leading-tight">
+          <span className="text-sm font-medium text-white/70">Ceará Sementes </span>
+          <span className="text-lg font-bold">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</span>
+        </h1>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isFetching && <Loader2 size={18} className="animate-spin text-white/70" aria-label="Atualizando…" />}
+          {data && (
+            <button
+              type="button"
+              onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
+              title="Salvar tabela em PDF"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+            >
+              <FileText size={18} />
+            </button>
+          )}
+          {temDadosPlantio && (
+            <button
+              type="button"
+              onClick={() => setCalculadoraAberta(true)}
+              title="Calculadora de plantio"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
+            >
+              <Calculator size={18} />
+            </button>
+          )}
         </div>
       </header>
 
