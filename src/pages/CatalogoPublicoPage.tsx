@@ -95,17 +95,16 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
  * texto quebrar sozinho. `mostrarDetalhes` (Canal.mostrarDetalhesPlantio E Produto.mostrarDetalhesCatalogo
  * juntos, ver ChannelsPanel.tsx/EditProductModal.tsx — o produto SOBREPÕE a Tabela só pra esconder,
  * nunca pra forçar mostrar quando a Tabela está desligada) — só quando os dois permitem, VC%/
- * Validade/PMS entram na mesma linha discreta, nessa ordem: Fornecedor > VC% > Validade > PMS
- * (Validade antes do PMS — em tela pequena, quando corta, é a Validade que mais importa ficar
- * visível); desligado, mostra só o Fornecedor. PMS aqui é sempre o digitado NESSE laudo
- * (plantioPmsManual) — nunca o base da Parametrização.
+ * PMS/Validade entram na mesma linha discreta, nessa ordem: Fornecedor > VC% > PMS > Validade;
+ * desligado, mostra só o Fornecedor. PMS aqui é sempre o digitado NESSE laudo (plantioPmsManual) —
+ * nunca o base da Parametrização.
  */
 function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: ItemCatalogo; selecionado: boolean; mostrarDetalhes: boolean; onClick: () => void }) {
   const infoPartes = [
     item.fornecedorNome,
     mostrarDetalhes && item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
-    mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
     mostrarDetalhes && item.plantioPmsManual ? `PMS ${item.plantioPmsManual}` : null,
+    mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
   ].filter((parte): parte is string => !!parte);
 
   return (
