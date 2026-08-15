@@ -580,6 +580,18 @@ function ModalCalculadoraPlantio({
                 </div>
               )}
 
+              <label className="block text-xs text-[#67718a]">
+                Área (ha)
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  placeholder="Ex.: 10"
+                  className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+                />
+              </label>
+
               {modo === 'covas' && (
                 <div className="space-y-1.5">
                   <div className="grid grid-cols-2 gap-2">
@@ -612,18 +624,6 @@ function ModalCalculadoraPlantio({
                   )}
                 </div>
               )}
-
-              <label className="block text-xs text-[#67718a]">
-                Área (ha)
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={area}
-                  onChange={(e) => setArea(e.target.value)}
-                  placeholder="Ex.: 10"
-                  className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233] placeholder:text-[#67718a]"
-                />
-              </label>
 
               <div className="rounded-md bg-white p-2.5">
                 <div className="flex justify-between text-sm">
