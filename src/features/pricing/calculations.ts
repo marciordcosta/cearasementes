@@ -58,17 +58,18 @@ export function chaveComparacaoNome(nome: string): string {
  * destaque em negrito ter sido marcado certo — mesma fonte de dados usada pro casamento
  * laudo↔produto no Catálogo Online e na Parametrização (ver calculoSemeadura.ts/
  * parametrizacaoProdutos.ts), "amarrando" os vários lugares do sistema que precisam achar "o mesmo
- * produto" na mesma informação. DE PROPÓSITO sem Categoria/Subcategoria como 2º eixo aqui — no
- * catálogo, Tradicional/Incrustado do mesmo Cultivar continuam o MESMO produto agrupado (não viram
- * grupos diferentes só por causa da Categoria/Classe cadastrada). Produto sem Cultivar cadastrado
- * (ainda não migrado) cai no critério antigo — nome destacado (ou 2ª palavra) + Subcategoria (ver
- * chaveComparacaoNome). Único lugar que monta essa chave; compra.ts, compraComparacao.ts,
- * PricingTable.tsx, catalogoPdf.ts e GraficoRepresentacaoModal.tsx reaproveitam em vez de remontar a
- * mesma string cada um por conta própria.
+ * produto" na mesma informação. DE PROPÓSITO sem Categoria nem Subcategoria/Classe em jogo — no
+ * catálogo, Tradicional/Incrustado do mesmo Cultivar continuam o MESMO produto agrupado, mesmo
+ * cadastrados em Classes diferentes (bug real, corrigido: "Brach Decumbens Incrustado" x "Brach
+ * Decumbens Tradicional" com Classe diferente cadastrada ficavam separados). Produto sem Cultivar
+ * cadastrado (ainda não migrado) cai no critério antigo — só nome destacado (ou 2ª palavra), também
+ * sem exigir a mesma Subcategoria (ver chaveComparacaoNome). Único lugar que monta essa chave;
+ * compra.ts, compraComparacao.ts, PricingTable.tsx, catalogoPdf.ts e GraficoRepresentacaoModal.tsx
+ * reaproveitam em vez de remontar a mesma string cada um por conta própria.
  */
-export function chaveComparacaoProduto(produto: { nome: string; subcategoriaId: string | null; cultivar: string | null }): string {
+export function chaveComparacaoProduto(produto: { nome: string; cultivar: string | null }): string {
   if (produto.cultivar) return `cultivar:${produto.cultivar.trim().toUpperCase()}`;
-  return `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}`;
+  return chaveComparacaoNome(produto.nome);
 }
 
 
