@@ -12,7 +12,7 @@ import {
   sementesComAjustePorDistancia,
 } from '@/features/arquivos/calculoSemeadura';
 import { paraNumero } from '@/features/arquivos/metricas';
-import { chaveComparacaoNome } from '@/features/pricing/calculations';
+import { chaveComparacaoProduto } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
 import { gerarCatalogoPublicoPdf, gerarCatalogoPublicoPdfBlob } from '@/features/pricing/catalogoPublicoPdf';
 import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
@@ -926,6 +926,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         fornecedorNome: item.fornecedorNome,
         preco: item.preco,
         peso: item.peso,
+        cultivar: item.cultivar,
         plantioVc: item.plantioVc,
         plantioPmsManual: item.plantioPmsManual,
         plantioValidade: item.plantioValidade,
@@ -934,8 +935,9 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     [itensFiltrados, data?.mostrarDetalhesPlantio],
   );
 
-  // Categoria -> blocos "colados" (mesmo produto/variantes, ver chaveComparacaoNome — mesma regra
-  // do PDF de catálogo) -> itens. Produto diferente do anterior sempre inicia um bloco novo (espaço
+  // Categoria -> blocos "colados" (mesmo produto/variantes, ver chaveComparacaoProduto — mesma
+  // regra do PDF de catálogo e da grade interna: prioriza Cultivar cadastrado, sem Categoria/Classe
+  // interferindo) -> itens. Produto diferente do anterior sempre inicia um bloco novo (espaço
   // padrão entre blocos); mesma família de produto continua no MESMO bloco (visualmente colado).
   const grupos = useMemo(() => {
     const porCategoria: { categoriaNome: string; blocos: { chave: string; itens: ItemCatalogo[] }[] }[] = [];
@@ -945,7 +947,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         grupoAtual = { categoriaNome: item.categoriaNome, blocos: [] };
         porCategoria.push(grupoAtual);
       }
-      const chave = chaveComparacaoNome(item.nome);
+      const chave = chaveComparacaoProduto(item);
       const blocoAtual = grupoAtual.blocos[grupoAtual.blocos.length - 1];
       if (blocoAtual && blocoAtual.chave === chave) blocoAtual.itens.push(item);
       else grupoAtual.blocos.push({ chave, itens: [item] });

@@ -2,7 +2,7 @@
 // embaixo, mesmo padrão de etiquetaFretePdf.ts), não no carregamento inicial da página pública.
 import type { jsPDF } from 'jspdf';
 import { abrirEImprimir, escapeHtml, gerarQrCodeSvg, nomeComDestaqueHtml } from './catalogoPdf';
-import { chaveComparacaoNome } from './calculations';
+import { chaveComparacaoProduto } from './calculations';
 
 const LINK_CATALOGO = 'https://linktr.ee/cearasementes';
 
@@ -12,6 +12,8 @@ export interface ItemCatalogoPublicoPdf {
   fornecedorNome: string | null;
   preco: number;
   peso: number;
+  /** Usado pra agrupar "mesmo produto" (ver chaveComparacaoProduto) — prioriza Cultivar cadastrado, sem Categoria/Classe interferindo. */
+  cultivar: string | null;
 }
 
 /** Igual tamanhoNomeCh em catalogoPdf.ts, só que a partir de texto solto (nome/fornecedor) em vez de `Produto`/`Fornecedor` — aqui só temos o snapshot já publicado. */
@@ -49,7 +51,7 @@ export function gerarCatalogoPublicoPdf(canalNome: string, itens: ItemCatalogoPu
     let linhas = '';
     itensCat.forEach((item, indice) => {
       const tagFornecedor = item.fornecedorNome ? ` <span class="tag-fornecedor">${escapeHtml(item.fornecedorNome)}</span>` : '';
-      const produtoMudou = indice > 0 && chaveComparacaoNome(item.nome) !== chaveComparacaoNome(itensCat[indice - 1].nome);
+      const produtoMudou = indice > 0 && chaveComparacaoProduto(item) !== chaveComparacaoProduto(itensCat[indice - 1]);
       linhas += `
         <tr class="${produtoMudou ? 'divisor' : ''}">
           <td>${nomeComDestaqueHtml(item.nome)}${tagFornecedor}</td>
@@ -259,7 +261,7 @@ function desenharNomeComDestaque(doc: jsPDF, nome: string, x: number, y: number,
  * (ModalNumeroWhatsApp em CatalogoPublicoPage.tsx), que precisa baixar um arquivo de verdade pro
  * cliente anexar na conversa, algo que window.print() não permite. Layout mais simples que o
  * catálogo "oficial" só na formatação da tabela em si (sem bordas de categoria coloridas) — o
- * cabeçalho (marca + QR), o agrupamento "colado" por produto (ver chaveComparacaoNome) e o destaque
+ * cabeçalho (marca + QR), o agrupamento "colado" por produto (ver chaveComparacaoProduto) e o destaque
  * em negrito do nome seguem o mesmo padrão.
  */
 export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: ItemCatalogoPublicoPdfDetalhado[]): Promise<Blob> {
@@ -329,10 +331,10 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
     const itensCat = [...(categoriasPresentes.get(cat) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     itensCat.forEach((item, indice) => {
       if (y > PDF_Y_LIMITE - 8) y = pdfNovaPagina(doc);
-      // Mesmo critério "colado" do catálogo oficial e da grade interna (ver chaveComparacaoNome em
+      // Mesmo critério "colado" do catálogo oficial e da grade interna (ver chaveComparacaoProduto em
       // calculations.ts) — variantes do mesmo produto (fornecedor/tratamento) ficam juntas, sem
       // espaço extra entre elas; produto DIFERENTE do anterior ganha uma linha fina separando.
-      const produtoMudou = indice > 0 && chaveComparacaoNome(item.nome) !== chaveComparacaoNome(itensCat[indice - 1].nome);
+      const produtoMudou = indice > 0 && chaveComparacaoProduto(item) !== chaveComparacaoProduto(itensCat[indice - 1]);
       if (produtoMudou) {
         doc.setDrawColor(170);
         doc.line(PDF_MARGEM, y - 2, PDF_LARGURA - PDF_MARGEM, y - 2);

@@ -626,6 +626,8 @@ export interface ItemCatalogoPublicoInput {
   plantioPrecisaPesoPorCova: boolean;
   /** = Produto.mostrarDetalhesCatalogo — false SOBREPÕE Canal.mostrarDetalhesPlantio e esconde VC%/Validade/PMS no card só pra esse item. */
   mostrarDetalhesCatalogo: boolean;
+  /** = Produto.cultivar — pra agrupar "mesmo produto" na página/PDFs públicos (ver chaveComparacaoProduto em calculations.ts), igual já vale internamente. */
+  cultivar: string | null;
   ordem: number;
 }
 
@@ -650,6 +652,7 @@ function itemCatalogoParaRow(canalId: string, item: ItemCatalogoPublicoInput) {
     plantio_margem_tolerancia: item.plantioMargemTolerancia,
     plantio_precisa_peso_por_cova: item.plantioPrecisaPesoPorCova,
     mostrar_detalhes_catalogo: item.mostrarDetalhesCatalogo,
+    cultivar: item.cultivar,
     ordem: item.ordem,
   };
 }
@@ -739,6 +742,7 @@ export interface CatalogoPublico {
     plantioMargemTolerancia: number | null;
     plantioPrecisaPesoPorCova: boolean;
     mostrarDetalhesCatalogo: boolean;
+    cultivar: string | null;
   }[];
 }
 
@@ -780,6 +784,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       plantioMargemTolerancia: i.plantio_margem_tolerancia,
       plantioPrecisaPesoPorCova: i.plantio_precisa_peso_por_cova,
       mostrarDetalhesCatalogo: i.mostrar_detalhes_catalogo,
+      cultivar: i.cultivar,
     })),
   };
 }

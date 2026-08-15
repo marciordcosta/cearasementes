@@ -468,6 +468,7 @@ export function PricingPage() {
       plantioMargemTolerancia: plantio.margemTolerancia,
       plantioPrecisaPesoPorCova: plantio.precisaPesoPorCova,
       mostrarDetalhesCatalogo: p.mostrarDetalhesCatalogo,
+      cultivar: p.cultivar,
       ordem: indice,
     };
   }
