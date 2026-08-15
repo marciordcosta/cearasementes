@@ -245,12 +245,21 @@ export function kgPorHaDeSementesCova(covasPorM2: number | null, sementesCova: n
   return covasPorM2 !== null && sementesCova !== null && pms !== null && pms > 0 ? (covasPorM2 * sementesCova * pms) / 100 : null;
 }
 
-/** Fornecedor do laudo "bate" com o Fornecedor cadastrado no produto da Tabela de Preço — comparação frouxa (normalizada, uma string contida na outra) pra tolerar variações de escrita ("Barenbrug" x "Barenbrug Sementes"). Null de qualquer lado nunca bate. */
+/**
+ * Fornecedor do laudo "bate" com o Fornecedor cadastrado no produto da Tabela de Preço — frouxo o
+ * suficiente pra tolerar variações de escrita ("Barenbrug" x "Barenbrug Sementes"), mas por PALAVRA
+ * inteira (não substring bruta): toda palavra do nome mais curto precisa aparecer como palavra
+ * INTEIRA no nome mais longo. Substring bruta (versão antiga) deixava uma palavra curta/genérica
+ * ("Grão") bater dentro de qualquer nome que a contivesse por acaso ("Multigrão"), mesmo sendo
+ * fornecedores completamente diferentes — risco real, fechado. Também não depende mais da ordem das
+ * palavras ("Sementes Adriana" agora bate com "Adriana Sementes"). Null de qualquer lado nunca bate.
+ */
 function fornecedorCasaComProduto(fornecedorLaudo: string | null, fornecedorProduto: string | null): boolean {
   if (!fornecedorLaudo || !fornecedorProduto) return false;
-  const a = normalizarNome(fornecedorLaudo);
-  const b = normalizarNome(fornecedorProduto);
-  return a === b || a.includes(b) || b.includes(a);
+  const palavrasLaudo = normalizarNome(fornecedorLaudo).split(' ').filter(Boolean);
+  const palavrasProduto = normalizarNome(fornecedorProduto).split(' ').filter(Boolean);
+  const [menor, maior] = palavrasLaudo.length <= palavrasProduto.length ? [palavrasLaudo, palavrasProduto] : [palavrasProduto, palavrasLaudo];
+  return menor.length > 0 && menor.every((palavra) => maior.includes(palavra));
 }
 
 /** Processos conhecidos do sistema — únicos usados pra decidir se a Tabela de Preço "menciona um Processo" (ver mencionaProcessoConflitante). */
