@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { AutocompleteInput } from '@/features/fretes/components/AutocompleteInput';
 import { paraNumero } from '../metricas';
 import { cultivarDoLaudo, normalizarNome } from '../parametrizacaoProdutos';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
@@ -214,6 +215,197 @@ function BlocoPerguntaChecklist({
   );
 }
 
+/**
+ * 1 linha da grade de Produtos — Cultivar/Processo em autocomplete, sugerindo os já cadastrados nos
+ * LAUDOS (fonte dessa informação, ver cultivarDoLaudo em parametrizacaoProdutos.ts): evita divergência
+ * de grafia entre o que fica aqui e o que fica no laudo, já que o casamento compara os 2 direto,
+ * exato. Estado local só nesses 2 campos (precisam ser controlados pro autocomplete funcionar) — os
+ * demais continuam no padrão defaultValue+onBlur do resto da grade, sem precisar de estado React.
+ * Salva ao sair do campo (onBlur) ou ao clicar numa sugestão (onSelecionar) — nunca a cada tecla.
+ */
+function LinhaParametrizacao({
+  cultivarSugerido,
+  processoSugerido,
+  existente,
+  cultivaresLaudos,
+  processosLaudos,
+  onSalvar,
+  onApagar,
+  onAbrirObservacao,
+}: {
+  cultivarSugerido: string;
+  processoSugerido: string;
+  existente: ProdutoParametrizacao | null;
+  cultivaresLaudos: string[];
+  processosLaudos: string[];
+  onSalvar: ParametrizacaoProdutosModalProps['onSalvar'];
+  onApagar: (id: string) => void;
+  onAbrirObservacao: (titulo: string, campos: CamposProduto, idExistente: string | null) => void;
+}) {
+  const cultivarInicial = existente?.cultivar ?? cultivarSugerido;
+  const processoInicial = existente?.processo ?? processoSugerido;
+  const [cultivar, setCultivar] = useState(cultivarInicial);
+  const [processo, setProcesso] = useState(processoInicial);
+  const idExistente = existente?.id ?? null;
+
+  const camposAtuais: CamposProduto = {
+    cultivar,
+    processo,
+    pmsBase: existente?.pmsBase ?? '',
+    densidadeBase: existente?.densidadeBase ?? '',
+    maxPlantulasMetroLinear: existente?.maxPlantulasMetroLinear ?? '',
+    maxPlantulasCova: existente?.maxPlantulasCova ?? '',
+    indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
+    perdaMedia: existente?.perdaMedia ?? '',
+    perdaBaixa: existente?.perdaBaixa ?? '',
+    modoPlantio: existente?.modoPlantio ?? null,
+    margemTolerancia: existente?.margemTolerancia ?? '',
+    observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
+  };
+  const tituloObservacao = [camposAtuais.cultivar, camposAtuais.processo].filter(Boolean).join(' ') || 'Sem Cultivar';
+
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
+      <AutocompleteInput
+        value={cultivar}
+        onChangeTexto={setCultivar}
+        onSelecionar={(valor) => {
+          setCultivar(valor);
+          if (valor.trim()) onSalvar({ ...camposAtuais, cultivar: valor }, idExistente);
+        }}
+        onBlur={() => {
+          const valor = cultivar.trim();
+          if (valor && valor !== cultivarInicial) onSalvar({ ...camposAtuais, cultivar: valor }, idExistente);
+        }}
+        opcoes={cultivaresLaudos.map((c) => ({ valor: c }))}
+        placeholder="Cultivar"
+        title="Ex.: Massai, Marandu — junto com Processo, é o que casa essa linha com o laudo certo"
+        className={`w-28 shrink-0 ${campoClasse}`}
+      />
+      <AutocompleteInput
+        value={processo}
+        onChangeTexto={setProcesso}
+        onSelecionar={(valor) => {
+          setProcesso(valor);
+          onSalvar({ ...camposAtuais, processo: valor }, idExistente);
+        }}
+        onBlur={() => {
+          const valor = processo.trim();
+          if (valor !== processoInicial) onSalvar({ ...camposAtuais, processo: valor }, idExistente);
+        }}
+        opcoes={processosLaudos.map((p) => ({ valor: p }))}
+        placeholder="(sem Processo)"
+        title="Ex.: Tradicional, Incrustado — em branco vale só pra laudo sem Processo cadastrado"
+        className={`w-24 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.pmsBase}
+        title="Peso de Mil Sementes (g)"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.densidadeBase}
+        placeholder="por m²"
+        title="Plântulas pretendidas por m² — usada em modo A Lanço"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.maxPlantulasMetroLinear}
+        placeholder="sem limite"
+        title="Máx. de plântulas pretendidas por metro linear — usada em Milho/Sorgo e no modo Linha"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.maxPlantulasCova}
+        placeholder="8"
+        title="Plântulas pretendidas por cova — usada em modo Covas"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.indiceSobrevivencia}
+        placeholder="ideal"
+        title="Índice de Sobrevivência (%)"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.perdaMedia}
+        placeholder="global"
+        title="Perda (%) na Condição Média — em branco, usa o valor global"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.perdaMedia) onSalvar({ ...camposAtuais, perdaMedia: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <input
+        defaultValue={camposAtuais.perdaBaixa}
+        placeholder="global"
+        title="Perda (%) na Condição Baixa — em branco, usa o valor global"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.perdaBaixa) onSalvar({ ...camposAtuais, perdaBaixa: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <select
+        value={camposAtuais.modoPlantio ?? 'lanco'}
+        onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' | 'linha' }, idExistente)}
+        title="Modo de plantio padrão"
+        className={`w-[74px] shrink-0 ${campoClasse}`}
+      >
+        <option value="lanco">Lanço</option>
+        <option value="linha">Linha</option>
+        <option value="cova">Cova</option>
+      </select>
+      <input
+        defaultValue={camposAtuais.margemTolerancia}
+        placeholder="25"
+        title="Margem de tolerância (%) pra arredondar sacos"
+        onBlur={(e) => {
+          const valor = e.target.value.trim();
+          if (valor !== camposAtuais.margemTolerancia) onSalvar({ ...camposAtuais, margemTolerancia: valor }, idExistente);
+        }}
+        className={`w-16 shrink-0 ${campoClasse}`}
+      />
+      <button
+        type="button"
+        onClick={() => onAbrirObservacao(tituloObservacao, camposAtuais, idExistente)}
+        title={camposAtuais.observacaoEtiqueta ? `Observação: ${camposAtuais.observacaoEtiqueta}` : 'Adicionar observação (texto impresso no Selo)'}
+        className={`w-8 shrink-0 text-center text-sm ${camposAtuais.observacaoEtiqueta ? 'text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'} hover:text-[var(--color-navy)]`}
+      >
+        📝
+      </button>
+      {existente ? (
+        <button type="button" onClick={() => onApagar(existente.id)} title="Excluir essa linha de parametrização" className="text-[var(--color-text-soft)] hover:text-bad">
+          🗑
+        </button>
+      ) : (
+        <span className="w-8 shrink-0" />
+      )}
+    </div>
+  );
+}
+
 /** PMS base, Densidade base (plantas/m²) e Índice de Sobrevivência (%) por Cultivar+Processo — cadastrado uma vez aqui, usado automaticamente no cálculo de kg/ha de todo laudo desse Cultivar+Processo. */
 export function ParametrizacaoProdutosModal({
   open,
@@ -284,6 +476,26 @@ export function ParametrizacaoProdutosModal({
     return linhas.sort((a, b) => a.cultivar.localeCompare(b.cultivar) || a.processo.localeCompare(b.processo));
   }, [produtos, arquivos]);
 
+  // Sugestões pro autocomplete de Cultivar/Processo (ver LinhaParametrizacao) — os laudos são a
+  // FONTE dessa informação, então cadastro manual aqui busca dessa mesma lista, evitando divergência
+  // de grafia entre o que fica na Parametrização e o que fica no laudo.
+  const cultivaresLaudos = useMemo(() => {
+    const vistos = new Set<string>();
+    arquivos.forEach((a) => {
+      const cultivar = cultivarDoLaudo(a);
+      if (cultivar) vistos.add(cultivar);
+    });
+    return [...vistos].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [arquivos]);
+  const processosLaudos = useMemo(() => {
+    const vistos = new Set<string>();
+    arquivos.forEach((a) => {
+      const processo = (a.processo ?? '').trim();
+      if (processo) vistos.add(processo);
+    });
+    return [...vistos].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [arquivos]);
+
   return (
     <>
     <Modal open={open} title="Parametrização de Produtos" onClose={onFechar} widthClassName="max-w-[1080px]">
@@ -323,151 +535,19 @@ export function ParametrizacaoProdutosModal({
               <span className="w-8 shrink-0 text-center">Obs.</span>
               <span className="w-8 shrink-0" />
             </div>
-            {linhasParametrizacao.map(({ chave, cultivar, processo, existente }) => {
-              const camposAtuais = {
-                cultivar: existente?.cultivar ?? cultivar,
-                processo: existente?.processo ?? processo,
-                pmsBase: existente?.pmsBase ?? '',
-                densidadeBase: existente?.densidadeBase ?? '',
-                maxPlantulasMetroLinear: existente?.maxPlantulasMetroLinear ?? '',
-                maxPlantulasCova: existente?.maxPlantulasCova ?? '',
-                indiceSobrevivencia: existente?.indiceSobrevivencia ?? '',
-                perdaMedia: existente?.perdaMedia ?? '',
-                perdaBaixa: existente?.perdaBaixa ?? '',
-                modoPlantio: existente?.modoPlantio ?? null,
-                margemTolerancia: existente?.margemTolerancia ?? '',
-                observacaoEtiqueta: existente?.observacaoEtiqueta ?? '',
-              };
-              const tituloObservacao = [camposAtuais.cultivar, camposAtuais.processo].filter(Boolean).join(' ') || 'Sem Cultivar';
-              return (
-              <div key={chave} className="flex items-center gap-2 rounded-md bg-[var(--color-page)] px-3 py-1.5">
-                <input
-                  defaultValue={camposAtuais.cultivar}
-                  placeholder="Cultivar"
-                  title="Ex.: Massai, Marandu — junto com Processo, é o que casa essa linha com o laudo certo"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor && valor !== camposAtuais.cultivar) onSalvar({ ...camposAtuais, cultivar: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-28 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.processo}
-                  placeholder="(sem Processo)"
-                  title="Ex.: Tradicional, Incrustado — em branco vale só pra laudo sem Processo cadastrado"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.processo) onSalvar({ ...camposAtuais, processo: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-24 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.pmsBase}
-                  title="Peso de Mil Sementes (g)"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.densidadeBase}
-                  placeholder="por m²"
-                  title="Plântulas pretendidas por m² — usada em modo A Lanço"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.densidadeBase) onSalvar({ ...camposAtuais, densidadeBase: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.maxPlantulasMetroLinear}
-                  placeholder="sem limite"
-                  title="Máx. de plântulas pretendidas por metro linear — usada em Milho/Sorgo e no modo Linha"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxPlantulasMetroLinear) onSalvar({ ...camposAtuais, maxPlantulasMetroLinear: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.maxPlantulasCova}
-                  placeholder="8"
-                  title="Plântulas pretendidas por cova — usada em modo Covas"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.maxPlantulasCova) onSalvar({ ...camposAtuais, maxPlantulasCova: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.indiceSobrevivencia}
-                  placeholder="ideal"
-                  title="Índice de Sobrevivência (%)"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.indiceSobrevivencia) onSalvar({ ...camposAtuais, indiceSobrevivencia: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.perdaMedia}
-                  placeholder="global"
-                  title="Perda (%) na Condição Média — em branco, usa o valor global"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.perdaMedia) onSalvar({ ...camposAtuais, perdaMedia: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <input
-                  defaultValue={camposAtuais.perdaBaixa}
-                  placeholder="global"
-                  title="Perda (%) na Condição Baixa — em branco, usa o valor global"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.perdaBaixa) onSalvar({ ...camposAtuais, perdaBaixa: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <select
-                  value={camposAtuais.modoPlantio ?? 'lanco'}
-                  onChange={(e) => onSalvar({ ...camposAtuais, modoPlantio: e.target.value as 'cova' | 'lanco' | 'linha' }, existente?.id ?? null)}
-                  title="Modo de plantio padrão"
-                  className={`w-[74px] shrink-0 ${campoClasse}`}
-                >
-                  <option value="lanco">Lanço</option>
-                  <option value="linha">Linha</option>
-                  <option value="cova">Cova</option>
-                </select>
-                <input
-                  defaultValue={camposAtuais.margemTolerancia}
-                  placeholder="25"
-                  title="Margem de tolerância (%) pra arredondar sacos"
-                  onBlur={(e) => {
-                    const valor = e.target.value.trim();
-                    if (valor !== camposAtuais.margemTolerancia) onSalvar({ ...camposAtuais, margemTolerancia: valor }, existente?.id ?? null);
-                  }}
-                  className={`w-16 shrink-0 ${campoClasse}`}
-                />
-                <button
-                  type="button"
-                  onClick={() => abrirObservacao(tituloObservacao, camposAtuais, existente?.id ?? null)}
-                  title={camposAtuais.observacaoEtiqueta ? `Observação: ${camposAtuais.observacaoEtiqueta}` : 'Adicionar observação (texto impresso no Selo)'}
-                  className={`w-8 shrink-0 text-center text-sm ${camposAtuais.observacaoEtiqueta ? 'text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'} hover:text-[var(--color-navy)]`}
-                >
-                  📝
-                </button>
-                {existente ? (
-                  <button type="button" onClick={() => onApagar(existente.id)} title="Excluir essa linha de parametrização" className="text-[var(--color-text-soft)] hover:text-bad">
-                    🗑
-                  </button>
-                ) : (
-                  <span className="w-8 shrink-0" />
-                )}
-              </div>
-              );
-            })}
+            {linhasParametrizacao.map(({ chave, cultivar, processo, existente }) => (
+              <LinhaParametrizacao
+                key={chave}
+                cultivarSugerido={cultivar}
+                processoSugerido={processo}
+                existente={existente}
+                cultivaresLaudos={cultivaresLaudos}
+                processosLaudos={processosLaudos}
+                onSalvar={onSalvar}
+                onApagar={onApagar}
+                onAbrirObservacao={abrirObservacao}
+              />
+            ))}
             {linhasParametrizacao.length === 0 && <p className="text-sm text-[var(--color-text-soft)]">Nenhum laudo importado ainda.</p>}
           </div>
         </div>

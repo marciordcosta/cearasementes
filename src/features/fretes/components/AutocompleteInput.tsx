@@ -27,7 +27,9 @@ export function AutocompleteInput({
   onChangeTexto,
   opcoes,
   onSelecionar,
+  onBlur,
   placeholder,
+  title,
   className,
 }: {
   value: string;
@@ -35,7 +37,10 @@ export function AutocompleteInput({
   opcoes: OpcaoAutocomplete[];
   /** Chamado ao clicar (ou dar Enter) numa sugestão — por padrão só preenche o texto. */
   onSelecionar?: (opcao: string) => void;
+  /** Ex.: pra disparar um salvamento só ao sair do campo (não a cada tecla) — mesmo padrão dos outros campos de grade editável. Clicar numa sugestão NÃO passa por aqui (o botão da sugestão usa onMouseDown+preventDefault de propósito, pra não tirar o foco do input); use onSelecionar pra reagir a esse caminho também. */
+  onBlur?: () => void;
   placeholder?: string;
+  title?: string;
   className?: string;
 }) {
   const [aberto, setAberto] = useState(false);
@@ -69,11 +74,13 @@ export function AutocompleteInput({
           setAberto(true);
         }}
         onFocus={() => setAberto(true)}
+        onBlur={onBlur}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && filtradas.length > 0) selecionar(filtradas[0].valor);
           if (e.key === 'Escape') setAberto(false);
         }}
         placeholder={placeholder}
+        title={title}
         autoComplete="off"
         className={className}
       />
