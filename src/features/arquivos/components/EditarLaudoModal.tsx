@@ -43,7 +43,6 @@ function Campo({ label, children }: { label: string; children: ReactNode }) {
 
 /** O arquivo pode ter sido salvo com dados errados ou faltando (detecção automática não pega tudo em PDF) — aqui corrige os metadados, sem reenviar o arquivo. */
 export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: EditarLaudoModalProps) {
-  const [nomeProduto, setNomeProduto] = useState('');
   const [lote, setLote] = useState('');
   const [anoSafra, setAnoSafra] = useState('');
   const [pureza, setPureza] = useState('');
@@ -58,7 +57,6 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
 
   useEffect(() => {
     if (!laudo) return;
-    setNomeProduto(laudo.nomeProduto);
     setLote(laudo.lote ?? '');
     setAnoSafra(laudo.anoSafra ?? '');
     setPureza(laudo.pureza ?? '');
@@ -73,17 +71,25 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
   }, [laudo]);
 
   function salvar() {
-    if (!laudo || !nomeProduto.trim() || !lote.trim() || !anoSafra.trim()) return;
+    if (!laudo || !cultivar.trim() || !lote.trim() || !anoSafra.trim()) return;
+    const cultivarTrim = cultivar.trim();
+    const processoTrim = processo.trim();
+    // Nome do Produto não é mais digitado à mão — some do formulário, mas continua existindo por
+    // baixo dos panos (grade de Arquivos, casamento com peso na Tabela de Preço pro Selo, ver
+    // encontrarProdutoPreco), montado automaticamente a partir de Espécie (fixa, lida do laudo) +
+    // Cultivar + Processo, mesma fórmula usada na extração original (ver interpretarConteudoLaudo.ts).
+    const baseNome = laudo.especie ? `${laudo.especie} ${cultivarTrim}` : cultivarTrim;
+    const nomeProduto = processoTrim ? `${baseNome} ${processoTrim}` : baseNome;
     onSalvar(laudo.id, {
-      nomeProduto: nomeProduto.trim(),
+      nomeProduto,
       lote: lote.trim(),
       anoSafra: anoSafra.trim(),
       pureza: pureza.trim(),
       germinacao: germinacao.trim(),
       validade: validade.trim(),
       categoria: categoria.trim(),
-      processo: processo.trim(),
-      cultivar: cultivar.trim(),
+      processo: processoTrim,
+      cultivar: cultivarTrim,
       fornecedor: fornecedor.trim(),
       pesoEmbalagem: pesoEmbalagem.trim(),
       pms: pms.trim(),
@@ -110,16 +116,13 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
         <p className="truncate text-xs text-[var(--color-text-soft)]" title={laudo?.arquivoNome}>
           Arquivo: {laudo?.arquivoNome}
         </p>
-        <Campo label="Nome do Produto *">
-          <input value={nomeProduto} onChange={(e) => setNomeProduto(e.target.value)} className={campoClasse} />
-        </Campo>
-        <Campo label="Cultivar">
+        <Campo label="Cultivar *">
           <input
             value={cultivar}
             onChange={(e) => setCultivar(e.target.value)}
             className={campoClasse}
             placeholder="Ex.: Massai, Marandu (lido do laudo quando o documento traz)"
-            title="Preenchido nos 2 lados (aqui e no produto correspondente na Tabela de Preço), o Catálogo Online casa esse laudo com o produto certo direto por esse campo — sem depender do nome bater por texto."
+            title="Preenchido nos 2 lados (aqui e no produto correspondente na Tabela de Preço), o Catálogo Online e a Parametrização casam esse laudo direto por esse campo — sem depender do nome bater por texto."
           />
         </Campo>
         <Campo label="Processo">
