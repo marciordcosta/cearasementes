@@ -10,20 +10,33 @@ interface ExportPdfModalProps {
   /** 'gerenciamento' expõe Custo/Frete/Encargos/Margem no PDF; 'online' publica o Catálogo Online (link público) em vez de gerar PDF — só ajusta o texto do modal, quem executa a ação é o chamador. */
   modo?: 'padrao' | 'gerenciamento' | 'online';
   onFechar: () => void;
-  onConfirmar: (canal: Canal) => void;
+  /** 1 ou mais Tabelas marcadas — no modo PDF, o chamador gera um arquivo por Tabela (separados); no modo 'online', publica/atualiza todas de uma vez. */
+  onConfirmar: (canais: Canal[]) => void;
 }
 
 export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar, onConfirmar }: ExportPdfModalProps) {
-  const [selecionadoId, setSelecionadoId] = useState<string | null>(canaisVisiveis[0]?.id ?? null);
+  const [selecionadosIds, setSelecionadosIds] = useState<Set<string>>(() => new Set(canaisVisiveis[0] ? [canaisVisiveis[0].id] : []));
+
+  function alternar(id: string) {
+    setSelecionadosIds((prev) => {
+      const proximo = new Set(prev);
+      if (proximo.has(id)) proximo.delete(id);
+      else proximo.add(id);
+      return proximo;
+    });
+  }
 
   function confirmar() {
-    const canal = canaisVisiveis.find((c) => c.id === selecionadoId);
-    if (!canal) {
-      alert('Selecione uma Tabela de Preço para gerar o catálogo.');
+    const canais = canaisVisiveis.filter((c) => selecionadosIds.has(c.id));
+    if (canais.length === 0) {
+      alert('Selecione ao menos uma Tabela de Preço.');
       return;
     }
-    onConfirmar(canal);
+    onConfirmar(canais);
   }
+
+  const rotuloBotao =
+    modo === 'online' ? `Publicar${selecionadosIds.size > 1 ? ` (${selecionadosIds.size})` : ''}` : `Confirmar Impressão${selecionadosIds.size > 1 ? ` (${selecionadosIds.size})` : ''}`;
 
   return (
     <Modal
@@ -36,17 +49,17 @@ export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar
             Cancelar
           </Button>
           <Button variant="action" onClick={confirmar}>
-            {modo === 'online' ? 'Publicar' : 'Confirmar Impressão'}
+            {rotuloBotao}
           </Button>
         </>
       }
     >
       <p className="mb-3 text-sm text-[var(--color-text-soft)]">
         {modo === 'gerenciamento'
-          ? 'Escolha qual Tabela de Preço será usada no relatório — ele traz Custo/Frete/Encargos/Margem R$ além de Valor e Peso, uso interno (não é pra ir pro cliente). Respeita o filtro de Classe/Categoria atualmente selecionado na tela.'
+          ? 'Escolha 1 ou mais Tabelas de Preço — marcando mais de uma, gera um relatório separado pra cada. Cada um traz Custo/Frete/Encargos/Margem R$ além de Valor e Peso, uso interno (não é pra ir pro cliente). Respeita o filtro de Classe/Categoria atualmente selecionado na tela.'
           : modo === 'online'
-            ? 'Escolha qual Tabela de Preço vira o link público — mostra só nome, peso e preço dos produtos marcados "Imprimir" (com Código cadastrado). Publicar de novo substitui o que estava no link antes.'
-            : 'Escolha qual Tabela de Preço será usada como coluna "Valor (R$)" no catálogo. O relatório respeitará o filtro de Classe/Categoria atualmente selecionado na tela.'}
+            ? 'Escolha 1 ou mais Tabelas de Preço — marcando mais de uma, publica/atualiza o link público de todas de uma vez. Mostra só nome, peso e preço dos produtos marcados "Imprimir" (com Código cadastrado). Publicar de novo substitui o que estava no link antes.'
+            : 'Escolha 1 ou mais Tabelas de Preço — marcando mais de uma, gera um catálogo separado pra cada. O relatório respeitará o filtro de Classe/Categoria atualmente selecionado na tela.'}
       </p>
       {canaisVisiveis.length === 0 ? (
         <p className="text-sm text-[var(--color-text-soft)]">
@@ -59,12 +72,7 @@ export function ExportPdfModal({ open, canaisVisiveis, modo = 'padrao', onFechar
               key={canal.id}
               className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-[var(--color-line)] px-3 py-2.5 text-sm hover:bg-[var(--color-page)]"
             >
-              <input
-                type="radio"
-                name="canal-pdf"
-                checked={selecionadoId === canal.id}
-                onChange={() => setSelecionadoId(canal.id)}
-              />
+              <input type="checkbox" checked={selecionadosIds.has(canal.id)} onChange={() => alternar(canal.id)} />
               <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ background: gerarCorCanal(canal.corIndice).dark }} />
               <span>{canal.nome}</span>
             </label>

@@ -160,7 +160,7 @@ export function PricingPage() {
   const [modalOrdemTipo, setModalOrdemTipo] = useState<'categorias' | 'canais' | null>(null);
   const [modalPdfAberto, setModalPdfAberto] = useState(false);
   const [modoExportacaoPdf, setModoExportacaoPdf] = useState<'padrao' | 'gerenciamento' | 'online'>('padrao');
-  const [linkCatalogoPublicado, setLinkCatalogoPublicado] = useState<{ canalNome: string; url: string } | null>(null);
+  const [linksCatalogoPublicado, setLinksCatalogoPublicado] = useState<{ canalNome: string; url: string }[] | null>(null);
   const [publicandoCatalogo, setPublicandoCatalogo] = useState(false);
   const [modalLimparAberto, setModalLimparAberto] = useState(false);
   const [limpandoTabela, setLimpandoTabela] = useState(false);
@@ -473,44 +473,56 @@ export function PricingPage() {
   }
 
   /**
-   * "Publicar" o Catálogo Online desse canal — calcula o preço de cada produto elegível AGORA
+   * "Publicar" o Catálogo Online de UM canal — calcula o preço de cada produto elegível AGORA
    * (autenticado, com Custo/Margem em mãos com segurança) e salva só nome+preço+peso já prontos
    * (ver publicarCatalogoOnline em pricing/api.ts) — a página pública nunca lê Custo/Margem.
    * Mesmo filtro do PDF de catálogo (Imprimir + Fornecedor visível no PDF + sem "precisa ajuste"
    * nesse canal), mais Código cadastrado (produto sem Código não teria como ligar ao snapshot).
+   * Sem tocar em `publicandoCatalogo`/`linksCatalogoPublicado` — isso é responsabilidade de quem
+   * chama (ver publicarCatalogos, que publica 1 ou mais canais de uma vez).
    */
-  async function publicarCatalogo(canal: Canal) {
+  async function publicarUmCatalogo(canal: Canal): Promise<{ canalNome: string; url: string }> {
+    const elegiveis = produtosExibidos.filter(
+      (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedorCatalogo(p.fornecedorId)?.visivelPdf ?? true),
+    );
+    // Dados de plantio (Guia de Plantio) só buscados aqui, no momento de publicar — não fazem parte
+    // da carga normal da Precificação (ver resolverPlantioParaProduto em calculoSemeadura.ts).
+    const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
+      fetchArquivosLaudos(),
+      fetchParametrizacaoProdutos(),
+      fetchFatoresPlantio(),
+    ]);
+    const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => construirItemCatalogo(p, canal, indice, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio));
+    const { freteKgEfetivo, fretePctEfetivo, freteMinimo } = resolverFreteEfetivo(canal, transportadoraPorId);
+    const slug = await publicarCatalogoOnline(
+      canal.id,
+      canal.nome,
+      freteKgEfetivo,
+      fretePctEfetivo,
+      freteMinimo,
+      canal.transportadoraId !== null,
+      canal.whatsapp,
+      canal.mostrarDetalhesPlantio,
+      itens,
+    );
+    return { canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` };
+  }
+
+  /** Publica 1 ou mais canais escolhidos no ExportPdfModal (modo 'online') — um de cada vez (não em paralelo, pra não competir por elegibilidade/estado); falha de 1 canal não impede os outros, só entra no alerta ao final. */
+  async function publicarCatalogos(canaisSelecionados: Canal[]) {
     setPublicandoCatalogo(true);
-    try {
-      const elegiveis = produtosExibidos.filter(
-        (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedorCatalogo(p.fornecedorId)?.visivelPdf ?? true),
-      );
-      // Dados de plantio (Guia de Plantio) só buscados aqui, no momento de publicar — não fazem parte
-      // da carga normal da Precificação (ver resolverPlantioParaProduto em calculoSemeadura.ts).
-      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
-        fetchArquivosLaudos(),
-        fetchParametrizacaoProdutos(),
-        fetchFatoresPlantio(),
-      ]);
-      const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => construirItemCatalogo(p, canal, indice, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio));
-      const { freteKgEfetivo, fretePctEfetivo, freteMinimo } = resolverFreteEfetivo(canal, transportadoraPorId);
-      const slug = await publicarCatalogoOnline(
-        canal.id,
-        canal.nome,
-        freteKgEfetivo,
-        fretePctEfetivo,
-        freteMinimo,
-        canal.transportadoraId !== null,
-        canal.whatsapp,
-        canal.mostrarDetalhesPlantio,
-        itens,
-      );
-      setLinkCatalogoPublicado({ canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` });
-    } catch (e) {
-      alert(mensagemDeErro(e, 'Falha ao publicar o Catálogo Online.'));
-    } finally {
-      setPublicandoCatalogo(false);
+    const publicados: { canalNome: string; url: string }[] = [];
+    const falhas: string[] = [];
+    for (const canal of canaisSelecionados) {
+      try {
+        publicados.push(await publicarUmCatalogo(canal));
+      } catch (e) {
+        falhas.push(`${canal.nome}: ${mensagemDeErro(e, 'falha ao publicar')}`);
+      }
     }
+    setPublicandoCatalogo(false);
+    if (publicados.length > 0) setLinksCatalogoPublicado(publicados);
+    if (falhas.length > 0) alert(`Falha ao publicar o Catálogo Online de:\n${falhas.join('\n')}`);
   }
 
   /**
@@ -1112,14 +1124,16 @@ export function PricingPage() {
         canaisVisiveis={canaisVisiveis}
         modo={modoExportacaoPdf}
         onFechar={() => setModalPdfAberto(false)}
-        onConfirmar={(canal) => {
+        onConfirmar={(canaisEscolhidos) => {
           setModalPdfAberto(false);
           if (modoExportacaoPdf === 'gerenciamento') {
-            gerarCatalogoGerenciamentoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi);
+            canaisEscolhidos.forEach((canal) =>
+              gerarCatalogoGerenciamentoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi),
+            );
           } else if (modoExportacaoPdf === 'online') {
-            publicarCatalogo(canal);
+            publicarCatalogos(canaisEscolhidos);
           } else {
-            gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi);
+            canaisEscolhidos.forEach((canal) => gerarCatalogoPDF(canal, produtosExibidos, categorias, subcategorias, fornecedores, canais, transportadoraPorId, resolverDescontoBi));
           }
         }}
       />
@@ -1129,32 +1143,36 @@ export function PricingPage() {
       </Modal>
 
       <Modal
-        open={linkCatalogoPublicado !== null}
-        title="Catálogo Online publicado"
-        onClose={() => setLinkCatalogoPublicado(null)}
+        open={linksCatalogoPublicado !== null}
+        title={linksCatalogoPublicado && linksCatalogoPublicado.length > 1 ? 'Catálogos Online publicados' : 'Catálogo Online publicado'}
+        onClose={() => setLinksCatalogoPublicado(null)}
         widthClassName="max-w-[440px]"
         footer={
-          <Button variant="primary" onClick={() => setLinkCatalogoPublicado(null)}>
+          <Button variant="primary" onClick={() => setLinksCatalogoPublicado(null)}>
             Fechar
           </Button>
         }
       >
-        {linkCatalogoPublicado && (
-          <div className="space-y-2.5 text-sm">
-            <p className="text-[var(--color-text-soft)]">
-              Link público de <strong className="text-[var(--color-text)]">{linkCatalogoPublicado.canalNome}</strong> atualizado — mande esse link pro cliente:
-            </p>
-            <div className="flex items-center gap-2">
-              <input readOnly value={linkCatalogoPublicado.url} onFocus={(e) => e.target.select()} className="num flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-2.5 py-1.5 text-xs text-[var(--color-text)]" />
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(linkCatalogoPublicado.url);
-                }}
-              >
-                Copiar
-              </Button>
-            </div>
+        {linksCatalogoPublicado && (
+          <div className="space-y-3 text-sm">
+            {linksCatalogoPublicado.map((link) => (
+              <div key={link.canalNome} className="space-y-1.5">
+                <p className="text-[var(--color-text-soft)]">
+                  Link público de <strong className="text-[var(--color-text)]">{link.canalNome}</strong> atualizado — mande esse link pro cliente:
+                </p>
+                <div className="flex items-center gap-2">
+                  <input readOnly value={link.url} onFocus={(e) => e.target.select()} className="num flex-1 rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-2.5 py-1.5 text-xs text-[var(--color-text)]" />
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(link.url);
+                    }}
+                  >
+                    Copiar
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Modal>

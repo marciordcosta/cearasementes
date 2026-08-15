@@ -154,6 +154,10 @@ export function gerarEtiquetaPdf(dados: DadosEtiqueta, comEstrutura: boolean): v
   janela.document.open();
   janela.document.write(htmlCompleto);
   janela.document.close();
+  // Fecha a aba sozinha assim que o diálogo de impressão é dispensado (impresso/salvo OU cancelado)
+  // — sem isso, a aba fica pra trás mostrando o HTML cru (sem CSS de tela), parecendo uma segunda
+  // tela solta do navegador.
+  janela.onafterprint = () => janela.close();
   // onload E o setTimeout de fallback (pra navegadores que não disparam onload de forma
   // confiável em document.write) podem disparar os dois — a flag garante só 1 diálogo de impressão.
   let impresso = false;
