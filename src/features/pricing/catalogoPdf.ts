@@ -1,6 +1,6 @@
 import qrcode from 'qrcode-generator';
 import type { Transportadora } from '@/features/fretes/types';
-import { calcularCanal, chaveComparacaoNome } from './calculations';
+import { calcularCanal, chaveComparacaoProduto } from './calculations';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from './types';
 
 const LINK_CATALOGO = 'https://linktr.ee/cearasementes';
@@ -137,7 +137,7 @@ export function gerarCatalogoPDF(
       // Mesma regra da Tabela de Preços: linha divisória mais espessa quando o produto "muda"
       // (duas primeiras palavras do nome diferentes do anterior) — sem a cor verde de categoria,
       // que aqui já fica implícita (cada categoria vira sua própria tabela/seção).
-      const produtoMudou = indice > 0 && chaveComparacaoNome(produto.nome) !== chaveComparacaoNome(itens[indice - 1].nome);
+      const produtoMudou = indice > 0 && chaveComparacaoProduto(produto) !== chaveComparacaoProduto(itens[indice - 1]);
       linhas += `
         <tr class="${produtoMudou ? 'divisor' : ''}">
           <td>${nomeComDestaqueHtml(produto.nome)}${tagFornecedor}</td>
@@ -313,7 +313,7 @@ export function gerarCatalogoGerenciamentoPDF(
       const r = calcularCanal(produto, canal, cat, getSubcategoria(produto.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
       const fornecedor = getFornecedor(produto.fornecedorId);
       const tagFornecedor = fornecedor ? ` <span class="tag-fornecedor">${escapeHtml(fornecedor.nome)}</span>` : '';
-      const produtoMudou = indice > 0 && chaveComparacaoNome(produto.nome) !== chaveComparacaoNome(itens[indice - 1].nome);
+      const produtoMudou = indice > 0 && chaveComparacaoProduto(produto) !== chaveComparacaoProduto(itens[indice - 1]);
       const freteExibido = freteConsiderado ? r.freteReais : 0;
       linhas += `
         <tr class="${produtoMudou ? 'divisor' : ''}">

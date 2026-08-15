@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import { NumeroSincronizado } from '@/components/ui/NumeroSincronizado';
 import type { Transportadora } from '@/features/fretes/types';
-import { alertaTolerancia, calcularCanal, chaveComparacaoNome, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete } from '../calculations';
+import { alertaTolerancia, calcularCanal, chaveComparacaoProduto, gerarCorCanal, margemClasse, montarTituloEncargos, montarTituloFrete } from '../calculations';
 import type { ClasseABC, HistoricoSafra, MargemBrutaAgregada, Representatividade } from '../historicoBi';
 import type { Canal, Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
@@ -840,7 +840,7 @@ export function PricingTable({
                   : produto.categoriaId !== anterior.categoriaId);
               // Produto "diferente" do anterior (mesmo dentro do mesmo grupo) — mesma linha
               // divisória espessa usada entre grupos, só que verde quando o grupo TAMBÉM mudou.
-              const produtoMudou = anterior !== null && chaveComparacaoNome(produto.nome) !== chaveComparacaoNome(anterior.nome);
+              const produtoMudou = anterior !== null && chaveComparacaoProduto(produto) !== chaveComparacaoProduto(anterior);
               const linhaEspessa = divisorPrincipalMudou || produtoMudou;
               const destacada = produto.id === linhaDestacada;
               return (

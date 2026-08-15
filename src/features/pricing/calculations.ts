@@ -52,13 +52,21 @@ export function chaveComparacaoNome(nome: string): string {
 }
 
 /**
- * Chave "mesmo produto entre fornecedores" pronta pra agrupar (Map/objeto) — nome destacado +
- * Classe (subcategoria). Único lugar que monta essa chave; compra.ts, compraComparacao.ts e
- * GraficoRepresentacaoModal.tsx reaproveitam em vez de remontar a mesma string cada um por conta
- * própria (o critério já mudou de ideia 2x nessa mesma sessão — ter 1 lugar só evita esquecer de
- * atualizar algum dos três da próxima vez).
+ * Chave "mesmo produto entre fornecedores/telas" pronta pra agrupar (Map/objeto) — prioriza Cultivar
+ * (campo próprio, ver Produto.cultivar) + Categoria quando o produto tem Cultivar cadastrado: mais
+ * confiável que reconhecer por texto, já que não depende do nome ter sido digitado igual nem do
+ * destaque em negrito ter sido marcado certo — mesma fonte de dados usada pro casamento
+ * laudo↔produto no Catálogo Online e na Parametrização (ver calculoSemeadura.ts/
+ * parametrizacaoProdutos.ts), "amarrando" os vários lugares do sistema que precisam achar "o mesmo
+ * produto" na mesma informação. Produto (Categoria, não Subcategoria — Produto não tem campo
+ * Processo próprio como o laudo tem, então Categoria é o 2º eixo aqui) sem Cultivar cadastrado
+ * (ainda não migrado) cai no critério antigo — nome destacado (ou 2ª palavra) + Subcategoria (ver
+ * chaveComparacaoNome). Único lugar que monta essa chave; compra.ts, compraComparacao.ts,
+ * PricingTable.tsx, catalogoPdf.ts e GraficoRepresentacaoModal.tsx reaproveitam em vez de remontar a
+ * mesma string cada um por conta própria.
  */
-export function chaveComparacaoProduto(produto: { nome: string; subcategoriaId: string | null }): string {
+export function chaveComparacaoProduto(produto: { nome: string; categoriaId: string; subcategoriaId: string | null; cultivar: string | null }): string {
+  if (produto.cultivar) return `cultivar:${produto.cultivar.trim().toUpperCase()}::${produto.categoriaId}`;
   return `${chaveComparacaoNome(produto.nome)}::${produto.subcategoriaId ?? ''}`;
 }
 
