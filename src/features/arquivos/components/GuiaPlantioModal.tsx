@@ -303,14 +303,19 @@ export function GuiaPlantioModal({
 
   // Busca ancorada direto no laudo (nome livre, sem depender da Tabela de
   // Preço) — filtra os laudos cujo nome bate com a palavra-chave e agrupa
-  // por nome de produto, só pra exibir os lotes juntos.
+  // por nome de produto, só pra exibir os lotes juntos. Mesma regra do
+  // Catálogo Online (ver itensFiltrados em CatalogoPublicoPage.tsx): cada
+  // palavra digitada precisa aparecer em algum lugar do nome (qualquer
+  // ordem), não um trecho contíguo só — "tradicional decumbens" agora acha
+  // "Brachiaria Decumbens Tradicional" mesmo com as palavras trocadas.
   const gruposFiltrados = useMemo(() => {
-    const termo = normalizarNome(busca);
-    if (!termo) return [];
+    const palavras = normalizarNome(busca).split(' ').filter(Boolean);
+    if (palavras.length === 0) return [];
     const porNome = new Map<string, { nome: string; laudos: ArquivoLaudo[] }>();
     for (const a of arquivos) {
-      if (!normalizarNome(a.nomeProduto).includes(termo)) continue;
-      const chave = normalizarNome(a.nomeProduto);
+      const descricao = normalizarNome(a.nomeProduto);
+      if (!palavras.every((palavra) => descricao.includes(palavra))) continue;
+      const chave = descricao;
       if (!porNome.has(chave)) porNome.set(chave, { nome: a.nomeProduto, laudos: [] });
       porNome.get(chave)!.laudos.push(a);
     }

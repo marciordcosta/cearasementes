@@ -1,3 +1,4 @@
+import { Calculator } from 'lucide-react';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
@@ -286,12 +287,13 @@ export function ArquivosPage() {
           </Button>
           <Button
             variant="navy"
+            title="Guia de Plantio"
             onClick={() => {
               setLaudoGuiaPlantio(null);
               setGuiaPlantioAberto(true);
             }}
           >
-            Guia de Plantio
+            <Calculator size={18} />
           </Button>
         </>
       }
