@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { fetchArquivosLaudos, fetchFatoresPlantio, fetchParametrizacaoProdutos } from '@/features/arquivos/api';
 import { resolverPlantioParaProduto } from '@/features/arquivos/calculoSemeadura';
+import { cultivarDoLaudo } from '@/features/arquivos/parametrizacaoProdutos';
 import { agregarItens } from '@/features/bi/aggregate';
 import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { aplicarTransportadoraNoCanal, fetchTransportadoras } from '@/features/fretes/api';
@@ -104,6 +105,18 @@ export function PricingPage() {
   const { data: produtosData } = useQuery({ queryKey: ['pricing', 'produtos'], queryFn: fetchProdutos });
   const { data: fornecedoresData } = useQuery({ queryKey: ['pricing', 'fornecedores'], queryFn: fetchFornecedores });
   const { data: custosData } = useQuery({ queryKey: ['pricing', 'custos'], queryFn: fetchCustosPersonalizados });
+  // Mesma queryKey já usada em ArquivosPage.tsx — cache compartilhado. Só pra sugerir, no autocomplete
+  // do campo Cultivar (EditProductModal.tsx), os Cultivares já usados nos laudos — evita divergência
+  // de grafia entre o que fica cadastrado no produto e no laudo (o casamento depende de bater exato).
+  const { data: arquivosLaudosData = [] } = useQuery({ queryKey: ['arquivos_laudos'], queryFn: fetchArquivosLaudos });
+  const cultivaresLaudos = useMemo(() => {
+    const vistos = new Set<string>();
+    arquivosLaudosData.forEach((a) => {
+      const cultivar = cultivarDoLaudo(a);
+      if (cultivar) vistos.add(cultivar);
+    });
+    return [...vistos].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [arquivosLaudosData]);
 
   // Estado local "espelha" o Supabase uma única vez ao carregar (feito pra
   // edição instantânea, tipo planilha) — depois disso, a fonte da verdade
@@ -1051,6 +1064,7 @@ export function PricingPage() {
         categorias={categorias}
         subcategorias={subcategorias}
         fornecedores={fornecedores}
+        cultivaresLaudos={cultivaresLaudos}
         temDescontoBi={temDescontoBiParaProduto(descontoBiPorCanalECodigo, produtoEditando?.codigo ?? null)}
         onFechar={() => setProdutoEditandoId(null)}
         onSalvar={onSalvarEdicaoProduto}

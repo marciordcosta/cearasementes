@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { AutocompleteInput } from '@/features/fretes/components/AutocompleteInput';
 import type { Categoria, Fornecedor, Produto, Subcategoria } from '../types';
 
 interface EditProductModalProps {
@@ -8,6 +9,8 @@ interface EditProductModalProps {
   categorias: Categoria[];
   subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
+  /** Cultivares já cadastrados nos laudos (Arquivos) — sugeridos no autocomplete do campo Cultivar, pra manter o texto igual ao usado lá (o casamento produto↔laudo, ver calculoSemeadura.ts, depende disso). */
+  cultivaresLaudos: string[];
   /** true = esse produto tem desconto médio real (BI) em pelo menos 1 canal — só nesse caso o checkbox "Usar desconto real" aparece (ver temDescontoBiParaProduto em historicoBi.ts). */
   temDescontoBi: boolean;
   onFechar: () => void;
@@ -41,7 +44,7 @@ function Linha({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function EditProductModal({ produto, categorias, subcategorias, fornecedores, temDescontoBi, onFechar, onSalvar }: EditProductModalProps) {
+export function EditProductModal({ produto, categorias, subcategorias, fornecedores, cultivaresLaudos, temDescontoBi, onFechar, onSalvar }: EditProductModalProps) {
   const [nome, setNome] = useState('');
   const [codigo, setCodigo] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
@@ -154,6 +157,16 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
           <input value={nome} onChange={(e) => setNome(e.target.value)} className={campoClasse} />
         </Linha>
 
+        <Linha label="Cultivar">
+          <AutocompleteInput
+            value={cultivar}
+            onChangeTexto={setCultivar}
+            opcoes={cultivaresLaudos.map((c) => ({ valor: c }))}
+            placeholder="Ex.: Massai, Marandu (opcional)"
+            className={campoClasse}
+          />
+        </Linha>
+
         <Linha label="Classe">
           <select value={classeValue} onChange={(e) => onClasseChange(e.target.value)} className={campoClasse}>
             {categorias.map((c) => (
@@ -182,16 +195,6 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
               </option>
             ))}
           </select>
-        </Linha>
-
-        <Linha label="Cultivar">
-          <input
-            value={cultivar}
-            onChange={(e) => setCultivar(e.target.value)}
-            placeholder="Ex.: Massai, Marandu (opcional)"
-            title="Preenchido nos 2 lados (aqui e no Cultivar do laudo correspondente, em Arquivos), o Catálogo Online casa esse produto com o laudo certo direto por esse campo, sem depender do nome bater por texto. Em branco, continua casando por nome como hoje."
-            className={campoClasse}
-          />
         </Linha>
 
         <Linha label="Valor Kg">
