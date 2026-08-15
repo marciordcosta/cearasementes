@@ -14,7 +14,7 @@ import {
 import { paraNumero } from '@/features/arquivos/metricas';
 import { chaveComparacaoNome } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
-import { gerarCatalogoPublicoPdf } from '@/features/pricing/catalogoPublicoPdf';
+import { gerarCatalogoPublicoPdf, gerarCatalogoPublicoPdfBlob } from '@/features/pricing/catalogoPublicoPdf';
 import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
 
 type ItemCatalogo = CatalogoPublico['itens'][number];
@@ -70,6 +70,13 @@ function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], frete
 function montarMensagemCotacaoFrete(canalNome: string, itens: ItemCarrinho[]): string {
   const linhas = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')}`);
   return [`Olá! Gostaria de uma cotação de frete — ${canalNome}`, '', ...linhas].join('\n');
+}
+
+/** Mesmo formato de lista usada no Orçamento (qtd×nome — R$ subtotal), sem Frete/Total geral — aqui é só contexto extra numa mensagem de contato solta, não um orçamento formal. Carrinho vazio devolve a mensagem base sem alteração. */
+function montarMensagemComCarrinho(mensagemBase: string, itens: ItemCarrinho[]): string {
+  if (itens.length === 0) return mensagemBase;
+  const blocos = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')} — R$ ${fmtR(i.preco * i.qtd)}`);
+  return [mensagemBase, '', 'Produtos de interesse:', ...blocos].join('\n');
 }
 
 /** Ícone oficial do WhatsApp (glifo público, mesmo usado em botões "fale conosco" pela web afora). */
@@ -150,10 +157,12 @@ function QuantidadeInput({ valor, onAlterar }: { valor: number; onAlterar: (v: n
 }
 
 function ModalConcluir({
+  titulo = 'Como você quer o orçamento?',
   onWhatsApp,
   onPdf,
   onFechar,
 }: {
+  titulo?: string;
   onWhatsApp: () => void;
   onPdf: () => void;
   onFechar: () => void;
@@ -161,7 +170,7 @@ function ModalConcluir({
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
-        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Como você quer o orçamento?</p>
+        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">{titulo}</p>
         <div className="flex flex-col gap-2">
           <button type="button" onClick={onWhatsApp} className="flex items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95">
             <IconeWhatsApp size={18} />
@@ -205,6 +214,53 @@ function ModalMensagemWhatsApp({ mensagemInicial, onEnviar, onFechar }: { mensag
         >
           <IconeWhatsApp size={18} />
           Enviar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Número de destino pra "Enviar por WhatsApp" o catálogo em PDF — sempre Brasil, "+55" fixo, só
+ * pede DDD+número (ver ModalConcluir/gerarCatalogoPublicoPdfBlob). O envio automático de arquivo
+ * sem ação nenhuma do cliente não é possível num site comum (exigiria a API paga do WhatsApp
+ * Business); o mais próximo é baixar o PDF e já abrir a conversa certa (wa.me abre o app no
+ * celular, o WhatsApp Web no computador), faltando só o cliente anexar o arquivo recém-baixado.
+ */
+function ModalNumeroWhatsApp({ enviando, onEnviar, onFechar }: { enviando: boolean; onEnviar: (digitos: string) => void; onFechar: () => void }) {
+  const [numero, setNumero] = useState('');
+  const digitos = numero.replace(/\D/g, '');
+  const valido = digitos.length >= 10;
+  return (
+    <div className="fixed inset-0 z-[230] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="w-full max-w-xs rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-sm font-bold text-[#1a2233]">Enviar catálogo pro WhatsApp</p>
+          <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-[#67718a]">O PDF é baixado e a conversa já abre nesse número — é só anexar o arquivo.</p>
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-md border border-[#e2e6ed] bg-[#f5f7fa] px-2.5 py-2 text-sm font-medium text-[#67718a]">+55</span>
+          <input
+            type="tel"
+            inputMode="numeric"
+            autoFocus
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+            placeholder="DDD + número"
+            className="num flex-1 rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233] placeholder:text-[#67718a]"
+          />
+        </div>
+        <button
+          type="button"
+          disabled={!valido || enviando}
+          onClick={() => onEnviar(digitos)}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {enviando ? <Loader2 size={16} className="animate-spin" /> : <IconeWhatsApp size={18} />}
+          {enviando ? 'Gerando PDF…' : 'Enviar'}
         </button>
       </div>
     </div>
@@ -746,6 +802,9 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [mensagemWhatsAppAberta, setMensagemWhatsAppAberta] = useState(false);
   const [calculadoraAberta, setCalculadoraAberta] = useState(false);
+  const [pdfEscolhaAberta, setPdfEscolhaAberta] = useState(false);
+  const [numeroPdfWhatsAppAberto, setNumeroPdfWhatsAppAberto] = useState(false);
+  const [enviandoPdfWhatsApp, setEnviandoPdfWhatsApp] = useState(false);
 
   function alternarSelecao(itemId: string) {
     setCarrinho((prev) => {
@@ -763,6 +822,29 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       else proximo.set(itemId, qtd);
       return proximo;
     });
+  }
+
+  /** Baixa o PDF (jsPDF de verdade, ver gerarCatalogoPublicoPdfBlob) e abre a conversa nesse número — wa.me abre o app no celular, o WhatsApp Web no computador; nenhum dos dois aceita anexo automático sem a API paga do WhatsApp Business, então o cliente anexa o arquivo recém-baixado manualmente. */
+  async function enviarPdfWhatsApp(digitos: string) {
+    if (!data) return;
+    setEnviandoPdfWhatsApp(true);
+    try {
+      const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensFiltrados);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Catálogo ${data.canalNome ?? 'Ceará Sementes'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const numeroCompleto = `55${digitos}`;
+      const mensagem = `Olá! Segue o catálogo da Ceará Sementes em PDF${data.canalNome ? ` (${data.canalNome})` : ''} — acabei de baixar, é só um instante que já anexo aqui.`;
+      window.open(linkWhatsApp(numeroCompleto, mensagem), '_blank');
+      setNumeroPdfWhatsAppAberto(false);
+    } finally {
+      setEnviandoPdfWhatsApp(false);
+    }
   }
 
   const categorias = useMemo(() => {
@@ -843,8 +925,8 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           {data && (
             <button
               type="button"
-              onClick={() => gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados)}
-              title="Salvar tabela em PDF"
+              onClick={() => setPdfEscolhaAberta(true)}
+              title="Salvar ou enviar tabela em PDF"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
             >
               <FileText size={18} />
@@ -969,7 +1051,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
       {mensagemWhatsAppAberta && data?.whatsapp && (
         <ModalMensagemWhatsApp
-          mensagemInicial="Olá! Vim do catálogo online."
+          mensagemInicial={montarMensagemComCarrinho('Olá! Vim do catálogo online.', itensCarrinho)}
           onEnviar={(mensagem) => {
             window.open(linkWhatsApp(data.whatsapp!, mensagem), '_blank');
             setMensagemWhatsAppAberta(false);
@@ -980,6 +1062,25 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
       {calculadoraAberta && data && (
         <ModalCalculadoraPlantio itens={data.itens} whatsapp={data.whatsapp} onAdicionarAoCarrinho={atualizarQtd} onFechar={() => setCalculadoraAberta(false)} />
+      )}
+
+      {pdfEscolhaAberta && data && (
+        <ModalConcluir
+          titulo="Como você quer o catálogo?"
+          onWhatsApp={() => {
+            setPdfEscolhaAberta(false);
+            setNumeroPdfWhatsAppAberto(true);
+          }}
+          onPdf={() => {
+            gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados);
+            setPdfEscolhaAberta(false);
+          }}
+          onFechar={() => setPdfEscolhaAberta(false)}
+        />
+      )}
+
+      {numeroPdfWhatsAppAberto && (
+        <ModalNumeroWhatsApp enviando={enviandoPdfWhatsApp} onEnviar={enviarPdfWhatsApp} onFechar={() => setNumeroPdfWhatsAppAberto(false)} />
       )}
 
       {orcamentoAberto && data && (

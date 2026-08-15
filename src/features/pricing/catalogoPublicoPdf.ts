@@ -1,3 +1,6 @@
+// Import só de tipo — jsPDF só entra no bundle de verdade na hora do clique (import dinâmico lá
+// embaixo, mesmo padrão de etiquetaFretePdf.ts), não no carregamento inicial da página pública.
+import type { jsPDF } from 'jspdf';
 import { abrirEImprimir, escapeHtml, gerarQrCodeSvg, nomeComDestaqueHtml } from './catalogoPdf';
 import { chaveComparacaoNome } from './calculations';
 
@@ -159,4 +162,101 @@ export function gerarCatalogoPublicoPdf(canalNome: string, itens: ItemCatalogoPu
   `;
 
   abrirEImprimir(htmlCompleto);
+}
+
+const PDF_MARGEM = 15;
+const PDF_LARGURA = 210;
+const PDF_ALTURA = 297;
+const PDF_Y_LIMITE = PDF_ALTURA - PDF_MARGEM;
+const PDF_LARGURA_UTIL = PDF_LARGURA - PDF_MARGEM * 2;
+
+function pdfNovaPagina(doc: jsPDF): number {
+  doc.addPage();
+  return PDF_MARGEM;
+}
+
+/**
+ * Mesmos dados de gerarCatalogoPublicoPdf, mas como um arquivo PDF de verdade (jsPDF, ver
+ * gerarEtiquetaFretePdf em etiquetaFretePdf.ts pro mesmo padrão) em vez de uma janela de impressão
+ * — necessário pra "Enviar por WhatsApp" (ModalNumeroWhatsApp em CatalogoPublicoPage.tsx), que
+ * precisa baixar um arquivo de verdade pro cliente anexar na conversa, algo que window.print() não
+ * permite. Layout mais simples que o catálogo "oficial" (sem QR code/cabeçalho de marca) — aqui o
+ * objetivo é só um PDF funcional, legível, rápido de gerar.
+ */
+export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: ItemCatalogoPublicoPdf[]): Promise<Blob> {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const f = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  let y = PDF_MARGEM;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('Ceará Sementes', PDF_MARGEM, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text(new Date().toLocaleDateString('pt-BR'), PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+  y += 6;
+  doc.setFontSize(11);
+  doc.text(canalNome, PDF_MARGEM, y);
+  doc.setTextColor(0);
+  y += 4;
+  doc.setDrawColor(0);
+  doc.line(PDF_MARGEM, y, PDF_LARGURA - PDF_MARGEM, y);
+  y += 8;
+
+  const categoriasPresentes = new Map<string, ItemCatalogoPublicoPdf[]>();
+  itens.forEach((item) => {
+    const lista = categoriasPresentes.get(item.categoriaNome) ?? [];
+    lista.push(item);
+    categoriasPresentes.set(item.categoriaNome, lista);
+  });
+  const categoriasOrdenadas = Array.from(categoriasPresentes.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  if (categoriasOrdenadas.length === 0) {
+    doc.setFontSize(11);
+    doc.text('Nenhum produto encontrado para o filtro atual.', PDF_MARGEM, y);
+  }
+
+  categoriasOrdenadas.forEach((cat) => {
+    if (y > PDF_Y_LIMITE - 14) y = pdfNovaPagina(doc);
+    doc.setFillColor(239, 239, 239);
+    doc.rect(PDF_MARGEM, y - 4.5, PDF_LARGURA_UTIL, 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(0);
+    doc.text(cat.toUpperCase(), PDF_MARGEM + 2, y);
+    y += 7;
+
+    const itensCat = [...(categoriasPresentes.get(cat) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    itensCat.forEach((item) => {
+      if (y > PDF_Y_LIMITE - 8) y = pdfNovaPagina(doc);
+      const nomeLimpo = item.nome.replace(/[*_]/g, '');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      const linhasNome = doc.splitTextToSize(nomeLimpo, PDF_LARGURA_UTIL - 45);
+      doc.text(linhasNome, PDF_MARGEM, y);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`R$ ${f(item.preco)}`, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(`${Math.round(item.peso)}kg`, PDF_LARGURA - PDF_MARGEM, y + 4, { align: 'right' });
+      let alturaLinha = linhasNome.length * 4.5;
+      if (item.fornecedorNome) {
+        doc.setFontSize(8);
+        doc.text(item.fornecedorNome, PDF_MARGEM, y + alturaLinha + 3);
+        alturaLinha += 4;
+      }
+      doc.setTextColor(0);
+      alturaLinha = Math.max(alturaLinha, 8);
+      doc.setDrawColor(220);
+      doc.line(PDF_MARGEM, y + alturaLinha, PDF_LARGURA - PDF_MARGEM, y + alturaLinha);
+      y += alturaLinha + 4;
+    });
+    y += 3;
+  });
+
+  return doc.output('blob');
 }
