@@ -973,6 +973,10 @@ export function GuiaPlantioModal({
                       // Sementes/m² × Germinação/100 = Densidade cadastrada, por construção (ver calcularSementesPorM2)
                       // — mais direto pegar a própria Densidade do que recalcular via Germinação.
                       const plantulasPorM2 = resolverDensidadeBase(laudo, produtos);
+                      // Mesma conversão de Sementes/m² -> Sementes/m linear (× Corredor em metros), aplicada em
+                      // cima de Plântulas/m² — nem toda semente lançada vira planta, então o Corredor precisa
+                      // escalar os dois do mesmo jeito.
+                      const plantulasPorMetroLinear = sementesPorMetroLinearModoLinha(plantulasPorM2, item.corredor);
                       return (
                         <div className="flex flex-col gap-1.5 border-l border-[var(--color-line)] p-2.5">
                           <div className="grid grid-cols-2 gap-1.5">
@@ -1006,7 +1010,7 @@ export function GuiaPlantioModal({
                             <div>
                               <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
                               <p
-                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}\nPlântulas/m²: ${plantulasPorM2 === null ? '—' : formatarCovas(plantulasPorM2)}`}
+                                title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}\nPlântulas/m²: ${plantulasPorM2 === null ? '—' : formatarCovas(plantulasPorM2)}\nPlântulas/m: ${plantulasPorMetroLinear === null ? '—' : formatarCovas(plantulasPorMetroLinear)}`}
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
                                 {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
