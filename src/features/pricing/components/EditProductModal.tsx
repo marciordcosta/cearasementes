@@ -25,6 +25,7 @@ interface EditProductModalProps {
     imprimir: boolean;
     usarDescontoReal: boolean;
     mostrarDetalhesCatalogo: boolean;
+    cultivar: string | null;
   }) => void;
 }
 
@@ -55,6 +56,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
   const [imprimir, setImprimir] = useState(true);
   const [usarDescontoReal, setUsarDescontoReal] = useState(false);
   const [mostrarDetalhesCatalogo, setMostrarDetalhesCatalogo] = useState(true);
+  const [cultivar, setCultivar] = useState('');
 
   useEffect(() => {
     if (!produto) return;
@@ -73,6 +75,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
     setImprimir(produto.imprimir);
     setUsarDescontoReal(produto.usarDescontoReal);
     setMostrarDetalhesCatalogo(produto.mostrarDetalhesCatalogo);
+    setCultivar(produto.cultivar ?? '');
   }, [produto]);
 
   // Valor do select de Classe: "sub:ID" quando o produto tem subcategoria, senão "cat:ID" — mesmo
@@ -121,6 +124,7 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
       imprimir,
       usarDescontoReal,
       mostrarDetalhesCatalogo,
+      cultivar: cultivar.trim() || null,
     });
   }
 
@@ -178,6 +182,16 @@ export function EditProductModal({ produto, categorias, subcategorias, fornecedo
               </option>
             ))}
           </select>
+        </Linha>
+
+        <Linha label="Cultivar">
+          <input
+            value={cultivar}
+            onChange={(e) => setCultivar(e.target.value)}
+            placeholder="Ex.: Massai, Marandu (opcional)"
+            title="Preenchido nos 2 lados (aqui e no Cultivar do laudo correspondente, em Arquivos), o Catálogo Online casa esse produto com o laudo certo direto por esse campo, sem depender do nome bater por texto. Em branco, continua casando por nome como hoje."
+            className={campoClasse}
+          />
         </Linha>
 
         <Linha label="Valor Kg">

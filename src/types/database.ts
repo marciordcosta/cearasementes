@@ -221,6 +221,8 @@ export interface Database {
           usar_desconto_real: boolean;
           /** true (padrão) = segue canais_preco.mostrar_detalhes_plantio da Tabela; false SOBREPÕE e esconde VC%/Validade/PMS no card do Catálogo Online só pra esse produto. */
           mostrar_detalhes_catalogo: boolean;
+          /** Cultivar (ex.: "Massai", "Marandu") — opcional, cadastrado à mão. Preenchido nos 2 lados (aqui e em arquivos_laudos.cultivar), o casamento laudo↔produto do Catálogo Online compara os 2 direto, sem depender de heurística de nome (ver laudoCasaComProduto em calculoSemeadura.ts). Nunca vai pro snapshot público (catalogo_publico_itens) — só usado no momento de Publicar, autenticado. */
+          cultivar: string | null;
           criado_em: string;
           atualizado_em: string;
         };
@@ -565,6 +567,8 @@ export interface Database {
           especie: string | null;
           /** Processo (ex.: "Tradicional", "Incrustado") — lido do laudo quando o documento traz ("Processo: ..."), editável em "Editar Laudo" quando não. Usada no Selo impresso. */
           processo: string | null;
+          /** Cultivar (ex.: "Massai", "Marandu") — lido do laudo quando o documento traz ("Cultivar: ..."), editável em "Editar Laudo" quando não. Preenchido nos 2 lados (aqui e em produtos.cultivar), o casamento laudo↔produto do Catálogo Online compara os 2 direto, sem depender de heurística de nome. */
+          cultivar: string | null;
           /** Fornecedor (ex.: "Barenbrug") — lido do laudo quando o documento traz ("Fornecedor: ..."), editável em "Editar Laudo" quando não. */
           fornecedor: string | null;
           /** Peso por Embalagem (kg) — lido do Boletim de Análise quando o documento traz, editável em "Editar Laudo" quando não. Linha PESO do Selo impresso; tem prioridade sobre o peso casado por nome na Tabela de Preço. Não confundir com "pms" (Peso de Mil Sementes). */

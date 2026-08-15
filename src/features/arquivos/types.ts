@@ -18,6 +18,8 @@ export interface ArquivoLaudo {
   especie: string | null;
   /** Processo (ex.: "Tradicional", "Incrustado") — lido do laudo quando o documento traz ("Processo: ..."), editável em EditarLaudoModal quando não. Usada só no Selo impresso (ver etiqueta.ts). */
   processo: string | null;
+  /** Cultivar (ex.: "Massai", "Marandu") — lido do laudo quando o documento traz ("Cultivar: ..."), editável em EditarLaudoModal quando não. Sem preencher, o Cultivar é derivado do Nome do Produto (ver derivarCultivar em etiqueta.ts). Preenchido nos 2 lados (aqui e em Produto.cultivar, na Tabela de Preço), o casamento laudo↔produto do Catálogo Online compara os 2 direto, sem depender de heurística de nome (ver laudoCasaComProduto em calculoSemeadura.ts). */
+  cultivar: string | null;
   /** Fornecedor (ex.: "Barenbrug") — lido do laudo quando o documento traz ("Fornecedor: ..."), editável em EditarLaudoModal quando não. */
   fornecedor: string | null;
   /** Peso por Embalagem (kg) — lido do Boletim de Análise quando o documento traz, editável em EditarLaudoModal quando não. Linha PESO do Selo impresso, com prioridade sobre o peso casado por nome na Tabela de Preço (ver etiqueta.ts). Não confundir com "pms" (Peso de Mil Sementes). */
@@ -57,6 +59,7 @@ export interface NovoLaudoInput {
   categoria?: string;
   especie?: string;
   processo?: string;
+  cultivar?: string;
   fornecedor?: string;
   pesoEmbalagem?: string;
 }

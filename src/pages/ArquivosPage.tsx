@@ -131,6 +131,7 @@ export function ArquivosPage() {
       validade: string;
       categoria: string;
       processo: string;
+      cultivar: string;
       fornecedor: string;
       pesoEmbalagem: string;
       pms: string;

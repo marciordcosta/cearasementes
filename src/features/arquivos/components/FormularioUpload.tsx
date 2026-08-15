@@ -75,6 +75,7 @@ export function FormularioUpload({ aberto, onFechar, enviando, onEnviar }: Formu
               categoria: lido.extras.Categoria,
               especie: lido.extras.Espécie,
               processo: lido.extras.Processo,
+              cultivar: lido.extras.Cultivar,
               fornecedor: lido.extras.Fornecedor,
               pesoEmbalagem: lido.extras.Peso,
               extras: lido.extras,

@@ -15,6 +15,7 @@ export interface PatchLaudo {
   validade: string;
   categoria: string;
   processo: string;
+  cultivar: string;
   fornecedor: string;
   pesoEmbalagem: string;
   pms: string;
@@ -50,6 +51,7 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
   const [validade, setValidade] = useState('');
   const [categoria, setCategoria] = useState('');
   const [processo, setProcesso] = useState('');
+  const [cultivar, setCultivar] = useState('');
   const [fornecedor, setFornecedor] = useState('');
   const [pesoEmbalagem, setPesoEmbalagem] = useState('');
   const [pms, setPms] = useState('');
@@ -64,6 +66,7 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
     setValidade(laudo.validade ?? '');
     setCategoria(laudo.categoria ?? '');
     setProcesso(laudo.processo ?? '');
+    setCultivar(laudo.cultivar ?? '');
     setFornecedor(laudo.fornecedor ?? '');
     setPesoEmbalagem(laudo.pesoEmbalagem ?? '');
     setPms(laudo.pms ?? '');
@@ -80,6 +83,7 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
       validade: validade.trim(),
       categoria: categoria.trim(),
       processo: processo.trim(),
+      cultivar: cultivar.trim(),
       fornecedor: fornecedor.trim(),
       pesoEmbalagem: pesoEmbalagem.trim(),
       pms: pms.trim(),
@@ -108,6 +112,15 @@ export function EditarLaudoModal({ laudo, fornecedores, onFechar, onSalvar }: Ed
         </p>
         <Campo label="Nome do Produto *">
           <input value={nomeProduto} onChange={(e) => setNomeProduto(e.target.value)} className={campoClasse} />
+        </Campo>
+        <Campo label="Cultivar">
+          <input
+            value={cultivar}
+            onChange={(e) => setCultivar(e.target.value)}
+            className={campoClasse}
+            placeholder="Ex.: Massai, Marandu (lido do laudo quando o documento traz)"
+            title="Preenchido nos 2 lados (aqui e no produto correspondente na Tabela de Preço), o Catálogo Online casa esse laudo com o produto certo direto por esse campo — sem depender do nome bater por texto."
+          />
         </Campo>
         <Campo label="Processo">
           <input

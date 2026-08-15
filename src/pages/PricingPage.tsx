@@ -370,6 +370,7 @@ export function PricingPage() {
     imprimir: boolean;
     usarDescontoReal: boolean;
     mostrarDetalhesCatalogo: boolean;
+    cultivar: string | null;
   }) {
     if (!produtoEditandoId) return;
     setProdutos((prev) =>
@@ -391,6 +392,7 @@ export function PricingPage() {
                 imprimir: patch.imprimir,
                 usarDescontoReal: patch.usarDescontoReal,
                 mostrarDetalhesCatalogo: patch.mostrarDetalhesCatalogo,
+                cultivar: patch.cultivar,
               }
             : p,
         ),
@@ -412,6 +414,7 @@ export function PricingPage() {
         imprimir: patch.imprimir,
         usar_desconto_real: patch.usarDescontoReal,
         mostrar_detalhes_catalogo: patch.mostrarDetalhesCatalogo,
+        cultivar: patch.cultivar,
       }).then(invalidarProdutosPreco),
     );
     setProdutoEditandoId(null);
@@ -433,7 +436,7 @@ export function PricingPage() {
     const categoria = getCategoriaCatalogo(p.categoriaId);
     const r = calcularCanal(p, canal, categoria, getSubcategoriaCatalogo(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
     const fornecedorNome = getFornecedorCatalogo(p.fornecedorId)?.nome ?? null;
-    const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome);
+    const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome, p.cultivar);
     return {
       produtoId: p.id,
       nome: p.nome,

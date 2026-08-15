@@ -102,6 +102,11 @@ export function interpretarConteudoLaudo(conteudo: ConteudoExtraido): CamposDoCo
 
   const extras: Record<string, string> = {};
   if (especie) extras.Espécie = especie;
+  // Cultivar já vinha sendo lido pra montar nomeProduto (linha acima) — agora também guardado à
+  // parte, como campo próprio do laudo (ver ArquivoLaudo.cultivar), pro casamento com a Tabela de
+  // Preço não depender de reduzir o nome por heurística (ver laudoCasaComProduto em
+  // calculoSemeadura.ts).
+  if (cultivar) extras.Cultivar = cultivar;
 
   // Modelo "Termo de Conformidade": rótulo solto em texto corrido ("Categoria: X") — tenta a linha primeiro, tabela como reforço.
   const camposDeTexto: Record<string, string[]> = {

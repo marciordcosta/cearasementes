@@ -112,6 +112,8 @@ export interface Produto {
   usarDescontoReal: boolean;
   /** true (padrão) = segue a configuração da Tabela (Canal.mostrarDetalhesPlantio) pra VC%/Validade/PMS no card do Catálogo Online; false SOBREPÕE a Tabela e esconde esses detalhes só pra ESSE produto, mesmo com a Tabela mostrando pros demais. */
   mostrarDetalhesCatalogo: boolean;
+  /** Opcional (ex.: "Massai", "Marandu"). Preenchido nos 2 lados (aqui e em ArquivoLaudo.cultivar), o Catálogo Online casa esse produto com o laudo certo comparando os 2 campos direto, sem depender de o nome bater por texto (ver laudoCasaComProduto em calculoSemeadura.ts) — em branco, continua casando por nome como hoje. */
+  cultivar: string | null;
   /** canalId -> preço sugerido/manual daquele canal */
   precos: Record<string, PrecoCanal>;
 }

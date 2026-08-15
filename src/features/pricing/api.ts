@@ -389,6 +389,7 @@ export async function fetchProdutos(): Promise<Produto[]> {
       imprimir: row.imprimir,
       usarDescontoReal: row.usar_desconto_real,
       mostrarDetalhesCatalogo: row.mostrar_detalhes_catalogo,
+      cultivar: row.cultivar,
       precos,
     };
   });
@@ -415,6 +416,7 @@ export async function inserirProduto(
       imprimir: true,
       usar_desconto_real: false,
       mostrar_detalhes_catalogo: true,
+      cultivar: null,
     })
     .select('*')
     .single();
@@ -444,6 +446,7 @@ export async function inserirProduto(
     imprimir: data.imprimir,
     usarDescontoReal: data.usar_desconto_real,
     mostrarDetalhesCatalogo: data.mostrar_detalhes_catalogo,
+    cultivar: data.cultivar,
     precos,
   };
 }
@@ -466,6 +469,7 @@ export async function atualizarProduto(
       | 'imprimir'
       | 'usar_desconto_real'
       | 'mostrar_detalhes_catalogo'
+      | 'cultivar'
     >
   >,
 ): Promise<void> {
@@ -570,6 +574,7 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
         imprimir: true,
         usar_desconto_real: false,
         mostrar_detalhes_catalogo: true,
+        cultivar: null,
       });
     }
     const { data, error } = await supabase.from('produtos').insert(linhas).select('id');
