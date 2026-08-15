@@ -1002,7 +1002,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
               {preparandoCompartilhamentoPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
             </button>
           )}
-          {temDadosPlantio && (
+          {temDadosPlantio && !itemUnicoSelecionado && (
             <button
               type="button"
               onClick={() => setCalculadoraAberta(true)}
