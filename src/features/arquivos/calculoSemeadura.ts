@@ -272,9 +272,9 @@ function mencionaProcessoConflitante(nomeProdutoPreco: string, laudo: Pick<Arqui
 
 /**
  * Cultivar (ver derivarCultivar em etiqueta.ts — já usada pro Selo, isola o Cultivar descartando as
- * palavras da Espécie) + Processo (campo próprio do laudo) — tentado primeiro; se não bater, o
- * Cultivar sozinho, MAS só quando a Tabela de Preço não menciona um Processo conflitante (ver
- * mencionaProcessoConflitante) — sem essa trava, um laudo "Incrustado" casava com o produto
+ * palavras da Espécie E do Processo) + Processo (campo próprio do laudo) — tentado primeiro; se não
+ * bater, o Cultivar sozinho, MAS só quando a Tabela de Preço não menciona um Processo conflitante
+ * (ver mencionaProcessoConflitante) — sem essa trava, um laudo "Incrustado" casava com o produto
  * "Tradicional" da mesma variedade só por causa do Cultivar em comum (bug real, corrigido). Tudo
  * isso é DE PROPÓSITO sem o Gênero/Espécie: laudo e Tabela às vezes escrevem o Gênero de formas
  * totalmente diferentes pra mesma planta (ex.: "U.Brizantha" no laudo x "Brach" na Tabela —
@@ -283,7 +283,7 @@ function mencionaProcessoConflitante(nomeProdutoPreco: string, laudo: Pick<Arqui
  * Cultivar isolável (raro — nomeProduto só tem a Espécie, nada sobra), cai pro nomeProduto inteiro.
  */
 function laudoCasaComProduto(laudo: ArquivoLaudo, nomeProdutoPreco: string): boolean {
-  const cultivar = derivarCultivar(laudo.nomeProduto, laudo.especie).trim();
+  const cultivar = derivarCultivar(laudo.nomeProduto, laudo.especie, laudo.processo).trim();
   const base = cultivar || laudo.nomeProduto;
   if (laudo.processo && laudoCasaComNomePreco(`${base} ${laudo.processo}`, nomeProdutoPreco)) return true;
   if (mencionaProcessoConflitante(nomeProdutoPreco, laudo)) return false;
