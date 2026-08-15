@@ -97,11 +97,12 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
  * nunca pra forçar mostrar quando a Tabela está desligada) — só quando os dois permitem, VC%/
  * PMS/Validade entram na mesma linha discreta, nessa ordem: Fornecedor > VC% > PMS > Validade;
  * desligado, mostra só o Fornecedor. PMS aqui é sempre o digitado NESSE laudo (plantioPmsManual) —
- * nunca o base da Parametrização.
+ * nunca o base da Parametrização. Fornecedor com mais peso (font-medium) que VC%/PMS/Validade
+ * (font-light, peso 300) — mesmo tamanho de fonte, mas com menos destaque, pra não competir de
+ * igual com o Fornecedor.
  */
 function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: ItemCatalogo; selecionado: boolean; mostrarDetalhes: boolean; onClick: () => void }) {
-  const infoPartes = [
-    item.fornecedorNome,
+  const detalhesPartes = [
     mostrarDetalhes && item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
     mostrarDetalhes && item.plantioPmsManual ? `PMS ${item.plantioPmsManual}` : null,
     mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
@@ -117,7 +118,13 @@ function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: I
         <p className="line-clamp-2 text-sm leading-snug text-[#1a2233]">
           <NomeComDestaque nome={item.nome} />
         </p>
-        {infoPartes.length > 0 && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{infoPartes.join(' · ')}</p>}
+        {(item.fornecedorNome || detalhesPartes.length > 0) && (
+          <p className="truncate text-[10px] uppercase tracking-wide text-[#67718a]">
+            {item.fornecedorNome && <span className="font-medium">{item.fornecedorNome}</span>}
+            {item.fornecedorNome && detalhesPartes.length > 0 && ' · '}
+            {detalhesPartes.length > 0 && <span className="font-light">{detalhesPartes.join(' · ')}</span>}
+          </p>
+        )}
       </div>
       <div className="shrink-0 text-right">
         <p className="num text-base font-bold text-[#0e9d74]">R$ {fmtR(item.preco)}</p>
