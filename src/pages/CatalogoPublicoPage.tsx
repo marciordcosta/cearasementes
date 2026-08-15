@@ -630,33 +630,38 @@ function ModalCalculadoraPlantio({
                   <span className="text-[#67718a]">Taxa de semeadura</span>
                   <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
                 </div>
-                {totalKg !== null && (
-                  <div className="mt-1 flex justify-between text-sm">
-                    <span className="text-[#67718a]">Total necessário</span>
-                    <span className="num font-bold text-[#0e9d74]">{Math.ceil(totalKg)} kg</span>
+                {/* Truque do grid-template-rows (0fr -> 1fr) pra animar até a altura de verdade do
+                    conteúdo sem JS medindo nada — digitar a Área não faz o modal "pular" de tamanho
+                    de repente (parecia bug). */}
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${totalKg !== null ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="overflow-hidden">
+                    <div className="mt-1 flex justify-between text-sm">
+                      <span className="text-[#67718a]">Total necessário</span>
+                      <span className="num font-bold text-[#0e9d74]">{totalKg !== null ? `${Math.ceil(totalKg)} kg` : ''}</span>
+                    </div>
+                    {itemSelecionado && qtdEmbalagens !== null && valorTotalPedido !== null && (
+                      <>
+                        <div className="mt-1 flex justify-between text-sm">
+                          <span className="text-[#67718a]">Valor unitário</span>
+                          <span className="num text-[#1a2233]">
+                            R$ {fmtR(itemSelecionado.preco)} <span className="text-[11px] text-[#67718a]">({Math.round(itemSelecionado.peso)}kg)</span>
+                          </span>
+                        </div>
+                        <div className="mt-1 flex justify-between text-sm">
+                          <span className="text-[#67718a]">Valor total do pedido</span>
+                          <span className="num font-bold text-[#0e9d74]">R$ {fmtR(valorTotalPedido)}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
-                )}
-                {itemSelecionado && qtdEmbalagens !== null && valorTotalPedido !== null && (
-                  <>
-                    <div className="mt-1 flex justify-between text-sm">
-                      <span className="text-[#67718a]">Valor unitário</span>
-                      <span className="num text-[#1a2233]">
-                        R$ {fmtR(itemSelecionado.preco)} <span className="text-[11px] text-[#67718a]">({Math.round(itemSelecionado.peso)}kg)</span>
-                      </span>
-                    </div>
-                    <div className="mt-1 flex justify-between text-sm">
-                      <span className="text-[#67718a]">Valor total do pedido</span>
-                      <span className="num font-bold text-[#0e9d74]">R$ {fmtR(valorTotalPedido)}</span>
-                    </div>
-                  </>
-                )}
+                </div>
               </div>
 
               <button
                 type="button"
                 disabled={qtdEmbalagens === null}
                 onClick={adicionarAoCarrinho}
-                className="w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white transition-opacity duration-300 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Adicionar ao carrinho{qtdEmbalagens !== null ? ` (${qtdEmbalagens})` : ''}
               </button>
