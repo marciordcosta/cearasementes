@@ -77,10 +77,11 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
   const [itens, setItens] = useState<ItemOrcamento[]>([]);
   const [buscaProduto, setBuscaProduto] = useState('');
 
-  // ---- Modo Etiquetas — NF(s) + volumes por cidade da lista acima; chaveado pelo texto da cidade
-  // (não por índice) pra não perder os dados se a lista for reordenada nas setas ▲▼. Cada cidade é
-  // editada num modal próprio (cidadeEditandoNotas = qual está aberta agora); antes de imprimir, um
-  // segundo modal deixa escolher quais cidades entram nessa impressão (todas, uma, ou um grupo). ----
+  // ---- Etiquetas — NF(s) + volumes por cidade da lista acima; chaveado pelo texto da cidade (não por
+  // índice) pra não perder os dados se a lista for reordenada nas setas ▲▼. Clicar numa cidade (em
+  // qualquer situação/modo) abre o modal de NFs dela (cidadeEditandoNotas = qual está aberta agora),
+  // que já tem um botão pra imprimir só as etiquetas daquela cidade; o botão global (ao lado da busca
+  // de cidade) abre um segundo modal pra escolher quais cidades entram numa impressão conjunta. ----
   const [notasPorCidade, setNotasPorCidade] = useState<Record<string, NotaEtiqueta[]>>({});
   const [cidadeEditandoNotas, setCidadeEditandoNotas] = useState<string | null>(null);
   const [modalImpressaoAberto, setModalImpressaoAberto] = useState(false);
@@ -386,6 +387,13 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     setModalImpressaoAberto(true);
   }
 
+  /** Imprime direto as etiquetas de uma única cidade (botão dentro do modal dela), sem passar pelo modal de seleção. */
+  async function imprimirNotasCidade(cidade: string) {
+    const notas = notasDaCidade(cidade).filter((n) => n.nf.trim() && n.volumes > 0);
+    if (notas.length === 0) return;
+    await gerarEtiquetaFretePdf([{ cidade, notas }]);
+  }
+
   /** Ignora NF em branco ou volumes ≤ 0 (e agora também a que ficou desmarcada no modal) — não precisa validar antes, só não gera etiqueta pra linha vazia. */
   async function confirmarImpressao() {
     const grupos = cidades
@@ -412,9 +420,10 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             onChangeCidades={setCidades}
             transportadoras={transportadoras}
             cidadesCache={cidadesRotaCache}
-            modoEtiquetas={modo === 'etiquetas'}
             resumoPorCidade={resumoNotasCidade}
             onAbrirCidade={setCidadeEditandoNotas}
+            onImprimirTodas={abrirModalImpressao}
+            temNotasParaImprimir={notasParaImprimirLista.length > 0}
           />
 
           {!ehRota && transportadorasCidade !== null && (
@@ -436,7 +445,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {ehRota && modo !== 'etiquetas' && (
+          {ehRota && (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={sugerirRota} disabled={sugerindoRota || rotaCalculando}>
                 {sugerindoRota ? 'Sugerindo…' : 'Sugerir Rota'}
@@ -571,19 +580,13 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
 
         {/* ---- Card 2: escolha do modo (Orçamento/Digitação Direta) + formulário correspondente ---- */}
         <Card className="space-y-3 p-5">
-          {podeEscolherModo || cidades.length > 0 ? (
+          {podeEscolherModo ? (
             <TabToggle
-              value={modo ?? (podeEscolherModo ? 'orcamento' : 'etiquetas')}
+              value={modo ?? 'orcamento'}
               onChange={(v) => setModo(v)}
               options={[
-                ...(podeEscolherModo
-                  ? [
-                      { value: 'orcamento' as const, label: 'Orçamento' },
-                      { value: 'direta' as const, label: 'Digitação Direta' },
-                    ]
-                  : []),
-                // Etiquetas não depende de nenhuma transportadora atender a cidade — é só rotulagem física do envio.
-                ...(cidades.length > 0 ? [{ value: 'etiquetas' as const, label: 'Etiquetas' }] : []),
+                { value: 'orcamento' as const, label: 'Orçamento' },
+                { value: 'direta' as const, label: 'Digitação Direta' },
               ]}
             />
           ) : (
@@ -704,17 +707,6 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {modo === 'etiquetas' && cidades.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-xs text-[var(--color-text-soft)]">
-                Clique numa cidade (à esquerda) pra informar a(s) NF(s) e a quantidade de volumes dela — sai 1 etiqueta por volume (ex.: 50 volumes =
-                etiquetas "1/50" a "50/50").
-              </p>
-              <Button variant="primary" onClick={abrirModalImpressao} disabled={notasParaImprimirLista.length === 0}>
-                🏷️ Imprimir Etiquetas
-              </Button>
-            </div>
-          )}
         </Card>
       </div>
 
@@ -754,9 +746,18 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                 </div>
               ))}
             </div>
-            <Button variant="outline" onClick={() => adicionarNota(cidadeEditandoNotas)}>
-              + Adicionar NF
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => adicionarNota(cidadeEditandoNotas)}>
+                + Adicionar NF
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => imprimirNotasCidade(cidadeEditandoNotas)}
+                disabled={resumoNotasCidade(cidadeEditandoNotas) === null}
+              >
+                🏷️ Imprimir Etiquetas
+              </Button>
+            </div>
           </div>
         )}
       </Modal>

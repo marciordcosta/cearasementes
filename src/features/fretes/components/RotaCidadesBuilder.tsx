@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/Button';
 import { apenasNomeCidade, cidadesDasTransportadoras, normalizarCidade } from '../calculations';
 import type { Transportadora } from '../types';
 import { AutocompleteInput, type OpcaoAutocomplete } from './AutocompleteInput';
@@ -9,15 +10,12 @@ interface RotaCidadesBuilderProps {
   onChangeCidades: (cidades: string[]) => void;
   transportadoras: Transportadora[];
   cidadesCache: string[];
-  /**
-   * Modo Etiquetas não usa ordem de rota (não calcula km) — esconde as setas ▲▼ e a
-   * linha "Rota: ...", e cada cidade vira clicável (abre o modal de NFs daquela
-   * cidade, via onAbrirCidade) com um resumo de notas/volumes ao lado do nome.
-   */
-  modoEtiquetas?: boolean;
-  /** Só usado com modoEtiquetas — null = cidade ainda sem NF cadastrada (sem resumo pra mostrar). */
+  /** Clicar numa cidade (em qualquer situação) abre o modal de NFs/etiquetas dela, via onAbrirCidade. */
   resumoPorCidade?: (cidade: string) => { notas: number; volumes: number } | null;
   onAbrirCidade?: (cidade: string) => void;
+  /** Botão "Imprimir Etiquetas" (todas as cidades de uma vez), ao lado da busca — só aparece se houver ao menos uma etiqueta informada. */
+  onImprimirTodas?: () => void;
+  temNotasParaImprimir?: boolean;
 }
 
 const campoClasse = 'w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-1.5 text-sm text-[var(--color-text)]';
@@ -36,9 +34,10 @@ export function RotaCidadesBuilder({
   onChangeCidades,
   transportadoras,
   cidadesCache,
-  modoEtiquetas,
   resumoPorCidade,
   onAbrirCidade,
+  onImprimirTodas,
+  temNotasParaImprimir,
 }: RotaCidadesBuilderProps) {
   const [buscaCidade, setBuscaCidade] = useState('');
   const ehRota = cidades.length > 1;
@@ -80,7 +79,14 @@ export function RotaCidadesBuilder({
   return (
     <div className="space-y-3">
       <div>
-        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">{ehRota ? 'Adicionar cidade à rota' : 'Cidade de destino'}</label>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <label className="text-xs font-semibold text-[var(--color-text-soft)]">{ehRota ? 'Adicionar cidade à rota' : 'Cidade de destino'}</label>
+          {temNotasParaImprimir && onImprimirTodas && (
+            <Button variant="outline" onClick={onImprimirTodas}>
+              🏷️ Imprimir Etiquetas
+            </Button>
+          )}
+        </div>
         <div className="max-w-md">
           <AutocompleteInput
             value={buscaCidade}
@@ -99,18 +105,19 @@ export function RotaCidadesBuilder({
 
       {cidades.length > 0 && (
         <div className="space-y-1.5">
-          {ehRota && !modoEtiquetas && (
+          {ehRota && (
             <p className="text-xs font-semibold text-[var(--color-text-soft)]">
               Rota: {cidadeInicio || 'Base'} → {cidades.join(' → ')} → {cidadeInicio || 'Base'}
             </p>
           )}
           {cidades.map((cidade, i) => {
-            const resumo = modoEtiquetas ? (resumoPorCidade?.(cidade) ?? null) : null;
+            const resumo = resumoPorCidade?.(cidade) ?? null;
             return (
               <div
                 key={`${cidade}_${i}`}
-                onClick={modoEtiquetas ? () => onAbrirCidade?.(cidade) : undefined}
-                className={`flex items-center gap-2 rounded-md bg-[var(--color-page)] px-2.5 py-1.5 text-sm ${modoEtiquetas ? 'cursor-pointer hover:bg-[var(--color-line)]/40' : ''}`}
+                onClick={() => onAbrirCidade?.(cidade)}
+                title="Clique pra informar NF(s) e imprimir etiquetas dessa cidade"
+                className="flex cursor-pointer items-center gap-2 rounded-md bg-[var(--color-page)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-line)]/40"
               >
                 <span className="w-5 shrink-0 text-xs text-[var(--color-text-soft)]">{i + 1}.</span>
                 <span className="flex-1 truncate text-[var(--color-text)]">{cidade}</span>
@@ -119,14 +126,26 @@ export function RotaCidadesBuilder({
                     {resumo.notas} NF · {resumo.volumes} vol.
                   </span>
                 )}
-                {ehRota && !modoEtiquetas && (
+                {ehRota && (
                   <>
-                    <button type="button" onClick={() => moverCidade(i, -1)} disabled={i === 0} title="Mover pra cima" className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moverCidade(i, -1);
+                      }}
+                      disabled={i === 0}
+                      title="Mover pra cima"
+                      className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30"
+                    >
                       ▲
                     </button>
                     <button
                       type="button"
-                      onClick={() => moverCidade(i, 1)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        moverCidade(i, 1);
+                      }}
                       disabled={i === cidades.length - 1}
                       title="Mover pra baixo"
                       className="text-[var(--color-text-soft)] hover:text-[var(--color-text)] disabled:opacity-30"
