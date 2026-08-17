@@ -1141,7 +1141,7 @@ function ModalCalculadoraPlantio({
             ))
           )}
 
-          {totalAreaHaCalculadora > 0 && (
+          {itens.length > 1 && totalAreaHaCalculadora > 0 && (
             <div className="flex justify-between rounded-md bg-[#eef1f5] px-2.5 py-1.5 text-xs font-semibold text-[#1a2233]">
               <span>Área total</span>
               <span className="num">{totalAreaHaCalculadora.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
