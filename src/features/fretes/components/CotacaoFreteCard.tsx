@@ -1,3 +1,4 @@
+import { Printer } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -151,21 +152,21 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
     return { totalItens, pesoTotal, valorTotalProdutos };
   }, [itens, dadosItem]);
 
+  // Sem escolha explícita ainda, o padrão é "Orçamento" — mesmo valor que o TabToggle já mostra como selecionado.
+  const modoEfetivo = modo ?? 'orcamento';
+
   // Peso/valor da carga — mesma lógica pros dois modos (Cidade única e Rota):
   // "Direta" é digitado à mão, "Orçamento" vem dos produtos escolhidos na Tabela de Preço.
   const pesoValorAtual = useMemo(() => {
-    if (modo === 'direta') {
+    if (modoEfetivo === 'direta') {
       const pesoNum = parseFloat(peso);
       const valorNum = parseFloat(valor);
       if (isNaN(pesoNum) || isNaN(valorNum)) return null;
       return { peso: pesoNum, valor: valorNum };
     }
-    if (modo === 'orcamento') {
-      if (itens.length === 0) return null;
-      return { peso: resumoOrcamento.pesoTotal, valor: resumoOrcamento.valorTotalProdutos };
-    }
-    return null;
-  }, [modo, peso, valor, itens.length, resumoOrcamento]);
+    if (itens.length === 0) return null;
+    return { peso: resumoOrcamento.pesoTotal, valor: resumoOrcamento.valorTotalProdutos };
+  }, [modoEfetivo, peso, valor, itens.length, resumoOrcamento]);
 
   // Com 1 cidade só, libera escolher Direta/Orçamento se alguma transportadora atender ela; com 2+ (Rota), libera direto (não depende de transportadora nenhuma).
   const podeEscolherModo = ehRota || (transportadorasCidade !== null && transportadorasCidade.length > 0);
@@ -477,7 +478,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                       </div>
                       <div className="mt-1 text-xs text-[var(--color-navy)] opacity-80">
                         {fmtPct1(r.pctValorCarga)} do valor da carga ·{' '}
-                        {modo === 'orcamento' ? fmtCustoPorSaco(r.total, resumoOrcamento.totalItens) : `${fmtBRL.format(r.custoPorKg)}/kg`}
+                        {modoEfetivo === 'orcamento' ? fmtCustoPorSaco(r.total, resumoOrcamento.totalItens) : `${fmtBRL.format(r.custoPorKg)}/kg`}
                       </div>
                     </div>
                   ) : (
@@ -493,7 +494,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                       </div>
                       <div className="mt-1 text-xs text-[var(--color-text-soft)]">
                         {fmtPct1(r.pctValorCarga)} do valor da carga ·{' '}
-                        {modo === 'orcamento' ? fmtCustoPorSaco(r.total, resumoOrcamento.totalItens) : `${fmtBRL.format(r.custoPorKg)}/kg`}
+                        {modoEfetivo === 'orcamento' ? fmtCustoPorSaco(r.total, resumoOrcamento.totalItens) : `${fmtBRL.format(r.custoPorKg)}/kg`}
                       </div>
                     </div>
                   ),
@@ -526,7 +527,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                   </div>
                   <div className="mt-1 text-xs text-[var(--color-text-soft)]">
                     {fmtPct1(comparativoFrota.pctValorCarga)} do valor da carga ·{' '}
-                    {modo === 'orcamento' ? fmtCustoPorSaco(comparativoFrota.valorFrete, resumoOrcamento.totalItens) : `${fmtBRL.format(comparativoFrota.custoPorKg)}/kg`}
+                    {modoEfetivo === 'orcamento' ? fmtCustoPorSaco(comparativoFrota.valorFrete, resumoOrcamento.totalItens) : `${fmtBRL.format(comparativoFrota.custoPorKg)}/kg`}
                     {resultado && resultado.length > 0 && (
                       <>
                         {' · '}
@@ -558,7 +559,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                 </div>
                 <div className="mt-1 text-xs text-[var(--color-navy)] opacity-80">
                   {fmtPct1(rotaResultado.pctValorCarga)} do valor da carga ·{' '}
-                  {modo === 'orcamento' ? fmtCustoPorSaco(rotaResultado.valorFrete, resumoOrcamento.totalItens) : `${fmtBRL.format(rotaResultado.custoPorKg)}/kg`} · saída às{' '}
+                  {modoEfetivo === 'orcamento' ? fmtCustoPorSaco(rotaResultado.valorFrete, resumoOrcamento.totalItens) : `${fmtBRL.format(rotaResultado.custoPorKg)}/kg`} · saída às{' '}
                   {parametrosRota.horarioInicio}
                 </div>
               </div>
@@ -582,7 +583,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
         <Card className="space-y-3 p-5">
           {podeEscolherModo ? (
             <TabToggle
-              value={modo ?? 'orcamento'}
+              value={modoEfetivo}
               onChange={(v) => setModo(v)}
               options={[
                 { value: 'orcamento' as const, label: 'Orçamento' },
@@ -593,7 +594,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             <p className="text-sm text-[var(--color-text-soft)]">Adicione uma cidade de destino para escolher Orçamento ou Digitação Direta.</p>
           )}
 
-          {podeEscolherModo && modo === 'direta' && (
+          {podeEscolherModo && modoEfetivo === 'direta' && (
             <div className="grid grid-cols-[auto_140px] items-center justify-start gap-x-3 gap-y-2.5">
               <label className="text-xs font-semibold text-[var(--color-text-soft)]">Peso (kg)</label>
               <input type="number" step="0.01" value={peso} onChange={(e) => setPeso(e.target.value)} className={`num ${campoClasse}`} />
@@ -603,7 +604,7 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
             </div>
           )}
 
-          {podeEscolherModo && modo === 'orcamento' && (
+          {podeEscolherModo && modoEfetivo === 'orcamento' && (
             <div className="space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Escolher Tabela</label>
@@ -710,7 +711,27 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
         </Card>
       </div>
 
-      <Modal open={cidadeEditandoNotas !== null} onClose={() => setCidadeEditandoNotas(null)} title={cidadeEditandoNotas ?? ''} widthClassName="max-w-md">
+      <Modal
+        open={cidadeEditandoNotas !== null}
+        onClose={() => setCidadeEditandoNotas(null)}
+        title={
+          cidadeEditandoNotas && (
+            <div className="flex w-full items-center justify-between gap-3">
+              <span className="truncate">{cidadeEditandoNotas}</span>
+              <button
+                type="button"
+                onClick={() => imprimirNotasCidade(cidadeEditandoNotas)}
+                disabled={resumoNotasCidade(cidadeEditandoNotas) === null}
+                title="Imprimir Etiquetas"
+                className="shrink-0 rounded-md bg-white/15 p-1.5 text-white hover:bg-white/28 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Printer size={14} />
+              </button>
+            </div>
+          )
+        }
+        widthClassName="max-w-md"
+      >
         {cidadeEditandoNotas && (
           <div className="space-y-3">
             <p className="text-xs text-[var(--color-text-soft)]">
@@ -746,18 +767,9 @@ export const CotacaoFreteCard = forwardRef<CotacaoFreteCardHandle, CotacaoFreteC
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => adicionarNota(cidadeEditandoNotas)}>
-                + Adicionar NF
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => imprimirNotasCidade(cidadeEditandoNotas)}
-                disabled={resumoNotasCidade(cidadeEditandoNotas) === null}
-              >
-                🏷️ Imprimir Etiquetas
-              </Button>
-            </div>
+            <Button variant="outline" onClick={() => adicionarNota(cidadeEditandoNotas)}>
+              + Adicionar NF
+            </Button>
           </div>
         )}
       </Modal>

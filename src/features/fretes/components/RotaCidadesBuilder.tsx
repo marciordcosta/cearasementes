@@ -1,5 +1,5 @@
+import { Printer } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Button } from '@/components/ui/Button';
 import { apenasNomeCidade, cidadesDasTransportadoras, normalizarCidade } from '../calculations';
 import type { Transportadora } from '../types';
 import { AutocompleteInput, type OpcaoAutocomplete } from './AutocompleteInput';
@@ -79,22 +79,27 @@ export function RotaCidadesBuilder({
   return (
     <div className="space-y-3">
       <div>
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <label className="text-xs font-semibold text-[var(--color-text-soft)]">{ehRota ? 'Adicionar cidade à rota' : 'Cidade de destino'}</label>
+        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">{ehRota ? 'Adicionar cidade à rota' : 'Cidade de destino'}</label>
+        <div className="flex max-w-md items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <AutocompleteInput
+              value={buscaCidade}
+              onChangeTexto={setBuscaCidade}
+              opcoes={opcoesCidades}
+              onSelecionar={adicionarCidade}
+              className={campoClasse}
+            />
+          </div>
           {temNotasParaImprimir && onImprimirTodas && (
-            <Button variant="outline" onClick={onImprimirTodas}>
-              🏷️ Imprimir Etiquetas
-            </Button>
+            <button
+              type="button"
+              onClick={onImprimirTodas}
+              title="Imprimir Etiquetas"
+              className="shrink-0 rounded-md border border-[var(--color-line)] p-2 text-[var(--color-text-soft)] hover:bg-[var(--color-line)]/40 hover:text-[var(--color-text)]"
+            >
+              <Printer size={16} />
+            </button>
           )}
-        </div>
-        <div className="max-w-md">
-          <AutocompleteInput
-            value={buscaCidade}
-            onChangeTexto={setBuscaCidade}
-            opcoes={opcoesCidades}
-            onSelecionar={adicionarCidade}
-            className={campoClasse}
-          />
         </div>
         <p className="mt-1 text-xs text-[var(--color-text-soft)]">
           {cidades.length === 0
