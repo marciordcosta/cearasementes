@@ -550,6 +550,7 @@ function ModalOrcamento({
   pagamentoBoletoParcelasMax,
   onAtualizarQtd,
   onAbrirCalculadora,
+  onLimparCarrinho,
   onFechar,
 }: {
   canalNome: string;
@@ -572,6 +573,8 @@ function ModalOrcamento({
   onAtualizarQtd: (itemId: string, qtd: number) => void;
   /** "Área total" nos totais é o link pra Calculadora de plantio — fecha o Orçamento e abre a Calculadora (ver render em CatalogoPublicoPage). */
   onAbrirCalculadora: () => void;
+  /** Zera carrinho/áreas editadas/modo escolhido (ver limparCarrinho em CatalogoPublicoPage) — chamado ao sair da tela de PDF (ver finalizarPedido), que fecha o ciclo do pedido. */
+  onLimparCarrinho: () => void;
   onFechar: () => void;
 }) {
   const [pagamentoAberto, setPagamentoAberto] = useState(false);
@@ -648,6 +651,14 @@ function ModalOrcamento({
     window.open(linkWhatsApp(whatsapp, montarMensagemCotacaoFrete(canalNome, itens)), '_blank');
   }
 
+  /** Saída do fluxo do pedido — baixado, compartilhado ou cancelado (qualquer um dos 3), zera o carrinho e fecha o Orçamento de vez. */
+  function finalizarPedido() {
+    setOfertaPdfAberta(false);
+    setNumeroPedidoPdfAberto(false);
+    onLimparCarrinho();
+    onFechar();
+  }
+
   /**
    * "Enviar" o PDF do pedido — tenta o compartilhamento nativo do navegador (Web Share API com
    * arquivo, mesmo padrão de tentarCompartilharPdf pro catálogo geral); sem suporte (a maioria dos
@@ -674,7 +685,8 @@ function ModalOrcamento({
 
   async function iniciarEnvioPedidoPdf() {
     const concluido = await tentarCompartilharPedidoPdf();
-    if (!concluido) setNumeroPedidoPdfAberto(true);
+    if (concluido) finalizarPedido();
+    else setNumeroPedidoPdfAberto(true);
   }
 
   /** Fallback sem Web Share: baixa o PDF (jsPDF de verdade) e abre a conversa nesse número — o cliente anexa o arquivo recém-baixado manualmente (mesmo padrão do PDF do catálogo geral). */
@@ -693,8 +705,7 @@ function ModalOrcamento({
       const numeroCompleto = `55${digitos}`;
       const mensagem = `Olá! Segue o pedido em PDF (${canalNome}) — acabei de baixar, é só um instante que já anexo aqui.`;
       window.open(linkWhatsApp(numeroCompleto, mensagem), '_blank');
-      setNumeroPedidoPdfAberto(false);
-      setOfertaPdfAberta(false);
+      finalizarPedido();
     } finally {
       setEnviandoPedidoPdf(false);
     }
@@ -711,7 +722,7 @@ function ModalOrcamento({
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    setOfertaPdfAberta(false);
+    finalizarPedido();
   }
 
   return (
@@ -858,7 +869,7 @@ function ModalOrcamento({
           enviando={preparandoCompartilhamentoPedidoPdf}
           onEnviar={iniciarEnvioPedidoPdf}
           onSalvar={salvarPedidoPdf}
-          onFechar={() => setOfertaPdfAberta(false)}
+          onFechar={finalizarPedido}
         />
       )}
       {numeroPedidoPdfAberto && (
@@ -1444,6 +1455,13 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     });
   }
 
+  /** Zera o carrinho inteiro (produtos, áreas digitadas e modo escolhido) — chamado ao sair da tela de PDF do pedido (ver finalizarPedido em ModalOrcamento), que fecha o ciclo do pedido enviado. */
+  function limparCarrinho() {
+    setCarrinho(new Map());
+    setAreasPorItem(new Map());
+    setModoPorItem(new Map());
+  }
+
   /**
    * Tenta o compartilhamento nativo do navegador (Web Share API com arquivo) — a mesma tela que
    * abre pra compartilhar um comprovante de banco: já lista o WhatsApp entre os apps e deixa
@@ -1790,6 +1808,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           pagamentoBoletoParcelasMax={data.pagamentoBoletoParcelasMax}
           onAtualizarQtd={atualizarQtd}
           onAbrirCalculadora={() => setCalculadoraAberta(true)}
+          onLimparCarrinho={limparCarrinho}
           onFechar={() => setOrcamentoAberto(false)}
         />
       )}
