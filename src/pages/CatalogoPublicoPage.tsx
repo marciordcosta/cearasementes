@@ -274,7 +274,7 @@ function ModalPagamento({
               onClick={() => onEscolher({ tipo: 'avista', descontoPct: avistaDescontoPct })}
               className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
             >
-              <p className="font-semibold text-[#1a2233]">À vista{avistaDescontoPct > 0 ? ` — ${avistaDescontoPct}% de desconto` : ''}</p>
+              <p className="font-semibold text-[#1a2233]">À vista</p>
               <p className="text-xs">
                 {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
                 <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalAvistaComDesconto)}</span>
@@ -289,14 +289,13 @@ function ModalPagamento({
             >
               <p className="font-semibold text-[#1a2233]">Boleto</p>
               <p className="text-xs text-[#67718a]">
-                {parcelasMax > 1 ? (
-                  <>
-                    em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
-                  </>
-                ) : (
-                  <>R$ {fmtR(valorProdutos)}</>
-                )}
+                Valor total: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
               </p>
+              {parcelasMax > 1 && (
+                <p className="text-xs text-[#67718a]">
+                  em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
+                </p>
+              )}
             </button>
           )}
           {boletoHabilitado && boletoExpandido && parcelasMax > 1 && (
