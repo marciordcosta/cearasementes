@@ -227,11 +227,27 @@ export function ChannelsPanel({
                     )}
                   </span>
                 </CampoRow>
+                <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — só DDD+número, Brasil (+55) já é fixo">
+                  <span className="flex items-center gap-1">
+                    <span className="rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-1.5 py-1.5 text-[11px] text-[var(--color-text-soft)]">+55</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="85999999999"
+                      defaultValue={(canal.whatsapp ?? '').replace(/^55/, '')}
+                      onBlur={(e) => {
+                        const digitos = e.target.value.replace(/\D/g, '');
+                        onAtualizarWhatsapp(canal.id, digitos ? `55${digitos}` : '');
+                      }}
+                      className="w-24 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-xs text-[var(--color-text)]"
+                    />
+                  </span>
+                </CampoRow>
                 <label
                   className="flex items-center justify-between gap-1.5 text-[11px]"
                   title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
                 >
-                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostrar detalhes (VC%/Validade)</span>
+                  <span className="whitespace-nowrap text-[var(--color-text)]">Mostrar detalhes (VC%/Validade)</span>
                   <input
                     type="checkbox"
                     checked={canal.mostrarDetalhesPlantio}
@@ -239,16 +255,6 @@ export function ChannelsPanel({
                     className="accent-[var(--color-navy)]"
                   />
                 </label>
-                <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — DDI+DDD+número, só dígitos, ex.: 5585999999999">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="5585999999999"
-                    defaultValue={canal.whatsapp ?? ''}
-                    onBlur={(e) => onAtualizarWhatsapp(canal.id, e.target.value.replace(/\D/g, ''))}
-                    className="w-28 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-xs text-[var(--color-text)]"
-                  />
-                </CampoRow>
               </div>
             </Card>
           );
