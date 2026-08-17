@@ -363,7 +363,7 @@ function ModalPagamento({
                   onClick={onCalcularFrete}
                   className={`text-left text-[11px] ${estadoFrete === 'nao_calculado' ? 'font-semibold text-[#0e9d74] underline' : 'num text-[#67718a] underline'}`}
                 >
-                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirar no local' : `Valor sem o frete: R$ ${fmtR(valorProdutos)}`}
+                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirada no local' : `Valor sem o frete: R$ ${fmtR(valorProdutos)}`}
                 </button>
               ) : whatsapp ? (
                 <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
@@ -371,9 +371,6 @@ function ModalPagamento({
                 </button>
               ) : (
                 <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
-              )}
-              {!(temTransportadora && estadoFrete === 'calculado') && (
-                <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
               )}
             </div>
           )}
