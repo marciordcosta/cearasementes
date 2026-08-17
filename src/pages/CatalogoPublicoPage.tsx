@@ -602,27 +602,29 @@ function LinhaCalculadoraPlantio({
   const totalKgExibido = travado ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
   const areaCorrespondenteAoCarrinho = travado && areaReversaDoCarrinho !== null ? areaReversaDoCarrinho : (area ?? '1');
 
-  // Guarda travado/qtd do render anterior — só pra distinguir DOIS motivos diferentes de recalcular a
-  // Área guardada (nunca a qtd do carrinho, só essa informação pro total de hectares):
+  // Guarda travado/Área reversa do render anterior — só pra distinguir DOIS motivos diferentes de
+  // recalcular a Área guardada (nunca a qtd do carrinho, só essa informação pro total de hectares):
   // 1) Produto que chega já travado (marcado direto na lista, nunca passou pelo "Usar" daqui) não tem
   //    Área guardada (`area` undefined) — sem isso, o total de hectares (ver totalAreaHa em
   //    CatalogoPublicoPage) fica 0 pra esse produto mesmo mostrando uma Área reversa aqui.
-  // 2) A qtd mudou por FORA daqui enquanto já estava travado (ex.: stepper do Orçamento) — a Área
-  //    guardada fica desatualizada em relação à qtd de verdade, então recalcula de novo.
+  // 2) A Área reversa mudou por FORA de editar o campo, enquanto já estava travado — tanto por a qtd
+  //    mudar (ex.: stepper do Orçamento) quanto por trocar o modo Lanço/Covas aqui mesmo (só o modo
+  //    continua liberado quando travado — Lanço e Covas têm Taxa de semeadura diferente, então a MESMA
+  //    qtd real corresponde a uma Área diferente em cada modo). A Área guardada acompanha os dois casos.
   // Deliberadamente NÃO recalcula só porque acabou de travar via "Usar" — nesse caso a Área já foi
   // guardada pelo próprio campo (onChange) enquanto o cliente editava, e a reversa (aproximada, por
   // causa da margem de tolerância de arredondarSacos) poderia "corrigir" o valor certinho que o
   // cliente digitou pra um número ligeiramente diferente, sem ele ter mexido em nada.
-  const anteriorRef = useRef({ travado, qtd: item.qtd });
+  const anteriorRef = useRef({ travado, areaReversa: areaReversaDoCarrinho });
   useEffect(() => {
     const anterior = anteriorRef.current;
     const chegouTravadoSemArea = travado && area === undefined;
-    const qtdMudouPorForaJaTravado = anterior.travado && travado && anterior.qtd !== item.qtd;
-    if ((chegouTravadoSemArea || qtdMudouPorForaJaTravado) && areaReversaDoCarrinho !== null) {
+    const mudouPorForaJaTravado = anterior.travado && travado && anterior.areaReversa !== areaReversaDoCarrinho;
+    if ((chegouTravadoSemArea || mudouPorForaJaTravado) && areaReversaDoCarrinho !== null) {
       onAlterarArea(areaReversaDoCarrinho);
     }
-    anteriorRef.current = { travado, qtd: item.qtd };
-  }, [travado, item.qtd, area, areaReversaDoCarrinho, onAlterarArea]);
+    anteriorRef.current = { travado, areaReversa: areaReversaDoCarrinho };
+  }, [travado, area, areaReversaDoCarrinho, onAlterarArea]);
 
   if (!temPlantio) {
     return (
@@ -647,9 +649,9 @@ function LinhaCalculadoraPlantio({
               <button
                 key={m}
                 type="button"
-                disabled={travado}
+                title={travado ? 'Já travado — trocar o modo só reexpressa a mesma quantidade real, a Área ajusta sozinha' : undefined}
                 onClick={() => setModo(m)}
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${modo === m ? 'bg-[#10233f] text-white' : 'bg-white text-[#67718a]'}`}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${modo === m ? 'bg-[#10233f] text-white' : 'bg-white text-[#67718a]'}`}
               >
                 {m === 'lanco' ? 'Lanço' : 'Covas'}
               </button>
