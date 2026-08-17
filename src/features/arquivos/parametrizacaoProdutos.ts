@@ -79,6 +79,11 @@ export function resolverPmsDoLaudo(laudo: IdentidadeLaudo & Pick<ArquivoLaudo, '
   return paraNumero(laudo.pms) ?? resolverPmsBase(laudo, produtos);
 }
 
+/** Modo de Plantio padrão cadastrado pro produto (Lanço/Covas/Linha) — usado como modo inicial da Calculadora de plantio do Catálogo Online (ver plantioModoPadrao em calculoSemeadura.ts/CatalogoPublicoPage.tsx), null sem cadastro pra esse Cultivar+Processo. */
+export function resolverModoPlantioPadrao(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): 'cova' | 'lanco' | 'linha' | null {
+  return encontrarProduto(laudo, produtos)?.modoPlantio ?? null;
+}
+
 /** Densidade base do produto, como texto cru — não é editável por lote, então isso é sempre o que a grade mostra. */
 export function resolverDensidadeBaseTexto(laudo: IdentidadeLaudo, produtos: ProdutoParametrizacao[]): string | null {
   return encontrarProduto(laudo, produtos)?.densidadeBase ?? null;

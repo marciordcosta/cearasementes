@@ -264,6 +264,8 @@ export interface Database {
           plantio_margem_tolerancia: number | null;
           /** = PlantioPublicoResultado.precisaPesoPorCova — true: modo Covas mostra "Peso/cova (g)" em vez de "Sementes/cova" (Sementes Tradicionais soltas não dá pra contar, só pesar). */
           plantio_precisa_peso_por_cova: boolean;
+          /** = PlantioPublicoResultado.modoPadrao — Modo de Plantio (Lanço/Covas/Linha) cadastrado em Parametrização pra esse Cultivar+Processo; modo inicial da Calculadora de plantio pública. Null = sem cadastro (item publicado antes dessa coluna existir também cai aqui). */
+          plantio_modo_padrao: 'cova' | 'lanco' | 'linha' | null;
           /** = Produto.mostrarDetalhesCatalogo — false SOBREPÕE canais_preco.mostrar_detalhes_plantio e esconde VC%/Validade/PMS no card só pra esse item, mesmo com a Tabela mostrando pros demais. */
           mostrar_detalhes_catalogo: boolean;
           /** = Produto.cultivar — usado pra agrupar "mesmo produto" na página/PDFs públicos (ver chaveComparacaoProduto em calculations.ts), igual já vale na grade/PDFs internos. Null = produto sem Cultivar cadastrado, cai no agrupamento por nome. */

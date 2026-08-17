@@ -619,6 +619,8 @@ export interface ItemCatalogoPublicoInput {
   plantioMargemTolerancia: number;
   /** = resolverPlantioParaProduto(...).precisaPesoPorCova — true: calculadora mostra Peso/cova (g) em vez de Sementes/cova no modo Covas. */
   plantioPrecisaPesoPorCova: boolean;
+  /** = resolverPlantioParaProduto(...).modoPadrao — modo (Lanço/Covas/Linha) cadastrado em Parametrização pra esse Cultivar+Processo; modo inicial da Calculadora de plantio. */
+  plantioModoPadrao: 'cova' | 'lanco' | 'linha' | null;
   /** = Produto.mostrarDetalhesCatalogo — false SOBREPÕE Canal.mostrarDetalhesPlantio e esconde VC%/Validade/PMS no card só pra esse item. */
   mostrarDetalhesCatalogo: boolean;
   /** = Produto.cultivar — pra agrupar "mesmo produto" na página/PDFs públicos (ver chaveComparacaoProduto em calculations.ts), igual já vale internamente. */
@@ -646,6 +648,7 @@ function itemCatalogoParaRow(canalId: string, item: ItemCatalogoPublicoInput) {
     plantio_validade: item.plantioValidade,
     plantio_margem_tolerancia: item.plantioMargemTolerancia,
     plantio_precisa_peso_por_cova: item.plantioPrecisaPesoPorCova,
+    plantio_modo_padrao: item.plantioModoPadrao,
     mostrar_detalhes_catalogo: item.mostrarDetalhesCatalogo,
     cultivar: item.cultivar,
     ordem: item.ordem,
@@ -736,6 +739,7 @@ export interface CatalogoPublico {
     plantioValidade: string | null;
     plantioMargemTolerancia: number | null;
     plantioPrecisaPesoPorCova: boolean;
+    plantioModoPadrao: 'cova' | 'lanco' | 'linha' | null;
     mostrarDetalhesCatalogo: boolean;
     cultivar: string | null;
   }[];
@@ -778,6 +782,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
       plantioValidade: i.plantio_validade,
       plantioMargemTolerancia: i.plantio_margem_tolerancia,
       plantioPrecisaPesoPorCova: i.plantio_precisa_peso_por_cova,
+      plantioModoPadrao: i.plantio_modo_padrao,
       mostrarDetalhesCatalogo: i.mostrar_detalhes_catalogo,
       cultivar: i.cultivar,
     })),

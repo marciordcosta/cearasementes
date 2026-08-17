@@ -504,6 +504,7 @@ export function PricingPage() {
       plantioValidade: plantio.validade,
       plantioMargemTolerancia: plantio.margemTolerancia,
       plantioPrecisaPesoPorCova: plantio.precisaPesoPorCova,
+      plantioModoPadrao: plantio.modoPadrao,
       mostrarDetalhesCatalogo: p.mostrarDetalhesCatalogo,
       cultivar: p.cultivar,
       ordem: indice,

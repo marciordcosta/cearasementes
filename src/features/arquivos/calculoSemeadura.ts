@@ -7,6 +7,7 @@ import {
   resolverIndiceSobrevivencia,
   resolverMargemTolerancia,
   resolverMaxPlantulasCova,
+  resolverModoPlantioPadrao,
   resolverPmsBase,
   resolverPmsDoLaudo,
 } from './parametrizacaoProdutos';
@@ -309,6 +310,8 @@ export interface PlantioPublicoResultado {
   margemTolerancia: number;
   /** = precisaPesoPorCova(laudo) — true: modo Covas mostra "Peso/cova (g)" (via `pms`) em vez de "Sementes/cova" (contagem). Sementes Tradicionais soltas não dá pra contar uma a uma, só pesar. */
   precisaPesoPorCova: boolean;
+  /** Modo de Plantio cadastrado em Parametrização pra esse Cultivar+Processo (ver resolverModoPlantioPadrao) — modo inicial da Calculadora de plantio do Catálogo Online. null sem cadastro (cai no critério antigo, ver modoPlantioInicial em CatalogoPublicoPage.tsx). */
+  modoPadrao: 'cova' | 'lanco' | 'linha' | null;
 }
 
 /**
@@ -330,7 +333,7 @@ export function resolverPlantioParaProduto(
 ): PlantioPublicoResultado {
   const laudo = encontrarLaudoParaProduto(arquivos, fornecedorProduto, cultivarProduto, processoProduto);
   if (!laudo) {
-    return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25, precisaPesoPorCova: false };
+    return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25, precisaPesoPorCova: false, modoPadrao: null };
   }
   const fatorCondicaoMedia = resolverFatorCondicao(laudo, 'media', produtos, fatores);
   const kgHaLanco = calcularKgPorHectareNumero(laudo, produtos, fatorDe(fatores, 'lanco'), fatorCondicaoMedia);
@@ -338,5 +341,15 @@ export function resolverPlantioParaProduto(
   const pms = resolverPmsDoLaudo(laudo, produtos);
   const vc = calcularVCNumero(laudo);
   const margemTolerancia = resolverMargemTolerancia(laudo, produtos);
-  return { kgHaLanco, sementesCovaBase, pms, vc, pmsManual: laudo.pms, validade: laudo.validade, margemTolerancia, precisaPesoPorCova: precisaPesoPorCova(laudo) };
+  return {
+    kgHaLanco,
+    sementesCovaBase,
+    pms,
+    vc,
+    pmsManual: laudo.pms,
+    validade: laudo.validade,
+    margemTolerancia,
+    precisaPesoPorCova: precisaPesoPorCova(laudo),
+    modoPadrao: resolverModoPlantioPadrao(laudo, produtos),
+  };
 }
