@@ -146,6 +146,16 @@ export function ChannelsPanel({
                 <CampoRow label="Taxa de Cartão (%)">
                   <input type="number" step="0.1" min="0" defaultValue={canal.cartao} onBlur={(e) => onAtualizarCampo(canal.id, 'cartao', parseFloat(e.target.value) || 0)} className={inputClass} />
                 </CampoRow>
+                <CampoRow label="Tipo de Imposto (ICMS)">
+                  <select
+                    defaultValue={canal.tipoImposto}
+                    onChange={(e) => onAtualizarTipoImposto(canal.id, e.target.value as TipoImposto)}
+                    className={selectClass}
+                  >
+                    <option value="estadual" className="text-[var(--color-text)]">Estadual</option>
+                    <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
+                  </select>
+                </CampoRow>
                 <CampoRow label="Outros Encargos (R$)">
                   <input type="number" step="0.1" min="0" defaultValue={canal.outrosEncargos} onBlur={(e) => onAtualizarCampo(canal.id, 'outrosEncargos', parseFloat(e.target.value) || 0)} className={inputClass} />
                 </CampoRow>
@@ -190,16 +200,6 @@ export function ChannelsPanel({
                     </CampoRow>
                   </>
                 )}
-                <CampoRow label="Tipo de Imposto (ICMS)">
-                  <select
-                    defaultValue={canal.tipoImposto}
-                    onChange={(e) => onAtualizarTipoImposto(canal.id, e.target.value as TipoImposto)}
-                    className={selectClass}
-                  >
-                    <option value="estadual" className="text-[var(--color-text)]">Estadual</option>
-                    <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
-                  </select>
-                </CampoRow>
                 <div className="border-t border-dashed border-[var(--color-line)] pt-1.5" />
                 <CampoRow
                   label="Frete cobrado do cliente"
