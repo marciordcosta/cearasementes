@@ -933,7 +933,7 @@ function LinhaCalculadoraPlantio({
         )}
       </div>
 
-      <div className={`grid gap-1.5 ${temDadosCovas ? 'grid-cols-3' : 'grid-cols-1'}`}>
+      <div className={`grid gap-1.5 ${temDadosCovas ? 'grid-cols-[1.3fr_1fr_1fr]' : 'grid-cols-1'}`}>
         <label className="block text-[10px] text-[#67718a]">
           Área (ha)
           {modo === 'lanco' ? (
@@ -943,7 +943,7 @@ function LinhaCalculadoraPlantio({
               <button
                 type="button"
                 onClick={() => ajustarArea(-0.5)}
-                className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]"
               >
                 −
               </button>
@@ -952,12 +952,12 @@ function LinhaCalculadoraPlantio({
                 inputMode="decimal"
                 value={areaExibida}
                 onChange={(e) => onAlterarArea(e.target.value)}
-                className="num h-8 w-full min-w-0 flex-1 rounded-md border border-[#e2e6ed] bg-white px-1.5 text-center text-base text-[#1a2233]"
+                className="num w-full min-w-0 flex-1 rounded-md border border-[#e2e6ed] bg-white px-1.5 py-1 text-center text-sm text-[#1a2233]"
               />
               <button
                 type="button"
                 onClick={() => ajustarArea(0.5)}
-                className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]"
               >
                 +
               </button>
@@ -968,7 +968,7 @@ function LinhaCalculadoraPlantio({
               inputMode="decimal"
               value={areaExibida}
               onChange={(e) => onAlterarArea(e.target.value)}
-              className="num mt-0.5 h-8 w-full rounded-md border border-[#e2e6ed] bg-white px-2 text-base text-[#1a2233]"
+              className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
             />
           )}
         </label>
