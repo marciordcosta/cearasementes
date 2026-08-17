@@ -512,8 +512,11 @@ type ModoPlantio = 'lanco' | 'covas';
  * outros produtos marcados (ver ModalCalculadoraPlantio, que só empilha uma dessas por item do
  * carrinho). Área é a ÚNICA parte do estado que mora no componente pai (CatalogoPublicoPage,
  * `areasPorItem`) — precisa disso pra somar o total de hectares no rodapé daqui E do Orçamento (ver
- * totalAreaHa). Mesma conta do Guia de Plantio interno (kg/ha), condição sempre "Média" (sem seletor
- * aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com Sementes/cova editável nem modo Linha, ver
+ * totalAreaHa). A quantidade no carrinho não é escolhida à parte: é DERIVADA da Área digitada (mudou a
+ * Área/modo/distância, a qtd recalcula e sincroniza sozinha — ver o useEffect logo abaixo); sem
+ * embalagem calculável, zera a qtd sem desmarcar o produto (fica com a Área ali pra ajustar). Mesma
+ * conta do Guia de Plantio interno (kg/ha), condição sempre "Média" (sem seletor aqui) e só 2 modos (A
+ * Lanço/Covas — nunca Milho/Sorgo com Sementes/cova editável nem modo Linha, ver
  * resolverPlantioParaProduto em calculoSemeadura.ts). Campos compactados (rótulos/paddings menores)
  * pra caber vários produtos empilhados sem rolagem excessiva.
  */
@@ -571,6 +574,17 @@ function LinhaCalculadoraPlantio({
   // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
   const qtdEmbalagens = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
   const valorTotalPedido = qtdEmbalagens !== null ? qtdEmbalagens * item.preco : null;
+
+  // A quantidade no carrinho é DERIVADA da Área — nunca digitada à parte: mudou a Área (ou o modo/
+  // distância), a qtd recalcula e sincroniza sozinha (sem embalagem calculável — Área vazia/inválida —
+  // zera, tirando o produto do carrinho sem desmarcar, ver definirQtdCarrinho). O `if` interno evita um
+  // set desnecessário quando já está sincronizado (senão iria disparar o efeito de novo à toa a cada
+  // render, já que `onDefinirQtd` é recriado no componente pai).
+  useEffect(() => {
+    if (!temPlantio) return;
+    const novaQtd = qtdEmbalagens ?? 0;
+    if (item.qtd !== novaQtd) onDefinirQtd(item.id, novaQtd);
+  }, [temPlantio, qtdEmbalagens, item.id, item.qtd, onDefinirQtd]);
 
   if (!temPlantio) {
     return (
@@ -675,19 +689,6 @@ function LinhaCalculadoraPlantio({
           </span>
         )}
       </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <QuantidadeInput valor={item.qtd} onAlterar={(v) => onDefinirQtd(item.id, v)} />
-        <button
-          type="button"
-          disabled={qtdEmbalagens === null}
-          onClick={() => qtdEmbalagens !== null && onDefinirQtd(item.id, qtdEmbalagens)}
-          title="Usa o Nº de embalagens calculado acima como quantidade no carrinho"
-          className="rounded-md bg-[#10233f] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Usar {qtdEmbalagens ?? '—'}
-        </button>
-      </div>
     </div>
   );
 }
@@ -697,11 +698,11 @@ function LinhaCalculadoraPlantio({
  * (marcar um produto na lista principal marca pro carrinho E pra calculadora, exatamente como um item
  * de carrinho): cada produto marcado ganha sua própria linha com cálculo 100% independente dos outros
  * (ver LinhaCalculadoraPlantio) — sem busca própria aqui dentro, pra adicionar mais um produto à conta
- * é só marcar mais um na tela principal. Desmarcar/zerar a qtd de um produto AQUI (no stepper ou no
- * botão "Usar N") só tira ele do CARRINHO (ver definirQtdCarrinho em CatalogoPublicoPage) — a linha
- * continua na calculadora, ainda marcada na lista principal, pra dar pra mudar de ideia sem precisar
- * marcar de novo; só desmarcar na tela principal remove daqui de vez. Produto marcado sem laudo
- * correspondente aparece com aviso, sem campos.
+ * é só marcar mais um na tela principal. Cada linha sincroniza a qtd do carrinho sozinha a partir da
+ * Área (ver LinhaCalculadoraPlantio) — zerar a Área só tira o produto do CARRINHO (ver
+ * definirQtdCarrinho em CatalogoPublicoPage), a linha continua aqui, ainda marcada na lista principal,
+ * pra dar pra mudar de ideia sem precisar marcar de novo; só desmarcar na tela principal remove daqui
+ * de vez. Produto marcado sem laudo correspondente aparece com aviso, sem campos.
  */
 function ModalCalculadoraPlantio({
   itens,
