@@ -321,6 +321,7 @@ function ModalOrcamento({
   totalAreaHa,
   whatsapp,
   onAtualizarQtd,
+  onAbrirCalculadora,
   onFechar,
 }: {
   canalNome: string;
@@ -334,6 +335,8 @@ function ModalOrcamento({
   totalAreaHa: number;
   whatsapp: string | null;
   onAtualizarQtd: (itemId: string, qtd: number) => void;
+  /** "Área total" nos totais é o link pra Calculadora de plantio — fecha o Orçamento e abre a Calculadora (ver render em CatalogoPublicoPage). */
+  onAbrirCalculadora: () => void;
   onFechar: () => void;
 }) {
   const [concluirAberto, setConcluirAberto] = useState(false);
@@ -456,10 +459,18 @@ function ModalOrcamento({
               <span className="num">R$ {fmtR(total)}</span>
             </div>
             {totalAreaHa > 0 && (
-              <div className="flex justify-between text-xs text-[#67718a]">
+              <button
+                type="button"
+                onClick={() => {
+                  onFechar();
+                  onAbrirCalculadora();
+                }}
+                title="Abrir a Calculadora de plantio"
+                className="flex w-full justify-between text-xs font-semibold text-[#0e9d74] underline"
+              >
                 <span>Área total (calculadora de plantio)</span>
                 <span className="num">{totalAreaHa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
-              </div>
+              </button>
             )}
           </div>
           <button
@@ -1242,6 +1253,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           totalAreaHa={totalAreaHa}
           whatsapp={data.whatsapp}
           onAtualizarQtd={atualizarQtd}
+          onAbrirCalculadora={() => setCalculadoraAberta(true)}
           onFechar={() => setOrcamentoAberto(false)}
         />
       )}
