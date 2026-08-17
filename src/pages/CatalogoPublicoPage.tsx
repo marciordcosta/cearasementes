@@ -525,11 +525,13 @@ type ModoPlantio = 'lanco' | 'covas';
  * `areasPorItem`) — precisa disso pra somar o total de hectares no rodapé daqui E do Orçamento (ver
  * totalAreaHa). O Nº de embalagens mostrado aqui é CALCULADO a partir da Área (atualiza a cada tecla)
  * mas só entra no carrinho quando o cliente clica em "Usar N embalagens" — a partir daí os campos
- * (Área/modo/Distância) TRAVAM (disabled), pra não parecer que o card ainda tá "ao vivo" enquanto o
- * carrinho já ficou com outro valor; clicar de novo no botão ("No carrinho: N ✓") tira do carrinho E
- * destrava os campos pra editar, aí é só clicar em "Usar" de novo pra reenviar atualizado. Mesma conta
- * do Guia de Plantio interno (kg/ha), condição sempre "Média" (sem seletor aqui) e só 2 modos (A
- * Lanço/Covas — nunca Milho/Sorgo com Sementes/cova editável nem modo Linha, ver
+ * (Área/modo/Distância) TRAVAM (disabled, ver `travado`), pra não parecer que o card ainda tá "ao vivo"
+ * enquanto o carrinho já ficou com outro valor. Clicar de novo no botão ("No carrinho: N ✓") só
+ * DESTRAVA os campos pra editar — NÃO mexe no carrinho (`travado` é estado local, independente da qtd
+ * real): a qtd que já tava lá fica intocada até o cliente clicar em "Usar" de novo com o novo cálculo;
+ * fechar sem reenviar mantém a qtd anterior. Mesma conta do Guia de Plantio interno (kg/ha), condição
+ * sempre "Média" (sem seletor aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com Sementes/cova
+ * editável nem modo Linha, ver
  * resolverPlantioParaProduto em calculoSemeadura.ts). Campos compactados (rótulos/paddings menores)
  * pra caber vários produtos empilhados sem rolagem excessiva.
  */
@@ -547,13 +549,13 @@ function LinhaCalculadoraPlantio({
 }) {
   const [modo, setModo] = useState<ModoPlantio>(item.plantioKgHaLanco != null ? 'lanco' : 'covas');
   const [corredor, setCorredor] = useState('50');
+  // Estado local, independente da qtd real do carrinho — só controla se os campos estão travados
+  // (mostrando o que já foi aplicado) ou liberados pra editar. Nasce travado quando o produto já chega
+  // com qtd>0 (ex.: marcado direto na lista); "editar" (ver botão) só muda ISSO, nunca zera o carrinho.
+  const [travado, setTravado] = useState(item.qtd > 0);
 
   const temPlantio = item.plantioKgHaLanco != null || item.plantioSementesCovaBase != null;
   const temOsDoisModos = item.plantioKgHaLanco != null && item.plantioSementesCovaBase != null && item.plantioPms != null;
-  // Mode-independente de propósito (ver feedback do usuário): o carrinho não distingue "aplicado no
-  // modo Lanço" de "aplicado no modo Covas" — é só "tem qtd>0 nesse produto" ou não, mesmo trocando de
-  // aba aqui dentro sem tocar em nada mais.
-  const emCarrinho = item.qtd > 0;
 
   const kgPorHa =
     modo === 'lanco'
@@ -587,17 +589,17 @@ function LinhaCalculadoraPlantio({
   // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
   const qtdEmbalagensCalculada = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
 
-  // Produto já no carrinho (qtd real, ver emCarrinho) pode ter chegado lá sem passar pelo "Usar" daqui
-  // (marcado direto na lista principal, ou a qtd ajustada no Orçamento) — nesses casos a Área/resultado
-  // recalculados a partir da `area` guardada não batem com a qtd de verdade. Enquanto travado, tudo que
-  // aparece (Área, kg total, embalagens, valor) reflete a qtd REAL do carrinho (exata, sem
-  // arredondamento) em vez do que sairia recalculando do zero — inclusive a Área mostrada é a REVERSA
-  // (aproximada — o inverso de totalKg = Math.ceil(kgPorHa) × área) que corresponde a essa qtd.
-  const qtdEmbalagens = emCarrinho ? item.qtd : qtdEmbalagensCalculada;
-  const totalKgExibido = emCarrinho ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
+  // Produto já no carrinho (qtd real) pode ter chegado lá sem passar pelo "Usar" daqui (marcado direto
+  // na lista principal, ou a qtd ajustada no Orçamento) — nesses casos a Área/resultado recalculados a
+  // partir da `area` guardada não batem com a qtd de verdade. Enquanto `travado`, tudo que aparece
+  // (Área, kg total, embalagens, valor) reflete a qtd REAL do carrinho (exata, sem arredondamento) em
+  // vez do que sairia recalculando do zero — inclusive a Área mostrada é a REVERSA (aproximada — o
+  // inverso de totalKg = Math.ceil(kgPorHa) × área) que corresponde a essa qtd.
+  const qtdEmbalagens = travado ? item.qtd : qtdEmbalagensCalculada;
+  const totalKgExibido = travado ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
   const valorTotalPedido = qtdEmbalagens !== null ? qtdEmbalagens * item.preco : null;
   const areaCorrespondenteAoCarrinho =
-    emCarrinho && kgPorHa !== null && kgPorHa > 0 && item.peso > 0
+    travado && kgPorHa !== null && kgPorHa > 0 && item.peso > 0
       ? String(Math.round(((item.qtd * item.peso) / Math.ceil(kgPorHa)) * 100) / 100)
       : area;
 
@@ -624,7 +626,7 @@ function LinhaCalculadoraPlantio({
               <button
                 key={m}
                 type="button"
-                disabled={emCarrinho}
+                disabled={travado}
                 onClick={() => setModo(m)}
                 className={`rounded-full px-2 py-0.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${modo === m ? 'bg-[#10233f] text-white' : 'bg-white text-[#67718a]'}`}
               >
@@ -642,7 +644,7 @@ function LinhaCalculadoraPlantio({
             type="number"
             inputMode="decimal"
             value={areaCorrespondenteAoCarrinho}
-            disabled={emCarrinho}
+            disabled={travado}
             onChange={(e) => onAlterarArea(e.target.value)}
             className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#67718a]"
           />
@@ -655,7 +657,7 @@ function LinhaCalculadoraPlantio({
                 type="number"
                 inputMode="decimal"
                 value={corredor}
-                disabled={emCarrinho}
+                disabled={travado}
                 onChange={(e) => setCorredor(e.target.value)}
                 className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#67718a]"
               />
@@ -709,17 +711,20 @@ function LinhaCalculadoraPlantio({
 
       <button
         type="button"
-        disabled={qtdEmbalagens === null}
+        disabled={!travado && qtdEmbalagensCalculada === null}
         onClick={() => {
-          if (emCarrinho) onDefinirQtd(item.id, 0);
-          else if (qtdEmbalagens !== null) onDefinirQtd(item.id, qtdEmbalagens);
+          if (travado) setTravado(false);
+          else if (qtdEmbalagensCalculada !== null) {
+            onDefinirQtd(item.id, qtdEmbalagensCalculada);
+            setTravado(true);
+          }
         }}
-        title={emCarrinho ? 'Tira do carrinho e libera os campos pra editar de novo' : undefined}
+        title={travado ? 'Libera os campos pra editar — o carrinho só muda quando enviar de novo' : undefined}
         className={`w-full rounded-md py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-          emCarrinho ? 'bg-[#e4f6ef] text-[#0e9d74] hover:bg-[#d7f0e6]' : 'bg-[#10233f] text-white hover:brightness-110'
+          travado ? 'bg-[#e4f6ef] text-[#0e9d74] hover:bg-[#d7f0e6]' : 'bg-[#10233f] text-white hover:brightness-110'
         }`}
       >
-        {emCarrinho ? `No carrinho: ${item.qtd} ✓ — clique pra editar` : `Usar ${qtdEmbalagens ?? '—'} embalagens no carrinho`}
+        {travado ? `No carrinho: ${item.qtd} ✓ — clique pra editar` : `Usar ${qtdEmbalagensCalculada ?? '—'} embalagens no carrinho`}
       </button>
     </div>
   );
@@ -732,10 +737,10 @@ function LinhaCalculadoraPlantio({
  * (ver LinhaCalculadoraPlantio) — sem busca própria aqui dentro, pra adicionar mais um produto à conta
  * é só marcar mais um na tela principal. Cada linha calcula o Nº de embalagens a partir da Área, mas só
  * entra no carrinho quando o cliente clica em "Usar N embalagens" (ver LinhaCalculadoraPlantio) — nada
- * automático. Clicar em "Aplicado ✓" pra remover só tira o produto do CARRINHO (ver definirQtdCarrinho
- * em CatalogoPublicoPage) — a linha continua aqui, ainda marcada na lista principal, pra dar pra mudar
- * de ideia sem precisar marcar de novo; só desmarcar na tela principal remove daqui de vez. Produto
- * marcado sem laudo correspondente aparece com aviso, sem campos.
+ * automático. Clicar em "No carrinho: N ✓" de novo só DESTRAVA os campos pra editar, nunca mexe na qtd
+ * do carrinho (ver `travado` em LinhaCalculadoraPlantio) — a qtd anterior fica valendo até o cliente
+ * clicar em "Usar" de novo com o cálculo atualizado. Só desmarcar na tela principal tira o produto
+ * daqui de vez (e do carrinho). Produto marcado sem laudo correspondente aparece com aviso, sem campos.
  */
 function ModalCalculadoraPlantio({
   itens,
