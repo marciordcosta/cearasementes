@@ -289,13 +289,14 @@ function ModalPagamento({
             >
               <p className="font-semibold text-[#1a2233]">Boleto</p>
               <p className="text-xs text-[#67718a]">
-                Valor total: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
+                Total: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
+                {parcelasMax > 1 && (
+                  <>
+                    {' '}
+                    em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
+                  </>
+                )}
               </p>
-              {parcelasMax > 1 && (
-                <p className="text-xs text-[#67718a]">
-                  em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
-                </p>
-              )}
             </button>
           )}
           {boletoHabilitado && boletoExpandido && parcelasMax > 1 && (
