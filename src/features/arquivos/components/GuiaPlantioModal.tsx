@@ -110,6 +110,11 @@ function formatarSementesCovaAtual(laudo: ArquivoLaudo, produtos: ProdutoParamet
   return pms !== null && pms > 0 ? formatarCovas((sementesCova * pms) / 1000) : '';
 }
 
+/** Sementes convertidas pra Peso (g) via PMS — mesma conta de formatarSementesCovaAtual, reaproveitada pro Sem./m (linear) quando o Processo pede peso em vez de contagem (semente Tradicional solta não dá pra contar, só pesar, ver precisaPesoPorCova). null sem PMS cadastrado. */
+function pesoGramas(sementes: number | null, pms: number | null): number | null {
+  return sementes !== null && pms !== null && pms > 0 ? (sementes * pms) / 1000 : null;
+}
+
 /** Distância (cm) — SEMPRE derivada do Corredor pra manter o Covas/m² travado (regra geral, ver covasM2Alvo). Nunca editável, nunca guardada — impossível o espaçamento "descolar" do alvo. Null com Corredor inválido. */
 function distanciaDerivada(corredorTexto: string): number | null {
   return distanciaDeCovasM2(covasM2Alvo(), corredorTexto);
@@ -869,6 +874,9 @@ export function GuiaPlantioModal({
                       // sementesPorMetroLinearModoLinha), sem trocar o layout do card (Covas nunca vira
                       // "semeadura contínua" sozinho — pra isso existe o modo Linha, independente).
                       const sementesPorMetroLinear = distancia !== null && distancia > 0 && sementesCovaNum !== null ? (100 / distancia) * sementesCovaNum : null;
+                      // Mesma regra do Peso/cova ao lado — Tradicional solta não dá pra contar, só pesar (ver
+                      // precisaPesoPorCova/pesoGramas): "Sem./m (linear)" também precisa virar peso (g) nesse caso.
+                      const sementesPorMetroLinearExibido = pesoPorCova ? pesoGramas(sementesPorMetroLinear, pms) : sementesPorMetroLinear;
                       const germinacaoFinalAtual = germinacaoFinalSemeadura(laudo, produtos, fatorModoItem, fatorCondicaoAtual);
                       const plantulasPorM2 = r.sementesPorM2 !== null && germinacaoFinalAtual !== null ? r.sementesPorM2 * (germinacaoFinalAtual / 100) : null;
                       // Nem toda semente lançada vira planta (germinação) — quantas realmente ESTABELECEM em
@@ -953,12 +961,12 @@ export function GuiaPlantioModal({
                               {semPmsParaPeso && <p className="mt-0.5 text-[9px] text-bad">Sem PMS cadastrado</p>}
                             </div>
                             <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCova ? 'Peso/m linear (g)' : 'Sem./m (linear)'}</p>
                               <p
                                 title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}\nPlântulas/m²: ${plantulasPorM2 === null ? '—' : formatarCovas(plantulasPorM2)}`}
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
-                                {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
+                                {sementesPorMetroLinearExibido === null ? '—' : formatarCovas(sementesPorMetroLinearExibido)}
                               </p>
                             </div>
                           </div>
@@ -970,6 +978,11 @@ export function GuiaPlantioModal({
                   {item.modo === 'linha' &&
                     (() => {
                       const sementesPorMetroLinear = sementesPorMetroLinearModoLinha(r.sementesPorM2, item.corredor);
+                      // Mesma regra do modo Covas ao lado — Tradicional solta não dá pra contar, só pesar (ver
+                      // precisaPesoPorCova/pesoGramas): "Sem./m (linear)" também precisa virar peso (g) nesse caso.
+                      const pesoPorCovaLinha = precisaPesoPorCova(laudo);
+                      const pmsLinha = pmsNumericoDoLaudo(laudo, produtos);
+                      const sementesPorMetroLinearExibido = pesoPorCovaLinha ? pesoGramas(sementesPorMetroLinear, pmsLinha) : sementesPorMetroLinear;
                       // Sementes/m² × Germinação/100 = Densidade cadastrada, por construção (ver calcularSementesPorM2)
                       // — mais direto pegar a própria Densidade do que recalcular via Germinação.
                       const plantulasPorM2 = resolverDensidadeBase(laudo, produtos);
@@ -1008,12 +1021,12 @@ export function GuiaPlantioModal({
                               )}
                             </div>
                             <div>
-                              <p className="text-[10px] text-[var(--color-text-soft)]">Sem./m (linear)</p>
+                              <p className="text-[10px] text-[var(--color-text-soft)]">{pesoPorCovaLinha ? 'Peso/m linear (g)' : 'Sem./m (linear)'}</p>
                               <p
                                 title={`Sementes/m²: ${r.sementesPorM2 === null ? '—' : formatarCovas(r.sementesPorM2)}\nPlântulas/m²: ${plantulasPorM2 === null ? '—' : formatarCovas(plantulasPorM2)}\nPlântulas/m: ${plantulasPorMetroLinear === null ? '—' : formatarCovas(plantulasPorMetroLinear)}`}
                                 className="border border-transparent px-1.5 py-1 text-xs font-medium text-[var(--color-text)]"
                               >
-                                {sementesPorMetroLinear === null ? '—' : formatarCovas(sementesPorMetroLinear)}
+                                {sementesPorMetroLinearExibido === null ? '—' : formatarCovas(sementesPorMetroLinearExibido)}
                               </p>
                             </div>
                           </div>
