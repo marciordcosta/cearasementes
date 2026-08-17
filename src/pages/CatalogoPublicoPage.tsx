@@ -263,16 +263,22 @@ function ModalPagamento({
           {boletoHabilitado && !boletoExpandido && (
             <button
               type="button"
-              onClick={() => setBoletoExpandido(true)}
+              onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: valorProdutos }))}
               className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
             >
               <p className="font-semibold text-[#1a2233]">Boleto</p>
               <p className="text-xs text-[#67718a]">
-                em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
+                {parcelasMax > 1 ? (
+                  <>
+                    em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
+                  </>
+                ) : (
+                  <>R$ {fmtR(valorProdutos)}</>
+                )}
               </p>
             </button>
           )}
-          {boletoHabilitado && boletoExpandido && (
+          {boletoHabilitado && boletoExpandido && parcelasMax > 1 && (
             <div className="rounded-md border border-[#e2e6ed] p-2.5">
               <p className="mb-1.5 text-xs font-semibold text-[#1a2233]">Boleto — escolha as parcelas</p>
               <div className="flex flex-col gap-1.5">
