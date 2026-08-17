@@ -14,7 +14,7 @@ import {
   sementesComAjustePorDistancia,
 } from '@/features/arquivos/calculoSemeadura';
 import { paraNumero } from '@/features/arquivos/metricas';
-import { chaveComparacaoProduto } from '@/features/pricing/calculations';
+import { calcularParcelasBoleto, chaveComparacaoProduto } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
 import { gerarCatalogoPublicoPdf, gerarCatalogoPublicoPdfBlob } from '@/features/pricing/catalogoPublicoPdf';
 import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
@@ -59,14 +59,17 @@ function linkWhatsApp(numero: string, texto?: string): string {
  * linhas — nome+fornecedor+peso, depois qtd × unitário = subtotal — com uma linha em branco
  * separando um item do outro.
  */
-function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], freteDescricao: string, total: number): string {
+function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], freteDescricao: string, total: number, pagamentoDescricao?: string | null): string {
   const blocos = itens.map((i) => {
     const nomeLimpo = i.nome.replace(/[*_]/g, '');
     const linhaNome = [nomeLimpo, i.fornecedorNome, `${Math.round(i.peso)}kg`].filter(Boolean).join(' ');
     const linhaValores = `${i.qtd} x R$ ${fmtR(i.preco)} = R$ ${fmtR(i.preco * i.qtd)}`;
     return `${linhaNome}\n${linhaValores}`;
   });
-  return [`Orçamento — ${canalNome}`, '', blocos.join('\n\n'), '', `Frete: ${freteDescricao}`, `Total: R$ ${fmtR(total)}`].join('\n');
+  const linhas = [`Orçamento — ${canalNome}`, '', blocos.join('\n\n'), '', `Frete: ${freteDescricao}`];
+  if (pagamentoDescricao) linhas.push(`Pagamento: ${pagamentoDescricao}`);
+  linhas.push(`Total: R$ ${fmtR(total)}`);
+  return linhas.join('\n');
 }
 
 function montarMensagemCotacaoFrete(canalNome: string, itens: ItemCarrinho[]): string {
@@ -207,6 +210,71 @@ function ModalConcluir({
   );
 }
 
+type PagamentoEscolhido = { tipo: 'avista'; descontoPct: number } | { tipo: 'boleto'; parcelas: number; valorParcela: number };
+
+/**
+ * "Como você quer pagar?" — abre ao clicar "Concluir" quando a Tabela tem À vista e/ou Boleto
+ * autorizado (ver pagamentoAvistaHabilitado/pagamentoBoletoHabilitado), antes do ModalConcluir
+ * (escolha WhatsApp/PDF). Escolher uma opção já avança (mesmo padrão do ModalConcluir); Cancelar
+ * volta pro Orçamento sem progredir.
+ */
+function ModalPagamento({
+  valorProdutos,
+  avistaHabilitado,
+  avistaDescontoPct,
+  boletoHabilitado,
+  boletoValorMinimo,
+  boletoParcelasMax,
+  onEscolher,
+  onFechar,
+}: {
+  valorProdutos: number;
+  avistaHabilitado: boolean;
+  avistaDescontoPct: number;
+  boletoHabilitado: boolean;
+  boletoValorMinimo: number;
+  boletoParcelasMax: number;
+  onEscolher: (escolha: PagamentoEscolhido) => void;
+  onFechar: () => void;
+}) {
+  const totalAvista = valorProdutos * (1 - avistaDescontoPct / 100);
+  const { parcelas, valorParcela } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
+        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Como você quer pagar?</p>
+        <div className="flex flex-col gap-2">
+          {avistaHabilitado && (
+            <button
+              type="button"
+              onClick={() => onEscolher({ tipo: 'avista', descontoPct: avistaDescontoPct })}
+              className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
+            >
+              <p className="font-semibold text-[#1a2233]">À vista{avistaDescontoPct > 0 ? ` — ${avistaDescontoPct}% de desconto` : ''}</p>
+              <p className="text-xs text-[#67718a]">Produtos: R$ {fmtR(totalAvista)}</p>
+            </button>
+          )}
+          {boletoHabilitado && (
+            <button
+              type="button"
+              onClick={() => onEscolher({ tipo: 'boleto', parcelas, valorParcela })}
+              className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
+            >
+              <p className="font-semibold text-[#1a2233]">Boleto</p>
+              <p className="text-xs text-[#67718a]">
+                {parcelas}x de R$ {fmtR(valorParcela)}
+              </p>
+            </button>
+          )}
+          <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Composição livre antes de sair pro WhatsApp — o clique no ícone flutuante não navega direto, só abre isso; o navegador só é aberto de fato ao confirmar "Enviar", pra não tirar o cliente do catálogo à toa. */
 function ModalMensagemWhatsApp({ mensagemInicial, onEnviar, onFechar }: { mensagemInicial: string; onEnviar: (mensagem: string) => void; onFechar: () => void }) {
   const [mensagem, setMensagem] = useState(mensagemInicial);
@@ -329,6 +397,11 @@ function ModalOrcamento({
   temTransportadora,
   totalAreaHa,
   whatsapp,
+  pagamentoAvistaHabilitado,
+  pagamentoAvistaDescontoPct,
+  pagamentoBoletoHabilitado,
+  pagamentoBoletoValorMinimo,
+  pagamentoBoletoParcelasMax,
   onAtualizarQtd,
   onAbrirCalculadora,
   onFechar,
@@ -344,11 +417,19 @@ function ModalOrcamento({
   /** Soma da Área (ha) digitada em cada produto na Calculadora de plantio (ver areasPorItem em CatalogoPublicoPage) — 0 quando ninguém usou a calculadora ainda. */
   totalAreaHa: number;
   whatsapp: string | null;
+  /** Config de pagamento da Tabela (ver Canal.pagamentoAvistaHabilitado/pagamentoBoletoHabilitado em pricing/types.ts) — quando ao menos um dos dois está habilitado, "Concluir" abre o ModalPagamento antes do ModalConcluir. */
+  pagamentoAvistaHabilitado: boolean;
+  pagamentoAvistaDescontoPct: number;
+  pagamentoBoletoHabilitado: boolean;
+  pagamentoBoletoValorMinimo: number;
+  pagamentoBoletoParcelasMax: number;
   onAtualizarQtd: (itemId: string, qtd: number) => void;
   /** "Área total" nos totais é o link pra Calculadora de plantio — fecha o Orçamento e abre a Calculadora (ver render em CatalogoPublicoPage). */
   onAbrirCalculadora: () => void;
   onFechar: () => void;
 }) {
+  const [pagamentoAberto, setPagamentoAberto] = useState(false);
+  const [pagamentoEscolhido, setPagamentoEscolhido] = useState<PagamentoEscolhido | null>(null);
   const [concluirAberto, setConcluirAberto] = useState(false);
   const [observacaoWhatsAppAberta, setObservacaoWhatsAppAberta] = useState(false);
   // Sempre nasce "não calculado" — some quando o Orçamento fecha (desmonta) e volta a pedir clique
@@ -356,12 +437,17 @@ function ModalOrcamento({
   // "Cotação de frete" do canal Manual é um fluxo à parte, ver pedirCotacaoFrete).
   const [estadoFrete, setEstadoFrete] = useState<'nao_calculado' | 'calculado' | 'retirada'>('nao_calculado');
 
+  const pagamentoDisponivel = pagamentoAvistaHabilitado || pagamentoBoletoHabilitado;
+
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
   const freteBruto = freteFixo + pesoTotalUsado * freteKgEfetivo + (valorProdutos * fretePctEfetivo) / 100;
   const freteCalculado = itens.length === 0 ? 0 : Math.max(freteBruto, freteMinimo);
   const freteIncluidoNoTotal = temTransportadora && estadoFrete === 'calculado';
+  // Desconto à vista entra só em cima dos produtos, nunca no frete.
+  const valorProdutosComPagamento = pagamentoEscolhido?.tipo === 'avista' ? valorProdutos * (1 - pagamentoEscolhido.descontoPct / 100) : valorProdutos;
   const total = valorProdutos + (freteIncluidoNoTotal ? freteCalculado : 0);
+  const totalComPagamento = valorProdutosComPagamento + (freteIncluidoNoTotal ? freteCalculado : 0);
 
   function alternarFrete() {
     // 1º clique (nao_calculado) mostra o valor; daí em diante alterna valor <-> Retirar no local.
@@ -373,6 +459,26 @@ function ModalOrcamento({
     if (estadoFrete === 'retirada') return 'Retirar no local';
     if (estadoFrete === 'calculado') return `R$ ${fmtR(freteCalculado)}`;
     return 'a calcular';
+  }
+
+  /** "Concluir" — só passa pelo ModalPagamento quando a Tabela tem À vista e/ou Boleto autorizado; sem isso, vai direto pro ModalConcluir (WhatsApp/PDF), como sempre foi. */
+  function iniciarConclusao() {
+    if (pagamentoDisponivel) setPagamentoAberto(true);
+    else setConcluirAberto(true);
+  }
+
+  function confirmarPagamento(escolha: PagamentoEscolhido) {
+    setPagamentoEscolhido(escolha);
+    setPagamentoAberto(false);
+    setConcluirAberto(true);
+  }
+
+  function descricaoPagamento(): string | undefined {
+    if (!pagamentoEscolhido) return undefined;
+    if (pagamentoEscolhido.tipo === 'avista') {
+      return pagamentoEscolhido.descontoPct > 0 ? `À vista (${pagamentoEscolhido.descontoPct}% de desconto nos produtos)` : 'À vista';
+    }
+    return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)}`;
   }
 
   function enviarWhatsApp() {
@@ -396,7 +502,8 @@ function ModalOrcamento({
       canalNome,
       itens.map((i) => ({ nome: i.nome, qtd: i.qtd, precoUnitario: i.preco, subtotal: i.preco * i.qtd })),
       descreverFrete(),
-      total,
+      totalComPagamento,
+      descricaoPagamento(),
     );
     setConcluirAberto(false);
   }
@@ -507,7 +614,7 @@ function ModalOrcamento({
           <button
             type="button"
             disabled={itens.length === 0}
-            onClick={() => setConcluirAberto(true)}
+            onClick={iniciarConclusao}
             className="w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Concluir
@@ -515,10 +622,22 @@ function ModalOrcamento({
         </div>
       </div>
 
+      {pagamentoAberto && (
+        <ModalPagamento
+          valorProdutos={valorProdutos}
+          avistaHabilitado={pagamentoAvistaHabilitado}
+          avistaDescontoPct={pagamentoAvistaDescontoPct}
+          boletoHabilitado={pagamentoBoletoHabilitado}
+          boletoValorMinimo={pagamentoBoletoValorMinimo}
+          boletoParcelasMax={pagamentoBoletoParcelasMax}
+          onEscolher={confirmarPagamento}
+          onFechar={() => setPagamentoAberto(false)}
+        />
+      )}
       {concluirAberto && <ModalConcluir onWhatsApp={enviarWhatsApp} onPdf={salvarPdf} onFechar={() => setConcluirAberto(false)} />}
       {observacaoWhatsAppAberta && (
         <ModalObservacaoWhatsApp
-          resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), total)}
+          resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), totalComPagamento, descricaoPagamento())}
           onEnviar={confirmarEnvioWhatsApp}
           onFechar={() => setObservacaoWhatsAppAberta(false)}
         />
@@ -1395,6 +1514,11 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           temTransportadora={data.temTransportadora}
           totalAreaHa={totalAreaHa}
           whatsapp={data.whatsapp}
+          pagamentoAvistaHabilitado={data.pagamentoAvistaHabilitado}
+          pagamentoAvistaDescontoPct={data.pagamentoAvistaDescontoPct}
+          pagamentoBoletoHabilitado={data.pagamentoBoletoHabilitado}
+          pagamentoBoletoValorMinimo={data.pagamentoBoletoValorMinimo}
+          pagamentoBoletoParcelasMax={data.pagamentoBoletoParcelasMax}
           onAtualizarQtd={atualizarQtd}
           onAbrirCalculadora={() => setCalculadoraAberta(true)}
           onFechar={() => setOrcamentoAberto(false)}

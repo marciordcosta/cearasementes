@@ -157,6 +157,21 @@ export function resolverFreteCatalogo(
   };
 }
 
+/**
+ * Simulação de parcelas do Boleto no Catálogo Online — total de produtos (sem frete, o desconto/
+ * parcelamento nunca mexe no frete) dividido pelo valor mínimo por boleto, arredondado pra baixo
+ * (cada parcela nunca fica menor que o mínimo) e travado em parcelasMax: passando do limite, mantém
+ * a qtd máxima e cada parcela fica maior que o mínimo (total ÷ parcelasMax). Mínimo de 1 parcela
+ * sempre que houver total a cobrar, mesmo abaixo do valor mínimo configurado.
+ */
+export function calcularParcelasBoleto(totalProdutos: number, valorMinimo: number, parcelasMax: number): { parcelas: number; valorParcela: number } {
+  if (totalProdutos <= 0) return { parcelas: 1, valorParcela: 0 };
+  const limite = Math.max(1, Math.floor(parcelasMax) || 1);
+  const parcelasCalc = valorMinimo > 0 ? Math.floor(totalProdutos / valorMinimo) : 1;
+  const parcelas = Math.min(Math.max(1, parcelasCalc), limite);
+  return { parcelas, valorParcela: totalProdutos / parcelas };
+}
+
 export function calcularCanal(
   produto: Produto,
   canal: Canal,

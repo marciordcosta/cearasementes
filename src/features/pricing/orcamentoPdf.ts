@@ -15,8 +15,10 @@ function f(v: number): string {
  * Orçamento montado pelo cliente no Catálogo Online (ver CatalogoPublicoPage.tsx) — janela de
  * impressão (mesmo fluxo de abrirEImprimir), não é gravado em lugar nenhum. `freteDescricao` já vem
  * pronto de descreverFrete() — cobre cotação/não calculado/retirada no local/valor calculado.
+ * `pagamentoDescricao` (opcional) = forma de pagamento escolhida no modal de Pagamento (À vista com
+ * desconto, ou Boleto parcelado) — null/undefined quando a Tabela não tem pagamento configurado.
  */
-export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], freteDescricao: string, total: number): void {
+export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], freteDescricao: string, total: number, pagamentoDescricao?: string | null): void {
   const linhas = itens
     .map(
       (item) => `
@@ -68,6 +70,7 @@ export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], 
         <tbody>${linhas}</tbody>
         <tfoot>
           <tr><td colspan="3">Frete</td><td class="num">${escapeHtml(freteDescricao)}</td></tr>
+          ${pagamentoDescricao ? `<tr><td colspan="3">Pagamento</td><td class="num">${escapeHtml(pagamentoDescricao)}</td></tr>` : ''}
           <tr class="total"><td colspan="3">Total</td><td class="num">R$ ${f(total)}</td></tr>
         </tfoot>
       </table>

@@ -82,7 +82,17 @@ import {
 import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from '@/features/pricing/types';
 import { mensagemDeErro } from '@/lib/errors';
 
-type CampoNumericoCanal = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
+type CampoNumericoCanal =
+  | 'desconto'
+  | 'comissao'
+  | 'cartao'
+  | 'outrosEncargos'
+  | 'freteKg'
+  | 'fretePct'
+  | 'freteAdicionalValor'
+  | 'pagamentoAvistaDescontoPct'
+  | 'pagamentoBoletoValorMinimo'
+  | 'pagamentoBoletoParcelasMax';
 
 const CAMPO_PARA_COLUNA: Record<CampoNumericoCanal, string> = {
   desconto: 'desconto',
@@ -92,6 +102,9 @@ const CAMPO_PARA_COLUNA: Record<CampoNumericoCanal, string> = {
   freteKg: 'frete_kg',
   fretePct: 'frete_pct',
   freteAdicionalValor: 'frete_adicional_valor',
+  pagamentoAvistaDescontoPct: 'pagamento_avista_desconto_pct',
+  pagamentoBoletoValorMinimo: 'pagamento_boleto_valor_minimo',
+  pagamentoBoletoParcelasMax: 'pagamento_boleto_parcelas_max',
 };
 
 export function PricingPage() {
@@ -543,6 +556,13 @@ export function PricingPage() {
       canal.transportadoraId !== null,
       canal.whatsapp,
       canal.mostrarDetalhesPlantio,
+      {
+        avistaHabilitado: canal.pagamentoAvistaHabilitado,
+        avistaDescontoPct: canal.pagamentoAvistaDescontoPct,
+        boletoHabilitado: canal.pagamentoBoletoHabilitado,
+        boletoValorMinimo: canal.pagamentoBoletoValorMinimo,
+        boletoParcelasMax: canal.pagamentoBoletoParcelasMax,
+      },
       itens,
     );
     return { canalNome: canal.nome, url: `${window.location.origin}/catalogo/${slug}` };
@@ -653,6 +673,16 @@ export function PricingPage() {
   function onToggleFreteIncluso(canalId: string, valor: boolean) {
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, freteIncluso: valor } : c)));
     salvarAgora(() => atualizarCanal(canalId, { frete_incluso: valor }));
+  }
+
+  function onTogglePagamentoAvista(canalId: string, valor: boolean) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, pagamentoAvistaHabilitado: valor } : c)));
+    salvarAgora(() => atualizarCanal(canalId, { pagamento_avista_habilitado: valor }));
+  }
+
+  function onTogglePagamentoBoleto(canalId: string, valor: boolean) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, pagamentoBoletoHabilitado: valor } : c)));
+    salvarAgora(() => atualizarCanal(canalId, { pagamento_boleto_habilitado: valor }));
   }
 
   function onRemoverCanal(canalId: string) {
@@ -1263,6 +1293,8 @@ export function PricingPage() {
             onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}
             onToggleVisivel={onToggleVisivel}
             onToggleFreteIncluso={onToggleFreteIncluso}
+            onTogglePagamentoAvista={onTogglePagamentoAvista}
+            onTogglePagamentoBoleto={onTogglePagamentoBoleto}
             onRemoverCanal={onRemoverCanal}
             onAdicionarCanal={onAdicionarCanal}
           />

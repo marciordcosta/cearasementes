@@ -20,7 +20,17 @@ export interface NovoCanalInput {
   transportadoraId: string | null;
 }
 
-type CampoNumerico = 'desconto' | 'comissao' | 'cartao' | 'outrosEncargos' | 'freteKg' | 'fretePct' | 'freteAdicionalValor';
+type CampoNumerico =
+  | 'desconto'
+  | 'comissao'
+  | 'cartao'
+  | 'outrosEncargos'
+  | 'freteKg'
+  | 'fretePct'
+  | 'freteAdicionalValor'
+  | 'pagamentoAvistaDescontoPct'
+  | 'pagamentoBoletoValorMinimo'
+  | 'pagamentoBoletoParcelasMax';
 
 interface ChannelsPanelProps {
   canais: Canal[];
@@ -36,6 +46,10 @@ interface ChannelsPanelProps {
   onAtualizarCanalModoMargem: (canalId: string, porReferencia: boolean) => void;
   onToggleVisivel: (canalId: string, valor: boolean) => void;
   onToggleFreteIncluso: (canalId: string, valor: boolean) => void;
+  /** true = essa Tabela oferece "À vista" (com desconto) no modal de pagamento do Catálogo Online. */
+  onTogglePagamentoAvista: (canalId: string, valor: boolean) => void;
+  /** true = essa Tabela oferece "Boleto" (parcelado) no modal de pagamento do Catálogo Online. */
+  onTogglePagamentoBoleto: (canalId: string, valor: boolean) => void;
   onRemoverCanal: (canalId: string) => void;
   onAdicionarCanal: (input: NovoCanalInput) => void;
   /** Vincula (ou desvincula, se null) a Transportadora+Região do canal — o cálculo passa a usar o valor dela ao vivo (módulo Fretes) */
@@ -67,6 +81,8 @@ export function ChannelsPanel({
   onAtualizarCanalModoMargem,
   onToggleVisivel,
   onToggleFreteIncluso,
+  onTogglePagamentoAvista,
+  onTogglePagamentoBoleto,
   onRemoverCanal,
   onAdicionarCanal,
   onSelecionarTransportadora,
@@ -137,6 +153,18 @@ export function ChannelsPanel({
                   <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Frete Incluso na Margem</span>
                   <input type="checkbox" checked={canal.freteIncluso} onChange={(e) => onToggleFreteIncluso(canal.id, e.target.checked)} className="accent-accent" />
                 </label>
+                <label
+                  className="flex items-center justify-between gap-1.5 text-[11px]"
+                  title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
+                >
+                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostra detalhes no catálogo</span>
+                  <input
+                    type="checkbox"
+                    checked={canal.mostrarDetalhesPlantio}
+                    onChange={(e) => onAtualizarMostrarDetalhes(canal.id, e.target.checked)}
+                    className="accent-[var(--color-navy)]"
+                  />
+                </label>
                 <CampoRow
                   label="Média de Desconto (%)"
                   title="Só usado quando não há desconto real medido no BI (última Safra vendida) pra um produto — a fonte primária agora é o histórico de vendas, não mais esse valor cadastrado."
@@ -204,73 +232,126 @@ export function ChannelsPanel({
                   </>
                 )}
                 <div className="border-t border-dashed border-[var(--color-line)] pt-1.5" />
-                <CampoRow
-                  label="Frete cobrado do cliente"
-                  title="O que se cobra do cliente pelo frete — Fixo/R$ por Kg digitados à mão, ou 'Transportadora' pra cobrar exatamente o valor ao vivo dela (mesmo usado no custo interno). Vale tanto pro cálculo interno de preço/margem quanto pro frete calculado no Catálogo Online."
-                >
-                  <span className="flex gap-1.5">
+                <div className="flex flex-col gap-1.5 rounded-md bg-[var(--color-page)] p-2">
+                  <CampoRow
+                    label="Frete cobrado do cliente"
+                    title="O que se cobra do cliente pelo frete — Fixo/R$ por Kg digitados à mão, ou 'Transportadora' pra cobrar exatamente o valor ao vivo dela (mesmo usado no custo interno). Vale tanto pro cálculo interno de preço/margem quanto pro frete calculado no Catálogo Online."
+                  >
+                    <span className="flex gap-1.5">
+                      <select
+                        defaultValue={canal.freteAdicionalTipo}
+                        onChange={(e) => onAtualizarFreteAdicionalTipo(canal.id, e.target.value as FreteAdicionalTipo)}
+                        className={selectClass}
+                      >
+                        <option value="fixo" className="text-[var(--color-text)]">R$ Fixo</option>
+                        <option value="kg" className="text-[var(--color-text)]">R$/Kg</option>
+                        <option value="transportadora" className="text-[var(--color-text)]">Transportadora</option>
+                      </select>
+                      {canal.freteAdicionalTipo !== 'transportadora' && (
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          defaultValue={canal.freteAdicionalValor}
+                          onBlur={(e) => onAtualizarCampo(canal.id, 'freteAdicionalValor', parseFloat(e.target.value) || 0)}
+                          className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-right text-xs text-[var(--color-text)] num"
+                        />
+                      )}
+                    </span>
+                  </CampoRow>
+                  <CampoRow
+                    label="Base de precificação"
+                    title="De onde vem a margem sugerida dessa Tabela — 'Categorias' usa a % cadastrada por Categoria (aba Categorias); 'Outra Tabela' espelha a Margem R$ de uma Tabela de referência, escolhida por Categoria (mesma aba). Continua funcionando exatamente como hoje — só o controle mudou de tela."
+                  >
                     <select
-                      defaultValue={canal.freteAdicionalTipo}
-                      onChange={(e) => onAtualizarFreteAdicionalTipo(canal.id, e.target.value as FreteAdicionalTipo)}
+                      value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
+                      onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
                       className={selectClass}
                     >
-                      <option value="fixo" className="text-[var(--color-text)]">R$ Fixo</option>
-                      <option value="kg" className="text-[var(--color-text)]">R$/Kg</option>
-                      <option value="transportadora" className="text-[var(--color-text)]">Transportadora</option>
+                      <option value="categoria" className="text-[var(--color-text)]">Categorias</option>
+                      <option value="referencia" className="text-[var(--color-text)]">Outra Tabela</option>
                     </select>
-                    {canal.freteAdicionalTipo !== 'transportadora' && (
+                  </CampoRow>
+                  <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — só DDD+número, Brasil (+55) já é fixo">
+                    <span className="flex items-center gap-1">
+                      <span className="rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-[11px] text-[var(--color-text-soft)]">+55</span>
                       <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        defaultValue={canal.freteAdicionalValor}
-                        onBlur={(e) => onAtualizarCampo(canal.id, 'freteAdicionalValor', parseFloat(e.target.value) || 0)}
-                        className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-right text-xs text-[var(--color-text)] num"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="85999999999"
+                        defaultValue={(canal.whatsapp ?? '').replace(/^55/, '')}
+                        onBlur={(e) => {
+                          const digitos = e.target.value.replace(/\D/g, '');
+                          onAtualizarWhatsapp(canal.id, digitos ? `55${digitos}` : '');
+                        }}
+                        className="w-24 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-xs text-[var(--color-text)]"
                       />
+                    </span>
+                  </CampoRow>
+                  <div className="flex flex-col gap-1.5 border-t border-dashed border-[var(--color-line)] pt-1.5">
+                    <p className="text-[11px] font-semibold text-[var(--color-text)]">Pagamento autorizado</p>
+                    <label
+                      className="flex items-center justify-between gap-1.5 text-[11px]"
+                      title="Oferece 'À vista' no modal de pagamento do Catálogo Online (depois de Concluir, antes do WhatsApp/PDF) — com o desconto abaixo, só sobre os produtos, nunca sobre o frete."
+                    >
+                      <span className="text-[var(--color-text-soft)]">À vista</span>
+                      <input
+                        type="checkbox"
+                        checked={canal.pagamentoAvistaHabilitado}
+                        onChange={(e) => onTogglePagamentoAvista(canal.id, e.target.checked)}
+                        className="accent-[var(--color-navy)]"
+                      />
+                    </label>
+                    {canal.pagamentoAvistaHabilitado && (
+                      <CampoRow label="Desconto à vista (%)">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          defaultValue={canal.pagamentoAvistaDescontoPct}
+                          onBlur={(e) => onAtualizarCampo(canal.id, 'pagamentoAvistaDescontoPct', parseFloat(e.target.value) || 0)}
+                          className={inputClass}
+                        />
+                      </CampoRow>
                     )}
-                  </span>
-                </CampoRow>
-                <CampoRow
-                  label="Base de precificação"
-                  title="De onde vem a margem sugerida dessa Tabela — 'Categorias' usa a % cadastrada por Categoria (aba Categorias); 'Outra Tabela' espelha a Margem R$ de uma Tabela de referência, escolhida por Categoria (mesma aba). Continua funcionando exatamente como hoje — só o controle mudou de tela."
-                >
-                  <select
-                    value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
-                    onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
-                    className={selectClass}
-                  >
-                    <option value="categoria" className="text-[var(--color-text)]">Categorias</option>
-                    <option value="referencia" className="text-[var(--color-text)]">Outra Tabela</option>
-                  </select>
-                </CampoRow>
-                <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — só DDD+número, Brasil (+55) já é fixo">
-                  <span className="flex items-center gap-1">
-                    <span className="rounded-md border border-[var(--color-line)] bg-[var(--color-page)] px-1.5 py-1.5 text-[11px] text-[var(--color-text-soft)]">+55</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="85999999999"
-                      defaultValue={(canal.whatsapp ?? '').replace(/^55/, '')}
-                      onBlur={(e) => {
-                        const digitos = e.target.value.replace(/\D/g, '');
-                        onAtualizarWhatsapp(canal.id, digitos ? `55${digitos}` : '');
-                      }}
-                      className="w-24 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-xs text-[var(--color-text)]"
-                    />
-                  </span>
-                </CampoRow>
-                <label
-                  className="flex items-center justify-between gap-1.5 text-[11px]"
-                  title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
-                >
-                  <span className="whitespace-nowrap text-[var(--color-text)]">Mostrar detalhes (VC%/Validade)</span>
-                  <input
-                    type="checkbox"
-                    checked={canal.mostrarDetalhesPlantio}
-                    onChange={(e) => onAtualizarMostrarDetalhes(canal.id, e.target.checked)}
-                    className="accent-[var(--color-navy)]"
-                  />
-                </label>
+                    <label
+                      className="flex items-center justify-between gap-1.5 text-[11px]"
+                      title="Oferece 'Boleto' no modal de pagamento — parcela o total dos produtos (sem frete) dividindo pelo Valor mínimo do boleto, travado na Qtd máxima de parcelas."
+                    >
+                      <span className="text-[var(--color-text-soft)]">Boleto</span>
+                      <input
+                        type="checkbox"
+                        checked={canal.pagamentoBoletoHabilitado}
+                        onChange={(e) => onTogglePagamentoBoleto(canal.id, e.target.checked)}
+                        className="accent-[var(--color-navy)]"
+                      />
+                    </label>
+                    {canal.pagamentoBoletoHabilitado && (
+                      <>
+                        <CampoRow label="Valor mínimo do boleto (R$)">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            defaultValue={canal.pagamentoBoletoValorMinimo}
+                            onBlur={(e) => onAtualizarCampo(canal.id, 'pagamentoBoletoValorMinimo', parseFloat(e.target.value) || 0)}
+                            className={inputClass}
+                          />
+                        </CampoRow>
+                        <CampoRow label="Qtd máxima de parcelas">
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            defaultValue={canal.pagamentoBoletoParcelasMax}
+                            onBlur={(e) => onAtualizarCampo(canal.id, 'pagamentoBoletoParcelasMax', parseInt(e.target.value, 10) || 1)}
+                            className={inputClass}
+                          />
+                        </CampoRow>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </Card>
           );
