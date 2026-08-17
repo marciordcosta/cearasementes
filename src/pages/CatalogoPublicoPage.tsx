@@ -152,7 +152,21 @@ function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: I
 }
 
 /** Nunca deixa chegar a 0 — remover o produto é só pelo "×" (ação explícita), não por engano descendo o "−" (ver ModalOrcamento). */
+/** Digitação livre — permite apagar o campo pra digitar um novo valor (sem o "1" grudado atrapalhando); só clampa no mínimo 1 ao sair do campo (vazio ou <1 volta pra "1"). Os botões −/+ continuam instantâneos, sem passar por aqui. */
 function QuantidadeInput({ valor, onAlterar }: { valor: number; onAlterar: (v: number) => void }) {
+  const [texto, setTexto] = useState(String(valor));
+
+  useEffect(() => {
+    setTexto(String(valor));
+  }, [valor]);
+
+  function commit() {
+    const n = parseInt(texto, 10);
+    const clamp = !texto.trim() || isNaN(n) || n < 1 ? 1 : n;
+    setTexto(String(clamp));
+    if (clamp !== valor) onAlterar(clamp);
+  }
+
   return (
     <div className="flex items-center gap-1.5">
       <button
@@ -167,8 +181,10 @@ function QuantidadeInput({ valor, onAlterar }: { valor: number; onAlterar: (v: n
         type="number"
         inputMode="numeric"
         min={1}
-        value={valor}
-        onChange={(e) => onAlterar(Math.max(1, parseInt(e.target.value, 10) || 1))}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
         className="num w-11 rounded-md border border-[#e2e6ed] bg-white px-1 py-1 text-center text-sm text-[#1a2233]"
       />
       <button type="button" onClick={() => onAlterar(valor + 1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]">
