@@ -435,11 +435,10 @@ function ModalOrcamento({
                           <NomeComDestaque nome={item.nome} />
                         </p>
                         {(item.fornecedorNome || modoLabel) && (
-                          <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">
-                            {item.fornecedorNome}
-                            {item.fornecedorNome && modoLabel && ' · '}
-                            {modoLabel && <span className="font-light normal-case">{modoLabel}</span>}
-                          </p>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            {item.fornecedorNome && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</p>}
+                            {modoLabel && <span className="shrink-0 rounded-full bg-[#c7ccd6] px-2 py-0.5 text-[10px] font-semibold text-white">{modoLabel}</span>}
+                          </div>
                         )}
                       </div>
                       <button type="button" onClick={() => onAtualizarQtd(item.id, 0)} className="shrink-0 text-[11px] text-[#67718a] underline hover:text-[#c24444]">
