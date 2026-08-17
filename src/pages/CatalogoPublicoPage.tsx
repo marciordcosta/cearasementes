@@ -226,7 +226,12 @@ function ModalConcluir({
   );
 }
 
-type PagamentoEscolhido = { tipo: 'avista'; descontoPct: number } | { tipo: 'boleto'; parcelas: number; valorParcela: number };
+type PagamentoEscolhido = { tipo: 'avista'; descontoPct: number } | { tipo: 'boleto'; parcelas: number; valorParcela: number; intervaloDias: number };
+
+/** "30/60/90 dias" pra N parcelas num intervalo fixo (30 = padrão, 15 = "Fracionar boletos") — 1ª parcela já vence no 1º intervalo, não em D+0. */
+function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
+  return `${Array.from({ length: parcelas }, (_, i) => (i + 1) * intervaloDias).join('/')} dias`;
+}
 
 /**
  * "Como você quer pagar?" — abre ao clicar "Concluir" quando a Tabela tem À vista e/ou Boleto
@@ -258,11 +263,14 @@ function ModalPagamento({
 }) {
   // Abre a lista de parcelas ao clicar em "Boleto" — escolher uma delas é que confirma (ver botão de cada parcela abaixo).
   const [boletoExpandido, setBoletoExpandido] = useState(false);
+  // "Fracionar boletos" troca de 30 pra 15 dias e dobra a qtd de parcelas exibida (3 parcelas de 30 em 30 vira 6 de 15 em 15).
+  const [intervaloDias, setIntervaloDias] = useState(30);
   // Desconto à vista só sobre os produtos, mas o valor mostrado aqui já soma o frete (o que o cliente pagaria de fato agora).
   const frete = totalComFrete - valorProdutos;
   const totalAvistaComDesconto = valorProdutos * (1 - avistaDescontoPct / 100) + frete;
-  // parcelasMax já é o teto real pra esse total (total ÷ valor mínimo, travado na Qtd máxima cadastrada) — o cliente escolhe qualquer valor de 1 até esse teto.
+  // parcelasMax já é o teto real pra esse total (total ÷ valor mínimo, travado na Qtd máxima cadastrada) — o cliente escolhe qualquer valor de 1 até esse teto (ou o dobro disso, fracionado).
   const { parcelas: parcelasMax } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
+  const parcelasExibidas = intervaloDias === 30 ? parcelasMax : parcelasMax * 2;
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
@@ -284,7 +292,7 @@ function ModalPagamento({
           {boletoHabilitado && !boletoExpandido && (
             <button
               type="button"
-              onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: valorProdutos }))}
+              onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: valorProdutos, intervaloDias: 30 }))}
               className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
             >
               <p className="font-semibold text-[#1a2233]">Boleto</p>
@@ -303,18 +311,29 @@ function ModalPagamento({
             <div className="rounded-md border border-[#e2e6ed] p-2.5">
               <p className="mb-1.5 text-xs font-semibold text-[#1a2233]">Boleto — escolha as parcelas</p>
               <div className="flex flex-col gap-1.5">
-                {Array.from({ length: parcelasMax }, (_, i) => i + 1).map((n) => (
+                {Array.from({ length: parcelasExibidas }, (_, i) => i + 1).map((n) => (
                   <button
                     key={n}
                     type="button"
-                    onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: valorProdutos / n })}
+                    onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: valorProdutos / n, intervaloDias })}
                     className="flex items-center justify-between rounded-md border border-[#e2e6ed] px-2.5 py-2 text-sm hover:bg-[#f5f7fa]"
                   >
-                    <span className="text-[#1a2233]">{n}x</span>
+                    <span className="text-[#1a2233]">
+                      {n}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(n, intervaloDias)})</span>
+                    </span>
                     <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos / n)}</span>
                   </button>
                 ))}
               </div>
+              {intervaloDias === 30 && (
+                <button
+                  type="button"
+                  onClick={() => setIntervaloDias(15)}
+                  className="mt-1.5 block w-full text-center text-[11px] text-[#0e9d74] underline"
+                >
+                  Fracionar boletos
+                </button>
+              )}
             </div>
           )}
           {boletoHabilitado && (
@@ -534,7 +553,7 @@ function ModalOrcamento({
     if (pagamentoEscolhido.tipo === 'avista') {
       return pagamentoEscolhido.descontoPct > 0 ? `À vista (${pagamentoEscolhido.descontoPct}% de desconto nos produtos)` : 'À vista';
     }
-    return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)}`;
+    return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)} (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)})`;
   }
 
   function enviarWhatsApp() {
