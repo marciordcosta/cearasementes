@@ -242,7 +242,9 @@ function ModalPagamento({
 }) {
   // Abre a lista de parcelas ao clicar em "Boleto" — escolher uma delas é que confirma (ver botão de cada parcela abaixo).
   const [boletoExpandido, setBoletoExpandido] = useState(false);
-  const totalAvista = valorProdutos * (1 - avistaDescontoPct / 100);
+  // Desconto à vista só sobre os produtos, mas o valor mostrado aqui já soma o frete (o que o cliente pagaria de fato agora).
+  const frete = totalComFrete - valorProdutos;
+  const totalAvistaComDesconto = valorProdutos * (1 - avistaDescontoPct / 100) + frete;
   // parcelasMax já é o teto real pra esse total (total ÷ valor mínimo, travado na Qtd máxima cadastrada) — o cliente escolhe qualquer valor de 1 até esse teto.
   const { parcelas: parcelasMax } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
   return (
@@ -258,9 +260,8 @@ function ModalPagamento({
             >
               <p className="font-semibold text-[#1a2233]">À vista{avistaDescontoPct > 0 ? ` — ${avistaDescontoPct}% de desconto` : ''}</p>
               <p className="text-xs">
-                <span className="text-[#67718a]">Produtos: </span>
-                {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(valorProdutos)}</span>}
-                <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalAvista)}</span>
+                {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
+                <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalAvistaComDesconto)}</span>
               </p>
             </button>
           )}
@@ -302,7 +303,7 @@ function ModalPagamento({
           )}
           {boletoHabilitado && (
             <p className="px-1 text-[11px] text-[#67718a]">
-              Total com frete: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete)}</span>
+              Total dos produtos: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
             </p>
           )}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
