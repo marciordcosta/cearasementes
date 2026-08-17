@@ -732,7 +732,7 @@ function LinhaCalculadoraPlantio({
       <div className="space-y-0.5 rounded-md bg-white px-2.5 py-1.5 text-xs">
         {totalKgExibido !== null && (
           <div className="flex justify-between">
-            <span className="text-[#67718a]">Qtd total em Kg</span>
+            <span className="text-[#67718a]">Quantidade necessária (kg)</span>
             <span className="num font-bold text-[#0e9d74]">{Math.ceil(totalKgExibido)} kg</span>
           </div>
         )}
