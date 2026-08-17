@@ -190,6 +190,19 @@ export function ChannelsPanel({
                 <CampoRow label="Outros Encargos (R$)">
                   <input type="number" step="0.1" min="0" defaultValue={canal.outrosEncargos} onBlur={(e) => onAtualizarCampo(canal.id, 'outrosEncargos', parseFloat(e.target.value) || 0)} className={inputClass} />
                 </CampoRow>
+                <CampoRow
+                  label="Base de precificação"
+                  title="De onde vem a margem sugerida dessa Tabela — 'Categorias' usa a % cadastrada por Categoria (aba Categorias); 'Outra Tabela' espelha a Margem R$ de uma Tabela de referência, escolhida por Categoria (mesma aba). Continua funcionando exatamente como hoje — só o controle mudou de tela."
+                >
+                  <select
+                    value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
+                    onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
+                    className={selectClass}
+                  >
+                    <option value="categoria" className="text-[var(--color-text)]">Categorias</option>
+                    <option value="referencia" className="text-[var(--color-text)]">Outra Tabela</option>
+                  </select>
+                </CampoRow>
                 <CampoRow label="Transportadora Padrão">
                   <select
                     value={canal.transportadoraId ?? ''}
@@ -258,19 +271,6 @@ export function ChannelsPanel({
                         />
                       )}
                     </span>
-                  </CampoRow>
-                  <CampoRow
-                    label="Base de precificação"
-                    title="De onde vem a margem sugerida dessa Tabela — 'Categorias' usa a % cadastrada por Categoria (aba Categorias); 'Outra Tabela' espelha a Margem R$ de uma Tabela de referência, escolhida por Categoria (mesma aba). Continua funcionando exatamente como hoje — só o controle mudou de tela."
-                  >
-                    <select
-                      value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
-                      onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
-                      className={selectClass}
-                    >
-                      <option value="categoria" className="text-[var(--color-text)]">Categorias</option>
-                      <option value="referencia" className="text-[var(--color-text)]">Outra Tabela</option>
-                    </select>
                   </CampoRow>
                   <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — só DDD+número, Brasil (+55) já é fixo">
                     <span className="flex items-center gap-1">
