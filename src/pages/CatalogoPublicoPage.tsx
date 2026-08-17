@@ -355,15 +355,16 @@ function ModalPagamento({
           {boletoHabilitado && (
             <div className="px-1">
               {temTransportadora ? (
-                // Mesmo botão alternável do "Frete" no Orçamento (ver alternarFrete), mas sem mostrar o
-                // valor do frete em si — ficaria confuso ao lado do valor das parcelas (que já são só
-                // produtos). Calculado, mostra direto o valor que embasa o Boleto ("sem o frete").
+                // Botão alternável ligado ao MESMO estadoFrete do Orçamento (ver alternarFrete), mas só
+                // 2 rótulos aqui — "calculado" vira "Valor sem o frete" (nunca o valor do frete em si,
+                // confundiria ao lado das parcelas); "retirada" some, some junto com "não calculado":
+                // enquanto não houver frete calculado, mostra sempre "Calcular frete".
                 <button
                   type="button"
                   onClick={onCalcularFrete}
-                  className={`text-left text-[11px] ${estadoFrete === 'nao_calculado' ? 'font-semibold text-[#0e9d74] underline' : 'num text-[#67718a] underline'}`}
+                  className={`text-left text-[11px] ${estadoFrete === 'calculado' ? 'num text-[#67718a] underline' : 'font-semibold text-[#0e9d74] underline'}`}
                 >
-                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirada no local' : `Valor sem o frete: R$ ${fmtR(valorProdutos)}`}
+                  {estadoFrete === 'calculado' ? `Valor sem o frete: R$ ${fmtR(valorProdutos)}` : 'Calcular frete'}
                 </button>
               ) : whatsapp ? (
                 <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
@@ -371,6 +372,9 @@ function ModalPagamento({
                 </button>
               ) : (
                 <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
+              )}
+              {!(temTransportadora && estadoFrete === 'calculado') && (
+                <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
               )}
             </div>
           )}
