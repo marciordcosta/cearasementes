@@ -220,6 +220,7 @@ type PagamentoEscolhido = { tipo: 'avista'; descontoPct: number } | { tipo: 'bol
  */
 function ModalPagamento({
   valorProdutos,
+  totalComFrete,
   avistaHabilitado,
   avistaDescontoPct,
   boletoHabilitado,
@@ -229,6 +230,8 @@ function ModalPagamento({
   onFechar,
 }: {
   valorProdutos: number;
+  /** Produtos + frete (quando já calculado) — mostrado como referência abaixo do Boleto, já que as parcelas dividem só os produtos. */
+  totalComFrete: number;
   avistaHabilitado: boolean;
   avistaDescontoPct: number;
   boletoHabilitado: boolean;
@@ -255,6 +258,7 @@ function ModalPagamento({
             >
               <p className="font-semibold text-[#1a2233]">À vista{avistaDescontoPct > 0 ? ` — ${avistaDescontoPct}% de desconto` : ''}</p>
               <p className="text-xs">
+                <span className="text-[#67718a]">Produtos: </span>
                 {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(valorProdutos)}</span>}
                 <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalAvista)}</span>
               </p>
@@ -295,6 +299,11 @@ function ModalPagamento({
                 ))}
               </div>
             </div>
+          )}
+          {boletoHabilitado && (
+            <p className="px-1 text-[11px] text-[#67718a]">
+              Total com frete: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete)}</span>
+            </p>
           )}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
             Cancelar
@@ -655,6 +664,7 @@ function ModalOrcamento({
       {pagamentoAberto && (
         <ModalPagamento
           valorProdutos={valorProdutos}
+          totalComFrete={total}
           avistaHabilitado={pagamentoAvistaHabilitado}
           avistaDescontoPct={pagamentoAvistaDescontoPct}
           boletoHabilitado={pagamentoBoletoHabilitado}
