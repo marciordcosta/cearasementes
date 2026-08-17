@@ -557,6 +557,7 @@ function ModalOrcamento({
   pagamentoBoletoParcelasMax,
   onAtualizarQtd,
   onAbrirCalculadora,
+  onDefinirModo,
   onLimparCarrinho,
   onFechar,
 }: {
@@ -580,6 +581,8 @@ function ModalOrcamento({
   onAtualizarQtd: (itemId: string, qtd: number) => void;
   /** "Área total" nos totais é o link pra Calculadora de plantio — fecha o Orçamento e abre a Calculadora (ver render em CatalogoPublicoPage). */
   onAbrirCalculadora: () => void;
+  /** Alterna o modo de plantio direto na tag do carrinho (só quando o item tem os dois modos, ver temAmbosModos) — mesmo mecanismo de persistência da Calculadora (ver definirModoCarrinho), reflete em rotuloModoPlantio/areaReversaDoItem/totalAreaHa. */
+  onDefinirModo: (itemId: string, modo: ModoPlantio) => void;
   /** Zera carrinho/áreas editadas/modo escolhido (ver limparCarrinho em CatalogoPublicoPage) — chamado ao sair da tela de PDF (ver finalizarPedido), que fecha o ciclo do pedido. */
   onLimparCarrinho: () => void;
   onFechar: () => void;
@@ -772,7 +775,19 @@ function ModalOrcamento({
                         {(item.fornecedorNome || modoLabel) && (
                           <div className="mt-0.5 flex items-center gap-1.5">
                             {item.fornecedorNome && <p className="truncate text-[10px] font-medium uppercase tracking-wide text-[#67718a]">{item.fornecedorNome}</p>}
-                            {modoLabel && <span className="shrink-0 rounded-full bg-[#c7ccd6] px-2 py-0.5 text-[10px] font-semibold text-white">{modoLabel}</span>}
+                            {modoLabel &&
+                              (temAmbosModos(item) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onDefinirModo(item.id, modoEfetivoDoItem(item) === 'lanco' ? 'covas' : 'lanco')}
+                                  title="Alternar entre A Lanço e Covas"
+                                  className="shrink-0 rounded-full bg-[#c7ccd6] px-2 py-0.5 text-[10px] font-semibold text-white underline hover:bg-[#aab1c0]"
+                                >
+                                  {modoLabel}
+                                </button>
+                              ) : (
+                                <span className="shrink-0 rounded-full bg-[#c7ccd6] px-2 py-0.5 text-[10px] font-semibold text-white">{modoLabel}</span>
+                              ))}
                           </div>
                         )}
                       </div>
@@ -953,6 +968,11 @@ function areaReversaDoItem(item: ItemCarrinho): number | null {
 function rotuloModoPlantio(item: ItemCarrinho): string | null {
   if (item.plantioKgHaLanco == null && item.plantioSementesCovaBase == null) return null;
   return modoEfetivoDoItem(item) === 'lanco' ? 'A Lanço' : 'Covas';
+}
+
+/** true = item tem dado dos DOIS modos (Lanço e Covas) — mesma condição de temOsDoisModos em LinhaCalculadoraPlantio; só nesse caso a tag do carrinho vira um link de alternância (ver ModalOrcamento). */
+function temAmbosModos(item: ItemCarrinho): boolean {
+  return item.plantioKgHaLanco != null && item.plantioSementesCovaBase != null && item.plantioPms != null;
 }
 
 /**
@@ -1815,6 +1835,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           pagamentoBoletoParcelasMax={data.pagamentoBoletoParcelasMax}
           onAtualizarQtd={atualizarQtd}
           onAbrirCalculadora={() => setCalculadoraAberta(true)}
+          onDefinirModo={definirModoCarrinho}
           onLimparCarrinho={limparCarrinho}
           onFechar={() => setOrcamentoAberto(false)}
         />
