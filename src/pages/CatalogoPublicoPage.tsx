@@ -494,105 +494,166 @@ function kgHaCovas(sementesCovaBase: number, pms: number, corredorTexto: string)
 type ModoPlantio = 'lanco' | 'covas';
 
 /**
- * Calculadora de plantio do Catálogo Online — mesmo cálculo do Guia de Plantio interno (kg/ha),
- * condição sempre "Média" (sem seletor aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com
- * Sementes/cova editável nem modo Linha, ver resolverPlantioParaProduto em calculoSemeadura.ts).
- * Busca só entre os itens já publicados desse catálogo que têm dado de plantio (nunca mostra
- * lote/laudo) — resultado é só Taxa de Semeadura (kg/ha) e Total pra área informada.
+ * 1 produto marcado, dentro da calculadora — cálculo, campos e estado (modo/corredor/área) 100%
+ * independentes dos outros produtos marcados (ver ModalCalculadoraPlantio, que só empilha uma
+ * dessas por item do carrinho). Mesma conta do Guia de Plantio interno (kg/ha), condição sempre
+ * "Média" (sem seletor aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com Sementes/cova
+ * editável nem modo Linha, ver resolverPlantioParaProduto em calculoSemeadura.ts). Campos
+ * compactados (rótulos/paddings menores) pra caber vários produtos empilhados sem rolagem excessiva.
  */
-function ModalCalculadoraPlantio({
-  itens,
-  itemInicial,
-  whatsapp,
-  onAdicionarAoCarrinho,
-  onFechar,
-}: {
-  itens: ItemCatalogo[];
-  /** Pré-seleciona o produto ao abrir (ver botão flutuante da calculadora, só some com exatamente 1 no carrinho) — evita o cliente ter que buscar de novo o mesmo produto que já marcou. */
-  itemInicial?: ItemCatalogo | null;
-  whatsapp: string | null;
-  /** Define a quantidade do item no carrinho pro nº de embalagens calculado (mesmo onAtualizarQtd de ModalOrcamento — sobrescreve, não soma, o que já estava lá). */
-  onAdicionarAoCarrinho: (itemId: string, qtd: number) => void;
-  onFechar: () => void;
-}) {
-  const [busca, setBusca] = useState('');
-  const [itemSelecionado, setItemSelecionado] = useState<ItemCatalogo | null>(itemInicial ?? null);
-  const [modo, setModo] = useState<ModoPlantio>(itemInicial?.plantioKgHaLanco != null ? 'lanco' : 'covas');
+function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho; onAtualizarQtd: (itemId: string, qtd: number) => void }) {
+  const [modo, setModo] = useState<ModoPlantio>(item.plantioKgHaLanco != null ? 'lanco' : 'covas');
   const [corredor, setCorredor] = useState('50');
   const [area, setArea] = useState('1');
 
-  // "!= null" (frouxo) — mesmo motivo de temDadosPlantio em CatalogoPublicoPage: trata cache velho
-  // (campo ausente, undefined) igual a "sem dado" (null).
-  const itensComPlantio = useMemo(() => itens.filter((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null), [itens]);
-
-  const resultadosBusca = useMemo(() => {
-    const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (palavras.length === 0) return [];
-    return itensComPlantio
-      .filter((i) => {
-        const descricao = `${i.nome} ${i.fornecedorNome ?? ''} ${i.categoriaNome} ${i.subcategoriaNome ?? ''} ${i.cultivar ?? ''}`.toLowerCase();
-        return palavras.every((palavra) => descricao.includes(palavra));
-      })
-      .slice(0, 8);
-  }, [itensComPlantio, busca]);
-
-  function selecionar(item: ItemCatalogo) {
-    setItemSelecionado(item);
-    setModo(item.plantioKgHaLanco != null ? 'lanco' : 'covas');
-    setCorredor('50');
-    setArea('1');
-    setBusca('');
-  }
-
-  const temOsDoisModos =
-    itemSelecionado !== null && itemSelecionado.plantioKgHaLanco != null && itemSelecionado.plantioSementesCovaBase != null && itemSelecionado.plantioPms != null;
+  const temPlantio = item.plantioKgHaLanco != null || item.plantioSementesCovaBase != null;
+  const temOsDoisModos = item.plantioKgHaLanco != null && item.plantioSementesCovaBase != null && item.plantioPms != null;
 
   const kgPorHa =
-    itemSelecionado === null
-      ? null
-      : modo === 'lanco'
-        ? (itemSelecionado.plantioKgHaLanco ?? null)
-        : itemSelecionado.plantioSementesCovaBase != null && itemSelecionado.plantioPms != null
-          ? kgHaCovas(itemSelecionado.plantioSementesCovaBase, itemSelecionado.plantioPms, corredor)
-          : null;
+    modo === 'lanco'
+      ? (item.plantioKgHaLanco ?? null)
+      : item.plantioSementesCovaBase != null && item.plantioPms != null
+        ? kgHaCovas(item.plantioSementesCovaBase, item.plantioPms, corredor)
+        : null;
 
   const areaNum = paraNumero(area);
   const totalKg = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
 
   // Distância entre covas (cm) — mesma referência do Guia interno (Covas/m² alvo travado em 4, ver
-  // covasM2Alvo), só informativo ao lado do Corredor: quem trava o espaçamento é o Corredor mesmo.
+  // covasM2Alvo), só informativo: quem trava o espaçamento é a Distância entre linhas mesmo.
   const distanciaCovas = modo === 'covas' ? distanciaDeCovasM2(covasM2Alvo(), corredor) : null;
-  const sementesPorCovaBruta =
-    modo === 'covas' && itemSelecionado?.plantioSementesCovaBase != null ? sementesCovaAjustada(itemSelecionado.plantioSementesCovaBase, corredor) : null;
+  const sementesPorCovaBruta = modo === 'covas' && item.plantioSementesCovaBase != null ? sementesCovaAjustada(item.plantioSementesCovaBase, corredor) : null;
   // Sementes Tradicionais soltas não dá pra contar uma a uma pra colocar na cova, só pesar (ver
   // precisaPesoPorCova em calculoSemeadura.ts) — mostra Peso/cova (g), via PMS, em vez da contagem
   // crua; sem PMS nenhum (nem do lote, nem base da Parametrização), não dá pra converter em peso.
   const pesoPorCovaGramas =
-    sementesPorCovaBruta !== null && itemSelecionado?.plantioPrecisaPesoPorCova && itemSelecionado.plantioPms != null && itemSelecionado.plantioPms > 0
-      ? (sementesPorCovaBruta * itemSelecionado.plantioPms) / 1000
-      : null;
-  const sementesPorCova = itemSelecionado?.plantioPrecisaPesoPorCova ? null : sementesPorCovaBruta;
+    sementesPorCovaBruta !== null && item.plantioPrecisaPesoPorCova && item.plantioPms != null && item.plantioPms > 0 ? (sementesPorCovaBruta * item.plantioPms) / 1000 : null;
+  const sementesPorCova = item.plantioPrecisaPesoPorCova ? null : sementesPorCovaBruta;
 
   // Nº de embalagens = Total necessário ÷ peso da embalagem desse produto (já cadastrado, o mesmo
   // peso mostrado no card) — arredondado pela MESMA margem de tolerância por grupo do Guia de
   // Plantio interno (ver arredondarSacos em calculoSemeadura.ts), não um Math.ceil puro: até essa %
   // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
-  const qtdEmbalagens =
-    totalKg !== null && itemSelecionado && itemSelecionado.peso > 0
-      ? arredondarSacos(totalKg / itemSelecionado.peso, (itemSelecionado.plantioMargemTolerancia ?? 25) / 100)
-      : null;
-  const valorTotalPedido = qtdEmbalagens !== null && itemSelecionado ? qtdEmbalagens * itemSelecionado.preco : null;
+  const qtdEmbalagens = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
+  const valorTotalPedido = qtdEmbalagens !== null ? qtdEmbalagens * item.preco : null;
+  const jaAplicado = qtdEmbalagens !== null && item.qtd === qtdEmbalagens;
 
-  function adicionarAoCarrinho() {
-    if (qtdEmbalagens === null || !itemSelecionado) return;
-    onAdicionarAoCarrinho(itemSelecionado.id, qtdEmbalagens);
-    onFechar();
+  if (!temPlantio) {
+    return (
+      <div className="rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-2.5">
+        <p className="text-sm font-semibold text-[#1a2233]">
+          <NomeComDestaque nome={item.nome} />
+        </p>
+        <p className="mt-1 text-xs text-[#67718a]">Sem dado de plantio pra esse produto.</p>
+      </div>
+    );
   }
 
-  function mensagemConsultor(): string {
-    return `Olá! Vim da calculadora de plantio do catálogo online e gostaria de falar com um consultor sobre o plantio${itemSelecionado ? ` de ${itemSelecionado.nome.replace(/[*_]/g, '')}` : ''}.`;
-  }
+  return (
+    <div className="space-y-2 rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1a2233]">
+          <NomeComDestaque nome={item.nome} />
+        </p>
+        {temOsDoisModos && (
+          <div className="flex shrink-0 gap-1">
+            {(['lanco', 'covas'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModo(m)}
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${modo === m ? 'bg-[#10233f] text-white' : 'bg-white text-[#67718a]'}`}
+              >
+                {m === 'lanco' ? 'Lanço' : 'Covas'}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
+      <div className={`grid gap-1.5 ${modo === 'covas' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <label className="block text-[10px] text-[#67718a]">
+          Área (ha)
+          <input
+            type="number"
+            inputMode="decimal"
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
+          />
+        </label>
+        {modo === 'covas' && (
+          <label className="block text-[10px] text-[#67718a]">
+            Dist. linhas (cm)
+            <input
+              type="number"
+              inputMode="decimal"
+              value={corredor}
+              onChange={(e) => setCorredor(e.target.value)}
+              className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
+            />
+          </label>
+        )}
+      </div>
+
+      {modo === 'covas' && (
+        <p className="text-[10px] leading-snug text-[#67718a]">
+          {distanciaCovas !== null && `Covas a cada ${Math.round(distanciaCovas)}cm`}
+          {sementesPorCova !== null && ` · ${Math.round(sementesPorCova)} sementes/cova`}
+          {pesoPorCovaGramas !== null && ` · ${pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}g/cova`}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-white px-2.5 py-1.5 text-xs">
+        <span className="text-[#67718a]">
+          Taxa: <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
+        </span>
+        {totalKg !== null && (
+          <span className="num font-bold text-[#0e9d74]">
+            {Math.ceil(totalKg)} kg total
+          </span>
+        )}
+        {qtdEmbalagens !== null && valorTotalPedido !== null && (
+          <span className="num text-[#1a2233]">
+            {qtdEmbalagens}x {Math.round(item.peso)}kg = R$ {fmtR(valorTotalPedido)}
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        disabled={qtdEmbalagens === null}
+        onClick={() => qtdEmbalagens !== null && onAtualizarQtd(item.id, qtdEmbalagens)}
+        className={`w-full rounded-md py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+          jaAplicado ? 'bg-[#e4f6ef] text-[#0e9d74]' : 'bg-[#10233f] text-white hover:brightness-110'
+        }`}
+      >
+        {jaAplicado ? 'Aplicado ao carrinho ✓' : `Usar ${qtdEmbalagens ?? '—'} embalagens no carrinho`}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Calculadora de plantio do Catálogo Online — trabalha SEMPRE em cima da mesma seleção do carrinho
+ * (marcar um produto na lista principal marca pro carrinho E pra calculadora, exatamente como um
+ * item de carrinho): cada produto marcado ganha sua própria linha com cálculo 100% independente dos
+ * outros (ver LinhaCalculadoraPlantio) — sem busca própria aqui dentro, pra adicionar mais um produto
+ * à conta é só marcar mais um na tela principal. "Usar N embalagens no carrinho" aplica o resultado
+ * daquele produto na qtd do carrinho (mesmo onAtualizarQtd de ModalOrcamento — sobrescreve, não soma,
+ * o que já estava lá); produto marcado sem laudo correspondente aparece com aviso, sem campos.
+ */
+function ModalCalculadoraPlantio({
+  itens,
+  whatsapp,
+  onAtualizarQtd,
+  onFechar,
+}: {
+  itens: ItemCarrinho[];
+  whatsapp: string | null;
+  onAtualizarQtd: (itemId: string, qtd: number) => void;
+  onFechar: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
@@ -603,166 +664,26 @@ function ModalCalculadoraPlantio({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          <div className="relative">
-            <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#67718a]" />
-            <input
-              type="text"
-              inputMode="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar produto…"
-              className="w-full rounded-md border border-[#e2e6ed] bg-[#f5f7fa] py-2 pl-8 pr-8 text-sm text-[#1a2233] placeholder:text-[#67718a]"
-            />
-          </div>
-
-          {busca.trim() && (
-            <div className="mt-2 overflow-hidden rounded-md border border-[#e2e6ed]">
-              {resultadosBusca.length === 0 ? (
-                <p className="px-3 py-2.5 text-xs text-[#67718a]">Nenhum produto com cálculo de plantio disponível pra essa busca.</p>
-              ) : (
-                resultadosBusca.map((item, i) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => selecionar(item)}
-                    className={`block w-full px-3 py-2 text-left text-sm text-[#1a2233] hover:bg-[#f5f7fa] ${i > 0 ? 'border-t border-[#e2e6ed]' : ''}`}
-                  >
-                    <NomeComDestaque nome={item.nome} />
-                  </button>
-                ))
-              )}
-            </div>
+        <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+          {itens.length === 0 ? (
+            <p className="py-6 text-center text-sm text-[#67718a]">Marque um ou mais produtos no catálogo pra calcular a quantidade de sementes necessária.</p>
+          ) : (
+            itens.map((item) => <LinhaCalculadoraPlantio key={item.id} item={item} onAtualizarQtd={onAtualizarQtd} />)
           )}
 
-          {itemSelecionado && (
-            <div className="mt-3 space-y-3 rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-3">
-              <p className="text-sm font-semibold text-[#1a2233]">
-                <NomeComDestaque nome={itemSelecionado.nome} />
-              </p>
-
-              {temOsDoisModos && (
-                <div className="flex gap-1.5">
-                  {(['lanco', 'covas'] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setModo(m)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${modo === m ? 'bg-[#10233f] text-white' : 'bg-white text-[#67718a]'}`}
-                    >
-                      {m === 'lanco' ? 'A Lanço' : 'Covas'}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <label className="block text-xs text-[#67718a]">
-                Área (ha)
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={area}
-                  onChange={(e) => setArea(e.target.value)}
-                  className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
-                />
-              </label>
-
-              {modo === 'covas' && (
-                <div className="space-y-1.5">
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="block text-xs text-[#67718a]">
-                      Distância entre linhas (cm)
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={corredor}
-                        onChange={(e) => setCorredor(e.target.value)}
-                        className="num mt-1 w-full rounded-md border border-[#e2e6ed] bg-white px-2.5 py-2 text-sm text-[#1a2233]"
-                      />
-                    </label>
-                    <label className="block text-xs text-[#67718a]">
-                      Distância entre covas (cm)
-                      <input
-                        type="text"
-                        readOnly
-                        disabled
-                        value={distanciaCovas !== null ? Math.round(distanciaCovas) : '—'}
-                        title="Travada — segue a Distância entre linhas, mantendo a densidade de covas por m² sempre igual"
-                        className="num mt-1 w-full cursor-not-allowed rounded-md border border-[#e2e6ed] bg-[#eef1f5] px-2.5 py-2 text-sm text-[#67718a]"
-                      />
-                    </label>
-                  </div>
-                  {sementesPorCova !== null && (
-                    <p className="text-xs text-[#67718a]">
-                      Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
-                    </p>
-                  )}
-                  {pesoPorCovaGramas !== null && (
-                    <p className="text-xs text-[#67718a]">
-                      Peso por cova (g): <span className="font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="rounded-md bg-white p-2.5">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[#67718a]">Taxa de semeadura</span>
-                  <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
-                </div>
-                {/* Truque do grid-template-rows (0fr -> 1fr) pra animar até a altura de verdade do
-                    conteúdo sem JS medindo nada — digitar a Área não faz o modal "pular" de tamanho
-                    de repente (parecia bug). */}
-                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${totalKg !== null ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                  <div className="overflow-hidden">
-                    <div className="mt-1 flex justify-between text-sm">
-                      <span className="text-[#67718a]">Total necessário</span>
-                      <span className="num font-bold text-[#0e9d74]">{totalKg !== null ? `${Math.ceil(totalKg)} kg` : ''}</span>
-                    </div>
-                    {itemSelecionado && qtdEmbalagens !== null && valorTotalPedido !== null && (
-                      <>
-                        <div className="mt-1 flex justify-between text-sm">
-                          <span className="text-[#67718a]">Valor unitário</span>
-                          <span className="num text-[#1a2233]">
-                            R$ {fmtR(itemSelecionado.preco)} <span className="text-[11px] text-[#67718a]">({Math.round(itemSelecionado.peso)}kg)</span>
-                          </span>
-                        </div>
-                        <div className="mt-1 flex justify-between text-sm">
-                          <span className="text-[#67718a]">Valor total do pedido</span>
-                          <span className="num font-bold text-[#0e9d74]">R$ {fmtR(valorTotalPedido)}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                disabled={qtdEmbalagens === null}
-                onClick={adicionarAoCarrinho}
-                className="w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white transition-opacity duration-300 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="border-t border-[#e2e6ed] pt-2.5 text-[11px] leading-snug text-[#67718a]">
+            <p>A indicação do sistema é uma forma básica e superficial. Para uma melhor precisão nos dados, consulte um de nossos consultores.</p>
+            {whatsapp && (
+              <a
+                href={linkWhatsApp(whatsapp, 'Olá! Vim da calculadora de plantio do catálogo online e gostaria de falar com um consultor sobre o plantio.')}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-block font-semibold text-[#0e9d74] underline"
               >
-                Adicionar ao carrinho{qtdEmbalagens !== null ? ` (${qtdEmbalagens})` : ''}
-              </button>
-
-              <div className="border-t border-[#e2e6ed] pt-2.5 text-[11px] leading-snug text-[#67718a]">
-                <p>A indicação do sistema é uma forma básica e superficial. Para uma melhor precisão nos dados, consulte um de nossos consultores.</p>
-                {whatsapp && (
-                  <a
-                    href={linkWhatsApp(whatsapp, mensagemConsultor())}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 inline-block font-semibold text-[#0e9d74] underline"
-                  >
-                    Falar com um consultor
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!itemSelecionado && !busca.trim() && <p className="py-6 text-center text-sm text-[#67718a]">Busque um produto pra calcular a quantidade de sementes necessária.</p>}
+                Falar com um consultor
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -969,19 +890,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       .filter((x): x is ItemCarrinho => x !== null);
   }, [carrinho, data]);
 
-  // Só com EXATAMENTE 1 produto marcado (nem 0, nem 2+) — ver botão flutuante da calculadora abaixo.
-  const itemUnicoSelecionado = itensCarrinho.length === 1 ? itensCarrinho[0] : null;
-
-  // "!= null" (frouxo) de propósito — cache local (localStorage) salvo antes desses campos existirem
-  // não tem essa chave (undefined), não `null`; "!== null" deixava passar esse caso e piscava o botão
-  // no carregamento (cache velho "tem dado"), sumindo assim que o fetch de verdade chegava.
-  const temDadosPlantio = useMemo(() => data?.itens.some((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null) ?? false, [data]);
-
-  // O único item marcado pode não ter cálculo de plantio (produto sem laudo correspondente) — nesse
-  // caso o botão flutuante NÃO aparece (abriria a calculadora "travada" nesse produto, sempre em "—",
-  // sem chance de buscar outro); o ícone genérico do topbar continua disponível pra buscar um produto
-  // que tenha o cálculo.
-  const itemUnicoTemPlantio = itemUnicoSelecionado !== null && (itemUnicoSelecionado.plantioKgHaLanco != null || itemUnicoSelecionado.plantioSementesCovaBase != null);
+  // Botão flutuante da calculadora só aparece com pelo menos 1 produto marcado (mesma seleção do
+  // carrinho) que tenha dado de plantio — "!= null" (frouxo) de propósito: cache local (localStorage)
+  // salvo antes desses campos existirem não tem essa chave (undefined), não `null`; "!== null" deixava
+  // passar esse caso e piscava o botão no carregamento (cache velho "tem dado"), sumindo assim que o
+  // fetch de verdade chegava.
+  const temItemComPlantioNoCarrinho = itensCarrinho.some((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null);
 
   const semNadaAindaCarregando = isLoading && !data;
 
@@ -1006,16 +920,6 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 disabled:opacity-60"
             >
               {preparandoCompartilhamentoPdf ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-            </button>
-          )}
-          {temDadosPlantio && !itemUnicoTemPlantio && (
-            <button
-              type="button"
-              onClick={() => setCalculadoraAberta(true)}
-              title="Calculadora de plantio"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25"
-            >
-              <Calculator size={18} />
             </button>
           )}
         </div>
@@ -1098,10 +1002,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         ))}
       </main>
 
-      {/* Ícones que "flutuam" de verdade (acompanham o scroll) — PDF/Calculadora "genérica" (sem
-          produto pré-selecionado) ficam no topbar (ver <header> acima) e rolam junto com a página.
-          Carrinho só aparece com item marcado; a calculadora flutuante (embaixo do carrinho) só
-          aparece com EXATAMENTE 1 produto marcado — some ao desmarcar ou ao marcar um 2º. */}
+      {/* Ícones que "flutuam" de verdade (acompanham o scroll) — PDF fica no topbar (ver <header>
+          acima) e rola junto com a página. Carrinho só aparece com item marcado; a calculadora
+          flutuante (embaixo do carrinho) usa a MESMA seleção do carrinho — aparece com 1+ produto
+          marcado que tenha dado de plantio, e mostra todos eles de uma vez (ver ModalCalculadoraPlantio). */}
       {carrinho.size > 0 && (
         <button
           type="button"
@@ -1116,7 +1020,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         </button>
       )}
 
-      {itemUnicoTemPlantio && (
+      {temItemComPlantioNoCarrinho && (
         <button
           type="button"
           onClick={() => setCalculadoraAberta(true)}
@@ -1150,13 +1054,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       )}
 
       {calculadoraAberta && data && (
-        <ModalCalculadoraPlantio
-          itens={data.itens}
-          itemInicial={itemUnicoTemPlantio ? itemUnicoSelecionado : null}
-          whatsapp={data.whatsapp}
-          onAdicionarAoCarrinho={atualizarQtd}
-          onFechar={() => setCalculadoraAberta(false)}
-        />
+        <ModalCalculadoraPlantio itens={itensCarrinho} whatsapp={data.whatsapp} onAtualizarQtd={atualizarQtd} onFechar={() => setCalculadoraAberta(false)} />
       )}
 
       {pdfEscolhaAberta && data && (
