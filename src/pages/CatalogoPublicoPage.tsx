@@ -571,7 +571,7 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
         )}
       </div>
 
-      <div className={`grid gap-1.5 ${modo === 'covas' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div className={`grid gap-1.5 ${modo === 'covas' ? 'grid-cols-3' : 'grid-cols-1'}`}>
         <label className="block text-[10px] text-[#67718a]">
           Área (ha)
           <input
@@ -583,24 +583,40 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
           />
         </label>
         {modo === 'covas' && (
-          <label className="block text-[10px] text-[#67718a]">
-            Dist. linhas (cm)
-            <input
-              type="number"
-              inputMode="decimal"
-              value={corredor}
-              onChange={(e) => setCorredor(e.target.value)}
-              className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
-            />
-          </label>
+          <>
+            <label className="block text-[10px] text-[#67718a]">
+              Dist. linhas (cm)
+              <input
+                type="number"
+                inputMode="decimal"
+                value={corredor}
+                onChange={(e) => setCorredor(e.target.value)}
+                className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
+              />
+            </label>
+            <label className="block text-[10px] text-[#67718a]">
+              Dist. covas (cm)
+              <input
+                type="text"
+                readOnly
+                disabled
+                value={distanciaCovas !== null ? Math.round(distanciaCovas) : '—'}
+                title="Travada — segue a Distância entre linhas, mantendo a densidade de covas por m² sempre igual"
+                className="num mt-0.5 w-full cursor-not-allowed rounded-md border border-[#e2e6ed] bg-[#eef1f5] px-2 py-1 text-sm text-[#67718a]"
+              />
+            </label>
+          </>
         )}
       </div>
 
-      {modo === 'covas' && (
-        <p className="text-[10px] leading-snug text-[#67718a]">
-          {distanciaCovas !== null && `Covas a cada ${Math.round(distanciaCovas)}cm`}
-          {sementesPorCova !== null && ` · ${Math.round(sementesPorCova)} sementes/cova`}
-          {pesoPorCovaGramas !== null && ` · ${pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}g/cova`}
+      {modo === 'covas' && sementesPorCova !== null && (
+        <p className="text-[10px] text-[#67718a]">
+          Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
+        </p>
+      )}
+      {modo === 'covas' && pesoPorCovaGramas !== null && (
+        <p className="text-[10px] text-[#67718a]">
+          Peso por cova (g): <span className="font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
         </p>
       )}
 
@@ -623,12 +639,16 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
       <button
         type="button"
         disabled={qtdEmbalagens === null}
-        onClick={() => qtdEmbalagens !== null && onAtualizarQtd(item.id, qtdEmbalagens)}
+        onClick={() => {
+          if (jaAplicado) onAtualizarQtd(item.id, 0);
+          else if (qtdEmbalagens !== null) onAtualizarQtd(item.id, qtdEmbalagens);
+        }}
+        title={jaAplicado ? 'Clique pra tirar esse produto do carrinho' : undefined}
         className={`w-full rounded-md py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-          jaAplicado ? 'bg-[#e4f6ef] text-[#0e9d74]' : 'bg-[#10233f] text-white hover:brightness-110'
+          jaAplicado ? 'bg-[#e4f6ef] text-[#0e9d74] hover:bg-[#d7f0e6]' : 'bg-[#10233f] text-white hover:brightness-110'
         }`}
       >
-        {jaAplicado ? 'Aplicado ao carrinho ✓' : `Usar ${qtdEmbalagens ?? '—'} embalagens no carrinho`}
+        {jaAplicado ? 'Aplicado ao carrinho ✓ — clique pra remover' : `Usar ${qtdEmbalagens ?? '—'} embalagens no carrinho`}
       </button>
     </div>
   );
@@ -641,7 +661,9 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
  * outros (ver LinhaCalculadoraPlantio) — sem busca própria aqui dentro, pra adicionar mais um produto
  * à conta é só marcar mais um na tela principal. "Usar N embalagens no carrinho" aplica o resultado
  * daquele produto na qtd do carrinho (mesmo onAtualizarQtd de ModalOrcamento — sobrescreve, não soma,
- * o que já estava lá); produto marcado sem laudo correspondente aparece com aviso, sem campos.
+ * o que já estava lá) e vira "Aplicado ✓" — reclicar em cima remove esse produto do carrinho (qtd 0),
+ * tirando a linha da própria calculadora também (ela só mostra o que tá marcado); produto marcado sem
+ * laudo correspondente aparece com aviso, sem campos.
  */
 function ModalCalculadoraPlantio({
   itens,
