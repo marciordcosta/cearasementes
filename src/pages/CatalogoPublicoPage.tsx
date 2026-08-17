@@ -229,6 +229,9 @@ function ModalConcluir({
 
 type PagamentoEscolhido = { tipo: 'avista'; descontoPct: number } | { tipo: 'boleto'; parcelas: number; valorParcela: number; intervaloDias: number };
 
+/** Mesmo ciclo do botão "Frete" no Orçamento (ver alternarFrete) — nao_calculado → calculado → retirada → calculado → ... */
+type EstadoFrete = 'nao_calculado' | 'calculado' | 'retirada';
+
 /** "30/60/90 dias" pra N parcelas num intervalo fixo (30 = padrão, 15 = "Fracionar boletos") — 1ª parcela já vence no 1º intervalo, não em D+0. */
 function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
   return `${Array.from({ length: parcelas }, (_, i) => (i + 1) * intervaloDias).join('/')} dias`;
@@ -243,7 +246,7 @@ function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
 function ModalPagamento({
   valorProdutos,
   totalComFrete,
-  freteCalculado,
+  estadoFrete,
   temTransportadora,
   whatsapp,
   onCalcularFrete,
@@ -259,8 +262,8 @@ function ModalPagamento({
   valorProdutos: number;
   /** Produtos + frete (quando já calculado) — mostrado como referência abaixo do Boleto, já que as parcelas dividem só os produtos. */
   totalComFrete: number;
-  /** true = frete de transportadora já calculado (mesma condição de freteIncluidoNoTotal no Orçamento) — sem isso, a linha abaixo do Boleto vira o link de calcular/cotar frete em vez do total dos produtos. */
-  freteCalculado: boolean;
+  /** Mesmo estado do botão "Frete" no Orçamento — a linha abaixo do Boleto vira o MESMO botão alternável (Calcular frete → Total dos produtos → Retirar no local → ...), só ligado a temTransportadora. */
+  estadoFrete: EstadoFrete;
   /** false = canal Manual (sem Transportadora) — usa "Cotação de frete" (WhatsApp) em vez de "Calcular frete". */
   temTransportadora: boolean;
   whatsapp: string | null;
@@ -349,27 +352,39 @@ function ModalPagamento({
               )}
             </div>
           )}
-          {boletoHabilitado &&
-            (freteCalculado ? (
-              <p className="px-1 text-[11px] text-[#67718a]">
-                Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
-              </p>
-            ) : (
-              <div className="px-1">
-                {temTransportadora ? (
-                  <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                    Calcular frete
-                  </button>
-                ) : whatsapp ? (
-                  <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                    Cotação de frete
-                  </button>
-                ) : (
-                  <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
-                )}
+          {boletoHabilitado && (
+            <div className="px-1">
+              {temTransportadora ? (
+                // Mesmo botão alternável do "Frete" no Orçamento (ver alternarFrete) — cicla Calcular
+                // frete → Total dos produtos → Retirar no local → ...; as duas últimas usam a MESMA
+                // formatação neutra (nunca a verde/negrito, essa é só do estado "ainda não calculado").
+                <button
+                  type="button"
+                  onClick={onCalcularFrete}
+                  className={`text-left text-[11px] ${estadoFrete === 'nao_calculado' ? 'font-semibold text-[#0e9d74] underline' : 'text-[#67718a] underline'}`}
+                >
+                  {estadoFrete === 'nao_calculado' ? (
+                    'Calcular frete'
+                  ) : estadoFrete === 'retirada' ? (
+                    'Retirar no local'
+                  ) : (
+                    <>
+                      Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
+                    </>
+                  )}
+                </button>
+              ) : whatsapp ? (
+                <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                  Cotação de frete
+                </button>
+              ) : (
+                <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
+              )}
+              {(!temTransportadora || estadoFrete === 'nao_calculado') && (
                 <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
-              </div>
-            ))}
+              )}
+            </div>
+          )}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
             Cancelar
           </button>
@@ -539,7 +554,7 @@ function ModalOrcamento({
   // Sempre nasce "não calculado" — some quando o Orçamento fecha (desmonta) e volta a pedir clique
   // na próxima vez que abrir, mesmo pro mesmo carrinho. Só faz sentido quando temTransportadora (a
   // "Cotação de frete" do canal Manual é um fluxo à parte, ver pedirCotacaoFrete).
-  const [estadoFrete, setEstadoFrete] = useState<'nao_calculado' | 'calculado' | 'retirada'>('nao_calculado');
+  const [estadoFrete, setEstadoFrete] = useState<EstadoFrete>('nao_calculado');
 
   const pagamentoDisponivel = pagamentoAvistaHabilitado || pagamentoBoletoHabilitado;
 
@@ -730,7 +745,7 @@ function ModalOrcamento({
         <ModalPagamento
           valorProdutos={valorProdutos}
           totalComFrete={total}
-          freteCalculado={freteIncluidoNoTotal}
+          estadoFrete={estadoFrete}
           temTransportadora={temTransportadora}
           whatsapp={whatsapp}
           onCalcularFrete={alternarFrete}
