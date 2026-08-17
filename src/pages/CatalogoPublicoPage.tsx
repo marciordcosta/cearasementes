@@ -339,7 +339,7 @@ function ModalPagamento({
           )}
           {boletoHabilitado && (
             <p className="px-1 text-[11px] text-[#67718a]">
-              Total dos produtos: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
+              Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
             </p>
           )}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
