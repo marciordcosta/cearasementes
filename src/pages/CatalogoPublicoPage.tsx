@@ -1,5 +1,5 @@
 import { Calculator, FileText, Loader2, Search, Truck, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import {
@@ -602,15 +602,27 @@ function LinhaCalculadoraPlantio({
   const totalKgExibido = travado ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
   const areaCorrespondenteAoCarrinho = travado && areaReversaDoCarrinho !== null ? areaReversaDoCarrinho : (area ?? '1');
 
-  // Produto que chega já travado (marcado direto na lista, nunca passou pelo "Usar" daqui) não tem
-  // Área guardada (`area` undefined) — sem isso, o total de hectares (ver totalAreaHa em
-  // CatalogoPublicoPage) fica 0 pra esse produto mesmo mostrando uma Área reversa aqui. Preenche
-  // `areasPorItem` com a Área reversa UMA VEZ (só quando ainda não existe valor guardado — não
-  // sobrescreve uma Área que o cliente já editou); nunca mexe na qtd do carrinho, só nessa informação.
+  // Guarda travado/qtd do render anterior — só pra distinguir DOIS motivos diferentes de recalcular a
+  // Área guardada (nunca a qtd do carrinho, só essa informação pro total de hectares):
+  // 1) Produto que chega já travado (marcado direto na lista, nunca passou pelo "Usar" daqui) não tem
+  //    Área guardada (`area` undefined) — sem isso, o total de hectares (ver totalAreaHa em
+  //    CatalogoPublicoPage) fica 0 pra esse produto mesmo mostrando uma Área reversa aqui.
+  // 2) A qtd mudou por FORA daqui enquanto já estava travado (ex.: stepper do Orçamento) — a Área
+  //    guardada fica desatualizada em relação à qtd de verdade, então recalcula de novo.
+  // Deliberadamente NÃO recalcula só porque acabou de travar via "Usar" — nesse caso a Área já foi
+  // guardada pelo próprio campo (onChange) enquanto o cliente editava, e a reversa (aproximada, por
+  // causa da margem de tolerância de arredondarSacos) poderia "corrigir" o valor certinho que o
+  // cliente digitou pra um número ligeiramente diferente, sem ele ter mexido em nada.
+  const anteriorRef = useRef({ travado, qtd: item.qtd });
   useEffect(() => {
-    if (!travado || area !== undefined || areaReversaDoCarrinho === null) return;
-    onAlterarArea(areaReversaDoCarrinho);
-  }, [travado, area, areaReversaDoCarrinho, onAlterarArea]);
+    const anterior = anteriorRef.current;
+    const chegouTravadoSemArea = travado && area === undefined;
+    const qtdMudouPorForaJaTravado = anterior.travado && travado && anterior.qtd !== item.qtd;
+    if ((chegouTravadoSemArea || qtdMudouPorForaJaTravado) && areaReversaDoCarrinho !== null) {
+      onAlterarArea(areaReversaDoCarrinho);
+    }
+    anteriorRef.current = { travado, qtd: item.qtd };
+  }, [travado, item.qtd, area, areaReversaDoCarrinho, onAlterarArea]);
 
   if (!temPlantio) {
     return (
