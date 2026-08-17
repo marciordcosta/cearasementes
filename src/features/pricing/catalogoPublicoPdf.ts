@@ -219,7 +219,7 @@ function svgParaPngDataUrl(svg: string, tamanhoPx: number): Promise<string> {
  * linha cai pro texto plano (sem marcação) quebrado em várias linhas via splitTextToSize — melhor
  * legível sem destaque do que cortado tentando manter o destaque. Devolve quantas linhas ocupou.
  */
-function desenharNomeComDestaque(doc: jsPDF, nome: string, x: number, y: number, larguraMax: number, tamanhoFonte: number): number {
+export function desenharNomeComDestaque(doc: jsPDF, nome: string, x: number, y: number, larguraMax: number, tamanhoFonte: number): number {
   const regex = /\*(.+?)\*|_(.+?)_/g;
   const segmentos: { texto: string; estilo: 'bold' | 'italic' | 'normal' }[] = [];
   let ultimoIndice = 0;

@@ -1,4 +1,7 @@
-import { abrirEImprimir, escapeHtml, nomeComDestaqueHtml } from './catalogoPdf';
+// Import só de tipo — jsPDF só entra no bundle de verdade na hora do clique (import dinâmico lá
+// embaixo), mesmo padrão de catalogoPublicoPdf.ts/etiquetaFretePdf.ts.
+import type { jsPDF } from 'jspdf';
+import { desenharNomeComDestaque } from './catalogoPublicoPdf';
 
 export interface ItemOrcamentoPdf {
   nome: string;
@@ -11,71 +14,109 @@ function f(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/**
- * Orçamento montado pelo cliente no Catálogo Online (ver CatalogoPublicoPage.tsx) — janela de
- * impressão (mesmo fluxo de abrirEImprimir), não é gravado em lugar nenhum. `freteDescricao` já vem
- * pronto de descreverFrete() — cobre cotação/não calculado/retirada no local/valor calculado.
- * `pagamentoDescricao` (opcional) = forma de pagamento escolhida no modal de Pagamento (À vista com
- * desconto, ou Boleto parcelado) — null/undefined quando a Tabela não tem pagamento configurado.
- */
-export function gerarOrcamentoPdf(canalNome: string, itens: ItemOrcamentoPdf[], freteDescricao: string, total: number, pagamentoDescricao?: string | null): void {
-  const linhas = itens
-    .map(
-      (item) => `
-        <tr>
-          <td>${nomeComDestaqueHtml(item.nome)}</td>
-          <td class="num">${item.qtd}</td>
-          <td class="num">R$ ${f(item.precoUnitario)}</td>
-          <td class="num">R$ ${f(item.subtotal)}</td>
-        </tr>
-      `,
-    )
-    .join('');
+const PDF_MARGEM = 15;
+const PDF_LARGURA = 210;
+const PDF_ALTURA = 297;
+const PDF_Y_LIMITE = PDF_ALTURA - PDF_MARGEM;
 
-  const dataEmissao = new Date().toLocaleDateString('pt-BR');
-  const html = `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Orçamento — ${escapeHtml(canalNome)}</title>
-      <style>
-        @page{ margin:18mm 14mm; }
-        *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
-        body{ font-family:'Inter',Arial,sans-serif; color:#000000; background:#FFFFFF; margin:0; padding:0 4mm; }
-        .cabecalho{ display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #000000; padding-bottom:8px; margin-bottom:18px; }
-        .cabecalho h1{ font-size:20px; font-weight:700; margin:0; }
-        .cabecalho .subtitulo{ font-size:12.5px; color:#333333; margin:2px 0 0; }
-        .cabecalho .meta{ font-size:11px; color:#333333; text-align:right; }
-        table{ width:100%; border-collapse:collapse; font-size:12px; }
-        thead th{ text-align:left; padding:7px 8px; border-bottom:1px solid #000000; font-weight:700; }
-        tbody td{ padding:7px 8px; border-bottom:1px solid #CCCCCC; }
-        .num{ text-align:right; white-space:nowrap; }
-        tfoot td{ padding:7px 8px; font-weight:700; }
-        tfoot .total td{ border-top:2px solid #000000; font-size:14px; }
-      </style>
-    </head>
-    <body>
-      <div class="cabecalho">
-        <div>
-          <h1>Ceará Sementes</h1>
-          <p class="subtitulo">Orçamento — ${escapeHtml(canalNome)}</p>
-        </div>
-        <div class="meta">Emitido em ${dataEmissao}</div>
-      </div>
-      <table>
-        <thead>
-          <tr><th>Produto</th><th class="num">Qtd.</th><th class="num">Unit. (R$)</th><th class="num">Subtotal (R$)</th></tr>
-        </thead>
-        <tbody>${linhas}</tbody>
-        <tfoot>
-          <tr><td colspan="3">Frete</td><td class="num">${escapeHtml(freteDescricao)}</td></tr>
-          ${pagamentoDescricao ? `<tr><td colspan="3">Pagamento</td><td class="num">${escapeHtml(pagamentoDescricao)}</td></tr>` : ''}
-          <tr class="total"><td colspan="3">Total</td><td class="num">R$ ${f(total)}</td></tr>
-        </tfoot>
-      </table>
-    </body>
-    </html>
-  `;
-  abrirEImprimir(html);
+function pdfNovaPagina(doc: jsPDF): number {
+  doc.addPage();
+  return PDF_MARGEM;
+}
+
+/**
+ * Orçamento montado pelo cliente no Catálogo Online (ver CatalogoPublicoPage.tsx) como um arquivo
+ * PDF de verdade (jsPDF, mesmo padrão de gerarCatalogoPublicoPdfBlob) — necessário pro fluxo de
+ * "Enviar pedido": depois de mandar o texto no WhatsApp, o sistema oferece anexar esse PDF também
+ * (compartilhamento nativo com fallback de baixar+anexar manualmente) ou só salvar o arquivo. Nunca
+ * gravado em lugar nenhum, só gerado na hora do clique. `freteDescricao` já vem pronto de
+ * descreverFrete() — cobre cotação/não calculado/valor calculado. `pagamentoDescricao` (opcional) =
+ * forma de pagamento escolhida no modal de Pagamento (À vista com desconto, ou Boleto parcelado) —
+ * null/undefined quando a Tabela não tem pagamento configurado.
+ */
+export async function gerarOrcamentoPdfBlob(
+  canalNome: string,
+  itens: ItemOrcamentoPdf[],
+  freteDescricao: string,
+  total: number,
+  pagamentoDescricao?: string | null,
+): Promise<Blob> {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(0);
+  doc.text('Ceará Sementes', PDF_MARGEM, PDF_MARGEM);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(80);
+  doc.text(`Orçamento — ${canalNome}`, PDF_MARGEM, PDF_MARGEM + 6);
+
+  doc.setFontSize(9);
+  doc.text(new Date().toLocaleDateString('pt-BR'), PDF_LARGURA - PDF_MARGEM, PDF_MARGEM, { align: 'right' });
+
+  let y = PDF_MARGEM + 12;
+  doc.setDrawColor(0);
+  doc.line(PDF_MARGEM, y, PDF_LARGURA - PDF_MARGEM, y);
+  y += 8;
+
+  const xQtd = PDF_LARGURA - PDF_MARGEM - 60;
+  const xUnit = PDF_LARGURA - PDF_MARGEM - 38;
+  const xSubtotal = PDF_LARGURA - PDF_MARGEM;
+  const larguraNome = xQtd - PDF_MARGEM - 4;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(0);
+  doc.text('Produto', PDF_MARGEM, y);
+  doc.text('Qtd.', xQtd, y, { align: 'right' });
+  doc.text('Unit. (R$)', xUnit, y, { align: 'right' });
+  doc.text('Subtotal (R$)', xSubtotal, y, { align: 'right' });
+  y += 2;
+  doc.setDrawColor(0);
+  doc.line(PDF_MARGEM, y, PDF_LARGURA - PDF_MARGEM, y);
+  y += 6;
+
+  itens.forEach((item) => {
+    if (y > PDF_Y_LIMITE - 8) y = pdfNovaPagina(doc);
+    doc.setTextColor(0);
+    const linhasNome = desenharNomeComDestaque(doc, item.nome, PDF_MARGEM, y, larguraNome, 10);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(String(item.qtd), xQtd, y, { align: 'right' });
+    doc.text(`R$ ${f(item.precoUnitario)}`, xUnit, y, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(`R$ ${f(item.subtotal)}`, xSubtotal, y, { align: 'right' });
+    const alturaLinha = Math.max(linhasNome * 4.5, 6);
+    doc.setDrawColor(220);
+    doc.line(PDF_MARGEM, y + alturaLinha - 2, PDF_LARGURA - PDF_MARGEM, y + alturaLinha - 2);
+    y += alturaLinha + 3;
+  });
+
+  y += 3;
+  if (y > PDF_Y_LIMITE - 20) y = pdfNovaPagina(doc);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(0);
+  doc.text('Frete', PDF_MARGEM, y);
+  doc.text(freteDescricao, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+  y += 6;
+
+  if (pagamentoDescricao) {
+    doc.text('Pagamento', PDF_MARGEM, y);
+    doc.text(pagamentoDescricao, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+    y += 6;
+  }
+
+  doc.setDrawColor(0);
+  doc.line(PDF_MARGEM, y, PDF_LARGURA - PDF_MARGEM, y);
+  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text('Total', PDF_MARGEM, y);
+  doc.text(`R$ ${f(total)}`, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+
+  return doc.output('blob');
 }

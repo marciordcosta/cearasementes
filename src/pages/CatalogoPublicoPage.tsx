@@ -17,7 +17,7 @@ import { paraNumero } from '@/features/arquivos/metricas';
 import { calcularParcelasBoleto, chaveComparacaoProduto } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
 import { gerarCatalogoPublicoPdf, gerarCatalogoPublicoPdfBlob } from '@/features/pricing/catalogoPublicoPdf';
-import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
+import { gerarOrcamentoPdfBlob, type ItemOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
 
 type ItemCatalogo = CatalogoPublico['itens'][number];
 /** modoEscolhido = modo (Lanço/Covas) salvo no carrinho via "Atualizar carrinho" na Calculadora — null = nunca escolhido, usa o padrão cadastrado (ver modoInicialDoItem/modoEfetivoDoItem). */
@@ -239,9 +239,9 @@ function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
 
 /**
  * "Como você quer pagar?" — abre ao clicar "Concluir" quando a Tabela tem À vista e/ou Boleto
- * autorizado (ver pagamentoAvistaHabilitado/pagamentoBoletoHabilitado), antes do ModalConcluir
- * (escolha WhatsApp/PDF). Escolher uma opção já avança (mesmo padrão do ModalConcluir); Cancelar
- * volta pro Orçamento sem progredir.
+ * autorizado (ver pagamentoAvistaHabilitado/pagamentoBoletoHabilitado), antes do passo de mensagem
+ * do WhatsApp (ver ModalObservacaoWhatsApp). Escolher uma opção já avança; Cancelar volta pro
+ * Orçamento sem progredir.
  */
 function ModalPagamento({
   valorProdutos,
@@ -493,8 +493,41 @@ function ModalObservacaoWhatsApp({ resumo, onEnviar, onFechar }: { resumo: strin
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95"
         >
           <IconeWhatsApp size={18} />
-          Enviar
+          Enviar pedido
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Aberto logo depois de "Enviar pedido" (texto já mandado no WhatsApp) — convite pra anexar o PDF
+ * do pedido também. "Enviar" tenta o compartilhamento nativo do navegador (ver
+ * tentarCompartilharPedidoPdf em ModalOrcamento), caindo no fallback de pedir o número (ver
+ * ModalNumeroWhatsApp) sem suporte; "Salvar" só baixa o arquivo, sem compartilhar nada.
+ */
+function ModalOfertaPdf({ enviando, onEnviar, onSalvar, onFechar }: { enviando: boolean; onEnviar: () => void; onSalvar: () => void; onFechar: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
+        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Quer anexar o PDF do pedido também?</p>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={onEnviar}
+            disabled={enviando}
+            className="flex items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {enviando ? <Loader2 size={18} className="animate-spin" /> : <IconeWhatsApp size={18} />}
+            Enviar
+          </button>
+          <button type="button" onClick={onSalvar} className="rounded-md border border-[#e2e6ed] py-2.5 text-sm font-semibold text-[#1a2233] hover:bg-[#f5f7fa]">
+            Salvar
+          </button>
+          <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
+            Não, obrigado
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -530,7 +563,7 @@ function ModalOrcamento({
   /** Soma da Área (ha) digitada em cada produto na Calculadora de plantio (ver areasPorItem em CatalogoPublicoPage) — 0 quando ninguém usou a calculadora ainda. */
   totalAreaHa: number;
   whatsapp: string | null;
-  /** Config de pagamento da Tabela (ver Canal.pagamentoAvistaHabilitado/pagamentoBoletoHabilitado em pricing/types.ts) — quando ao menos um dos dois está habilitado, "Concluir" abre o ModalPagamento antes do ModalConcluir. */
+  /** Config de pagamento da Tabela (ver Canal.pagamentoAvistaHabilitado/pagamentoBoletoHabilitado em pricing/types.ts) — quando ao menos um dos dois está habilitado, "Concluir" abre o ModalPagamento antes de mandar a mensagem no WhatsApp. */
   pagamentoAvistaHabilitado: boolean;
   pagamentoAvistaDescontoPct: number;
   pagamentoBoletoHabilitado: boolean;
@@ -543,8 +576,13 @@ function ModalOrcamento({
 }) {
   const [pagamentoAberto, setPagamentoAberto] = useState(false);
   const [pagamentoEscolhido, setPagamentoEscolhido] = useState<PagamentoEscolhido | null>(null);
-  const [concluirAberto, setConcluirAberto] = useState(false);
   const [observacaoWhatsAppAberta, setObservacaoWhatsAppAberta] = useState(false);
+  // Depois de mandar o texto no WhatsApp ("Enviar pedido"), oferece anexar o PDF também — ver
+  // confirmarEnvioWhatsApp/tentarCompartilharPedidoPdf/enviarPedidoPdfWhatsApp/salvarPedidoPdf.
+  const [ofertaPdfAberta, setOfertaPdfAberta] = useState(false);
+  const [numeroPedidoPdfAberto, setNumeroPedidoPdfAberto] = useState(false);
+  const [enviandoPedidoPdf, setEnviandoPedidoPdf] = useState(false);
+  const [preparandoCompartilhamentoPedidoPdf, setPreparandoCompartilhamentoPedidoPdf] = useState(false);
   // Sempre nasce "não calculado" — some quando o Orçamento fecha (desmonta) e volta a pedir clique
   // na próxima vez que abrir, mesmo pro mesmo carrinho. Só faz sentido quando temTransportadora (a
   // "Cotação de frete" do canal Manual é um fluxo à parte, ver pedirCotacaoFrete).
@@ -573,16 +611,16 @@ function ModalOrcamento({
     return 'a calcular';
   }
 
-  /** "Concluir" — só passa pelo ModalPagamento quando a Tabela tem À vista e/ou Boleto autorizado; sem isso, vai direto pro ModalConcluir (WhatsApp/PDF), como sempre foi. */
+  /** "Concluir" — só passa pelo ModalPagamento quando a Tabela tem À vista e/ou Boleto autorizado; sem isso, vai direto pro passo de mensagem do WhatsApp (ver ModalObservacaoWhatsApp), pulando a escolha WhatsApp/PDF que existia antes — o PDF agora é oferecido DEPOIS de enviar (ver confirmarEnvioWhatsApp). */
   function iniciarConclusao() {
     if (pagamentoDisponivel) setPagamentoAberto(true);
-    else setConcluirAberto(true);
+    else setObservacaoWhatsAppAberta(true);
   }
 
   function confirmarPagamento(escolha: PagamentoEscolhido) {
     setPagamentoEscolhido(escolha);
     setPagamentoAberto(false);
-    setConcluirAberto(true);
+    setObservacaoWhatsAppAberta(true);
   }
 
   function descricaoPagamento(): string | undefined {
@@ -593,15 +631,16 @@ function ModalOrcamento({
     return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)} (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)})`;
   }
 
-  function enviarWhatsApp() {
-    setConcluirAberto(false);
-    setObservacaoWhatsAppAberta(true);
+  function itensParaPdf(): ItemOrcamentoPdf[] {
+    return itens.map((i) => ({ nome: i.nome, qtd: i.qtd, precoUnitario: i.preco, subtotal: i.preco * i.qtd }));
   }
 
+  /** "Enviar pedido" — manda o texto (ver montarMensagemOrcamento) e, na sequência, abre o convite pra anexar o PDF também (ver ModalOfertaPdf abaixo), sem esperar o cliente voltar do WhatsApp. */
   function confirmarEnvioWhatsApp(mensagemFinal: string) {
     if (!whatsapp) return;
     window.open(linkWhatsApp(whatsapp, mensagemFinal), '_blank');
     setObservacaoWhatsAppAberta(false);
+    setOfertaPdfAberta(true);
   }
 
   function pedirCotacaoFrete() {
@@ -609,15 +648,70 @@ function ModalOrcamento({
     window.open(linkWhatsApp(whatsapp, montarMensagemCotacaoFrete(canalNome, itens)), '_blank');
   }
 
-  function salvarPdf() {
-    gerarOrcamentoPdf(
-      canalNome,
-      itens.map((i) => ({ nome: i.nome, qtd: i.qtd, precoUnitario: i.preco, subtotal: i.preco * i.qtd })),
-      descreverFrete(),
-      totalComPagamento,
-      descricaoPagamento(),
-    );
-    setConcluirAberto(false);
+  /**
+   * "Enviar" o PDF do pedido — tenta o compartilhamento nativo do navegador (Web Share API com
+   * arquivo, mesmo padrão de tentarCompartilharPdf pro catálogo geral); sem suporte (a maioria dos
+   * computadores), devolve `false` pro fallback de pedir o número e abrir a conversa manualmente
+   * (ver ModalNumeroWhatsApp/enviarPedidoPdfWhatsApp). Cancelar a tela nativa conta como "concluído".
+   */
+  async function tentarCompartilharPedidoPdf(): Promise<boolean> {
+    const nav = navigator as Navigator & { canShare?: (dados?: { files?: File[] }) => boolean; share?: (dados: { files?: File[]; title?: string }) => Promise<void> };
+    if (typeof nav.share !== 'function' || typeof nav.canShare !== 'function') return false;
+    setPreparandoCompartilhamentoPedidoPdf(true);
+    try {
+      const blob = await gerarOrcamentoPdfBlob(canalNome, itensParaPdf(), descreverFrete(), totalComPagamento, descricaoPagamento());
+      const nomeArquivo = `Pedido ${canalNome}.pdf`;
+      const file = new File([blob], nomeArquivo, { type: 'application/pdf' });
+      if (!nav.canShare({ files: [file] })) return false;
+      await nav.share({ files: [file], title: nomeArquivo });
+      return true;
+    } catch (erro) {
+      return erro instanceof Error && erro.name === 'AbortError';
+    } finally {
+      setPreparandoCompartilhamentoPedidoPdf(false);
+    }
+  }
+
+  async function iniciarEnvioPedidoPdf() {
+    const concluido = await tentarCompartilharPedidoPdf();
+    if (!concluido) setNumeroPedidoPdfAberto(true);
+  }
+
+  /** Fallback sem Web Share: baixa o PDF (jsPDF de verdade) e abre a conversa nesse número — o cliente anexa o arquivo recém-baixado manualmente (mesmo padrão do PDF do catálogo geral). */
+  async function enviarPedidoPdfWhatsApp(digitos: string) {
+    setEnviandoPedidoPdf(true);
+    try {
+      const blob = await gerarOrcamentoPdfBlob(canalNome, itensParaPdf(), descreverFrete(), totalComPagamento, descricaoPagamento());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Pedido ${canalNome}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const numeroCompleto = `55${digitos}`;
+      const mensagem = `Olá! Segue o pedido em PDF (${canalNome}) — acabei de baixar, é só um instante que já anexo aqui.`;
+      window.open(linkWhatsApp(numeroCompleto, mensagem), '_blank');
+      setNumeroPedidoPdfAberto(false);
+      setOfertaPdfAberta(false);
+    } finally {
+      setEnviandoPedidoPdf(false);
+    }
+  }
+
+  /** "Salvar" o PDF do pedido — baixa direto, sem compartilhar/anexar nada. */
+  async function salvarPedidoPdf() {
+    const blob = await gerarOrcamentoPdfBlob(canalNome, itensParaPdf(), descreverFrete(), totalComPagamento, descricaoPagamento());
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Pedido ${canalNome}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    setOfertaPdfAberta(false);
   }
 
   return (
@@ -752,13 +846,23 @@ function ModalOrcamento({
           onFechar={() => setPagamentoAberto(false)}
         />
       )}
-      {concluirAberto && <ModalConcluir onWhatsApp={enviarWhatsApp} onPdf={salvarPdf} onFechar={() => setConcluirAberto(false)} />}
       {observacaoWhatsAppAberta && (
         <ModalObservacaoWhatsApp
           resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), totalComPagamento, descricaoPagamento())}
           onEnviar={confirmarEnvioWhatsApp}
           onFechar={() => setObservacaoWhatsAppAberta(false)}
         />
+      )}
+      {ofertaPdfAberta && (
+        <ModalOfertaPdf
+          enviando={preparandoCompartilhamentoPedidoPdf}
+          onEnviar={iniciarEnvioPedidoPdf}
+          onSalvar={salvarPedidoPdf}
+          onFechar={() => setOfertaPdfAberta(false)}
+        />
+      )}
+      {numeroPedidoPdfAberto && (
+        <ModalNumeroWhatsApp enviando={enviandoPedidoPdf} onEnviar={enviarPedidoPdfWhatsApp} onFechar={() => setNumeroPedidoPdfAberto(false)} />
       )}
     </div>
   );
