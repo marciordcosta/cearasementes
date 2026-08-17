@@ -55,8 +55,8 @@ function linkWhatsApp(numero: string, texto?: string): string {
 }
 
 /**
- * `freteDescricao` já vem pronto de descreverFrete() — cobre os 4 estados (cotação/não
- * calculado/retirada/valor), então aqui só monta o texto, sem saber de onde veio. Cada item em 2
+ * `freteDescricao` já vem pronto de descreverFrete() — cobre os 3 estados (cotação/não
+ * calculado/valor), então aqui só monta o texto, sem saber de onde veio. Cada item em 2
  * linhas — nome+fornecedor+peso, depois qtd × unitário = subtotal — com uma linha em branco
  * separando um item do outro.
  */
@@ -229,8 +229,8 @@ function ModalConcluir({
 
 type PagamentoEscolhido = { tipo: 'avista'; descontoPct: number } | { tipo: 'boleto'; parcelas: number; valorParcela: number; intervaloDias: number };
 
-/** Mesmo ciclo do botão "Frete" no Orçamento (ver alternarFrete) — nao_calculado → calculado → retirada → calculado → ... */
-type EstadoFrete = 'nao_calculado' | 'calculado' | 'retirada';
+/** Mesmo ciclo do botão "Frete" no Orçamento (ver alternarFrete) — alterna nao_calculado ↔ calculado a cada clique. */
+type EstadoFrete = 'nao_calculado' | 'calculado';
 
 /** "30/60/90 dias" pra N parcelas num intervalo fixo (30 = padrão, 15 = "Fracionar boletos") — 1ª parcela já vence no 1º intervalo, não em D+0. */
 function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
@@ -262,7 +262,7 @@ function ModalPagamento({
   valorProdutos: number;
   /** Produtos + frete (quando já calculado) — mostrado como referência abaixo do Boleto, já que as parcelas dividem só os produtos. */
   totalComFrete: number;
-  /** Mesmo estado do botão "Frete" no Orçamento — a linha abaixo do Boleto vira o MESMO botão alternável (Calcular frete → Total dos produtos → Retirar no local → ...), só ligado a temTransportadora. */
+  /** Mesmo estado do botão "Frete" no Orçamento — o Boleto usa o mesmo estadoFrete pra alternar entre "Calcular frete" e "Valor sem o frete", só ligado a temTransportadora. */
   estadoFrete: EstadoFrete;
   /** false = canal Manual (sem Transportadora) — usa "Cotação de frete" (WhatsApp) em vez de "Calcular frete". */
   temTransportadora: boolean;
@@ -355,10 +355,9 @@ function ModalPagamento({
           {boletoHabilitado && (
             <div className="px-1">
               {temTransportadora ? (
-                // Botão alternável ligado ao MESMO estadoFrete do Orçamento (ver alternarFrete), mas só
-                // 2 rótulos aqui — "calculado" vira "Valor sem o frete" (nunca o valor do frete em si,
-                // confundiria ao lado das parcelas); "retirada" some, some junto com "não calculado":
-                // enquanto não houver frete calculado, mostra sempre "Calcular frete".
+                // Botão alternável ligado ao MESMO estadoFrete do Orçamento (ver alternarFrete) — calculado
+                // vira "Valor sem o frete" (nunca o valor do frete em si, confundiria ao lado das
+                // parcelas); sem cálculo, mostra sempre "Calcular frete".
                 <button
                   type="button"
                   onClick={onCalcularFrete}
@@ -562,13 +561,12 @@ function ModalOrcamento({
   const totalComPagamento = valorProdutosComPagamento + (freteIncluidoNoTotal ? freteCalculado : 0);
 
   function alternarFrete() {
-    // 1º clique (nao_calculado) mostra o valor; daí em diante alterna valor <-> Retirar no local.
-    setEstadoFrete((atual) => (atual === 'calculado' ? 'retirada' : 'calculado'));
+    // Alterna nao_calculado <-> calculado a cada clique.
+    setEstadoFrete((atual) => (atual === 'calculado' ? 'nao_calculado' : 'calculado'));
   }
 
   function descreverFrete(): string {
     if (!temTransportadora) return 'a combinar (cotação à parte)';
-    if (estadoFrete === 'retirada') return 'Retirar no local';
     if (estadoFrete === 'calculado') return `R$ ${fmtR(freteCalculado)}`;
     return 'a calcular';
   }
@@ -699,8 +697,8 @@ function ModalOrcamento({
                   <span className="text-xs">A combinar</span>
                 )
               ) : (
-                <button type="button" onClick={alternarFrete} className={`text-xs ${estadoFrete === 'nao_calculado' ? 'font-semibold text-[#0e9d74] underline' : 'num text-[#67718a] underline'}`}>
-                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirar no local' : `R$ ${fmtR(freteCalculado)}`}
+                <button type="button" onClick={alternarFrete} className={`text-xs ${estadoFrete === 'calculado' ? 'num text-[#67718a] underline' : 'font-semibold text-[#0e9d74] underline'}`}>
+                  {estadoFrete === 'calculado' ? `R$ ${fmtR(freteCalculado)}` : 'Calcular frete'}
                 </button>
               )}
             </div>
