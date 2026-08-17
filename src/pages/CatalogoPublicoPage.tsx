@@ -146,10 +146,16 @@ function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: I
   );
 }
 
+/** Nunca deixa chegar a 0 — remover o produto é só pelo "×" (ação explícita), não por engano descendo o "−" (ver ModalOrcamento). */
 function QuantidadeInput({ valor, onAlterar }: { valor: number; onAlterar: (v: number) => void }) {
   return (
     <div className="flex items-center gap-1.5">
-      <button type="button" onClick={() => onAlterar(valor - 1)} className="flex h-7 w-7 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]">
+      <button
+        type="button"
+        disabled={valor <= 1}
+        onClick={() => onAlterar(Math.max(1, valor - 1))}
+        className="flex h-7 w-7 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa] disabled:cursor-not-allowed disabled:opacity-40"
+      >
         −
       </button>
       <input
