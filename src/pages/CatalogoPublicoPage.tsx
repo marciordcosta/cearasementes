@@ -88,6 +88,17 @@ function IconeWhatsApp({ size = 22 }: { size?: number }) {
   );
 }
 
+/** Selo de check — mesmo usado no card do produto (LinhaProduto) pra indicar "marcado"/"no carrinho" — reaproveitado na Calculadora de plantio (ver LinhaCalculadoraPlantio) pra indicar cart, mesma linguagem visual. */
+function IconeCheck() {
+  return (
+    <span className="shrink-0 rounded-full bg-[#0e9d74] p-0.5 text-white">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    </span>
+  );
+}
+
 /**
  * 1 linha (produto) — usada tanto sozinha (card próprio) quanto dentro de um bloco "colado"
  * (variantes do mesmo produto, ver agruparPorProduto). Fornecedor SEMPRE numa linha própria embaixo
@@ -130,13 +141,7 @@ function LinhaProduto({ item, selecionado, mostrarDetalhes, onClick }: { item: I
         <p className="num text-base font-bold text-[#0e9d74]">R$ {fmtR(item.preco)}</p>
         <p className="text-[11px] text-[#67718a]">{Math.round(item.peso)}kg</p>
       </div>
-      {selecionado && (
-        <span className="shrink-0 rounded-full bg-[#0e9d74] p-0.5 text-white">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </span>
-      )}
+      {selecionado && <IconeCheck />}
     </button>
   );
 }
@@ -313,6 +318,7 @@ function ModalOrcamento({
   fretePctEfetivo,
   freteMinimo,
   temTransportadora,
+  totalAreaHa,
   whatsapp,
   onAtualizarQtd,
   onFechar,
@@ -324,6 +330,8 @@ function ModalOrcamento({
   freteMinimo: number;
   /** false = canal Manual (sem Transportadora) — Frete Kg/% digitado à mão não é uma referência real de frete, então não calcula: mostra "Cotação de frete" (WhatsApp) em vez de um valor. */
   temTransportadora: boolean;
+  /** Soma da Área (ha) digitada em cada produto na Calculadora de plantio (ver areasPorItem em CatalogoPublicoPage) — 0 quando ninguém usou a calculadora ainda. */
+  totalAreaHa: number;
   whatsapp: string | null;
   onAtualizarQtd: (itemId: string, qtd: number) => void;
   onFechar: () => void;
@@ -447,6 +455,12 @@ function ModalOrcamento({
               <span>{freteIncluidoNoTotal ? 'Total' : 'Total dos produtos'}</span>
               <span className="num">R$ {fmtR(total)}</span>
             </div>
+            {totalAreaHa > 0 && (
+              <div className="flex justify-between text-xs text-[#67718a]">
+                <span>Área total (calculadora de plantio)</span>
+                <span className="num">{totalAreaHa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -494,20 +508,36 @@ function kgHaCovas(sementesCovaBase: number, pms: number, corredorTexto: string)
 type ModoPlantio = 'lanco' | 'covas';
 
 /**
- * 1 produto marcado, dentro da calculadora — cálculo, campos e estado (modo/corredor/área) 100%
- * independentes dos outros produtos marcados (ver ModalCalculadoraPlantio, que só empilha uma
- * dessas por item do carrinho). Mesma conta do Guia de Plantio interno (kg/ha), condição sempre
- * "Média" (sem seletor aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com Sementes/cova
- * editável nem modo Linha, ver resolverPlantioParaProduto em calculoSemeadura.ts). Campos
- * compactados (rótulos/paddings menores) pra caber vários produtos empilhados sem rolagem excessiva.
+ * 1 produto marcado, dentro da calculadora — cálculo e estado (modo/corredor) 100% independentes dos
+ * outros produtos marcados (ver ModalCalculadoraPlantio, que só empilha uma dessas por item do
+ * carrinho). Área é a ÚNICA parte do estado que mora no componente pai (CatalogoPublicoPage,
+ * `areasPorItem`) — precisa disso pra somar o total de hectares no rodapé daqui E do Orçamento (ver
+ * totalAreaHa). Mesma conta do Guia de Plantio interno (kg/ha), condição sempre "Média" (sem seletor
+ * aqui) e só 2 modos (A Lanço/Covas — nunca Milho/Sorgo com Sementes/cova editável nem modo Linha, ver
+ * resolverPlantioParaProduto em calculoSemeadura.ts). Campos compactados (rótulos/paddings menores)
+ * pra caber vários produtos empilhados sem rolagem excessiva.
  */
-function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho; onAtualizarQtd: (itemId: string, qtd: number) => void }) {
+function LinhaCalculadoraPlantio({
+  item,
+  area,
+  onAlterarArea,
+  onDefinirQtd,
+}: {
+  item: ItemCarrinho;
+  area: string;
+  onAlterarArea: (valor: string) => void;
+  /** Nunca desmarca o produto (ao contrário do onAtualizarQtd do Orçamento) — zerar aqui só tira da conta do pedido, o produto continua com linha própria na calculadora (ver definirQtdCarrinho em CatalogoPublicoPage). */
+  onDefinirQtd: (itemId: string, qtd: number) => void;
+}) {
   const [modo, setModo] = useState<ModoPlantio>(item.plantioKgHaLanco != null ? 'lanco' : 'covas');
   const [corredor, setCorredor] = useState('50');
-  const [area, setArea] = useState('1');
 
   const temPlantio = item.plantioKgHaLanco != null || item.plantioSementesCovaBase != null;
   const temOsDoisModos = item.plantioKgHaLanco != null && item.plantioSementesCovaBase != null && item.plantioPms != null;
+  // Mode-independente de propósito (ver feedback do usuário): o carrinho não distingue "aplicado no
+  // modo Lanço" de "aplicado no modo Covas" — é só "tem qtd>0 nesse produto" ou não, mesmo trocando de
+  // aba aqui dentro sem tocar em nada mais.
+  const emCarrinho = item.qtd > 0;
 
   const kgPorHa =
     modo === 'lanco'
@@ -519,10 +549,15 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
   const areaNum = paraNumero(area);
   const totalKg = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
 
+  // Campos de Covas (distância, sementes/peso por cova) — calculados INDEPENDENTE do modo ativo, não
+  // só quando `modo === 'covas'`: o card reserva o espaço deles sempre que o produto tem dado de Covas
+  // (`temDadosCovas` abaixo), só alternando visibilidade (`invisible`, mantém o espaço) conforme o
+  // modo — trocar de aba não pode fazer o card "pular" de tamanho.
+  const temDadosCovas = item.plantioSementesCovaBase != null;
   // Distância entre covas (cm) — mesma referência do Guia interno (Covas/m² alvo travado em 4, ver
   // covasM2Alvo), só informativo: quem trava o espaçamento é a Distância entre linhas mesmo.
-  const distanciaCovas = modo === 'covas' ? distanciaDeCovasM2(covasM2Alvo(), corredor) : null;
-  const sementesPorCovaBruta = modo === 'covas' && item.plantioSementesCovaBase != null ? sementesCovaAjustada(item.plantioSementesCovaBase, corredor) : null;
+  const distanciaCovas = distanciaDeCovasM2(covasM2Alvo(), corredor);
+  const sementesPorCovaBruta = temDadosCovas ? sementesCovaAjustada(item.plantioSementesCovaBase!, corredor) : null;
   // Sementes Tradicionais soltas não dá pra contar uma a uma pra colocar na cova, só pesar (ver
   // precisaPesoPorCova em calculoSemeadura.ts) — mostra Peso/cova (g), via PMS, em vez da contagem
   // crua; sem PMS nenhum (nem do lote, nem base da Parametrização), não dá pra converter em peso.
@@ -536,7 +571,6 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
   // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
   const qtdEmbalagens = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
   const valorTotalPedido = qtdEmbalagens !== null ? qtdEmbalagens * item.preco : null;
-  const jaAplicado = qtdEmbalagens !== null && item.qtd === qtdEmbalagens;
 
   if (!temPlantio) {
     return (
@@ -552,8 +586,9 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
   return (
     <div className="space-y-2 rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1a2233]">
+        <p className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm font-semibold text-[#1a2233]">
           <NomeComDestaque nome={item.nome} />
+          {emCarrinho && <IconeCheck />}
         </p>
         {temOsDoisModos && (
           <div className="flex shrink-0 gap-1">
@@ -571,20 +606,20 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
         )}
       </div>
 
-      <div className={`grid gap-1.5 ${modo === 'covas' ? 'grid-cols-3' : 'grid-cols-1'}`}>
+      <div className={`grid gap-1.5 ${temDadosCovas ? 'grid-cols-3' : 'grid-cols-1'}`}>
         <label className="block text-[10px] text-[#67718a]">
           Área (ha)
           <input
             type="number"
             inputMode="decimal"
             value={area}
-            onChange={(e) => setArea(e.target.value)}
+            onChange={(e) => onAlterarArea(e.target.value)}
             className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
           />
         </label>
-        {modo === 'covas' && (
+        {temDadosCovas && (
           <>
-            <label className="block text-[10px] text-[#67718a]">
+            <label className={`block text-[10px] text-[#67718a] ${modo !== 'covas' ? 'invisible' : ''}`}>
               Dist. linhas (cm)
               <input
                 type="number"
@@ -594,7 +629,7 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
                 className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
               />
             </label>
-            <label className="block text-[10px] text-[#67718a]">
+            <label className={`block text-[10px] text-[#67718a] ${modo !== 'covas' ? 'invisible' : ''}`}>
               Dist. covas (cm)
               <input
                 type="text"
@@ -609,14 +644,19 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
         )}
       </div>
 
-      {modo === 'covas' && sementesPorCova !== null && (
-        <p className="text-[10px] text-[#67718a]">
-          Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
-        </p>
-      )}
-      {modo === 'covas' && pesoPorCovaGramas !== null && (
-        <p className="text-[10px] text-[#67718a]">
-          Peso por cova (g): <span className="font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
+      {temDadosCovas && (sementesPorCova !== null || pesoPorCovaGramas !== null) && (
+        <p className={`text-[10px] text-[#67718a] ${modo !== 'covas' ? 'invisible' : ''}`}>
+          {sementesPorCova !== null ? (
+            <>
+              Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
+            </>
+          ) : (
+            pesoPorCovaGramas !== null && (
+              <>
+                Peso por cova (g): <span className="font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
+              </>
+            )
+          )}
         </p>
       )}
 
@@ -636,44 +676,49 @@ function LinhaCalculadoraPlantio({ item, onAtualizarQtd }: { item: ItemCarrinho;
         )}
       </div>
 
-      <button
-        type="button"
-        disabled={qtdEmbalagens === null}
-        onClick={() => {
-          if (jaAplicado) onAtualizarQtd(item.id, 0);
-          else if (qtdEmbalagens !== null) onAtualizarQtd(item.id, qtdEmbalagens);
-        }}
-        title={jaAplicado ? 'Clique pra tirar esse produto do carrinho' : undefined}
-        className={`w-full rounded-md py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-          jaAplicado ? 'bg-[#e4f6ef] text-[#0e9d74] hover:bg-[#d7f0e6]' : 'bg-[#10233f] text-white hover:brightness-110'
-        }`}
-      >
-        {jaAplicado ? 'Aplicado ao carrinho ✓ — clique pra remover' : `Usar ${qtdEmbalagens ?? '—'} embalagens no carrinho`}
-      </button>
+      <div className="flex items-center justify-between gap-2">
+        <QuantidadeInput valor={item.qtd} onAlterar={(v) => onDefinirQtd(item.id, v)} />
+        <button
+          type="button"
+          disabled={qtdEmbalagens === null}
+          onClick={() => qtdEmbalagens !== null && onDefinirQtd(item.id, qtdEmbalagens)}
+          title="Usa o Nº de embalagens calculado acima como quantidade no carrinho"
+          className="rounded-md bg-[#10233f] px-3 py-1.5 text-xs font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Usar {qtdEmbalagens ?? '—'}
+        </button>
+      </div>
     </div>
   );
 }
 
 /**
  * Calculadora de plantio do Catálogo Online — trabalha SEMPRE em cima da mesma seleção do carrinho
- * (marcar um produto na lista principal marca pro carrinho E pra calculadora, exatamente como um
- * item de carrinho): cada produto marcado ganha sua própria linha com cálculo 100% independente dos
- * outros (ver LinhaCalculadoraPlantio) — sem busca própria aqui dentro, pra adicionar mais um produto
- * à conta é só marcar mais um na tela principal. "Usar N embalagens no carrinho" aplica o resultado
- * daquele produto na qtd do carrinho (mesmo onAtualizarQtd de ModalOrcamento — sobrescreve, não soma,
- * o que já estava lá) e vira "Aplicado ✓" — reclicar em cima remove esse produto do carrinho (qtd 0),
- * tirando a linha da própria calculadora também (ela só mostra o que tá marcado); produto marcado sem
- * laudo correspondente aparece com aviso, sem campos.
+ * (marcar um produto na lista principal marca pro carrinho E pra calculadora, exatamente como um item
+ * de carrinho): cada produto marcado ganha sua própria linha com cálculo 100% independente dos outros
+ * (ver LinhaCalculadoraPlantio) — sem busca própria aqui dentro, pra adicionar mais um produto à conta
+ * é só marcar mais um na tela principal. Desmarcar/zerar a qtd de um produto AQUI (no stepper ou no
+ * botão "Usar N") só tira ele do CARRINHO (ver definirQtdCarrinho em CatalogoPublicoPage) — a linha
+ * continua na calculadora, ainda marcada na lista principal, pra dar pra mudar de ideia sem precisar
+ * marcar de novo; só desmarcar na tela principal remove daqui de vez. Produto marcado sem laudo
+ * correspondente aparece com aviso, sem campos.
  */
 function ModalCalculadoraPlantio({
   itens,
+  areasPorItem,
+  totalAreaHa,
   whatsapp,
-  onAtualizarQtd,
+  onAlterarArea,
+  onDefinirQtd,
   onFechar,
 }: {
   itens: ItemCarrinho[];
+  areasPorItem: Map<string, string>;
+  /** Soma da Área (ha) de todos os itens (ver totalAreaHa em CatalogoPublicoPage) — mesmo total mostrado no Orçamento. */
+  totalAreaHa: number;
   whatsapp: string | null;
-  onAtualizarQtd: (itemId: string, qtd: number) => void;
+  onAlterarArea: (itemId: string, valor: string) => void;
+  onDefinirQtd: (itemId: string, qtd: number) => void;
   onFechar: () => void;
 }) {
   return (
@@ -690,7 +735,22 @@ function ModalCalculadoraPlantio({
           {itens.length === 0 ? (
             <p className="py-6 text-center text-sm text-[#67718a]">Marque um ou mais produtos no catálogo pra calcular a quantidade de sementes necessária.</p>
           ) : (
-            itens.map((item) => <LinhaCalculadoraPlantio key={item.id} item={item} onAtualizarQtd={onAtualizarQtd} />)
+            itens.map((item) => (
+              <LinhaCalculadoraPlantio
+                key={item.id}
+                item={item}
+                area={areasPorItem.get(item.id) ?? '1'}
+                onAlterarArea={(valor) => onAlterarArea(item.id, valor)}
+                onDefinirQtd={onDefinirQtd}
+              />
+            ))
+          )}
+
+          {totalAreaHa > 0 && (
+            <div className="flex justify-between rounded-md bg-[#eef1f5] px-2.5 py-1.5 text-xs font-semibold text-[#1a2233]">
+              <span>Área total</span>
+              <span className="num">{totalAreaHa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
+            </div>
           )}
 
           <div className="border-t border-[#e2e6ed] pt-2.5 text-[11px] leading-snug text-[#67718a]">
@@ -750,7 +810,14 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
+  // Presença = "marcado" (aparece destacado na lista + com linha própria na Calculadora de plantio);
+  // valor = qtd real no pedido (0 = marcado mas fora do pedido — ver definirQtdCarrinho). Só
+  // `alternarSelecao` (clique no card, na lista principal) desmarca de vez (apaga a chave).
   const [carrinho, setCarrinho] = useState<Map<string, number>>(new Map());
+  // Área (ha) digitada em cada produto na Calculadora de plantio — mora aqui (não dentro de
+  // LinhaCalculadoraPlantio) só pra dar pra somar o total de hectares tanto no rodapé da própria
+  // calculadora quanto no Orçamento (ver totalAreaHa).
+  const [areasPorItem, setAreasPorItem] = useState<Map<string, string>>(new Map());
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [mensagemWhatsAppAberta, setMensagemWhatsAppAberta] = useState(false);
   const [calculadoraAberta, setCalculadoraAberta] = useState(false);
@@ -759,6 +826,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   const [enviandoPdfWhatsApp, setEnviandoPdfWhatsApp] = useState(false);
   const [preparandoCompartilhamentoPdf, setPreparandoCompartilhamentoPdf] = useState(false);
 
+  /** Clique no card, na lista principal — desmarca de vez (some do carrinho E da Calculadora) quando já marcado. */
   function alternarSelecao(itemId: string) {
     setCarrinho((prev) => {
       const proximo = new Map(prev);
@@ -766,8 +834,15 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       else proximo.set(itemId, 1);
       return proximo;
     });
+    setAreasPorItem((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const proximo = new Map(prev);
+      proximo.delete(itemId);
+      return proximo;
+    });
   }
 
+  /** Usado no Orçamento (stepper/remover) — qtd<=0 desmarca de vez, igual sempre foi (remover ali é uma decisão explícita: "não quero mais esse produto"). */
   function atualizarQtd(itemId: string, qtd: number) {
     setCarrinho((prev) => {
       const proximo = new Map(prev);
@@ -775,6 +850,20 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       else proximo.set(itemId, qtd);
       return proximo;
     });
+  }
+
+  /** Só pra dentro da Calculadora de plantio — NUNCA desmarca (ao contrário de atualizarQtd): zerar aqui só tira da conta do pedido, o produto continua com linha própria na calculadora. */
+  function definirQtdCarrinho(itemId: string, qtd: number) {
+    setCarrinho((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const proximo = new Map(prev);
+      proximo.set(itemId, Math.max(0, qtd));
+      return proximo;
+    });
+  }
+
+  function alterarArea(itemId: string, area: string) {
+    setAreasPorItem((prev) => new Map(prev).set(itemId, area));
   }
 
   /**
@@ -901,6 +990,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     return porCategoria;
   }, [itensFiltrados]);
 
+  // TODOS os produtos marcados (qualquer qtd, inclusive 0) — alimenta a Calculadora de plantio, que
+  // precisa continuar mostrando a linha de um produto mesmo depois de zerado ali dentro (ver
+  // definirQtdCarrinho). Pra tudo que é "carrinho de verdade" (orçamento, botão flutuante, mensagem de
+  // WhatsApp), usa `itensNoCarrinho` (qtd>0) logo abaixo.
   const itensCarrinho: ItemCarrinho[] = useMemo(() => {
     if (!data) return [];
     const porId = new Map(data.itens.map((i) => [i.id, i]));
@@ -911,6 +1004,15 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       })
       .filter((x): x is ItemCarrinho => x !== null);
   }, [carrinho, data]);
+
+  const itensNoCarrinho = useMemo(() => itensCarrinho.filter((i) => i.qtd > 0), [itensCarrinho]);
+
+  // Soma da Área (ha) digitada em cada produto que está de fato no pedido (qtd>0) — mesmo total
+  // mostrado no rodapé da Calculadora de plantio E no Orçamento (ver ModalOrcamento/ModalCalculadoraPlantio).
+  const totalAreaHa = useMemo(
+    () => itensNoCarrinho.reduce((soma, item) => soma + (paraNumero(areasPorItem.get(item.id) ?? '') ?? 0), 0),
+    [itensNoCarrinho, areasPorItem],
+  );
 
   // Botão flutuante da calculadora só aparece com pelo menos 1 produto marcado (mesma seleção do
   // carrinho) que tenha dado de plantio — "!= null" (frouxo) de propósito: cache local (localStorage)
@@ -1028,7 +1130,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           acima) e rola junto com a página. Carrinho só aparece com item marcado; a calculadora
           flutuante (embaixo do carrinho) usa a MESMA seleção do carrinho — aparece com 1+ produto
           marcado que tenha dado de plantio, e mostra todos eles de uma vez (ver ModalCalculadoraPlantio). */}
-      {carrinho.size > 0 && (
+      {itensNoCarrinho.length > 0 && (
         <button
           type="button"
           onClick={() => setOrcamentoAberto(true)}
@@ -1037,7 +1139,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         >
           <Truck size={20} />
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
-            {carrinho.size}
+            {itensNoCarrinho.length}
           </span>
         </button>
       )}
@@ -1066,7 +1168,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
       {mensagemWhatsAppAberta && data?.whatsapp && (
         <ModalMensagemWhatsApp
-          mensagemInicial={montarMensagemComCarrinho('Olá! Vim do catálogo online.', itensCarrinho)}
+          mensagemInicial={montarMensagemComCarrinho('Olá! Vim do catálogo online.', itensNoCarrinho)}
           onEnviar={(mensagem) => {
             window.open(linkWhatsApp(data.whatsapp!, mensagem), '_blank');
             setMensagemWhatsAppAberta(false);
@@ -1076,7 +1178,15 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       )}
 
       {calculadoraAberta && data && (
-        <ModalCalculadoraPlantio itens={itensCarrinho} whatsapp={data.whatsapp} onAtualizarQtd={atualizarQtd} onFechar={() => setCalculadoraAberta(false)} />
+        <ModalCalculadoraPlantio
+          itens={itensCarrinho}
+          areasPorItem={areasPorItem}
+          totalAreaHa={totalAreaHa}
+          whatsapp={data.whatsapp}
+          onAlterarArea={alterarArea}
+          onDefinirQtd={definirQtdCarrinho}
+          onFechar={() => setCalculadoraAberta(false)}
+        />
       )}
 
       {pdfEscolhaAberta && data && (
@@ -1101,11 +1211,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       {orcamentoAberto && data && (
         <ModalOrcamento
           canalNome={data.canalNome ?? ''}
-          itens={itensCarrinho}
+          itens={itensNoCarrinho}
           freteKgEfetivo={data.freteKgEfetivo}
           fretePctEfetivo={data.fretePctEfetivo}
           freteMinimo={data.freteMinimo}
           temTransportadora={data.temTransportadora}
+          totalAreaHa={totalAreaHa}
           whatsapp={data.whatsapp}
           onAtualizarQtd={atualizarQtd}
           onFechar={() => setOrcamentoAberto(false)}
