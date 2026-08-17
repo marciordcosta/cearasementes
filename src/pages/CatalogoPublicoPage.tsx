@@ -298,7 +298,7 @@ function ModalPagamento({
             >
               <p className="font-semibold text-[#1a2233]">Boleto</p>
               <p className="text-xs text-[#67718a]">
-                Total: <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
+                <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
                 {parcelasMax > 1 && (
                   <>
                     {' '}
