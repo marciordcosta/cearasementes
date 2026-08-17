@@ -190,7 +190,7 @@ export interface ItemCatalogoPublicoPdfDetalhado extends ItemCatalogoPublicoPdf 
  * imagem raster (`addImage`), não SVG. `document`/`Image`/`canvas` só existem em navegador (nunca
  * roda em build/SSR), coerente com o resto desse arquivo (chamado só no clique do usuário).
  */
-function svgParaPngDataUrl(svg: string, tamanhoPx: number): Promise<string> {
+export function svgParaPngDataUrl(svg: string, tamanhoPx: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {

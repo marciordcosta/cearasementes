@@ -55,8 +55,8 @@ function linkWhatsApp(numero: string, texto?: string): string {
 }
 
 /**
- * `freteDescricao` já vem pronto de descreverFrete() — cobre os 3 estados (cotação/não
- * calculado/valor), então aqui só monta o texto, sem saber de onde veio. Cada item em 2
+ * `freteDescricao` já vem pronto de descreverFrete() — cobre os 3 estados (cotação/retirada/
+ * valor calculado), então aqui só monta o texto, sem saber de onde veio. Cada item em 2
  * linhas — nome+fornecedor+peso, depois qtd × unitário = subtotal — com uma linha em branco
  * separando um item do outro.
  */
@@ -608,7 +608,7 @@ function ModalOrcamento({
   function descreverFrete(): string {
     if (!temTransportadora) return 'a combinar (cotação à parte)';
     if (estadoFrete === 'calculado') return `R$ ${fmtR(freteCalculado)}`;
-    return 'a calcular';
+    return 'Retirada';
   }
 
   /** "Concluir" — só passa pelo ModalPagamento quando a Tabela tem À vista e/ou Boleto autorizado; sem isso, vai direto pro passo de mensagem do WhatsApp (ver ModalObservacaoWhatsApp), pulando a escolha WhatsApp/PDF que existia antes — o PDF agora é oferecido DEPOIS de enviar (ver confirmarEnvioWhatsApp). */
