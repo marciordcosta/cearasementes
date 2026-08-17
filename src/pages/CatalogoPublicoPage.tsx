@@ -354,16 +354,21 @@ function ModalPagamento({
               <p className="px-1 text-[11px] text-[#67718a]">
                 Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
               </p>
-            ) : temTransportadora ? (
-              <button type="button" onClick={onCalcularFrete} className="px-1 text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                Calcular frete
-              </button>
-            ) : whatsapp ? (
-              <button type="button" onClick={onCotarFrete} className="px-1 text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                Cotação de frete
-              </button>
             ) : (
-              <p className="px-1 text-[11px] text-[#67718a]">Frete a combinar</p>
+              <div className="px-1">
+                {temTransportadora ? (
+                  <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                    Calcular frete
+                  </button>
+                ) : whatsapp ? (
+                  <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                    Cotação de frete
+                  </button>
+                ) : (
+                  <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
+                )}
+                <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
+              </div>
             ))}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
             Cancelar
