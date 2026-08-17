@@ -597,7 +597,6 @@ function LinhaCalculadoraPlantio({
   // inverso de totalKg = Math.ceil(kgPorHa) × área) que corresponde a essa qtd.
   const qtdEmbalagens = travado ? item.qtd : qtdEmbalagensCalculada;
   const totalKgExibido = travado ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
-  const valorTotalPedido = qtdEmbalagens !== null ? qtdEmbalagens * item.preco : null;
   const areaCorrespondenteAoCarrinho =
     travado && kgPorHa !== null && kgPorHa > 0 && item.peso > 0
       ? String(Math.round(((item.qtd * item.peso) / Math.ceil(kgPorHa)) * 100) / 100)
@@ -677,34 +676,31 @@ function LinhaCalculadoraPlantio({
         )}
       </div>
 
-      {temDadosCovas && (sementesPorCova !== null || pesoPorCovaGramas !== null) && (
-        <p className={`text-[10px] text-[#67718a] ${modo !== 'covas' ? 'invisible' : ''}`}>
-          {sementesPorCova !== null ? (
-            <>
-              Sementes por cova: <span className="font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
-            </>
-          ) : (
-            pesoPorCovaGramas !== null && (
-              <>
-                Peso por cova (g): <span className="font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
-              </>
-            )
-          )}
-        </p>
-      )}
+      <p className="text-[10px] text-[#67718a]">
+        Taxa de semeadura: <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
+        {modo === 'covas' && sementesPorCova !== null && (
+          <>
+            {' '}
+            · Sementes por cova: <span className="num font-semibold text-[#1a2233]">{Math.round(sementesPorCova)}</span>
+          </>
+        )}
+        {modo === 'covas' && sementesPorCova === null && pesoPorCovaGramas !== null && (
+          <>
+            {' '}
+            · Peso por cova (g): <span className="num font-semibold text-[#1a2233]">{pesoPorCovaGramas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</span>
+          </>
+        )}
+      </p>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-white px-2.5 py-1.5 text-xs">
-        <span className="text-[#67718a]">
-          Taxa: <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
-        </span>
         {totalKgExibido !== null && (
           <span className="num font-bold text-[#0e9d74]">
             {Math.ceil(totalKgExibido)} kg total
           </span>
         )}
-        {qtdEmbalagens !== null && valorTotalPedido !== null && (
+        {qtdEmbalagens !== null && (
           <span className="num text-[#1a2233]">
-            {qtdEmbalagens}x {Math.round(item.peso)}kg = R$ {fmtR(valorTotalPedido)}
+            {qtdEmbalagens}x {Math.round(item.peso)}kg
           </span>
         )}
       </div>
@@ -749,6 +745,7 @@ function ModalCalculadoraPlantio({
   whatsapp,
   onAlterarArea,
   onDefinirQtd,
+  onAbrirCarrinho,
   onFechar,
 }: {
   itens: ItemCarrinho[];
@@ -758,6 +755,8 @@ function ModalCalculadoraPlantio({
   whatsapp: string | null;
   onAlterarArea: (itemId: string, valor: string) => void;
   onDefinirQtd: (itemId: string, qtd: number) => void;
+  /** Link "Ir para o carrinho" no rodapé — fecha a Calculadora e abre o Orçamento (ver render em CatalogoPublicoPage). */
+  onAbrirCarrinho: () => void;
   onFechar: () => void;
 }) {
   return (
@@ -783,6 +782,19 @@ function ModalCalculadoraPlantio({
                 onDefinirQtd={onDefinirQtd}
               />
             ))
+          )}
+
+          {itens.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                onFechar();
+                onAbrirCarrinho();
+              }}
+              className="w-full text-center text-xs font-semibold text-[#0e9d74] underline"
+            >
+              Ir para o carrinho
+            </button>
           )}
 
           {totalAreaHa > 0 && (
@@ -1224,6 +1236,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           whatsapp={data.whatsapp}
           onAlterarArea={alterarArea}
           onDefinirQtd={definirQtdCarrinho}
+          onAbrirCarrinho={() => setOrcamentoAberto(true)}
           onFechar={() => setCalculadoraAberta(false)}
         />
       )}
