@@ -636,6 +636,12 @@ function LinhaCalculadoraPlantio({
   const areaNum = paraNumero(areaExibida);
   const totalKg = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
 
+  /** +/- só no modo A Lanço (ver botões abaixo) — passo de 0,5 ha, nunca abaixo de 0,5. Arredonda pro múltiplo de 0,5 mais próximo antes de somar, pra não acumular erro de ponto flutuante depois de vários cliques. */
+  function ajustarArea(delta: number) {
+    const atual = Math.round((areaNum ?? 0) * 2) / 2;
+    onAlterarArea(String(Math.max(0.5, atual + delta)));
+  }
+
   // Campos de Covas (distância, sementes/peso por cova) — calculados INDEPENDENTE do modo ativo, não
   // só quando `modo === 'covas'`: o card reserva o espaço deles sempre que o produto tem dado de Covas
   // (`temDadosCovas` abaixo), só alternando visibilidade (`invisible`, mantém o espaço) conforme o
@@ -713,13 +719,41 @@ function LinhaCalculadoraPlantio({
       <div className={`grid gap-1.5 ${temDadosCovas ? 'grid-cols-3' : 'grid-cols-1'}`}>
         <label className="block text-[10px] text-[#67718a]">
           Área (ha)
-          <input
-            type="number"
-            inputMode="decimal"
-            value={areaExibida}
-            onChange={(e) => onAlterarArea(e.target.value)}
-            className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
-          />
+          {modo === 'lanco' ? (
+            // Só no modo A Lanço — no Covas não sobra espaço na lateral do campo (Dist. linhas/covas
+            // ocupam ali do lado), fica só o campo manual mesmo.
+            <div className="mt-0.5 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => ajustarArea(-0.5)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={areaExibida}
+                onChange={(e) => onAlterarArea(e.target.value)}
+                className="num w-full min-w-0 flex-1 rounded-md border border-[#e2e6ed] bg-white px-1.5 py-1 text-center text-sm text-[#1a2233]"
+              />
+              <button
+                type="button"
+                onClick={() => ajustarArea(0.5)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#e2e6ed] text-[#67718a] hover:bg-[#f5f7fa]"
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <input
+              type="number"
+              inputMode="decimal"
+              value={areaExibida}
+              onChange={(e) => onAlterarArea(e.target.value)}
+              className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233]"
+            />
+          )}
         </label>
         {temDadosCovas && (
           <>
