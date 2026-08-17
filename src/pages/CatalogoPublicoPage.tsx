@@ -607,6 +607,7 @@ function LinhaCalculadoraPlantio({
   area,
   onAlterarArea,
   onQtdCalculada,
+  onAreaCalculada,
 }: {
   item: ItemCarrinho;
   /** undefined = cliente ainda não digitou nada aqui — mostra a Área reversa da qtd real (ver areaReversaDoItem) em vez de um valor guardado. */
@@ -614,6 +615,8 @@ function LinhaCalculadoraPlantio({
   onAlterarArea: (valor: string) => void;
   /** Reporta o Nº de embalagens calculado AO VIVO (a partir da Área/modo atuais) pro pai — só pra habilitar o botão "Atualizar carrinho" quando difere da qtd real; nunca escreve no carrinho sozinho. */
   onQtdCalculada: (itemId: string, qtd: number | null) => void;
+  /** Reporta a Área (ha) exibida AGORA (digitada ou reversa da qtd real) pro pai — soma o "Área total" da própria Calculadora, que assim acompanha o que está sendo digitado, diferente do "Área total" do Orçamento (esse sim só a qtd real, ver totalAreaHa em CatalogoPublicoPage). */
+  onAreaCalculada: (itemId: string, area: number | null) => void;
 }) {
   const modoInicial = modoInicialDoItem(item);
   const [modo, setModo] = useState<ModoPlantio>(modoInicial);
@@ -665,6 +668,14 @@ function LinhaCalculadoraPlantio({
   useEffect(() => {
     onQtdCalculada(item.id, tocado ? qtdEmbalagensCalculada : item.qtd);
   }, [item.id, item.qtd, tocado, qtdEmbalagensCalculada, onQtdCalculada]);
+
+  // Área total DA CALCULADORA (ver totalAreaHaCalculadora em ModalCalculadoraPlantio) acompanha o que
+  // está sendo digitado AGORA em cada linha — diferente da Área total do Orçamento, que só reflete a
+  // qtd real do carrinho (ver totalAreaHa em CatalogoPublicoPage). null sem dado de plantio (produto
+  // sem laudo casando não mostra campo de Área nenhum, não pode entrar na soma).
+  useEffect(() => {
+    onAreaCalculada(item.id, temPlantio ? areaNum : null);
+  }, [item.id, temPlantio, areaNum, onAreaCalculada]);
 
   if (!temPlantio) {
     return (
@@ -791,29 +802,39 @@ function LinhaCalculadoraPlantio({
 function ModalCalculadoraPlantio({
   itens,
   areasPorItem,
-  totalAreaHa,
   whatsapp,
   onAlterarArea,
   onDefinirQtd,
+  onLimparAreasEditadas,
   onFechar,
 }: {
   itens: ItemCarrinho[];
   areasPorItem: Map<string, string>;
-  /** Soma da Área (ha) de todos os itens (ver totalAreaHa em CatalogoPublicoPage) — mesmo total mostrado no Orçamento; calculado direto do carrinho, não depende de nada aqui dentro. */
-  totalAreaHa: number;
   whatsapp: string | null;
   onAlterarArea: (itemId: string, valor: string) => void;
   onDefinirQtd: (itemId: string, qtd: number) => void;
+  /** Chamado depois de "Atualizar carrinho" — limpa o rascunho de Área digitado, senão reabrir a Calculadora reportaria "tocado" de novo à toa (ver limparAreasEditadas em CatalogoPublicoPage). */
+  onLimparAreasEditadas: (itemIds: string[]) => void;
   onFechar: () => void;
 }) {
   // Nº de embalagens calculado AO VIVO por item (ver onQtdCalculada em LinhaCalculadoraPlantio) — só
   // pra decidir se "Atualizar carrinho" fica habilitado (algum item calculado difere da qtd real) e,
   // ao clicar, pra saber o que mandar pro carrinho de cada um.
   const [qtdCalculadaPorItem, setQtdCalculadaPorItem] = useState<Map<string, number | null>>(new Map());
+  // Área (ha) exibida AGORA em cada linha (ver onAreaCalculada em LinhaCalculadoraPlantio) — só pro
+  // "Área total" DESTA tela, que acompanha o que está sendo digitado ao vivo (diferente do "Área
+  // total" do Orçamento, esse sim só a qtd real já no carrinho, ver totalAreaHa em CatalogoPublicoPage).
+  const [areaCalculadaPorItem, setAreaCalculadaPorItem] = useState<Map<string, number | null>>(new Map());
 
   function registrarQtdCalculada(itemId: string, qtd: number | null) {
     setQtdCalculadaPorItem((prev) => (prev.get(itemId) === qtd ? prev : new Map(prev).set(itemId, qtd)));
   }
+
+  function registrarAreaCalculada(itemId: string, area: number | null) {
+    setAreaCalculadaPorItem((prev) => (prev.get(itemId) === area ? prev : new Map(prev).set(itemId, area)));
+  }
+
+  const totalAreaHaCalculadora = itens.reduce((soma, item) => soma + (areaCalculadaPorItem.get(item.id) ?? 0), 0);
 
   const temAtualizacaoPendente = itens.some((item) => {
     const calc = qtdCalculadaPorItem.get(item.id);
@@ -825,6 +846,7 @@ function ModalCalculadoraPlantio({
       const calc = qtdCalculadaPorItem.get(item.id);
       if (calc != null && calc !== item.qtd) onDefinirQtd(item.id, calc);
     });
+    onLimparAreasEditadas(itens.map((item) => item.id));
     onFechar();
   }
 
@@ -849,14 +871,15 @@ function ModalCalculadoraPlantio({
                 area={areasPorItem.get(item.id)}
                 onAlterarArea={(valor) => onAlterarArea(item.id, valor)}
                 onQtdCalculada={registrarQtdCalculada}
+                onAreaCalculada={registrarAreaCalculada}
               />
             ))
           )}
 
-          {totalAreaHa > 0 && (
+          {totalAreaHaCalculadora > 0 && (
             <div className="flex justify-between rounded-md bg-[#eef1f5] px-2.5 py-1.5 text-xs font-semibold text-[#1a2233]">
               <span>Área total</span>
-              <span className="num">{totalAreaHa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
+              <span className="num">{totalAreaHaCalculadora.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
             </div>
           )}
 
@@ -933,8 +956,11 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   // `alternarSelecao` (clique no card, na lista principal) desmarca de vez (apaga a chave).
   const [carrinho, setCarrinho] = useState<Map<string, number>>(new Map());
   // Área (ha) digitada em cada produto na Calculadora de plantio — mora aqui (não dentro de
-  // LinhaCalculadoraPlantio) só pra dar pra somar o total de hectares tanto no rodapé da própria
-  // calculadora quanto no Orçamento (ver totalAreaHa).
+  // LinhaCalculadoraPlantio) só pra sobreviver ao produto trocar de linha/a Calculadora fechar e abrir
+  // de novo; é só rascunho de edição, nunca aplicado até "Atualizar carrinho" (ver
+  // limparAreasEditadas) — não alimenta o total de hectares de lugar nenhum (ver totalAreaHa,
+  // calculado direto da qtd real do carrinho, e totalAreaHaCalculadora, ao vivo dentro da própria
+  // Calculadora).
   const [areasPorItem, setAreasPorItem] = useState<Map<string, string>>(new Map());
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [mensagemWhatsAppAberta, setMensagemWhatsAppAberta] = useState(false);
@@ -982,6 +1008,15 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   function alterarArea(itemId: string, area: string) {
     setAreasPorItem((prev) => new Map(prev).set(itemId, area));
+  }
+
+  /** Chamado depois de "Atualizar carrinho" (ver ModalCalculadoraPlantio) — apaga o rascunho de Área digitado, senão reabrir a Calculadora reportaria essa Área de novo como "tocada" (ver `tocado` em LinhaCalculadoraPlantio) mesmo já tudo aplicado, deixando o botão parecendo ter algo pendente à toa. */
+  function limparAreasEditadas(itemIds: string[]) {
+    setAreasPorItem((prev) => {
+      const proximo = new Map(prev);
+      itemIds.forEach((id) => proximo.delete(id));
+      return proximo;
+    });
   }
 
   /**
@@ -1281,10 +1316,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         <ModalCalculadoraPlantio
           itens={itensCarrinho}
           areasPorItem={areasPorItem}
-          totalAreaHa={totalAreaHa}
           whatsapp={data.whatsapp}
           onAlterarArea={alterarArea}
           onDefinirQtd={definirQtdCarrinho}
+          onLimparAreasEditadas={limparAreasEditadas}
           onFechar={() => {
             setCalculadoraAberta(false);
             setOrcamentoAberto(true);
