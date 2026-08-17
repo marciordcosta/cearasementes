@@ -474,7 +474,7 @@ function ModalObservacaoWhatsApp({ resumo, onEnviar, onFechar }: { resumo: strin
     <div className="fixed inset-0 z-[230] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-bold text-[#1a2233]">Mensagem pro WhatsApp</p>
+          <p className="text-sm font-bold text-[#1a2233]">Resumo do pedido</p>
           <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
             <X size={18} />
           </button>
@@ -510,7 +510,7 @@ function ModalOfertaPdf({ enviando, onEnviar, onSalvar, onFechar }: { enviando: 
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
-        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Quer anexar o PDF do pedido também?</p>
+        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Pedido em PDF</p>
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -519,7 +519,7 @@ function ModalOfertaPdf({ enviando, onEnviar, onSalvar, onFechar }: { enviando: 
             className="flex items-center justify-center gap-2 rounded-md bg-[#25D366] py-2.5 text-sm font-semibold text-white hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {enviando ? <Loader2 size={18} className="animate-spin" /> : <IconeWhatsApp size={18} />}
-            Enviar
+            Compartilhar
           </button>
           <button type="button" onClick={onSalvar} className="rounded-md border border-[#e2e6ed] py-2.5 text-sm font-semibold text-[#1a2233] hover:bg-[#f5f7fa]">
             Salvar
