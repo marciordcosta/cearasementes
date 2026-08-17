@@ -935,7 +935,7 @@ function LinhaCalculadoraPlantio({
 
       <div className={`grid gap-1.5 ${temDadosCovas ? 'grid-cols-[1.3fr_1fr_1fr]' : 'grid-cols-1'}`}>
         <label className="block text-[10px] text-[#67718a]">
-          Área (ha)
+          Informa a área (ha)
           {modo === 'lanco' ? (
             // Só no modo A Lanço — no Covas não sobra espaço na lateral do campo (Dist. linhas/covas
             // ocupam ali do lado), fica só o campo manual mesmo.
