@@ -542,7 +542,8 @@ function LinhaCalculadoraPlantio({
   onDefinirQtd,
 }: {
   item: ItemCarrinho;
-  area: string;
+  /** undefined = ainda sem Área guardada pra esse produto (nunca editada aqui) — diferente de "" ou "1", precisa dar pra distinguir do valor padrão pra decidir se faz o backfill reverso abaixo. */
+  area: string | undefined;
   onAlterarArea: (valor: string) => void;
   /** Nunca desmarca o produto (ao contrário do onAtualizarQtd do Orçamento) — zerar aqui só tira da conta do pedido, o produto continua com linha própria na calculadora (ver definirQtdCarrinho em CatalogoPublicoPage). */
   onDefinirQtd: (itemId: string, qtd: number) => void;
@@ -564,7 +565,7 @@ function LinhaCalculadoraPlantio({
         ? kgHaCovas(item.plantioSementesCovaBase, item.plantioPms, corredor)
         : null;
 
-  const areaNum = paraNumero(area);
+  const areaNum = paraNumero(area ?? '1');
   const totalKg = kgPorHa !== null && areaNum !== null && areaNum > 0 ? Math.ceil(kgPorHa) * areaNum : null;
 
   // Campos de Covas (distância, sementes/peso por cova) — calculados INDEPENDENTE do modo ativo, não
@@ -595,12 +596,21 @@ function LinhaCalculadoraPlantio({
   // (Área, kg total, embalagens, valor) reflete a qtd REAL do carrinho (exata, sem arredondamento) em
   // vez do que sairia recalculando do zero — inclusive a Área mostrada é a REVERSA (aproximada — o
   // inverso de totalKg = Math.ceil(kgPorHa) × área) que corresponde a essa qtd.
+  const areaReversaDoCarrinho =
+    kgPorHa !== null && kgPorHa > 0 && item.peso > 0 ? String(Math.round(((item.qtd * item.peso) / Math.ceil(kgPorHa)) * 100) / 100) : null;
   const qtdEmbalagens = travado ? item.qtd : qtdEmbalagensCalculada;
   const totalKgExibido = travado ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
-  const areaCorrespondenteAoCarrinho =
-    travado && kgPorHa !== null && kgPorHa > 0 && item.peso > 0
-      ? String(Math.round(((item.qtd * item.peso) / Math.ceil(kgPorHa)) * 100) / 100)
-      : area;
+  const areaCorrespondenteAoCarrinho = travado && areaReversaDoCarrinho !== null ? areaReversaDoCarrinho : (area ?? '1');
+
+  // Produto que chega já travado (marcado direto na lista, nunca passou pelo "Usar" daqui) não tem
+  // Área guardada (`area` undefined) — sem isso, o total de hectares (ver totalAreaHa em
+  // CatalogoPublicoPage) fica 0 pra esse produto mesmo mostrando uma Área reversa aqui. Preenche
+  // `areasPorItem` com a Área reversa UMA VEZ (só quando ainda não existe valor guardado — não
+  // sobrescreve uma Área que o cliente já editou); nunca mexe na qtd do carrinho, só nessa informação.
+  useEffect(() => {
+    if (!travado || area !== undefined || areaReversaDoCarrinho === null) return;
+    onAlterarArea(areaReversaDoCarrinho);
+  }, [travado, area, areaReversaDoCarrinho, onAlterarArea]);
 
   if (!temPlantio) {
     return (
@@ -692,16 +702,20 @@ function LinhaCalculadoraPlantio({
         )}
       </p>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md bg-white px-2.5 py-1.5 text-xs">
+      <div className="space-y-0.5 rounded-md bg-white px-2.5 py-1.5 text-xs">
         {totalKgExibido !== null && (
-          <span className="num font-bold text-[#0e9d74]">
-            {Math.ceil(totalKgExibido)} kg total
-          </span>
+          <div className="flex justify-between">
+            <span className="text-[#67718a]">Qtd total em Kg</span>
+            <span className="num font-bold text-[#0e9d74]">{Math.ceil(totalKgExibido)} kg</span>
+          </div>
         )}
         {qtdEmbalagens !== null && (
-          <span className="num text-[#1a2233]">
-            {qtdEmbalagens}x {Math.round(item.peso)}kg
-          </span>
+          <div className="flex justify-between">
+            <span className="text-[#67718a]">Qtd total em sacos</span>
+            <span className="num font-semibold text-[#1a2233]">
+              {qtdEmbalagens} ({Math.round(item.peso)}kg cada)
+            </span>
+          </div>
         )}
       </div>
 
@@ -777,7 +791,7 @@ function ModalCalculadoraPlantio({
               <LinhaCalculadoraPlantio
                 key={item.id}
                 item={item}
-                area={areasPorItem.get(item.id) ?? '1'}
+                area={areasPorItem.get(item.id)}
                 onAlterarArea={(valor) => onAlterarArea(item.id, valor)}
                 onDefinirQtd={onDefinirQtd}
               />
