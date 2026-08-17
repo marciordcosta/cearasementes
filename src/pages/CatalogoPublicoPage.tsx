@@ -237,8 +237,11 @@ function ModalPagamento({
   onEscolher: (escolha: PagamentoEscolhido) => void;
   onFechar: () => void;
 }) {
+  // Abre a lista de parcelas ao clicar em "Boleto" — escolher uma delas é que confirma (ver botão de cada parcela abaixo).
+  const [boletoExpandido, setBoletoExpandido] = useState(false);
   const totalAvista = valorProdutos * (1 - avistaDescontoPct / 100);
-  const { parcelas, valorParcela } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
+  // parcelasMax já é o teto real pra esse total (total ÷ valor mínimo, travado na Qtd máxima cadastrada) — o cliente escolhe qualquer valor de 1 até esse teto.
+  const { parcelas: parcelasMax } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
@@ -251,20 +254,41 @@ function ModalPagamento({
               className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
             >
               <p className="font-semibold text-[#1a2233]">À vista{avistaDescontoPct > 0 ? ` — ${avistaDescontoPct}% de desconto` : ''}</p>
-              <p className="text-xs text-[#67718a]">Produtos: R$ {fmtR(totalAvista)}</p>
+              <p className="text-xs">
+                {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(valorProdutos)}</span>}
+                <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalAvista)}</span>
+              </p>
             </button>
           )}
-          {boletoHabilitado && (
+          {boletoHabilitado && !boletoExpandido && (
             <button
               type="button"
-              onClick={() => onEscolher({ tipo: 'boleto', parcelas, valorParcela })}
+              onClick={() => setBoletoExpandido(true)}
               className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
             >
               <p className="font-semibold text-[#1a2233]">Boleto</p>
               <p className="text-xs text-[#67718a]">
-                {parcelas}x de R$ {fmtR(valorParcela)}
+                em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
               </p>
             </button>
+          )}
+          {boletoHabilitado && boletoExpandido && (
+            <div className="rounded-md border border-[#e2e6ed] p-2.5">
+              <p className="mb-1.5 text-xs font-semibold text-[#1a2233]">Boleto — escolha as parcelas</p>
+              <div className="flex flex-col gap-1.5">
+                {Array.from({ length: parcelasMax }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: valorProdutos / n })}
+                    className="flex items-center justify-between rounded-md border border-[#e2e6ed] px-2.5 py-2 text-sm hover:bg-[#f5f7fa]"
+                  >
+                    <span className="text-[#1a2233]">{n}x</span>
+                    <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos / n)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
             Cancelar
