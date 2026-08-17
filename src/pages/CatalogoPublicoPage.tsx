@@ -395,10 +395,23 @@ function ModalOrcamento({
     <div className="fixed inset-0 z-[210] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-[#e2e6ed] px-4 py-3.5">
-          <p className="text-sm font-bold text-[#1a2233]">Orçamento — {canalNome}</p>
-          <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
-            <X size={18} />
-          </button>
+          <p className="min-w-0 flex-1 truncate text-sm font-bold text-[#1a2233]">Orçamento — {canalNome}</p>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                onFechar();
+                onAbrirCalculadora();
+              }}
+              title="Calculadora de plantio"
+              className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]"
+            >
+              <Calculator size={18} />
+            </button>
+            <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -765,6 +778,9 @@ function LinhaCalculadoraPlantio({
  * do carrinho (ver `travado` em LinhaCalculadoraPlantio) — a qtd anterior fica valendo até o cliente
  * clicar em "Usar" de novo com o cálculo atualizado. Só desmarcar na tela principal tira o produto
  * daqui de vez (e do carrinho). Produto marcado sem laudo correspondente aparece com aviso, sem campos.
+ * Só se abre a partir do Orçamento (ícone no título/link "Área total", ver ModalOrcamento) — fechar
+ * aqui (X ou fundo) sempre VOLTA pro Orçamento, nunca só fecha solto (ver onFechar no render em
+ * CatalogoPublicoPage).
  */
 function ModalCalculadoraPlantio({
   itens,
@@ -773,7 +789,6 @@ function ModalCalculadoraPlantio({
   whatsapp,
   onAlterarArea,
   onDefinirQtd,
-  onAbrirCarrinho,
   onFechar,
 }: {
   itens: ItemCarrinho[];
@@ -783,8 +798,6 @@ function ModalCalculadoraPlantio({
   whatsapp: string | null;
   onAlterarArea: (itemId: string, valor: string) => void;
   onDefinirQtd: (itemId: string, qtd: number) => void;
-  /** Link "Ir para o carrinho" no rodapé — fecha a Calculadora e abre o Orçamento (ver render em CatalogoPublicoPage). */
-  onAbrirCarrinho: () => void;
   onFechar: () => void;
 }) {
   return (
@@ -810,19 +823,6 @@ function ModalCalculadoraPlantio({
                 onDefinirQtd={onDefinirQtd}
               />
             ))
-          )}
-
-          {itens.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                onFechar();
-                onAbrirCarrinho();
-              }}
-              className="w-full text-center text-xs font-semibold text-[#0e9d74] underline"
-            >
-              Ir para o carrinho
-            </button>
           )}
 
           {totalAreaHa > 0 && (
@@ -1093,13 +1093,6 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     [itensNoCarrinho, areasPorItem],
   );
 
-  // Botão flutuante da calculadora só aparece com pelo menos 1 produto marcado (mesma seleção do
-  // carrinho) que tenha dado de plantio — "!= null" (frouxo) de propósito: cache local (localStorage)
-  // salvo antes desses campos existirem não tem essa chave (undefined), não `null`; "!== null" deixava
-  // passar esse caso e piscava o botão no carregamento (cache velho "tem dado"), sumindo assim que o
-  // fetch de verdade chegava.
-  const temItemComPlantioNoCarrinho = itensCarrinho.some((i) => i.plantioKgHaLanco != null || i.plantioSementesCovaBase != null);
-
   const semNadaAindaCarregando = isLoading && !data;
 
   return (
@@ -1205,10 +1198,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         ))}
       </main>
 
-      {/* Ícones que "flutuam" de verdade (acompanham o scroll) — PDF fica no topbar (ver <header>
-          acima) e rola junto com a página. Carrinho só aparece com item marcado; a calculadora
-          flutuante (embaixo do carrinho) usa a MESMA seleção do carrinho — aparece com 1+ produto
-          marcado que tenha dado de plantio, e mostra todos eles de uma vez (ver ModalCalculadoraPlantio). */}
+      {/* Ícone que "flutua" de verdade (acompanha o scroll) — PDF fica no topbar (ver <header> acima)
+          e rola junto com a página. Carrinho só aparece com item marcado; a Calculadora de plantio não
+          tem ícone próprio na tela — acesso só de dentro do Orçamento (ícone no título + link "Área
+          total", ver ModalOrcamento), pra não duplicar entrada. */}
       {itensNoCarrinho.length > 0 && (
         <button
           type="button"
@@ -1220,17 +1213,6 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
             {itensNoCarrinho.length}
           </span>
-        </button>
-      )}
-
-      {temItemComPlantioNoCarrinho && (
-        <button
-          type="button"
-          onClick={() => setCalculadoraAberta(true)}
-          title="Calculadora de plantio"
-          className="fixed right-5 top-20 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
-        >
-          <Calculator size={20} />
         </button>
       )}
 
@@ -1264,8 +1246,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           whatsapp={data.whatsapp}
           onAlterarArea={alterarArea}
           onDefinirQtd={definirQtdCarrinho}
-          onAbrirCarrinho={() => setOrcamentoAberto(true)}
-          onFechar={() => setCalculadoraAberta(false)}
+          onFechar={() => {
+            setCalculadoraAberta(false);
+            setOrcamentoAberto(true);
+          }}
         />
       )}
 
