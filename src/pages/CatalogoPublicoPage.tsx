@@ -243,6 +243,11 @@ function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
 function ModalPagamento({
   valorProdutos,
   totalComFrete,
+  freteCalculado,
+  temTransportadora,
+  whatsapp,
+  onCalcularFrete,
+  onCotarFrete,
   avistaHabilitado,
   avistaDescontoPct,
   boletoHabilitado,
@@ -254,6 +259,13 @@ function ModalPagamento({
   valorProdutos: number;
   /** Produtos + frete (quando já calculado) — mostrado como referência abaixo do Boleto, já que as parcelas dividem só os produtos. */
   totalComFrete: number;
+  /** true = frete de transportadora já calculado (mesma condição de freteIncluidoNoTotal no Orçamento) — sem isso, a linha abaixo do Boleto vira o link de calcular/cotar frete em vez do total dos produtos. */
+  freteCalculado: boolean;
+  /** false = canal Manual (sem Transportadora) — usa "Cotação de frete" (WhatsApp) em vez de "Calcular frete". */
+  temTransportadora: boolean;
+  whatsapp: string | null;
+  onCalcularFrete: () => void;
+  onCotarFrete: () => void;
   avistaHabilitado: boolean;
   avistaDescontoPct: number;
   boletoHabilitado: boolean;
@@ -337,11 +349,22 @@ function ModalPagamento({
               )}
             </div>
           )}
-          {boletoHabilitado && (
-            <p className="px-1 text-[11px] text-[#67718a]">
-              Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
-            </p>
-          )}
+          {boletoHabilitado &&
+            (freteCalculado ? (
+              <p className="px-1 text-[11px] text-[#67718a]">
+                Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
+              </p>
+            ) : temTransportadora ? (
+              <button type="button" onClick={onCalcularFrete} className="px-1 text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                Calcular frete
+              </button>
+            ) : whatsapp ? (
+              <button type="button" onClick={onCotarFrete} className="px-1 text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                Cotação de frete
+              </button>
+            ) : (
+              <p className="px-1 text-[11px] text-[#67718a]">Frete a combinar</p>
+            ))}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
             Cancelar
           </button>
@@ -702,6 +725,11 @@ function ModalOrcamento({
         <ModalPagamento
           valorProdutos={valorProdutos}
           totalComFrete={total}
+          freteCalculado={freteIncluidoNoTotal}
+          temTransportadora={temTransportadora}
+          whatsapp={whatsapp}
+          onCalcularFrete={alternarFrete}
+          onCotarFrete={pedirCotacaoFrete}
           avistaHabilitado={pagamentoAvistaHabilitado}
           avistaDescontoPct={pagamentoAvistaDescontoPct}
           boletoHabilitado={pagamentoBoletoHabilitado}
