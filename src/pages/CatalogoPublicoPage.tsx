@@ -355,15 +355,15 @@ function ModalPagamento({
           {boletoHabilitado && (
             <div className="px-1">
               {temTransportadora ? (
-                // Mesmo botão alternável do "Frete" no Orçamento (ver alternarFrete): Calcular frete →
-                // R$ valor do frete → Retirar no local → ... — formatação idêntica à do Orçamento (só o
-                // estado "ainda não calculado" fica em destaque verde/negrito).
+                // Mesmo botão alternável do "Frete" no Orçamento (ver alternarFrete), mas sem mostrar o
+                // valor do frete em si — ficaria confuso ao lado do valor das parcelas (que já são só
+                // produtos). Calculado, mostra direto o valor que embasa o Boleto ("sem o frete").
                 <button
                   type="button"
                   onClick={onCalcularFrete}
                   className={`text-left text-[11px] ${estadoFrete === 'nao_calculado' ? 'font-semibold text-[#0e9d74] underline' : 'num text-[#67718a] underline'}`}
                 >
-                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirar no local' : `R$ ${fmtR(frete)}`}
+                  {estadoFrete === 'nao_calculado' ? 'Calcular frete' : estadoFrete === 'retirada' ? 'Retirar no local' : `Valor sem o frete: R$ ${fmtR(valorProdutos)}`}
                 </button>
               ) : whatsapp ? (
                 <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
@@ -372,14 +372,7 @@ function ModalPagamento({
               ) : (
                 <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
               )}
-              {/* Abaixo do botão de frete: com frete já calculado, o total dos produtos (base do
-                  parcelamento); sem frete calculado (nem tentado, nem "retirar no local"), o aviso de
-                  retirada — as duas alternam conforme o MESMO estadoFrete do botão acima. */}
-              {temTransportadora && estadoFrete === 'calculado' ? (
-                <p className="mt-0.5 text-[11px] text-[#67718a]">
-                  Total dos produtos: <span className="num">R$ {fmtR(valorProdutos)}</span>
-                </p>
-              ) : (
+              {!(temTransportadora && estadoFrete === 'calculado') && (
                 <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
               )}
             </div>
