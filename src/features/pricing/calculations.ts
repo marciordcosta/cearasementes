@@ -126,6 +126,37 @@ export function resolverFreteEfetivo(canal: Canal, transportadoraPorId: Map<stri
   };
 }
 
+/**
+ * Frete que o CLIENTE paga no Catálogo Online — diferente de resolverFreteEfetivo (esse é o CUSTO
+ * real pra empresa, usado no cálculo interno de preço/margem): por padrão usa o "Frete cobrado do
+ * cliente" configurado no canal (Fixo ou R$/Kg, ver Canal.freteAdicionalTipo/freteAdicionalValor),
+ * não o valor ao vivo da Transportadora. O piso mínimo (freteMinimo) sempre vem da Transportadora
+ * vinculada, os 2 modos — é um limite comercial, não uma cobrança calculada. Modo "Transportadora" é
+ * a exceção: nesse caso passa direto o valor/percentual dela ao vivo, igual sempre foi (sem override
+ * manual nenhum) — as tabelas nesse modo cobram do cliente exatamente o frete real da Transportadora.
+ */
+export function resolverFreteCatalogo(
+  canal: Canal,
+  transportadoraPorId: Map<string, Transportadora>,
+): { freteKgEfetivo: number; fretePctEfetivo: number; freteFixo: number; freteMinimo: number } {
+  const transportadora = canal.transportadoraId ? transportadoraPorId.get(canal.transportadoraId) : undefined;
+  const freteMinimo = transportadora?.freteMinimo ?? 0;
+  if (canal.freteAdicionalTipo === 'transportadora') {
+    return {
+      freteKgEfetivo: transportadora ? transportadora.valorPorKg : canal.freteKg,
+      fretePctEfetivo: transportadora && transportadora.valorPorNfTipo === 'percentual' ? transportadora.valorPorNf * 100 : canal.fretePct,
+      freteFixo: 0,
+      freteMinimo,
+    };
+  }
+  return {
+    freteKgEfetivo: canal.freteAdicionalTipo === 'kg' ? canal.freteAdicionalValor : 0,
+    fretePctEfetivo: 0,
+    freteFixo: canal.freteAdicionalTipo === 'fixo' ? canal.freteAdicionalValor : 0,
+    freteMinimo,
+  };
+}
+
 export function calcularCanal(
   produto: Produto,
   canal: Canal,
@@ -161,12 +192,18 @@ export function calcularCanal(
   // inteiro) e a margem sobe sozinha em vez do preço sugerido cair. Sempre
   // usa o peso CADASTRADO do produto, nunca o cubado — é uma cobrança
   // comercial ao cliente por peso real, não o peso que a transportadora usa
-  // pra calcular o custo dela.
-  const freteAdicionalReais = canal.freteAdicionalValor
-    ? canal.freteAdicionalTipo === 'kg'
-      ? produto.peso * canal.freteAdicionalValor
+  // pra calcular o custo dela. Modo "Transportadora" (ver FreteAdicionalTipo) é a exceção: em vez de
+  // um valor digitado à mão, passa o frete REAL (ao vivo, já calculado acima em freteKgComponente)
+  // inteiro pro cliente — a tabela nesse modo não embute frete nenhum na margem, cobra exatamente o
+  // que a Transportadora cobra.
+  const freteAdicionalReais =
+    canal.freteAdicionalTipo === 'transportadora'
+      ? freteKgComponente
       : canal.freteAdicionalValor
-    : 0;
+        ? canal.freteAdicionalTipo === 'kg'
+          ? produto.peso * canal.freteAdicionalValor
+          : canal.freteAdicionalValor
+        : 0;
 
   const custoBase = Math.max(0, produto.custo + freteKgComponente + outrosEncargos + valorDespesaExtra - freteAdicionalReais);
   const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;

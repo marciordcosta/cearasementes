@@ -190,19 +190,6 @@ export function ChannelsPanel({
                     </CampoRow>
                   </>
                 )}
-                <CampoRow label="Frete Cobrado">
-                  <span className="flex gap-1.5">
-                    <select
-                      defaultValue={canal.freteAdicionalTipo}
-                      onChange={(e) => onAtualizarFreteAdicionalTipo(canal.id, e.target.value as FreteAdicionalTipo)}
-                      className={selectClass}
-                    >
-                      <option value="fixo" className="text-[var(--color-text)]">R$ Fixo</option>
-                      <option value="kg" className="text-[var(--color-text)]">R$/Kg</option>
-                    </select>
-                    <input type="number" step="0.1" min="0" defaultValue={canal.freteAdicionalValor} onBlur={(e) => onAtualizarCampo(canal.id, 'freteAdicionalValor', parseFloat(e.target.value) || 0)} className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-right text-xs text-[var(--color-text)] num" />
-                  </span>
-                </CampoRow>
                 <CampoRow label="Tipo de Imposto (ICMS)">
                   <select
                     defaultValue={canal.tipoImposto}
@@ -213,8 +200,35 @@ export function ChannelsPanel({
                     <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
                   </select>
                 </CampoRow>
+                <div className="border-t border-dashed border-[var(--color-line)] pt-1.5" />
+                <CampoRow
+                  label="Frete cobrado do cliente"
+                  title="O que se cobra do cliente pelo frete — Fixo/R$ por Kg digitados à mão, ou 'Transportadora' pra cobrar exatamente o valor ao vivo dela (mesmo usado no custo interno). Vale tanto pro cálculo interno de preço/margem quanto pro frete calculado no Catálogo Online."
+                >
+                  <span className="flex gap-1.5">
+                    <select
+                      defaultValue={canal.freteAdicionalTipo}
+                      onChange={(e) => onAtualizarFreteAdicionalTipo(canal.id, e.target.value as FreteAdicionalTipo)}
+                      className={selectClass}
+                    >
+                      <option value="fixo" className="text-[var(--color-text)]">R$ Fixo</option>
+                      <option value="kg" className="text-[var(--color-text)]">R$/Kg</option>
+                      <option value="transportadora" className="text-[var(--color-text)]">Transportadora</option>
+                    </select>
+                    {canal.freteAdicionalTipo !== 'transportadora' && (
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        defaultValue={canal.freteAdicionalValor}
+                        onBlur={(e) => onAtualizarCampo(canal.id, 'freteAdicionalValor', parseFloat(e.target.value) || 0)}
+                        className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1.5 text-right text-xs text-[var(--color-text)] num"
+                      />
+                    )}
+                  </span>
+                </CampoRow>
                 <label
-                  className="flex items-center justify-between gap-1.5 border-t border-dashed border-[var(--color-line)] pt-1.5 text-[11px]"
+                  className="flex items-center justify-between gap-1.5 text-[11px]"
                   title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
                 >
                   <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostrar detalhes (VC%/Validade)</span>

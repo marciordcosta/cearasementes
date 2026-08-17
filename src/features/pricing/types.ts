@@ -1,4 +1,5 @@
-export type FreteAdicionalTipo = 'fixo' | 'kg';
+/** 'transportadora' = Frete cobrado do cliente passa a ser o valor AO VIVO da Transportadora vinculada ao canal (mesma fonte usada no custo interno), não um valor fixo/por Kg digitado à mão — ver freteAdicionalReais em calculations.ts. */
+export type FreteAdicionalTipo = 'fixo' | 'kg' | 'transportadora';
 export type TipoImposto = 'estadual' | 'interestadual';
 
 export interface Canal {

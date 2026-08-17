@@ -135,7 +135,7 @@ export interface Database {
           outros_encargos: number;
           frete_kg: number;
           frete_pct: number;
-          frete_adicional_tipo: 'fixo' | 'kg';
+          frete_adicional_tipo: 'fixo' | 'kg' | 'transportadora';
           frete_adicional_valor: number;
           tipo_imposto: 'estadual' | 'interestadual';
           visivel: boolean;
@@ -283,10 +283,12 @@ export interface Database {
           canal_id: string;
           slug: string;
           nome: string;
-          /** = resolverFreteEfetivo(canal).freteKgEfetivo (calculations.ts) — R$/kg já resolvido (Transportadora vinculada ou o valor manual do canal). */
+          /** = resolverFreteCatalogo(canal).freteKgEfetivo (calculations.ts) — R$/kg já resolvido a partir do "Frete cobrado do cliente" do canal (ou da Transportadora ao vivo, no modo "Transportadora"). */
           frete_kg_efetivo: number;
           frete_pct_efetivo: number;
-          /** = resolverFreteEfetivo(canal).freteMinimo — piso do frete TOTAL do pedido (não por item), só quando há Transportadora vinculada. */
+          /** = resolverFreteCatalogo(canal).freteFixo — valor fixo (R$) do "Frete cobrado do cliente" quando o canal está no modo "Fixo"; 0 nos outros modos. */
+          frete_fixo: number;
+          /** = resolverFreteCatalogo(canal).freteMinimo — piso do frete TOTAL do pedido (não por item), só quando há Transportadora vinculada. */
           frete_minimo: number;
           /** DDI+DDD+número, só dígitos — usado no botão flutuante e no envio do Orçamento por esse canal. Null = sem WhatsApp cadastrado (esconde os botões). */
           whatsapp: string | null;

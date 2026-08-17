@@ -668,6 +668,7 @@ export async function publicarCatalogoOnline(
   canalNome: string,
   freteKgEfetivo: number,
   fretePctEfetivo: number,
+  freteFixo: number,
   freteMinimo: number,
   temTransportadora: boolean,
   whatsapp: string | null,
@@ -681,6 +682,7 @@ export async function publicarCatalogoOnline(
     nome: canalNome,
     frete_kg_efetivo: freteKgEfetivo,
     frete_pct_efetivo: fretePctEfetivo,
+    frete_fixo: freteFixo,
     frete_minimo: freteMinimo,
     tem_transportadora: temTransportadora,
     whatsapp,
@@ -718,6 +720,7 @@ export interface CatalogoPublico {
   canalNome: string | null;
   freteKgEfetivo: number;
   fretePctEfetivo: number;
+  freteFixo: number;
   freteMinimo: number;
   temTransportadora: boolean;
   whatsapp: string | null;
@@ -761,6 +764,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
     canalNome: canalRow.nome,
     freteKgEfetivo: canalRow.frete_kg_efetivo,
     fretePctEfetivo: canalRow.frete_pct_efetivo,
+    freteFixo: canalRow.frete_fixo,
     freteMinimo: canalRow.frete_minimo,
     temTransportadora: canalRow.tem_transportadora,
     whatsapp: canalRow.whatsapp,

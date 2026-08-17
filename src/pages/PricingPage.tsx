@@ -50,7 +50,7 @@ import {
   type ItemCatalogoPublicoInput,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
-import { calcularCanal, ordenarProdutos, resolverFreteEfetivo } from '@/features/pricing/calculations';
+import { calcularCanal, ordenarProdutos, resolverFreteCatalogo } from '@/features/pricing/calculations';
 import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
@@ -532,12 +532,13 @@ export function PricingPage() {
       fetchFatoresPlantio(),
     ]);
     const itens = ordenarProdutos(elegiveis, categorias).map((p, indice) => construirItemCatalogo(p, canal, indice, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio));
-    const { freteKgEfetivo, fretePctEfetivo, freteMinimo } = resolverFreteEfetivo(canal, transportadoraPorId);
+    const { freteKgEfetivo, fretePctEfetivo, freteFixo, freteMinimo } = resolverFreteCatalogo(canal, transportadoraPorId);
     const slug = await publicarCatalogoOnline(
       canal.id,
       canal.nome,
       freteKgEfetivo,
       fretePctEfetivo,
+      freteFixo,
       freteMinimo,
       canal.transportadoraId !== null,
       canal.whatsapp,

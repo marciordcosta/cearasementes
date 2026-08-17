@@ -324,6 +324,7 @@ function ModalOrcamento({
   itens,
   freteKgEfetivo,
   fretePctEfetivo,
+  freteFixo,
   freteMinimo,
   temTransportadora,
   totalAreaHa,
@@ -336,6 +337,7 @@ function ModalOrcamento({
   itens: ItemCarrinho[];
   freteKgEfetivo: number;
   fretePctEfetivo: number;
+  freteFixo: number;
   freteMinimo: number;
   /** false = canal Manual (sem Transportadora) — Frete Kg/% digitado à mão não é uma referência real de frete, então não calcula: mostra "Cotação de frete" (WhatsApp) em vez de um valor. */
   temTransportadora: boolean;
@@ -356,7 +358,7 @@ function ModalOrcamento({
 
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
-  const freteBruto = pesoTotalUsado * freteKgEfetivo + (valorProdutos * fretePctEfetivo) / 100;
+  const freteBruto = freteFixo + pesoTotalUsado * freteKgEfetivo + (valorProdutos * fretePctEfetivo) / 100;
   const freteCalculado = itens.length === 0 ? 0 : Math.max(freteBruto, freteMinimo);
   const freteIncluidoNoTotal = temTransportadora && estadoFrete === 'calculado';
   const total = valorProdutos + (freteIncluidoNoTotal ? freteCalculado : 0);
@@ -1388,6 +1390,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           itens={itensNoCarrinho}
           freteKgEfetivo={data.freteKgEfetivo}
           fretePctEfetivo={data.fretePctEfetivo}
+          freteFixo={data.freteFixo}
           freteMinimo={data.freteMinimo}
           temTransportadora={data.temTransportadora}
           totalAreaHa={totalAreaHa}
