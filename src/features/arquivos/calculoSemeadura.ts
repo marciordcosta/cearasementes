@@ -263,26 +263,40 @@ function fornecedorCasaComProduto(fornecedorLaudo: string | null, fornecedorProd
 }
 
 /**
- * Casamento do Catálogo Online — EXCLUSIVAMENTE pelos 3 campos cadastrados (Cultivar, Processo,
- * Fornecedor), nunca pelo nome de exibição do produto: sem heurística, sem fuzzy matching, sem
- * fallback nenhum. Faltando qualquer um dos 3 de qualquer lado (produto sem Cultivar/Processo/
- * Fornecedor cadastrado, ou laudo sem Processo/Fornecedor preenchido), não casa — melhor não mostrar
- * VC%/PMS/Validade nenhum do que arriscar mostrar o de outro lote/variante (ver
- * fornecedorCasaComProduto pra tolerância de escrita nesse campo especificamente).
+ * Índice Cultivar+Processo -> laudos, montado uma vez por lista de `arquivos` e reaproveitado (ver
+ * encontrarLaudoParaProduto) — mesma ideia do índice de Parametrização (ver indiceProdutos em
+ * parametrizacaoProdutos.ts): Publicar o Catálogo Online chama isso pra CADA produto da Tabela de
+ * Preço, sempre com a MESMA lista de laudos (fetchArquivosLaudos só roda 1x no início) — sem esse
+ * índice, cada publicação varria a lista inteira de laudos de novo por produto. Cultivar+Processo já
+ * é comparação EXATA (normalizada) — só o Fornecedor continua fuzzy (ver fornecedorCasaComProduto),
+ * então esse índice só agrupa por Cultivar+Processo; o casamento de Fornecedor roda em cima do balde
+ * já bem menor (só os laudos daquele Cultivar+Processo, não todo mundo).
  */
-function laudoCasaComProduto(laudo: ArquivoLaudo, cultivarProduto: string | null, processoProduto: string | null, fornecedorProduto: string | null): boolean {
-  const cultivarProdutoLimpo = cultivarProduto?.trim();
-  const processoProdutoLimpo = processoProduto?.trim();
-  if (!cultivarProdutoLimpo || !processoProdutoLimpo) return false;
-  if (normalizarNome(cultivarDoLaudo(laudo)) !== normalizarNome(cultivarProdutoLimpo)) return false;
-  if (normalizarNome(laudo.processo ?? '') !== normalizarNome(processoProdutoLimpo)) return false;
-  return fornecedorCasaComProduto(laudo.fornecedor, fornecedorProduto);
+const indiceLaudosCache = new WeakMap<ArquivoLaudo[], Map<string, ArquivoLaudo[]>>();
+
+function indiceLaudosPorCultivarProcesso(arquivos: ArquivoLaudo[]): Map<string, ArquivoLaudo[]> {
+  const cacheado = indiceLaudosCache.get(arquivos);
+  if (cacheado) return cacheado;
+  const indice = new Map<string, ArquivoLaudo[]>();
+  arquivos.forEach((laudo) => {
+    const chave = `${normalizarNome(cultivarDoLaudo(laudo))}|${normalizarNome(laudo.processo ?? '')}`;
+    const balde = indice.get(chave);
+    if (balde) balde.push(laudo);
+    else indice.set(chave, [laudo]);
+  });
+  indiceLaudosCache.set(arquivos, indice);
+  return indice;
 }
 
 /**
- * Laudo de maior Validade entre os que casam com esse produto da Tabela de Preço (ver
- * laudoCasaComProduto — Cultivar + Processo + Fornecedor cadastrados, os 3 exigidos) — igual à
- * ordenação já usada no Guia de Plantio.
+ * Laudo de maior Validade entre os que casam com esse produto da Tabela de Preço — casamento do
+ * Catálogo Online EXCLUSIVAMENTE pelos 3 campos cadastrados (Cultivar, Processo, Fornecedor), nunca
+ * pelo nome de exibição do produto: sem heurística, sem fuzzy matching pro Cultivar/Processo, sem
+ * fallback nenhum. Faltando qualquer um dos 3 de qualquer lado (produto sem Cultivar/Processo/
+ * Fornecedor cadastrado, ou laudo sem Processo/Fornecedor preenchido), não casa — melhor não mostrar
+ * VC%/PMS/Validade nenhum do que arriscar mostrar o de outro lote/variante (ver
+ * fornecedorCasaComProduto pra tolerância de escrita nesse campo especificamente). Mesma ordenação
+ * por Validade já usada no Guia de Plantio.
  */
 export function encontrarLaudoParaProduto(
   arquivos: ArquivoLaudo[],
@@ -290,7 +304,12 @@ export function encontrarLaudoParaProduto(
   cultivarProduto: string | null = null,
   processoProduto: string | null = null,
 ): ArquivoLaudo | null {
-  const candidatos = arquivos.filter((a) => laudoCasaComProduto(a, cultivarProduto, processoProduto, fornecedorProduto));
+  const cultivarProdutoLimpo = cultivarProduto?.trim();
+  const processoProdutoLimpo = processoProduto?.trim();
+  if (!cultivarProdutoLimpo || !processoProdutoLimpo) return null;
+  const chave = `${normalizarNome(cultivarProdutoLimpo)}|${normalizarNome(processoProdutoLimpo)}`;
+  const mesmoCultivarProcesso = indiceLaudosPorCultivarProcesso(arquivos).get(chave) ?? [];
+  const candidatos = mesmoCultivarProcesso.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto));
   if (candidatos.length === 0) return null;
   return [...candidatos].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
 }

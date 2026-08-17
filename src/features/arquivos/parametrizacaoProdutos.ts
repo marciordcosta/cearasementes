@@ -48,6 +48,32 @@ export function cultivarDoLaudo(laudo: IdentidadeLaudo): string {
 }
 
 /**
+ * Índice Cultivar+Processo -> Parametrização, montado uma vez por lista de `produtos` e reaproveitado
+ * (ver encontrarProduto) — evita varrer a lista inteira de novo a cada chamada. Publicar o Catálogo
+ * Online chama resolverPmsBase/resolverDensidadeBase/resolverModoPlantioPadrao/etc. várias vezes POR
+ * PRODUTO da Tabela de Preço, sempre com a MESMA lista de Parametrização (fetchParametrizacaoProdutos
+ * só roda 1x no início) — sem esse índice, cada publicação ficava O(produtos da Tabela × chamadas ×
+ * tamanho da Parametrização), perceptível com listas maiores. WeakMap: cacheia por lista (referência),
+ * então listas diferentes (ex. testes) nunca compartilham índice por engano, e o cache some sozinho
+ * quando a lista antiga não tem mais nenhuma referência viva.
+ */
+const indiceProdutosCache = new WeakMap<ProdutoParametrizacao[], Map<string, ProdutoParametrizacao>>();
+
+function indiceProdutos(produtos: ProdutoParametrizacao[]): Map<string, ProdutoParametrizacao> {
+  const cacheado = indiceProdutosCache.get(produtos);
+  if (cacheado) return cacheado;
+  const indice = new Map<string, ProdutoParametrizacao>();
+  produtos.forEach((p) => {
+    const chave = `${normalizarNome(p.cultivar ?? '')}|${normalizarNome(p.processo ?? '')}`;
+    // Cultivar+Processo é único no cadastro (constraint no banco) — nunca deveria colidir, mas em
+    // caso de dado legado duplicado, mantém o 1º (mesmo comportamento do .find() que isso substitui).
+    if (!indice.has(chave)) indice.set(chave, p);
+  });
+  indiceProdutosCache.set(produtos, indice);
+  return indice;
+}
+
+/**
  * Acha a Parametrização cadastrada pro Cultivar+Processo desse laudo — comparação EXATA
  * (normalizada, sem acento/caixa), sem heurística de nome nenhuma: Cultivar (ver cultivarDoLaudo) e
  * Processo são campos PRÓPRIOS de cada lado (laudo e cadastro de Parametrização, ver
@@ -61,7 +87,7 @@ function encontrarProduto(laudo: IdentidadeLaudo, produtos: ProdutoParametrizaca
   const cultivar = normalizarNome(cultivarDoLaudo(laudo));
   if (!cultivar) return null;
   const processo = normalizarNome(laudo.processo ?? '');
-  return produtos.find((p) => normalizarNome(p.cultivar ?? '') === cultivar && normalizarNome(p.processo ?? '') === processo) ?? null;
+  return indiceProdutos(produtos).get(`${cultivar}|${processo}`) ?? null;
 }
 
 /** PMS base do produto, como texto cru (pra exibir na grade exatamente como foi cadastrado) — null se não houver cadastro pra esse produto. */
