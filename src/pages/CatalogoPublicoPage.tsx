@@ -851,6 +851,13 @@ function ModalCalculadoraPlantio({
             ))
           )}
 
+          {totalAreaHa > 0 && (
+            <div className="flex justify-between rounded-md bg-[#eef1f5] px-2.5 py-1.5 text-xs font-semibold text-[#1a2233]">
+              <span>Área total</span>
+              <span className="num">{totalAreaHa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
+            </div>
+          )}
+
           {itens.length > 0 && (
             <button
               type="button"
@@ -860,13 +867,6 @@ function ModalCalculadoraPlantio({
             >
               Atualizar carrinho
             </button>
-          )}
-
-          {totalAreaHa > 0 && (
-            <div className="flex justify-between rounded-md bg-[#eef1f5] px-2.5 py-1.5 text-xs font-semibold text-[#1a2233]">
-              <span>Área total</span>
-              <span className="num">{totalAreaHa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ha</span>
-            </div>
           )}
 
           <div className="border-t border-[#e2e6ed] pt-2.5 text-[11px] leading-snug text-[#67718a]">
