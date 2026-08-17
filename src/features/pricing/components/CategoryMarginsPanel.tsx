@@ -38,7 +38,6 @@ interface CategoryMarginsPanelProps {
   onAtualizarTolerancia: (categoriaId: string, canalId: string, valor: number | null) => void;
   onRemoverCategoria: (categoriaId: string) => void;
   onAdicionarCategoria: (input: { nome: string; estadual: number; interestadual: number }) => void;
-  onRenomearSubcategoria: (id: string, nome: string) => void;
   onRemoverSubcategoria: (id: string) => void;
   /** valor null = apaga o override, volta a herdar a margem da categoria pai. */
   onAtualizarMargemSubcategoria: (subcategoriaId: string, canalId: string, valor: number | null) => void;
@@ -59,7 +58,6 @@ export function CategoryMarginsPanel({
   onAtualizarTolerancia,
   onRemoverCategoria,
   onAdicionarCategoria,
-  onRenomearSubcategoria,
   onRemoverSubcategoria,
   onAtualizarMargemSubcategoria,
   onAtualizarCanalModoMargem,
@@ -229,17 +227,11 @@ export function CategoryMarginsPanel({
                     </tr>
                     {subsDaCategoria.map((sub) => (
                       <tr key={sub.id} className="border-t border-[var(--color-line)]">
-                        <td className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] py-1 pl-8 pr-3 text-[var(--color-text-soft)]">
-                          <input
-                            type="text"
-                            defaultValue={sub.nome}
-                            onBlur={(e) => {
-                              const novoNome = e.target.value.trim();
-                              if (novoNome && novoNome !== sub.nome) onRenomearSubcategoria(sub.id, novoNome);
-                              else e.target.value = sub.nome;
-                            }}
-                            className="w-full rounded-md border border-transparent bg-transparent px-1 py-1 text-[var(--color-text-soft)] hover:border-[var(--color-line)] focus:border-[var(--color-line)] focus:bg-[var(--color-surface)]"
-                          />
+                        <td
+                          className="border-r-2 border-[var(--color-line)] bg-[var(--color-page)] py-1 pl-8 pr-3 text-[var(--color-text-soft)]"
+                          title="Nome vem do campo Processo, em Editar Produto — não é editável aqui"
+                        >
+                          {sub.nome}
                         </td>
                         <td className="px-3 py-1 text-center text-[var(--color-text-soft)]">—</td>
                         <td className="border-r-2 border-[var(--color-line)] px-3 py-1 text-center text-[var(--color-text-soft)]">—</td>

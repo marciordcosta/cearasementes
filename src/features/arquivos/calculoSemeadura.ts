@@ -1,6 +1,5 @@
 import { calcularVCNumero, paraNumero } from './metricas';
 import {
-  cultivarCasaComNomePreco,
   cultivarDoLaudo,
   normalizarNome,
   resolverDensidadeBase,
@@ -262,92 +261,37 @@ function fornecedorCasaComProduto(fornecedorLaudo: string | null, fornecedorProd
   return menor.length > 0 && menor.every((palavra) => maior.includes(palavra));
 }
 
-/** Processos conhecidos do sistema — únicos usados pra decidir se a Tabela de Preço "menciona um Processo" (ver mencionaProcessoConflitante). */
-const PROCESSOS_CONHECIDOS = ['tradicional', 'incrustado'];
-
 /**
- * true quando a Tabela de Preço menciona um Processo (Tradicional/Incrustado) que não aparece em
- * lugar NENHUM do laudo (nem no campo Processo estruturado, nem solto no nome) — sinal de que é
- * OUTRA variante do mesmo Cultivar (ex.: laudo "Decumbens Incrustado" x produto "Brach Decumbens
- * Tradicional" — mesmo Cultivar, Processo diferente, produtos DIFERENTES), não simplesmente uma
- * Tabela que não repete o Processo no nome (aí nenhum dos dois lados menciona nenhum Processo, e
- * essa função devolve false — sem conflito, pode cair no Cultivar sozinho).
+ * Casamento do Catálogo Online — EXCLUSIVAMENTE pelos 3 campos cadastrados (Cultivar, Processo,
+ * Fornecedor), nunca pelo nome de exibição do produto: sem heurística, sem fuzzy matching, sem
+ * fallback nenhum. Faltando qualquer um dos 3 de qualquer lado (produto sem Cultivar/Processo/
+ * Fornecedor cadastrado, ou laudo sem Processo/Fornecedor preenchido), não casa — melhor não mostrar
+ * VC%/PMS/Validade nenhum do que arriscar mostrar o de outro lote/variante (ver
+ * fornecedorCasaComProduto pra tolerância de escrita nesse campo especificamente).
  */
-function mencionaProcessoConflitante(nomeProdutoPreco: string, laudo: Pick<ArquivoLaudo, 'nomeProduto' | 'processo'>): boolean {
-  const nomePrecoNorm = normalizarNome(nomeProdutoPreco);
-  const nomeLaudoCompleto = normalizarNome(`${laudo.nomeProduto} ${laudo.processo ?? ''}`);
-  return PROCESSOS_CONHECIDOS.some((proc) => nomePrecoNorm.includes(proc) && !nomeLaudoCompleto.includes(proc));
-}
-
-/**
- * Cultivar CADASTRADO nos 2 lados (`cultivarProduto`, da Tabela de Preço, e `cultivarDoLaudo`) —
- * compara direto, normalizado (sem acento/caixa), sem fuzzy matching nenhum: nada de heurística de
- * nome, nada de "descartar 1ª palavra achando que é Gênero" — os 2 lados dizem exatamente qual é o
- * Cultivar, então ou bate ou não bate. Processo (Tradicional/Incrustado) ainda não é campo próprio
- * do produto, então continua checado pelo NOME da Tabela de Preço (ver mencionaProcessoConflitante)
- * — só pra não deixar um laudo Incrustado entrar num produto que diz "Tradicional" no nome, mesmo
- * cultivar. Esse é o caminho MAIS ROBUSTO: uma vez cadastrado, mudar o texto do nome do produto (pra
- * ajustar destaque/marca, por exemplo) nunca mais quebra esse casamento.
- */
-function cultivarCadastradoCasaComProduto(laudo: ArquivoLaudo, nomeProdutoPreco: string, cultivarProduto: string): boolean {
-  if (normalizarNome(cultivarDoLaudo(laudo)) !== normalizarNome(cultivarProduto)) return false;
-  return !mencionaProcessoConflitante(nomeProdutoPreco, laudo);
-}
-
-/**
- * Sem Cultivar cadastrado no produto (`cultivarProduto` null — a maioria hoje): casa por NOME, igual
- * antes — Cultivar do laudo (ver cultivarDoLaudo) + Processo (campo próprio do laudo) tentado
- * primeiro; se não bater, o Cultivar sozinho, MAS só quando a Tabela de Preço não menciona um
- * Processo conflitante (ver mencionaProcessoConflitante) — sem essa trava, um laudo "Incrustado"
- * casava com o produto "Tradicional" da mesma variedade só por causa do Cultivar em comum (bug real,
- * corrigido). O casamento em si usa cultivarCasaComNomePreco (núcleo sem o fallback de "descartar a
- * 1ª palavra achando que é Gênero" que laudoCasaComNomePreco tem) — aqui a 1ª palavra JÁ é o Cultivar
- * de verdade, não um Gênero cru; reaplicar aquele fallback descartaria o próprio Cultivar e sobraria
- * só o Processo, que casa com QUALQUER produto do mesmo Processo, espécie nenhuma a ver (bug real,
- * corrigido — um laudo de Panicum Massai/Mombaça puxando dados pra um Brachiaria Decumbens sem laudo
- * algum, só por os dois serem "Tradicional"). Tudo isso é DE PROPÓSITO sem o Gênero/Espécie: laudo e
- * Tabela às vezes escrevem o Gênero de formas totalmente diferentes pra mesma planta (ex.:
- * "U.Brizantha" no laudo x "Brach" na Tabela — Urochloa/Brachiaria é sinônimo taxonômico,
- * reclassificação, não é só abreviação, não tem prefixo em comum) — exigir o Gênero bater fazia
- * esses laudos nunca casarem com produto nenhum. Sem Cultivar isolável (raro — nomeProduto só tem a
- * Espécie, nada sobra), cai pro nomeProduto inteiro. Esse caminho por nome é inerentemente mais
- * frágil que o cadastrado (ver cultivarCadastradoCasaComProduto) — cadastrar o Cultivar no laudo E
- * no produto elimina essa fragilidade de vez.
- */
-function cultivarPorNomeCasaComProduto(laudo: ArquivoLaudo, nomeProdutoPreco: string): boolean {
-  const base = cultivarDoLaudo(laudo) || laudo.nomeProduto;
-  if (laudo.processo && cultivarCasaComNomePreco(`${base} ${laudo.processo}`, nomeProdutoPreco)) return true;
-  if (mencionaProcessoConflitante(nomeProdutoPreco, laudo)) return false;
-  return cultivarCasaComNomePreco(base, nomeProdutoPreco);
-}
-
-function laudoCasaComProduto(laudo: ArquivoLaudo, nomeProdutoPreco: string, cultivarProduto: string | null): boolean {
+function laudoCasaComProduto(laudo: ArquivoLaudo, cultivarProduto: string | null, processoProduto: string | null, fornecedorProduto: string | null): boolean {
   const cultivarProdutoLimpo = cultivarProduto?.trim();
-  if (cultivarProdutoLimpo) return cultivarCadastradoCasaComProduto(laudo, nomeProdutoPreco, cultivarProdutoLimpo);
-  return cultivarPorNomeCasaComProduto(laudo, nomeProdutoPreco);
+  const processoProdutoLimpo = processoProduto?.trim();
+  if (!cultivarProdutoLimpo || !processoProdutoLimpo) return false;
+  if (normalizarNome(cultivarDoLaudo(laudo)) !== normalizarNome(cultivarProdutoLimpo)) return false;
+  if (normalizarNome(laudo.processo ?? '') !== normalizarNome(processoProdutoLimpo)) return false;
+  return fornecedorCasaComProduto(laudo.fornecedor, fornecedorProduto);
 }
 
 /**
  * Laudo de maior Validade entre os que casam com esse produto da Tabela de Preço (ver
- * laudoCasaComProduto — por Cultivar cadastrado quando `cultivarProduto` vier preenchido, por nome
- * como fallback) — igual à ordenação já usada no Guia de Plantio. Quando o produto tem Fornecedor
- * cadastrado, o Fornecedor do laudo é EXIGIDO também (não só preferido): Cultivar sozinho não basta
- * pra distinguir o mesmo capim vendido por fornecedores diferentes (lotes/PMS/VC diferentes) —
- * melhor não mostrar nada do que mostrar o dado errado. Sem nenhum laudo com Fornecedor batendo,
- * retorna null. Produto SEM Fornecedor cadastrado não tem o que exigir, cai no casamento só por
- * Cultivar(+Processo) mesmo.
+ * laudoCasaComProduto — Cultivar + Processo + Fornecedor cadastrados, os 3 exigidos) — igual à
+ * ordenação já usada no Guia de Plantio.
  */
 export function encontrarLaudoParaProduto(
-  nomeProdutoPreco: string,
   arquivos: ArquivoLaudo[],
   fornecedorProduto: string | null = null,
   cultivarProduto: string | null = null,
+  processoProduto: string | null = null,
 ): ArquivoLaudo | null {
-  const candidatos = arquivos.filter((a) => laudoCasaComProduto(a, nomeProdutoPreco, cultivarProduto));
+  const candidatos = arquivos.filter((a) => laudoCasaComProduto(a, cultivarProduto, processoProduto, fornecedorProduto));
   if (candidatos.length === 0) return null;
-  const finalistas = fornecedorProduto ? candidatos.filter((a) => fornecedorCasaComProduto(a.fornecedor, fornecedorProduto)) : candidatos;
-  if (finalistas.length === 0) return null;
-  return [...finalistas].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
+  return [...candidatos].sort((a, b) => validadeParaOrdenacao(b.validade) - validadeParaOrdenacao(a.validade))[0];
 }
 
 export interface PlantioPublicoResultado {
@@ -373,17 +317,18 @@ export interface PlantioPublicoResultado {
  * qualquer produto (mesmo Milho/Sorgo, que no Guia interno tem Sementes/cova editável —
  * simplificação combinada com o usuário pra essa calculadora pública). Calculado no momento de
  * "Publicar" (autenticado, com os laudos/Parametrização em mãos); a página pública só lê o
- * resultado, nunca o laudo em si.
+ * resultado, nunca o laudo em si. Casamento SÓ por Cultivar+Processo+Fornecedor cadastrados (ver
+ * laudoCasaComProduto) — faltando qualquer um dos 3, fica tudo null (sem detalhes no card).
  */
 export function resolverPlantioParaProduto(
-  nomeProdutoPreco: string,
   arquivos: ArquivoLaudo[],
   produtos: ProdutoParametrizacao[],
   fatores: FatorPlantio[],
   fornecedorProduto: string | null = null,
   cultivarProduto: string | null = null,
+  processoProduto: string | null = null,
 ): PlantioPublicoResultado {
-  const laudo = encontrarLaudoParaProduto(nomeProdutoPreco, arquivos, fornecedorProduto, cultivarProduto);
+  const laudo = encontrarLaudoParaProduto(arquivos, fornecedorProduto, cultivarProduto, processoProduto);
   if (!laudo) {
     return { kgHaLanco: null, sementesCovaBase: null, pms: null, vc: null, pmsManual: null, validade: null, margemTolerancia: 25, precisaPesoPorCova: false };
   }

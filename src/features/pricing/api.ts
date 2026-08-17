@@ -285,11 +285,6 @@ export async function inserirSubcategoria(input: { categoriaId: string; nome: st
   return { id: data.id, categoriaId: data.categoria_id, nome: data.nome, ordem: data.ordem, margens: {} };
 }
 
-export async function atualizarSubcategoria(id: string, patch: Partial<Pick<SubcategoriaRow, 'nome' | 'ordem'>>): Promise<void> {
-  const { error } = await supabase.from('subcategorias').update(patch).eq('id', id);
-  if (error) throw error;
-}
-
 export async function apagarSubcategoria(id: string): Promise<void> {
   const { error } = await supabase.from('subcategorias').delete().eq('id', id);
   if (error) throw error;

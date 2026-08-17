@@ -28,7 +28,6 @@ import {
   atualizarItemCatalogoPublico,
   atualizarPrecisaAjuste,
   atualizarProduto,
-  atualizarSubcategoria,
   fetchCanais,
   fetchCategorias,
   fetchCustosPersonalizados,
@@ -484,14 +483,15 @@ export function PricingPage() {
     fatoresPlantio: Awaited<ReturnType<typeof fetchFatoresPlantio>>,
   ): ItemCatalogoPublicoInput {
     const categoria = getCategoriaCatalogo(p.categoriaId);
-    const r = calcularCanal(p, canal, categoria, getSubcategoriaCatalogo(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
+    const subcategoria = getSubcategoriaCatalogo(p.subcategoriaId);
+    const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi);
     const fornecedorNome = getFornecedorCatalogo(p.fornecedorId)?.nome ?? null;
-    const plantio = resolverPlantioParaProduto(p.nome, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome, p.cultivar);
+    const plantio = resolverPlantioParaProduto(arquivosLaudos, parametrizacaoProdutos, fatoresPlantio, fornecedorNome, p.cultivar, subcategoria?.nome ?? null);
     return {
       produtoId: p.id,
       nome: p.nome,
       categoriaNome: categoria.nome,
-      subcategoriaNome: getSubcategoriaCatalogo(p.subcategoriaId)?.nome ?? null,
+      subcategoriaNome: subcategoria?.nome ?? null,
       fornecedorNome,
       preco: r.preco,
       peso: p.peso,
@@ -784,11 +784,6 @@ export function PricingPage() {
   }
 
   // ---------- Subcategorias ----------
-  function onRenomearSubcategoria(id: string, nome: string) {
-    setSubcategorias((prev) => prev.map((s) => (s.id === id ? { ...s, nome } : s)));
-    salvarAgora(() => atualizarSubcategoria(id, { nome }));
-  }
-
   /** Sem confirmação/bloqueio: subcategoria_id é opcional (on delete set null) — produtos que a usavam só ficam sem subcategoria. */
   function onRemoverSubcategoria(id: string) {
     setSubcategorias((prev) => prev.filter((s) => s.id !== id));
@@ -1279,7 +1274,6 @@ export function PricingPage() {
             onAtualizarTolerancia={onAtualizarTolerancia}
             onRemoverCategoria={onRemoverCategoria}
             onAdicionarCategoria={onAdicionarCategoria}
-            onRenomearSubcategoria={onRenomearSubcategoria}
             onRemoverSubcategoria={onRemoverSubcategoria}
             onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}
             onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}

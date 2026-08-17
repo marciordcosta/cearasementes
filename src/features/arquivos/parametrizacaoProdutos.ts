@@ -176,20 +176,6 @@ function casamentoDeTermos(termosLaudo: string[], nomeProdutoPreco: string): boo
 }
 
 /**
- * Casa o Cultivar JÁ ISOLADO de um laudo (ver derivarCultivar em etiqueta.ts — Espécie e Processo já
- * descartados) com o nome de um produto da Tabela de Preço — só o núcleo do casamento (ver
- * casamentoDeTermos), SEM o fallback de "descartar a 1ª palavra achando que é Gênero" que
- * laudoCasaComNomePreco tem: aqui a 1ª palavra JÁ é o próprio Cultivar (a mais importante pra
- * distinguir uma variedade da outra), não um Gênero cru — descartá-la faria um Cultivar totalmente
- * diferente (ex.: um laudo de "Massai" isolado só como "Tradicional" depois de perder a palavra que
- * importava) casar com QUALQUER produto do mesmo Processo, espécie nenhuma a ver (bug real,
- * corrigido — ver laudoCasaComProduto em calculoSemeadura.ts).
- */
-export function cultivarCasaComNomePreco(cultivarOuCultivarProcesso: string, nomeProdutoPreco: string): boolean {
-  return casamentoDeTermos(termosDeConteudo(cultivarOuCultivarProcesso), nomeProdutoPreco);
-}
-
-/**
  * Casa o nome CRU de um laudo (ainda com o Gênero na frente, ex.: "Tanzania 1 Tradicional" — o "1" é
  * o número do lote) com o nome de um produto da Tabela de Preço — ver casamentoDeTermos pro núcleo.
  *
