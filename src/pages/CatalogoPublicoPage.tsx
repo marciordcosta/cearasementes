@@ -363,9 +363,16 @@ function ModalPagamento({
                   onClick={onCalcularFrete}
                   className={`text-left text-[11px] ${estadoFrete === 'calculado' ? 'num text-[#67718a] underline' : 'font-semibold text-[#0e9d74] underline'}`}
                 >
-                  {estadoFrete === 'calculado'
-                    ? `Valor sem o frete: R$ ${fmtR(valorProdutos)}${avistaHabilitado ? ` (R$ ${fmtR(valorProdutos * (1 - avistaDescontoPct / 100))} à vista)` : ''}`
-                    : 'Calcular frete'}
+                  {estadoFrete === 'calculado' ? (
+                    <>
+                      Valor sem o frete: R$ {fmtR(valorProdutos)}
+                      {avistaHabilitado && (
+                        <span className="text-[#0e9d74]"> (R$ {fmtR(valorProdutos * (1 - avistaDescontoPct / 100))} à vista)</span>
+                      )}
+                    </>
+                  ) : (
+                    'Calcular frete'
+                  )}
                 </button>
               ) : whatsapp ? (
                 <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
