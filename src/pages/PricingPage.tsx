@@ -1260,6 +1260,7 @@ export function PricingPage() {
             onAtualizarMostrarDetalhes={onAtualizarMostrarDetalhesCanal}
             onAtualizarTipoImposto={onAtualizarTipoImposto}
             onAtualizarFreteAdicionalTipo={onAtualizarFreteAdicionalTipo}
+            onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}
             onToggleVisivel={onToggleVisivel}
             onToggleFreteIncluso={onToggleFreteIncluso}
             onRemoverCanal={onRemoverCanal}
@@ -1278,7 +1279,6 @@ export function PricingPage() {
             onAdicionarCategoria={onAdicionarCategoria}
             onRemoverSubcategoria={onRemoverSubcategoria}
             onAtualizarMargemSubcategoria={onAtualizarMargemSubcategoria}
-            onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}
             onAtualizarCategoriaReferencia={onAtualizarCategoriaReferencia}
             onAtualizarCategoriaReferenciaAjuste={onAtualizarCategoriaReferenciaAjuste}
           />

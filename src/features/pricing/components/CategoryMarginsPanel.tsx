@@ -41,8 +41,6 @@ interface CategoryMarginsPanelProps {
   onRemoverSubcategoria: (id: string) => void;
   /** valor null = apaga o override, volta a herdar a margem da categoria pai. */
   onAtualizarMargemSubcategoria: (subcategoriaId: string, canalId: string, valor: number | null) => void;
-  /** true = essa Tabela inteira passa a operar "por referência" (a Tabela referenciada em si é escolhida por Categoria); false = volta a "por categoria". */
-  onAtualizarCanalModoMargem: (canalId: string, porReferencia: boolean) => void;
   /** null = essa categoria ainda não escolheu (ou volta a não ter) referência pra esse canal. */
   onAtualizarCategoriaReferencia: (categoriaId: string, canalId: string, valor: string | null) => void;
   /** 0 = mira a Margem R$ da referência sem alteração; positivo/negativo ajusta esse % sobre o valor antes de virar a meta. */
@@ -60,7 +58,6 @@ export function CategoryMarginsPanel({
   onAdicionarCategoria,
   onRemoverSubcategoria,
   onAtualizarMargemSubcategoria,
-  onAtualizarCanalModoMargem,
   onAtualizarCategoriaReferencia,
   onAtualizarCategoriaReferenciaAjuste,
 }: CategoryMarginsPanelProps) {
@@ -122,19 +119,12 @@ export function CategoryMarginsPanel({
             </thead>
             <tbody>
               <tr className="border-t border-[var(--color-line)] bg-[var(--color-page)]">
-                <td className="px-3 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Cálculo da margem sugerida</td>
+                <td className="px-3 py-1" />
                 <td className="px-2 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Estadual</td>
                 <td className="border-r-2 border-[var(--color-line)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-soft)]">Interestadual</td>
                 {canais.map((canal) => (
-                  <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1">
-                    <select
-                      value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
-                      onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
-                      className="w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-1 text-[11px] text-[var(--color-text)]"
-                    >
-                      <option value="categoria">Por categoria</option>
-                      <option value="referencia">Por referência</option>
-                    </select>
+                  <td key={canal.id} className="border-l border-[var(--color-line)] px-3 py-1 text-[10px] font-semibold text-[var(--color-text-soft)]">
+                    {canal.margemPorReferencia ? 'Tabela · Ajuste · Tol.' : 'Margem · Tol.'}
                   </td>
                 ))}
                 <td className="px-3 py-1" />

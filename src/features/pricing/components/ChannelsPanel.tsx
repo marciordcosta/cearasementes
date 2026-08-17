@@ -32,6 +32,8 @@ interface ChannelsPanelProps {
   onAtualizarMostrarDetalhes: (canalId: string, valor: boolean) => void;
   onAtualizarTipoImposto: (canalId: string, valor: TipoImposto) => void;
   onAtualizarFreteAdicionalTipo: (canalId: string, valor: FreteAdicionalTipo) => void;
+  /** true = margem sugerida dessa Tabela vem de "Outra Tabela" (referência, escolhida por Categoria em Categorias); false = vem direto da % cadastrada por Categoria ("Categorias"). Mesmo campo de sempre (Canal.margemPorReferencia) — só mudou de tela, ver Categorias > Gerenciamento de Categorias pro comportamento em si. */
+  onAtualizarCanalModoMargem: (canalId: string, porReferencia: boolean) => void;
   onToggleVisivel: (canalId: string, valor: boolean) => void;
   onToggleFreteIncluso: (canalId: string, valor: boolean) => void;
   onRemoverCanal: (canalId: string) => void;
@@ -62,6 +64,7 @@ export function ChannelsPanel({
   onAtualizarMostrarDetalhes,
   onAtualizarTipoImposto,
   onAtualizarFreteAdicionalTipo,
+  onAtualizarCanalModoMargem,
   onToggleVisivel,
   onToggleFreteIncluso,
   onRemoverCanal,
@@ -226,6 +229,19 @@ export function ChannelsPanel({
                       />
                     )}
                   </span>
+                </CampoRow>
+                <CampoRow
+                  label="Base de precificação"
+                  title="De onde vem a margem sugerida dessa Tabela — 'Categorias' usa a % cadastrada por Categoria (aba Categorias); 'Outra Tabela' espelha a Margem R$ de uma Tabela de referência, escolhida por Categoria (mesma aba). Continua funcionando exatamente como hoje — só o controle mudou de tela."
+                >
+                  <select
+                    value={canal.margemPorReferencia ? 'referencia' : 'categoria'}
+                    onChange={(e) => onAtualizarCanalModoMargem(canal.id, e.target.value === 'referencia')}
+                    className={selectClass}
+                  >
+                    <option value="categoria" className="text-[var(--color-text)]">Categorias</option>
+                    <option value="referencia" className="text-[var(--color-text)]">Outra Tabela</option>
+                  </select>
                 </CampoRow>
                 <CampoRow label="WhatsApp" title="Número usado no Catálogo Online desse canal (botão flutuante + envio de orçamento) — só DDD+número, Brasil (+55) já é fixo">
                   <span className="flex items-center gap-1">
