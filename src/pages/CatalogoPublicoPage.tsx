@@ -574,8 +574,21 @@ function LinhaCalculadoraPlantio({
   // peso mostrado no card) — arredondado pela MESMA margem de tolerância por grupo do Guia de
   // Plantio interno (ver arredondarSacos em calculoSemeadura.ts), não um Math.ceil puro: até essa %
   // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
-  const qtdEmbalagens = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
+  const qtdEmbalagensCalculada = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
+
+  // Produto já no carrinho (qtd real, ver emCarrinho) pode ter chegado lá sem passar pelo "Usar" daqui
+  // (marcado direto na lista principal, ou a qtd ajustada no Orçamento) — nesses casos a Área/resultado
+  // recalculados a partir da `area` guardada não batem com a qtd de verdade. Enquanto travado, tudo que
+  // aparece (Área, kg total, embalagens, valor) reflete a qtd REAL do carrinho (exata, sem
+  // arredondamento) em vez do que sairia recalculando do zero — inclusive a Área mostrada é a REVERSA
+  // (aproximada — o inverso de totalKg = Math.ceil(kgPorHa) × área) que corresponde a essa qtd.
+  const qtdEmbalagens = emCarrinho ? item.qtd : qtdEmbalagensCalculada;
+  const totalKgExibido = emCarrinho ? (item.peso > 0 ? item.qtd * item.peso : null) : totalKg;
   const valorTotalPedido = qtdEmbalagens !== null ? qtdEmbalagens * item.preco : null;
+  const areaCorrespondenteAoCarrinho =
+    emCarrinho && kgPorHa !== null && kgPorHa > 0 && item.peso > 0
+      ? String(Math.round(((item.qtd * item.peso) / Math.ceil(kgPorHa)) * 100) / 100)
+      : area;
 
   if (!temPlantio) {
     return (
@@ -591,9 +604,8 @@ function LinhaCalculadoraPlantio({
   return (
     <div className="space-y-2 rounded-md border border-[#e2e6ed] bg-[#f5f7fa] p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm font-semibold text-[#1a2233]">
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1a2233]">
           <NomeComDestaque nome={item.nome} />
-          {emCarrinho && <IconeCheck />}
         </p>
         {temOsDoisModos && (
           <div className="flex shrink-0 gap-1">
@@ -618,7 +630,7 @@ function LinhaCalculadoraPlantio({
           <input
             type="number"
             inputMode="decimal"
-            value={area}
+            value={areaCorrespondenteAoCarrinho}
             disabled={emCarrinho}
             onChange={(e) => onAlterarArea(e.target.value)}
             className="num mt-0.5 w-full rounded-md border border-[#e2e6ed] bg-white px-2 py-1 text-sm text-[#1a2233] disabled:cursor-not-allowed disabled:bg-[#eef1f5] disabled:text-[#67718a]"
@@ -672,9 +684,9 @@ function LinhaCalculadoraPlantio({
         <span className="text-[#67718a]">
           Taxa: <span className="num font-semibold text-[#1a2233]">{kgPorHa !== null ? `${Math.ceil(kgPorHa)} kg/ha` : '—'}</span>
         </span>
-        {totalKg !== null && (
+        {totalKgExibido !== null && (
           <span className="num font-bold text-[#0e9d74]">
-            {Math.ceil(totalKg)} kg total
+            {Math.ceil(totalKgExibido)} kg total
           </span>
         )}
         {qtdEmbalagens !== null && valorTotalPedido !== null && (
