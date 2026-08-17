@@ -20,7 +20,8 @@ import { gerarCatalogoPublicoPdf, gerarCatalogoPublicoPdfBlob } from '@/features
 import { gerarOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
 
 type ItemCatalogo = CatalogoPublico['itens'][number];
-type ItemCarrinho = ItemCatalogo & { qtd: number };
+/** modoEscolhido = modo (Lanço/Covas) salvo no carrinho via "Atualizar carrinho" na Calculadora — null = nunca escolhido, usa o padrão cadastrado (ver modoInicialDoItem/modoEfetivoDoItem). */
+type ItemCarrinho = ItemCatalogo & { qtd: number; modoEscolhido: ModoPlantio | null };
 
 function fmtR(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -757,6 +758,11 @@ function modoInicialDoItem(item: Pick<ItemCatalogo, 'plantioModoPadrao' | 'plant
   return item.plantioKgHaLanco != null ? 'lanco' : 'covas';
 }
 
+/** Modo que vale AGORA pro item: o que o cliente escolheu e salvou no carrinho (item.modoEscolhido), ou o padrão cadastrado (modoInicialDoItem) quando ele nunca trocou. */
+function modoEfetivoDoItem(item: ItemCarrinho): ModoPlantio {
+  return item.modoEscolhido ?? modoInicialDoItem(item);
+}
+
 /** Taxa de semeadura (kg/ha) de um item num modo/corredor — núcleo repetido tanto na linha da Calculadora quanto no total de hectares calculável direto do carrinho (ver areaReversaDoItem), sem precisar abrir a Calculadora. */
 function kgPorHaDoItem(item: Pick<ItemCatalogo, 'plantioKgHaLanco' | 'plantioSementesCovaBase' | 'plantioPms'>, modo: ModoPlantio, corredor: string): number | null {
   return modo === 'lanco'
@@ -775,15 +781,15 @@ function kgPorHaDoItem(item: Pick<ItemCatalogo, 'plantioKgHaLanco' | 'plantioSem
  * assim fica sempre certo mesmo pra quem nunca abriu a Calculadora.
  */
 function areaReversaDoItem(item: ItemCarrinho): number | null {
-  const kgPorHa = kgPorHaDoItem(item, modoInicialDoItem(item), '50');
+  const kgPorHa = kgPorHaDoItem(item, modoEfetivoDoItem(item), '50');
   if (kgPorHa === null || kgPorHa <= 0 || item.peso <= 0) return null;
   return Math.round(((item.qtd * item.peso) / Math.ceil(kgPorHa)) * 100) / 100;
 }
 
-/** Rótulo curto do modo de plantio padrão do item — tag discreta no carrinho (ver ModalOrcamento). null sem dado de plantio nenhum (produto sem laudo casando). */
-function rotuloModoPlantio(item: ItemCatalogo): string | null {
+/** Rótulo curto do modo de plantio EFETIVO do item (escolhido e salvo, ou padrão cadastrado) — tag discreta no carrinho (ver ModalOrcamento). null sem dado de plantio nenhum (produto sem laudo casando). */
+function rotuloModoPlantio(item: ItemCarrinho): string | null {
   if (item.plantioKgHaLanco == null && item.plantioSementesCovaBase == null) return null;
-  return modoInicialDoItem(item) === 'lanco' ? 'A Lanço' : 'Covas';
+  return modoEfetivoDoItem(item) === 'lanco' ? 'A Lanço' : 'Covas';
 }
 
 /**
@@ -807,6 +813,7 @@ function LinhaCalculadoraPlantio({
   onAlterarArea,
   onQtdCalculada,
   onAreaCalculada,
+  onModoCalculado,
 }: {
   item: ItemCarrinho;
   /** undefined = cliente ainda não digitou nada aqui — mostra a Área reversa da qtd real (ver areaReversaDoItem) em vez de um valor guardado. */
@@ -816,9 +823,13 @@ function LinhaCalculadoraPlantio({
   onQtdCalculada: (itemId: string, qtd: number | null) => void;
   /** Reporta a Área (ha) exibida AGORA (digitada ou reversa da qtd real) pro pai — soma o "Área total" da própria Calculadora, que assim acompanha o que está sendo digitado, diferente do "Área total" do Orçamento (esse sim só a qtd real, ver totalAreaHa em CatalogoPublicoPage). */
   onAreaCalculada: (itemId: string, area: number | null) => void;
+  /** Reporta o modo (Lanço/Covas) selecionado AGORA pro pai — só pra habilitar "Atualizar carrinho" quando difere do modo efetivo já salvo (ver modoEfetivoDoItem) e, ao confirmar, salvar esse modo no carrinho. */
+  onModoCalculado: (itemId: string, modo: ModoPlantio) => void;
 }) {
-  const modoInicial = modoInicialDoItem(item);
-  const [modo, setModo] = useState<ModoPlantio>(modoInicial);
+  // Modo efetivo ATUAL do item (o que já está salvo no carrinho, ou o padrão cadastrado) — ponto de partida
+  // da linha e referência pra saber se o cliente trocou de aba de verdade (ver `tocado` abaixo).
+  const modoEfetivoAtual = modoEfetivoDoItem(item);
+  const [modo, setModo] = useState<ModoPlantio>(modoEfetivoAtual);
   const [corredor, setCorredor] = useState('50');
 
   const temPlantio = item.plantioKgHaLanco != null || item.plantioSementesCovaBase != null;
@@ -863,16 +874,23 @@ function LinhaCalculadoraPlantio({
   // de embalagem faltando ainda arredonda pra baixo, acima arredonda pra cima.
   const qtdEmbalagensCalculada = totalKg !== null && item.peso > 0 ? arredondarSacos(totalKg / item.peso, (item.plantioMargemTolerancia ?? 25) / 100) : null;
 
-  // "Tocado" = cliente já mexeu em algo aqui (Área, ou trocou modo/Corredor do padrão) — enquanto não
-  // tocar em nada, reporta a própria qtd real (não o cálculo ao vivo) pro pai: a Área reversa é só
-  // APROXIMADA (arredondarSacos usa margem de tolerância, não é o inverso exato), então recalculando
-  // ela pra frente de novo o resultado podia sair um pouco diferente da qtd real só por causa desse
-  // arredondamento — sem isso, o botão "Atualizar carrinho" (ver ModalCalculadoraPlantio) apareceria
-  // "habilitado" (parecendo ter algo pendente) por conta própria, mesmo sem o cliente ter feito nada.
-  const tocado = area !== undefined || modo !== modoInicial || corredor !== '50';
+  // "Tocado" = cliente já mexeu em algo aqui (Área, ou trocou modo/Corredor do que já está EFETIVAMENTE
+  // salvo — não o padrão cru, senão reabrir a Calculadora com um modo já salvo diferente do padrão
+  // acenderia o botão à toa) — enquanto não tocar em nada, reporta a própria qtd real (não o cálculo ao
+  // vivo) pro pai: a Área reversa é só APROXIMADA (arredondarSacos usa margem de tolerância, não é o
+  // inverso exato), então recalculando ela pra frente de novo o resultado podia sair um pouco diferente
+  // da qtd real só por causa desse arredondamento — sem isso, o botão "Atualizar carrinho" (ver
+  // ModalCalculadoraPlantio) apareceria "habilitado" (parecendo ter algo pendente) sem o cliente ter feito nada.
+  const tocado = area !== undefined || modo !== modoEfetivoAtual || corredor !== '50';
   useEffect(() => {
     onQtdCalculada(item.id, tocado ? qtdEmbalagensCalculada : item.qtd);
   }, [item.id, item.qtd, tocado, qtdEmbalagensCalculada, onQtdCalculada]);
+
+  // Reporta o modo selecionado AGORA (sempre, tocado ou não) — o pai compara com o efetivo já salvo pra
+  // decidir se há algo pendente, e usa esse valor de verdade se "Atualizar carrinho" for clicado.
+  useEffect(() => {
+    onModoCalculado(item.id, modo);
+  }, [item.id, modo, onModoCalculado]);
 
   // Área total DA CALCULADORA (ver totalAreaHaCalculadora em ModalCalculadoraPlantio) acompanha o que
   // está sendo digitado AGORA em cada linha — diferente da Área total do Orçamento, que só reflete a
@@ -1038,6 +1056,7 @@ function ModalCalculadoraPlantio({
   whatsapp,
   onAlterarArea,
   onDefinirQtd,
+  onDefinirModo,
   onLimparAreasEditadas,
   onFechar,
 }: {
@@ -1046,6 +1065,8 @@ function ModalCalculadoraPlantio({
   whatsapp: string | null;
   onAlterarArea: (itemId: string, valor: string) => void;
   onDefinirQtd: (itemId: string, qtd: number) => void;
+  /** Salva no carrinho o modo (Lanço/Covas) escolhido na Calculadora — ver modoEfetivoDoItem/rotuloModoPlantio, que passam a refletir essa escolha. */
+  onDefinirModo: (itemId: string, modo: ModoPlantio) => void;
   /** Chamado depois de "Atualizar carrinho" — limpa o rascunho de Área digitado, senão reabrir a Calculadora reportaria "tocado" de novo à toa (ver limparAreasEditadas em CatalogoPublicoPage). */
   onLimparAreasEditadas: (itemIds: string[]) => void;
   onFechar: () => void;
@@ -1058,6 +1079,9 @@ function ModalCalculadoraPlantio({
   // "Área total" DESTA tela, que acompanha o que está sendo digitado ao vivo (diferente do "Área
   // total" do Orçamento, esse sim só a qtd real já no carrinho, ver totalAreaHa em CatalogoPublicoPage).
   const [areaCalculadaPorItem, setAreaCalculadaPorItem] = useState<Map<string, number | null>>(new Map());
+  // Modo (Lanço/Covas) selecionado AGORA em cada linha (ver onModoCalculado em LinhaCalculadoraPlantio) —
+  // junto com qtdCalculadaPorItem, decide se "Atualizar carrinho" fica habilitado e o que salvar.
+  const [modoCalculadoPorItem, setModoCalculadoPorItem] = useState<Map<string, ModoPlantio>>(new Map());
 
   function registrarQtdCalculada(itemId: string, qtd: number | null) {
     setQtdCalculadaPorItem((prev) => (prev.get(itemId) === qtd ? prev : new Map(prev).set(itemId, qtd)));
@@ -1067,17 +1091,24 @@ function ModalCalculadoraPlantio({
     setAreaCalculadaPorItem((prev) => (prev.get(itemId) === area ? prev : new Map(prev).set(itemId, area)));
   }
 
+  function registrarModoCalculado(itemId: string, modo: ModoPlantio) {
+    setModoCalculadoPorItem((prev) => (prev.get(itemId) === modo ? prev : new Map(prev).set(itemId, modo)));
+  }
+
   const totalAreaHaCalculadora = itens.reduce((soma, item) => soma + (areaCalculadaPorItem.get(item.id) ?? 0), 0);
 
   const temAtualizacaoPendente = itens.some((item) => {
     const calc = qtdCalculadaPorItem.get(item.id);
-    return calc != null && calc !== item.qtd;
+    const modoCalc = modoCalculadoPorItem.get(item.id);
+    return (calc != null && calc !== item.qtd) || (modoCalc != null && modoCalc !== modoEfetivoDoItem(item));
   });
 
   function atualizarCarrinho() {
     itens.forEach((item) => {
       const calc = qtdCalculadaPorItem.get(item.id);
       if (calc != null && calc !== item.qtd) onDefinirQtd(item.id, calc);
+      const modoCalc = modoCalculadoPorItem.get(item.id);
+      if (modoCalc != null && modoCalc !== modoEfetivoDoItem(item)) onDefinirModo(item.id, modoCalc);
     });
     onLimparAreasEditadas(itens.map((item) => item.id));
     onFechar();
@@ -1105,6 +1136,7 @@ function ModalCalculadoraPlantio({
                 onAlterarArea={(valor) => onAlterarArea(item.id, valor)}
                 onQtdCalculada={registrarQtdCalculada}
                 onAreaCalculada={registrarAreaCalculada}
+                onModoCalculado={registrarModoCalculado}
               />
             ))
           )}
@@ -1195,6 +1227,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
   // calculado direto da qtd real do carrinho, e totalAreaHaCalculadora, ao vivo dentro da própria
   // Calculadora).
   const [areasPorItem, setAreasPorItem] = useState<Map<string, string>>(new Map());
+  // Modo (Lanço/Covas) salvo por item via "Atualizar carrinho" na Calculadora — ausente = nunca
+  // escolhido, usa o padrão cadastrado (ver modoInicialDoItem/modoEfetivoDoItem). Ao contrário de
+  // areasPorItem (rascunho, some ao aplicar), esse fica valendo até o item ser desmarcado de vez.
+  const [modoPorItem, setModoPorItem] = useState<Map<string, ModoPlantio>>(new Map());
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [mensagemWhatsAppAberta, setMensagemWhatsAppAberta] = useState(false);
   const [calculadoraAberta, setCalculadoraAberta] = useState(false);
@@ -1212,6 +1248,12 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
       return proximo;
     });
     setAreasPorItem((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const proximo = new Map(prev);
+      proximo.delete(itemId);
+      return proximo;
+    });
+    setModoPorItem((prev) => {
       if (!prev.has(itemId)) return prev;
       const proximo = new Map(prev);
       proximo.delete(itemId);
@@ -1241,6 +1283,11 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   function alterarArea(itemId: string, area: string) {
     setAreasPorItem((prev) => new Map(prev).set(itemId, area));
+  }
+
+  /** Salva no carrinho o modo (Lanço/Covas) escolhido na Calculadora (ver ModalCalculadoraPlantio/atualizarCarrinho) — passa a valer pra rotuloModoPlantio/areaReversaDoItem/modoEfetivoDoItem até o item ser desmarcado de vez. */
+  function definirModoCarrinho(itemId: string, modo: ModoPlantio) {
+    setModoPorItem((prev) => new Map(prev).set(itemId, modo));
   }
 
   /** Chamado depois de "Atualizar carrinho" (ver ModalCalculadoraPlantio) — apaga o rascunho de Área digitado, senão reabrir a Calculadora reportaria essa Área de novo como "tocada" (ver `tocado` em LinhaCalculadoraPlantio) mesmo já tudo aplicado, deixando o botão parecendo ter algo pendente à toa. */
@@ -1386,10 +1433,10 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     return Array.from(carrinho.entries())
       .map(([id, qtd]) => {
         const item = porId.get(id);
-        return item ? { ...item, qtd } : null;
+        return item ? { ...item, qtd, modoEscolhido: modoPorItem.get(id) ?? null } : null;
       })
       .filter((x): x is ItemCarrinho => x !== null);
-  }, [carrinho, data]);
+  }, [carrinho, data, modoPorItem]);
 
   const itensNoCarrinho = useMemo(() => itensCarrinho.filter((i) => i.qtd > 0), [itensCarrinho]);
 
@@ -1552,6 +1599,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           whatsapp={data.whatsapp}
           onAlterarArea={alterarArea}
           onDefinirQtd={definirQtdCarrinho}
+          onDefinirModo={definirModoCarrinho}
           onLimparAreasEditadas={limparAreasEditadas}
           onFechar={() => {
             setCalculadoraAberta(false);
