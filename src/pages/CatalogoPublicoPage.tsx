@@ -961,7 +961,7 @@ function LinhaCalculadoraPlantio({
         )}
       </div>
 
-      <div className={`grid gap-1.5 ${temDadosCovas ? 'grid-cols-[1.3fr_1fr_1fr]' : 'grid-cols-1'}`}>
+      <div className={`grid gap-1.5 ${!temDadosCovas ? 'grid-cols-1' : modo === 'lanco' ? 'grid-cols-[1.3fr_1fr_1fr]' : 'grid-cols-3'}`}>
         <label className="block text-[10px] text-[#67718a]">
           Informa a área (ha)
           {modo === 'lanco' ? (
