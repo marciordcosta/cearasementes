@@ -781,11 +781,12 @@ function LinhaCalculadoraPlantio({
  * é só marcar mais um na tela principal. Sem trava nenhuma — cada linha calcula ao vivo, mas nada entra
  * no carrinho sozinho: existe UM botão só, "Atualizar carrinho", que manda de uma vez a qtd calculada
  * de CADA linha que estiver diferente da qtd real (ver qtdCalculadaPorItem/temAtualizacaoPendente) —
- * apagado (desabilitado) até ter alguma coisa pendente. Só desmarcar na tela principal tira um produto
- * daqui de vez (e do carrinho). Produto marcado sem laudo correspondente aparece com aviso, sem campos.
- * Só se abre a partir do Orçamento (ícone no título/link "Área total", ver ModalOrcamento) — fechar
- * aqui (X ou fundo) sempre VOLTA pro Orçamento, nunca só fecha solto (ver onFechar no render em
- * CatalogoPublicoPage).
+ * apagado (desabilitado) até ter alguma coisa pendente; ao clicar, já FECHA a Calculadora e volta pro
+ * Orçamento em seguida (ver atualizarCarrinho), pra mostrar o carrinho já atualizado. Só desmarcar na
+ * tela principal tira um produto daqui de vez (e do carrinho). Produto marcado sem laudo
+ * correspondente aparece com aviso, sem campos. Só se abre a partir do Orçamento (ícone no título/link
+ * "Área total", ver ModalOrcamento) — fechar aqui (X, fundo ou "Atualizar carrinho") sempre VOLTA pro
+ * Orçamento, nunca só fecha solto (ver onFechar no render em CatalogoPublicoPage).
  */
 function ModalCalculadoraPlantio({
   itens,
@@ -824,6 +825,7 @@ function ModalCalculadoraPlantio({
       const calc = qtdCalculadaPorItem.get(item.id);
       if (calc != null && calc !== item.qtd) onDefinirQtd(item.id, calc);
     });
+    onFechar();
   }
 
   return (
