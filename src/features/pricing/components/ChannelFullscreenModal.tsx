@@ -5,7 +5,7 @@ import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
 import { fetchPrecosCatalogoPublicoPorCanal } from '../api';
-import { calcularCanal } from '../calculations';
+import { statusPublicacaoPendente } from '../calculations';
 import {
   calcularMargemAtualProjetada,
   calcularRepresentatividade,
@@ -73,11 +73,6 @@ export function ChannelFullscreenModal({
   onAtualizarItemCatalogo,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
-  // Desligado (padrão) = bloco fixo de identificação (Classe/ID) some, só Nome/Fornecedor/Peso —
-  // as colunas por canal (Frete/Encargos/ML($)/Repres.%/Ajuste) ficam completas, "como já funciona
-  // hoje". Ligado = o bloco fixo abre tudo (Classe/ID de volta), e as colunas por canal encolhem
-  // pro resumido (só Preço+ML%) pra não empilhar as duas coisas ao mesmo tempo — ver PricingTable.tsx.
-  const [custoEstendido, setCustoEstendido] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoAberto, setGraficoAberto] = useState(false);
@@ -94,7 +89,6 @@ export function ChannelFullscreenModal({
       setGraficoAberto(false);
       setProdutoGraficoLinha(null);
       setSafraSelecionadaGrafico(null);
-      setCustoEstendido(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
@@ -154,30 +148,20 @@ export function ChannelFullscreenModal({
   });
 
   /**
-   * produtoId -> tipo de mudança pendente desde a última publicação (ver PricingTable.tsx, que
-   * destaca o 🌐 com isso) — 'novo' (elegível agora, nunca publicado), 'preco' (elegível, publicado,
-   * mas o preço calculado agora é diferente do salvo) ou 'remover' (publicado, mas não elegível mais
-   * — Imprimir desligado ou "precisa ajuste" nesse canal). Tolerância de 1 centavo na comparação de
-   * preço pra não acusar diferença por arredondamento de ponto flutuante.
+   * produtoId -> tipo de mudança pendente desde a última publicação (ver statusPublicacaoPendente em
+   * calculations.ts) — usado só pra saber QUANTOS/QUAIS itens publicar no botão "🌐 Publicar N
+   * pendentes" (ver publicarTodosPendentes) — não tem mais coluna própria na grade (ver
+   * PricingTable.tsx, o 🌐 por item saiu, o botão global já resolve).
    */
   const publicacaoPendentePorProduto = useMemo(() => {
     if (!canal) return new Map<string, 'novo' | 'preco' | 'remover'>();
     const mapa = new Map<string, 'novo' | 'preco' | 'remover'>();
     produtos.forEach((p) => {
-      const elegivel = p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true);
-      const precoPublicado = precosPublicados.get(p.id);
-      if (!elegivel) {
-        if (precoPublicado !== undefined) mapa.set(p.id, 'remover');
-        return;
-      }
-      if (precoPublicado === undefined) {
-        mapa.set(p.id, 'novo');
-        return;
-      }
       const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
       const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
-      const precoAtual = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi).preco;
-      if (Math.abs(precoAtual - precoPublicado) > 0.005) mapa.set(p.id, 'preco');
+      const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
+      const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
+      if (status) mapa.set(p.id, status);
     });
     return mapa;
   }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorPorId, precosPublicados]);
@@ -259,18 +243,6 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setCustoEstendido((v) => !v)}
-            title={
-              custoEstendido
-                ? 'Mostrando Classe/ID — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
-                : 'Estender pra ver Classe/ID — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
-            }
-            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${custoEstendido ? 'bg-[var(--color-accent)] text-[#04241A]' : 'bg-white/15 text-white hover:bg-white/25'}`}
-          >
-            {custoEstendido ? 'Recolher' : 'Estender'}
-          </button>
           {onAtualizarItemCatalogo && publicacaoPendentePorProduto.size > 0 && (
             <button
               type="button"
@@ -312,17 +284,16 @@ export function ChannelFullscreenModal({
             canaisVisiveis={[canal]}
             todosCanais={todosCanais}
             transportadoras={transportadoras}
-            // Ver o toggle "Estender" (setCustoEstendido) no cabeçalho — as duas nunca ficam
-            // detalhadas ao mesmo tempo, senão a grade fica larga demais mesmo em tela cheia.
-            mostrarDetalhesFixos={custoEstendido}
-            mostrarDetalhesTabelas={!custoEstendido}
+            // Sempre tudo aqui — é a tela cheia de UMA Tabela, tem espaço de sobra e o usuário já
+            // veio pra examinar essa Tabela a fundo (o "Estender" fica só na grade principal, ver
+            // PricingPage.tsx, que é quem precisa desse trade-off por ter várias Tabelas lado a lado).
+            mostrarDetalhesFixos
+            mostrarDetalhesTabelas
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
             onAtualizarValorKg={onAtualizarValorKg}
-            onAtualizarItemCatalogo={onAtualizarItemCatalogo ? atualizarItemEinvalidar : undefined}
-            publicacaoPendentePorProduto={publicacaoPendentePorProduto}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}

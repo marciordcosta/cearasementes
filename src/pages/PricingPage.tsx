@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Gauge, Loader2, Truck } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +32,7 @@ import {
   fetchCategorias,
   fetchCustosPersonalizados,
   fetchFornecedores,
+  fetchPrecosCatalogoPublicoPorCanal,
   fetchProdutos,
   fetchSubcategorias,
   inserirCanal,
@@ -51,7 +52,7 @@ import {
   type ItemCatalogoPublicoInput,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
-import { calcularCanal, ordenarProdutos, resolverFreteCatalogo } from '@/features/pricing/calculations';
+import { calcularCanal, ordenarProdutos, resolverFreteCatalogo, statusPublicacaoPendente } from '@/features/pricing/calculations';
 import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
@@ -171,6 +172,13 @@ export function PricingPage() {
   const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores' | 'custos'>('tabelas');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
+  // Desligado (padrão) = bloco fixo (Classe/ID) some, só Nome/Fornecedor/Peso/Custo — as colunas por
+  // canal (Frete/Encargos/ML($)/Repres.%/Ajuste) ficam completas em CADA Tabela visível. Ligado = o
+  // bloco fixo abre tudo (Classe/ID de volta), e as colunas por canal encolhem pro resumido (só
+  // Preço+ML%) em TODAS as Tabelas ao mesmo tempo — senão a grade fica larga demais com várias
+  // Tabelas lado a lado. Ver PricingTable.tsx (mostrarDetalhesFixos/mostrarDetalhesTabelas).
+  const [custoEstendido, setCustoEstendido] = useState(false);
+  const [publicandoPendentesGrade, setPublicandoPendentesGrade] = useState(false);
   const [modalMargemAberto, setModalMargemAberto] = useState(false);
   const [modalCompraAberto, setModalCompraAberto] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
@@ -269,6 +277,38 @@ export function PricingPage() {
   // também) — isso É uma desativação de verdade (não um filtro de busca passageiro), então também
   // vale pra "Publicar" (ver publicarUmCatalogo, que usa esta lista em vez de produtosExibidos).
   const produtosAtivos = produtos.filter((p) => (p.fornecedorId ? (fornecedorPorId.get(p.fornecedorId)?.visivelGrade ?? true) : true));
+
+  // Preço já publicado de cada Tabela visível (uma query por canal, ver fetchPrecosCatalogoPublicoPorCanal)
+  // — só pra saber, na grade principal, QUANTOS produtos têm publicação pendente em QUALQUER Tabela
+  // visível de uma vez só (ver publicacaoPendenteGrade abaixo e o botão "🌐 Publicar N pendentes" da
+  // barra de ferramentas). Mesma queryKey já usada na tela cheia por canal — cache compartilhado.
+  const precosPublicadosQueries = useQueries({
+    queries: canaisVisiveis.map((canal) => ({
+      queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id],
+      queryFn: () => fetchPrecosCatalogoPublicoPorCanal(canal.id),
+    })),
+  });
+
+  /**
+   * Pendências de publicação em TODAS as Tabelas visíveis de uma vez (ao contrário do 🌐 da tela
+   * cheia por canal, que só olha 1) — cada entrada é 1 produto que precisa publicar (ou remover) em
+   * 1 canal específico. Usa `produtosAtivos` (ignora busca/Categoria/Fornecedor da grade), mesma
+   * regra de publicarUmCatalogo/atualizarItemCatalogo: só a desativação de verdade conta.
+   */
+  const publicacaoPendenteGrade = canaisVisiveis.flatMap((canal, indice) => {
+    const precosPublicados = precosPublicadosQueries[indice]?.data;
+    if (!precosPublicados) return [];
+    const pendentes: { canal: Canal; produtoId: string }[] = [];
+    produtosAtivos.forEach((p) => {
+      const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
+      const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
+      const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
+      const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
+      if (status) pendentes.push({ canal, produtoId: p.id });
+    });
+    return pendentes;
+  });
+
   const produtosFiltrados = produtosAtivos
     .filter((p) => {
       if (filtroClasse === 'todas') return true;
@@ -621,6 +661,20 @@ export function PricingPage() {
     } catch (e) {
       alert(mensagemDeErro(e, 'Falha ao atualizar esse produto no Catálogo Online.'));
       return false;
+    }
+  }
+
+  /** Botão "global" da grade principal — publica (ou remove) de uma vez todas as pendências de TODAS as Tabelas visíveis (ver publicacaoPendenteGrade), reaproveitando atualizarItemCatalogo um item de cada vez. */
+  async function publicarTodosPendentesGrade() {
+    if (publicacaoPendenteGrade.length === 0) return;
+    setPublicandoPendentesGrade(true);
+    try {
+      for (const { canal, produtoId } of publicacaoPendenteGrade) {
+        await atualizarItemCatalogo(produtoId, canal);
+      }
+      canaisVisiveis.forEach((canal) => queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id] }));
+    } finally {
+      setPublicandoPendentesGrade(false);
     }
   }
 
@@ -1029,6 +1083,29 @@ export function PricingPage() {
                 onEscolherCategorias={() => setModalOrdemTipo('categorias')}
                 onEscolherCanais={() => setModalOrdemTipo('canais')}
               />
+              <button
+                type="button"
+                onClick={() => setCustoEstendido((v) => !v)}
+                title={
+                  custoEstendido
+                    ? 'Mostrando Classe/ID em todas as Tabelas — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
+                    : 'Estender pra ver Classe/ID em todas as Tabelas — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
+                }
+                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${custoEstendido ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-[var(--color-text)] border border-[var(--color-line)] hover:bg-[var(--color-line)]/40'}`}
+              >
+                {custoEstendido ? 'Recolher' : 'Estender'}
+              </button>
+              {publicacaoPendenteGrade.length > 0 && (
+                <button
+                  type="button"
+                  onClick={publicarTodosPendentesGrade}
+                  disabled={publicandoPendentesGrade}
+                  title="Publica (ou remove) de uma vez só, em TODAS as Tabelas visíveis, os produtos com preço/ativação pendente desde a última publicação"
+                  className="shrink-0 rounded-full border border-warn/40 bg-warn-soft px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-[#8A5B10] hover:brightness-95 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {publicandoPendentesGrade ? 'Publicando…' : `🌐 Publicar ${publicacaoPendenteGrade.length} pendente${publicacaoPendenteGrade.length > 1 ? 's' : ''}`}
+                </button>
+              )}
               <div className="flex-1" />
               <SeletorCriterioRepresentacao
                 criterio={criterioRepresentacao}
@@ -1060,10 +1137,12 @@ export function PricingPage() {
               canaisVisiveis={canaisVisiveis}
               todosCanais={canais}
               transportadoras={transportadoras}
-              // Grade compacta principal — sempre resumida (a versão detalhada agora só vive na
-              // tela cheia por canal, ver ChannelFullscreenModal.tsx).
-              mostrarDetalhesFixos={false}
-              mostrarDetalhesTabelas={false}
+              // Ver o toggle "Estender" (setCustoEstendido) na barra de ferramentas acima — as duas
+              // nunca ficam detalhadas ao mesmo tempo, senão a grade fica larga demais com várias
+              // Tabelas lado a lado (a tela cheia por canal, essa sim, sempre mostra tudo — ver
+              // ChannelFullscreenModal.tsx, que tem espaço de sobra por ser só 1 Tabela).
+              mostrarDetalhesFixos={custoEstendido}
+              mostrarDetalhesTabelas={!custoEstendido}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}

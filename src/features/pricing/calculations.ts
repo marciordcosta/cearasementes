@@ -282,6 +282,33 @@ export function calcularCanal(
   };
 }
 
+/**
+ * Status de publicação pendente de UM produto num canal — mesma regra usada pra elegibilidade em
+ * "Publicar" (Imprimir + "precisa ajuste" + Fornecedor visível no PDF), comparando o preço calculado
+ * AGORA com o que já está publicado (ver fetchPrecosCatalogoPublicoPorCanal em pricing/api.ts).
+ * Reaproveitado tanto na grade principal (vários canais, ver PricingPage.tsx) quanto na tela cheia
+ * por canal (ver ChannelFullscreenModal.tsx) — o botão "🌐 Publicar N pendentes" nos dois lugares usa
+ * isso pra saber o que mudou. `null` = nada pendente (já publicado igual, ou nunca elegível mesmo).
+ * Tolerância de 1 centavo na comparação de preço, pra não acusar diferença por arredondamento.
+ */
+export function statusPublicacaoPendente(
+  produto: Produto,
+  canal: Canal,
+  precoPublicado: number | undefined,
+  categoria: Categoria,
+  subcategoria: Subcategoria | undefined,
+  transportadoraPorId: Map<string, Transportadora>,
+  canaisPorId: Map<string, Canal>,
+  resolverDescontoBi: ((canal: Canal, produto: Produto) => number | null) | undefined,
+  fornecedorVisivelPdf: boolean,
+): 'novo' | 'preco' | 'remover' | null {
+  const elegivel = produto.imprimir && !!produto.codigo && !(produto.precos[canal.id]?.precisaAjuste ?? false) && fornecedorVisivelPdf;
+  if (!elegivel) return precoPublicado !== undefined ? 'remover' : null;
+  if (precoPublicado === undefined) return 'novo';
+  const precoAtual = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi).preco;
+  return Math.abs(precoAtual - precoPublicado) > 0.005 ? 'preco' : null;
+}
+
 export function margemClasse(margemPct: number, alvo: number): 'good' | 'warn' | 'bad' {
   if (margemPct < 0) return 'bad';
   if (margemPct < alvo * 0.6) return 'warn';
