@@ -1804,8 +1804,8 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           (topo-a-piso), não pequenos flutuando soltos. */}
       <header className="flex items-center gap-2 border-b border-[#e2e6ed] bg-[#10233f] px-4 py-2 text-white">
         <h1 className="min-w-0 max-w-[65%] truncate leading-tight">
-          <span className="text-sm font-medium text-white/70">Ceará Sementes </span>
-          <span className="text-lg font-bold">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</span>
+          <span className="text-lg font-bold">Ceará Sementes </span>
+          <span className="text-sm font-medium text-white/70">{data?.canalNome ?? (semNadaAindaCarregando ? 'Carregando…' : 'Catálogo')}</span>
         </h1>
         <div className="flex shrink-0 items-center gap-1.5">
           {isFetching && <Loader2 size={18} className="animate-spin text-white/70" aria-label="Atualizando…" />}
