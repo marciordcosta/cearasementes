@@ -630,7 +630,7 @@ export function PricingTable({
         : [
             {
               chave: `${canal.id}:ajuste`,
-              rotulo: '',
+              rotulo: 'Status',
               larguraPadrao: defaults['col:ajuste'],
               larguraChave: 'col:ajuste',
               canalId: canal.id,
@@ -748,10 +748,14 @@ export function PricingTable({
   const limiarComecoCobertura = mostrarDetalhesFixos ? largura('id') : 0;
 
   // Quantas colunas fixas (fora dos blocos por canal/safra) existem antes do cabeçalho de canal
-  // começar — Excluir+Editar+Produto+Peso sempre, + Custo quando `mostrarCusto`, + Classe/ID quando
-  // "Estender" está ligado, + Repres. Geral quando além disso houver dado pra ela.
+  // começar — Excluir+Editar (só fora da tela cheia por canal, ver somenteCanal) +Produto+Peso
+  // sempre, + Custo quando `mostrarCusto`, + Classe/ID quando "Estender" está ligado, + Repres.
+  // Geral quando além disso houver dado pra ela.
   const colSpanColunasFixas =
-    4 + (mostrarCusto ? 1 : 0) + (mostrarDetalhesFixos ? 2 : 0) + (mostrarDetalhesFixos && representatividadeGeralPorProduto ? 1 : 0);
+    (somenteCanal ? 2 : 4) +
+    (mostrarCusto ? 1 : 0) +
+    (mostrarDetalhesFixos ? 2 : 0) +
+    (mostrarDetalhesFixos && representatividadeGeralPorProduto ? 1 : 0);
   // Preço+Frete+Encargos+ML%+ML$+Ajuste (6) e mais Repres. quando essa coluna existir — no modo
   // Resumo, só Preço+ML% (Ajuste agora some junto com o resto do grupo detalhado).
   const colSpanPorCanal = modoResumo ? 2 : 6 + (representatividadePorProduto ? 1 : 0);
