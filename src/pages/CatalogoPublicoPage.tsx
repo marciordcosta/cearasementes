@@ -413,7 +413,7 @@ function ModalPagamento({
                 </div>
               )
             ) : whatsapp ? (
-              <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+              <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#2563eb] underline">
                 Cotação de frete
               </button>
             ) : (
@@ -917,7 +917,7 @@ function ModalOrcamento({
               <span>Frete</span>
               {!temTransportadora ? (
                 whatsapp ? (
-                  <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#0e9d74] underline">
+                  <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#2563eb] underline">
                     Cotação de frete
                   </button>
                 ) : (
