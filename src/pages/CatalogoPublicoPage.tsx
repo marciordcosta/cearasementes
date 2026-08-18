@@ -391,19 +391,28 @@ function ModalPagamento({
                   </div>
                 )
               ) : (
-                <div className="flex flex-col gap-1">
-                  <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                    Calcular frete
-                  </button>
+                <div className="flex items-stretch gap-2">
                   {/* Frete nunca é obrigatório — sem pagamento habilitado, o "Continuar" abaixo só aparece
                       depois de calcular (ver freteResolvido); esse aqui deixa seguir direto pra retirada,
-                      sem precisar calcular nada. Com pagamento habilitado, Pix/Boleto já servem pra isso
-                      (nenhum dos dois exige frete calculado), então não repete o botão. */}
+                      sem precisar calcular nada. Vira botão de verdade (não só link) porque, sem o frete
+                      calculado, retirada é o caminho mais provável. Com pagamento habilitado, Pix/Boleto
+                      já servem pra isso (nenhum dos dois exige frete calculado), então não repete o botão. */}
                   {!pagamentoHabilitado && (
-                    <button type="button" onClick={onContinuar} className="text-left text-[11px] font-semibold text-[#67718a] underline">
+                    <button
+                      type="button"
+                      onClick={onContinuar}
+                      className="flex-1 rounded-md border border-[#e2e6ed] px-2 py-2 text-center text-xs font-semibold text-[#1a2233] hover:bg-[#f5f7fa]"
+                    >
                       Retirar no local
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={onCalcularFrete}
+                    className="flex-1 text-center text-[11px] font-semibold text-[#0e9d74] underline"
+                  >
+                    Calcular frete
+                  </button>
                 </div>
               )
             ) : whatsapp ? (
