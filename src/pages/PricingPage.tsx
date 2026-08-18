@@ -629,9 +629,8 @@ export function PricingPage() {
       canal.whatsapp,
       canal.mostrarDetalhesPlantio,
       {
-        avistaHabilitado: canal.pagamentoAvistaHabilitado,
+        habilitado: canal.pagamentoHabilitado,
         avistaDescontoPct: canal.pagamentoAvistaDescontoPct,
-        boletoHabilitado: canal.pagamentoBoletoHabilitado,
         boletoValorMinimo: canal.pagamentoBoletoValorMinimo,
         boletoParcelasMax: canal.pagamentoBoletoParcelasMax,
       },
@@ -775,14 +774,9 @@ export function PricingPage() {
     salvarAgora(() => atualizarCanal(canalId, { frete_incluso: valor }));
   }
 
-  function onTogglePagamentoAvista(canalId: string, valor: boolean) {
-    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, pagamentoAvistaHabilitado: valor } : c)));
-    salvarAgora(() => atualizarCanal(canalId, { pagamento_avista_habilitado: valor }));
-  }
-
-  function onTogglePagamentoBoleto(canalId: string, valor: boolean) {
-    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, pagamentoBoletoHabilitado: valor } : c)));
-    salvarAgora(() => atualizarCanal(canalId, { pagamento_boleto_habilitado: valor }));
+  function onTogglePagamento(canalId: string, valor: boolean) {
+    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, pagamentoHabilitado: valor } : c)));
+    salvarAgora(() => atualizarCanal(canalId, { pagamento_habilitado: valor }));
   }
 
   function onRemoverCanal(canalId: string) {
@@ -1407,8 +1401,7 @@ export function PricingPage() {
             onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}
             onToggleVisivel={onToggleVisivel}
             onToggleFreteIncluso={onToggleFreteIncluso}
-            onTogglePagamentoAvista={onTogglePagamentoAvista}
-            onTogglePagamentoBoleto={onTogglePagamentoBoleto}
+            onTogglePagamento={onTogglePagamento}
             onRemoverCanal={onRemoverCanal}
             onAdicionarCanal={onAdicionarCanal}
           />

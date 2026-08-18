@@ -40,9 +40,8 @@ function canalFromRow(row: CanalRow): Canal {
     margemPorReferencia: row.margem_por_referencia,
     whatsapp: row.whatsapp,
     mostrarDetalhesPlantio: row.mostrar_detalhes_plantio,
-    pagamentoAvistaHabilitado: row.pagamento_avista_habilitado,
+    pagamentoHabilitado: row.pagamento_habilitado,
     pagamentoAvistaDescontoPct: row.pagamento_avista_desconto_pct,
-    pagamentoBoletoHabilitado: row.pagamento_boleto_habilitado,
     pagamentoBoletoValorMinimo: row.pagamento_boleto_valor_minimo,
     pagamentoBoletoParcelasMax: row.pagamento_boleto_parcelas_max,
   };
@@ -677,9 +676,8 @@ function itemCatalogoParaRow(canalId: string, item: ItemCatalogoPublicoInput) {
  * (fetchCatalogoPublicoPorSlug) não passa por aqui. Devolve o slug pra montar o link.
  */
 export interface PagamentoConfigCanal {
-  avistaHabilitado: boolean;
+  habilitado: boolean;
   avistaDescontoPct: number;
-  boletoHabilitado: boolean;
   boletoValorMinimo: number;
   boletoParcelasMax: number;
 }
@@ -709,9 +707,8 @@ export async function publicarCatalogoOnline(
     tem_transportadora: temTransportadora,
     whatsapp,
     mostrar_detalhes_plantio: mostrarDetalhesPlantio,
-    pagamento_avista_habilitado: pagamento.avistaHabilitado,
+    pagamento_habilitado: pagamento.habilitado,
     pagamento_avista_desconto_pct: pagamento.avistaDescontoPct,
-    pagamento_boleto_habilitado: pagamento.boletoHabilitado,
     pagamento_boleto_valor_minimo: pagamento.boletoValorMinimo,
     pagamento_boleto_parcelas_max: pagamento.boletoParcelasMax,
   });
@@ -771,9 +768,8 @@ export interface CatalogoPublico {
   temTransportadora: boolean;
   whatsapp: string | null;
   mostrarDetalhesPlantio: boolean;
-  pagamentoAvistaHabilitado: boolean;
+  pagamentoHabilitado: boolean;
   pagamentoAvistaDescontoPct: number;
-  pagamentoBoletoHabilitado: boolean;
   pagamentoBoletoValorMinimo: number;
   pagamentoBoletoParcelasMax: number;
   itens: {
@@ -820,9 +816,8 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
     temTransportadora: canalRow.tem_transportadora,
     whatsapp: canalRow.whatsapp,
     mostrarDetalhesPlantio: canalRow.mostrar_detalhes_plantio,
-    pagamentoAvistaHabilitado: canalRow.pagamento_avista_habilitado,
+    pagamentoHabilitado: canalRow.pagamento_habilitado,
     pagamentoAvistaDescontoPct: canalRow.pagamento_avista_desconto_pct,
-    pagamentoBoletoHabilitado: canalRow.pagamento_boleto_habilitado,
     pagamentoBoletoValorMinimo: canalRow.pagamento_boleto_valor_minimo,
     pagamentoBoletoParcelasMax: canalRow.pagamento_boleto_parcelas_max,
     itens: (itensRows ?? []).map((i) => ({

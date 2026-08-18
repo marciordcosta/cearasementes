@@ -238,10 +238,12 @@ function prazoBoletoLabel(parcelas: number, intervaloDias: number): string {
 }
 
 /**
- * "Como você quer pagar?" — abre ao clicar "Concluir" quando a Tabela tem À vista e/ou Boleto
- * autorizado (ver pagamentoAvistaHabilitado/pagamentoBoletoHabilitado), antes do passo de mensagem
- * do WhatsApp (ver ModalObservacaoWhatsApp). Escolher uma opção já avança; Cancelar volta pro
- * Orçamento sem progredir.
+ * "Formas de pagamento" — abre ao clicar "Concluir". Com pagamentoHabilitado, mostra Pix (desconto)
+ * e Boleto (parcelado) juntos, sempre os dois — escolher uma opção já avança. Sem pagamento
+ * habilitado, o modal ainda abre (só quando o frete ainda não foi calculado no carrinho, ver
+ * precisaCalcularFreteAntes em ModalOrcamento) mostrando só "Calcular frete"; depois de calculado,
+ * "Continuar" avança sem escolher forma de pagamento nenhuma. Cancelar sempre volta pro Orçamento
+ * sem progredir. O aviso de frete (fora do cartão branco) aparece nos dois casos.
  */
 function ModalPagamento({
   valorProdutos,
@@ -251,146 +253,189 @@ function ModalPagamento({
   whatsapp,
   onCalcularFrete,
   onCotarFrete,
-  avistaHabilitado,
+  pagamentoHabilitado,
   avistaDescontoPct,
-  boletoHabilitado,
   boletoValorMinimo,
   boletoParcelasMax,
   onEscolher,
+  onContinuar,
   onFechar,
 }: {
   valorProdutos: number;
   /** Produtos + frete (quando já calculado) — mostrado como referência abaixo do Boleto, já que as parcelas dividem só os produtos. */
   totalComFrete: number;
-  /** Mesmo estado do botão "Frete" no Orçamento — o Boleto usa o mesmo estadoFrete pra alternar entre "Calcular frete" e "Valor sem o frete", só ligado a temTransportadora. */
+  /** Mesmo estado do botão "Frete" no Orçamento — alterna entre "Calcular frete" e "Valor sem o frete"/totais, só ligado a temTransportadora. */
   estadoFrete: EstadoFrete;
   /** false = canal Manual (sem Transportadora) — usa "Cotação de frete" (WhatsApp) em vez de "Calcular frete". */
   temTransportadora: boolean;
   whatsapp: string | null;
   onCalcularFrete: () => void;
   onCotarFrete: () => void;
-  avistaHabilitado: boolean;
+  pagamentoHabilitado: boolean;
   avistaDescontoPct: number;
-  boletoHabilitado: boolean;
   boletoValorMinimo: number;
   boletoParcelasMax: number;
   onEscolher: (escolha: PagamentoEscolhido) => void;
+  /** Sem pagamento habilitado — "Continuar" avança pro resumo sem escolher forma de pagamento nenhuma. */
+  onContinuar: () => void;
   onFechar: () => void;
 }) {
   // Abre a lista de parcelas ao clicar em "Boleto" — escolher uma delas é que confirma (ver botão de cada parcela abaixo).
   const [boletoExpandido, setBoletoExpandido] = useState(false);
   // "Fracionar boletos" troca de 30 pra 15 dias e dobra a qtd de parcelas exibida (3 parcelas de 30 em 30 vira 6 de 15 em 15).
   const [intervaloDias, setIntervaloDias] = useState(30);
-  // Desconto à vista só sobre os produtos, mas o valor mostrado aqui já soma o frete (o que o cliente pagaria de fato agora).
+  // Desconto Pix só sobre os produtos, mas o valor mostrado aqui já soma o frete (o que o cliente pagaria de fato agora).
   const frete = totalComFrete - valorProdutos;
-  const totalAvistaComDesconto = valorProdutos * (1 - avistaDescontoPct / 100) + frete;
+  const totalPixComDesconto = valorProdutos * (1 - avistaDescontoPct / 100) + frete;
   // parcelasMax já é o teto real pra esse total (total ÷ valor mínimo, travado na Qtd máxima cadastrada) — o cliente escolhe qualquer valor de 1 até esse teto (ou o dobro disso, fracionado).
   const { parcelas: parcelasMax } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
   const parcelasExibidas = intervaloDias === 30 ? parcelasMax : parcelasMax * 2;
+  const freteResolvido = temTransportadora ? estadoFrete === 'calculado' : true;
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+    <div
+      className="fixed inset-0 z-[220] flex flex-col items-center justify-center gap-2.5 bg-black/45 p-4"
+      onMouseDown={(e) => e.target === e.currentTarget && onFechar()}
+    >
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
-        <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Como você quer pagar?</p>
+        {pagamentoHabilitado && <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Formas de pagamento</p>}
         <div className="flex flex-col gap-2">
-          {avistaHabilitado && (
-            <button
-              type="button"
-              onClick={() => onEscolher({ tipo: 'avista', descontoPct: avistaDescontoPct })}
-              className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
-            >
-              <p className="font-semibold text-[#1a2233]">À vista</p>
-              <p className="text-xs">
-                {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
-                <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalAvistaComDesconto)}</span>
-              </p>
-            </button>
-          )}
-          {boletoHabilitado && !boletoExpandido && (
-            <button
-              type="button"
-              onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: valorProdutos, intervaloDias: 30 }))}
-              className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
-            >
-              <p className="font-semibold text-[#1a2233]">Boleto</p>
-              <p className="text-xs text-[#67718a]">
-                <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
-                {parcelasMax > 1 && (
-                  <>
-                    {' '}
-                    em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
-                  </>
-                )}
-              </p>
-            </button>
-          )}
-          {boletoHabilitado && boletoExpandido && parcelasMax > 1 && (
-            <div className="rounded-md border border-[#e2e6ed] p-2.5">
-              <p className="mb-1.5 text-xs font-semibold text-[#1a2233]">Boleto — escolha as parcelas</p>
-              <div className="flex flex-col gap-1.5">
-                {Array.from({ length: parcelasExibidas }, (_, i) => i + 1).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: valorProdutos / n, intervaloDias })}
-                    className="flex items-center justify-between rounded-md border border-[#e2e6ed] px-2.5 py-2 text-sm hover:bg-[#f5f7fa]"
-                  >
-                    <span className="text-[#1a2233]">
-                      {n}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(n, intervaloDias)})</span>
-                    </span>
-                    <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos / n)}</span>
-                  </button>
-                ))}
-              </div>
-              {intervaloDias === 30 && (
+          {pagamentoHabilitado && (
+            <>
+              <button
+                type="button"
+                onClick={() => onEscolher({ tipo: 'avista', descontoPct: avistaDescontoPct })}
+                className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
+              >
+                <p className="font-semibold text-[#1a2233]">Pix</p>
+                <p className="text-xs">
+                  {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
+                  <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalPixComDesconto)}</span>
+                </p>
+              </button>
+              {!boletoExpandido && (
                 <button
                   type="button"
-                  onClick={() => setIntervaloDias(15)}
-                  className="mt-1.5 block w-full text-center text-[11px] text-[#0e9d74] underline"
+                  onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: valorProdutos, intervaloDias: 30 }))}
+                  className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
                 >
-                  Fracionar boletos
+                  <p className="font-semibold text-[#1a2233]">Boleto</p>
+                  <p className="text-xs text-[#67718a]">
+                    <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
+                    {parcelasMax > 1 ? (
+                      <>
+                        {' '}
+                        em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
+                      </>
+                    ) : (
+                      <span className="ml-1 text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(1, 30)})</span>
+                    )}
+                  </p>
                 </button>
               )}
-            </div>
-          )}
-          {boletoHabilitado && (
-            <div className="px-1">
-              {temTransportadora ? (
-                // Botão alternável ligado ao MESMO estadoFrete do Orçamento (ver alternarFrete) — calculado
-                // vira "Valor sem o frete" (nunca o valor do frete em si, confundiria ao lado das
-                // parcelas); sem cálculo, mostra sempre "Calcular frete".
-                <button
-                  type="button"
-                  onClick={onCalcularFrete}
-                  className={`text-left text-[11px] ${estadoFrete === 'calculado' ? 'num text-[#67718a] underline' : 'font-semibold text-[#0e9d74] underline'}`}
-                >
-                  {estadoFrete === 'calculado' ? (
-                    <>
-                      Valor sem o frete: R$ {fmtR(valorProdutos)}
-                      {avistaHabilitado && (
-                        <span className="text-[#0e9d74]"> (R$ {fmtR(valorProdutos * (1 - avistaDescontoPct / 100))} à vista)</span>
-                      )}
-                    </>
-                  ) : (
-                    'Calcular frete'
+              {boletoExpandido && parcelasMax > 1 && (
+                <div className="rounded-md border border-[#e2e6ed] p-2.5">
+                  <p className="mb-1.5 text-xs font-semibold text-[#1a2233]">Boleto — escolha as parcelas</p>
+                  <div className="flex flex-col gap-1.5">
+                    {Array.from({ length: parcelasExibidas }, (_, i) => i + 1).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: valorProdutos / n, intervaloDias })}
+                        className="flex items-center justify-between rounded-md border border-[#e2e6ed] px-2.5 py-2 text-sm hover:bg-[#f5f7fa]"
+                      >
+                        <span className="text-[#1a2233]">
+                          {n}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(n, intervaloDias)})</span>
+                        </span>
+                        <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos / n)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {intervaloDias === 30 && (
+                    <button
+                      type="button"
+                      onClick={() => setIntervaloDias(15)}
+                      className="mt-1.5 block w-full text-center text-[11px] text-[#0e9d74] underline"
+                    >
+                      Fracionar boletos
+                    </button>
                   )}
-                </button>
-              ) : whatsapp ? (
-                <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                  Cotação de frete
-                </button>
+                </div>
+              )}
+            </>
+          )}
+          {/* Frete — sempre visível: com pagamento habilitado é referência pro Pix/Boleto; sem pagamento, é o único motivo do modal existir. */}
+          <div className="px-1">
+            {temTransportadora ? (
+              estadoFrete === 'calculado' ? (
+                pagamentoHabilitado ? (
+                  <button type="button" onClick={onCalcularFrete} className="num text-left text-[11px] text-[#67718a] underline">
+                    Valor sem o frete: R$ {fmtR(valorProdutos)}
+                    {avistaDescontoPct > 0 && (
+                      <span className="text-[#0e9d74]"> (R$ {fmtR(valorProdutos * (1 - avistaDescontoPct / 100))} no Pix)</span>
+                    )}
+                  </button>
+                ) : (
+                  <div className="space-y-1 text-xs text-[#67718a]">
+                    <div className="flex justify-between">
+                      <span>Frete</span>
+                      <span className="num">R$ {fmtR(frete)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total dos produtos</span>
+                      <span className="num">R$ {fmtR(valorProdutos)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold text-[#1a2233]">
+                      <span>Total do pedido</span>
+                      <span className="num">R$ {fmtR(totalComFrete)}</span>
+                    </div>
+                  </div>
+                )
               ) : (
-                <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
-              )}
-              {!(temTransportadora && estadoFrete === 'calculado') && (
-                <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
-              )}
-            </div>
+                <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                  Calcular frete
+                </button>
+              )
+            ) : whatsapp ? (
+              <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                Cotação de frete
+              </button>
+            ) : (
+              <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
+            )}
+            {!(temTransportadora && estadoFrete === 'calculado') && (
+              <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
+            )}
+          </div>
+          {!pagamentoHabilitado && freteResolvido && (
+            <button
+              type="button"
+              onClick={onContinuar}
+              className="mt-1 w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white hover:brightness-110"
+            >
+              Continuar
+            </button>
           )}
           <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
             Cancelar
           </button>
         </div>
       </div>
+      <p className="max-w-xs text-center text-[10px] leading-snug text-white/75">
+        Cálculo de frete válido pro Estado do CE. Não enviamos pra zona rural ou distritos — pra mais informações,{' '}
+        {whatsapp ? (
+          <a
+            href={linkWhatsApp(whatsapp, 'Olá! Gostaria de saber mais sobre entrega/frete pro meu endereço.')}
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            converse com um consultor
+          </a>
+        ) : (
+          'converse com um consultor'
+        )}
+        .
+      </p>
     </div>
   );
 }
@@ -555,9 +600,8 @@ function ModalOrcamento({
   temTransportadora,
   totalAreaHa,
   whatsapp,
-  pagamentoAvistaHabilitado,
+  pagamentoHabilitado,
   pagamentoAvistaDescontoPct,
-  pagamentoBoletoHabilitado,
   pagamentoBoletoValorMinimo,
   pagamentoBoletoParcelasMax,
   onAtualizarQtd,
@@ -577,10 +621,9 @@ function ModalOrcamento({
   /** Soma da Área (ha) digitada em cada produto na Calculadora de plantio (ver areasPorItem em CatalogoPublicoPage) — 0 quando ninguém usou a calculadora ainda. */
   totalAreaHa: number;
   whatsapp: string | null;
-  /** Config de pagamento da Tabela (ver Canal.pagamentoAvistaHabilitado/pagamentoBoletoHabilitado em pricing/types.ts) — quando ao menos um dos dois está habilitado, "Concluir" abre o ModalPagamento antes de mandar a mensagem no WhatsApp. */
-  pagamentoAvistaHabilitado: boolean;
+  /** Config de pagamento da Tabela (ver Canal.pagamentoHabilitado em pricing/types.ts) — quando ligado, "Concluir" abre o ModalPagamento (Pix + Boleto) antes de mandar a mensagem no WhatsApp; quando desligado, o mesmo modal ainda abre só pra calcular o frete, se ele ainda não tiver sido calculado no carrinho. */
+  pagamentoHabilitado: boolean;
   pagamentoAvistaDescontoPct: number;
-  pagamentoBoletoHabilitado: boolean;
   pagamentoBoletoValorMinimo: number;
   pagamentoBoletoParcelasMax: number;
   onAtualizarQtd: (itemId: string, qtd: number) => void;
@@ -609,7 +652,10 @@ function ModalOrcamento({
   // "Cotação de frete" do canal Manual é um fluxo à parte, ver pedirCotacaoFrete).
   const [estadoFrete, setEstadoFrete] = useState<EstadoFrete>('nao_calculado');
 
-  const pagamentoDisponivel = pagamentoAvistaHabilitado || pagamentoBoletoHabilitado;
+  // Sem pagamento habilitado, o modal ainda abre — só que aí é só pra calcular o frete (ver
+  // iniciarConclusao) — mas só faz sentido nisso quando dá pra calcular de verdade (temTransportadora)
+  // e ainda não foi calculado; sem Transportadora, ou já calculado, não tem o que perguntar ali.
+  const precisaCalcularFreteAntes = temTransportadora && estadoFrete !== 'calculado';
 
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
@@ -632,9 +678,14 @@ function ModalOrcamento({
     return 'Retirada';
   }
 
-  /** "Concluir" — só passa pelo ModalPagamento quando a Tabela tem À vista e/ou Boleto autorizado; sem isso, vai direto pro resumo/composição do WhatsApp (ver ModalObservacaoWhatsApp). */
+  /**
+   * "Concluir" — passa pelo ModalPagamento quando a Tabela tem pagamento habilitado (Pix/Boleto) OU
+   * quando o frete ainda não foi calculado no carrinho (mesmo sem pagamento, esse modal ainda serve
+   * pra calcular o frete antes de seguir); sem nenhum dos dois, vai direto pro resumo/composição do
+   * WhatsApp (ver ModalObservacaoWhatsApp).
+   */
   function iniciarConclusao() {
-    if (pagamentoDisponivel) setPagamentoAberto(true);
+    if (pagamentoHabilitado || precisaCalcularFreteAntes) setPagamentoAberto(true);
     else setObservacaoWhatsAppAberta(true);
   }
 
@@ -644,10 +695,16 @@ function ModalOrcamento({
     setObservacaoWhatsAppAberta(true);
   }
 
+  /** "Continuar" no ModalPagamento sem pagamento habilitado (só a parte de calcular frete) — não escolhe forma de pagamento nenhuma, só avança pro resumo. */
+  function continuarSemPagamento() {
+    setPagamentoAberto(false);
+    setObservacaoWhatsAppAberta(true);
+  }
+
   function descricaoPagamento(): string | undefined {
     if (!pagamentoEscolhido) return undefined;
     if (pagamentoEscolhido.tipo === 'avista') {
-      return pagamentoEscolhido.descontoPct > 0 ? `À vista (${pagamentoEscolhido.descontoPct}% de desconto nos produtos)` : 'À vista';
+      return pagamentoEscolhido.descontoPct > 0 ? `Pix (${pagamentoEscolhido.descontoPct}% de desconto nos produtos)` : 'Pix';
     }
     return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)} (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)})`;
   }
@@ -833,12 +890,12 @@ function ModalOrcamento({
           whatsapp={whatsapp}
           onCalcularFrete={alternarFrete}
           onCotarFrete={pedirCotacaoFrete}
-          avistaHabilitado={pagamentoAvistaHabilitado}
+          pagamentoHabilitado={pagamentoHabilitado}
           avistaDescontoPct={pagamentoAvistaDescontoPct}
-          boletoHabilitado={pagamentoBoletoHabilitado}
           boletoValorMinimo={pagamentoBoletoValorMinimo}
           boletoParcelasMax={pagamentoBoletoParcelasMax}
           onEscolher={confirmarPagamento}
+          onContinuar={continuarSemPagamento}
           onFechar={() => setPagamentoAberto(false)}
         />
       )}
@@ -1794,9 +1851,8 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           temTransportadora={data.temTransportadora}
           totalAreaHa={totalAreaHa}
           whatsapp={data.whatsapp}
-          pagamentoAvistaHabilitado={data.pagamentoAvistaHabilitado}
+          pagamentoHabilitado={data.pagamentoHabilitado}
           pagamentoAvistaDescontoPct={data.pagamentoAvistaDescontoPct}
-          pagamentoBoletoHabilitado={data.pagamentoBoletoHabilitado}
           pagamentoBoletoValorMinimo={data.pagamentoBoletoValorMinimo}
           pagamentoBoletoParcelasMax={data.pagamentoBoletoParcelasMax}
           onAtualizarQtd={atualizarQtd}

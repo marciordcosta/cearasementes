@@ -26,11 +26,9 @@ export interface Canal {
   whatsapp: string | null;
   /** true = o card do Catálogo Online desse canal mostra VC%/Validade (além de Fornecedor) — false (padrão) mostra só o nome e o Fornecedor, sem esses detalhes agronômicos. Por Tabela, porque o público de cada uma pode ser diferente (produtor final x revenda). */
   mostrarDetalhesPlantio: boolean;
-  /** true = essa Tabela oferece "À vista" como forma de pagamento no Catálogo Online (modal de pagamento, antes de mandar no WhatsApp/PDF) — com o desconto de pagamentoAvistaDescontoPct sobre os produtos (nunca sobre o frete). */
-  pagamentoAvistaHabilitado: boolean;
+  /** true = essa Tabela oferece pagamento no Catálogo Online (modal antes de mandar no WhatsApp/PDF) — Pix (com desconto de pagamentoAvistaDescontoPct sobre os produtos, nunca sobre o frete) e Boleto (parcelado, dividindo o total de produtos por pagamentoBoletoValorMinimo, travado em pagamentoBoletoParcelasMax — ver calcularParcelasBoleto) juntos, sempre os dois quando ligado. */
+  pagamentoHabilitado: boolean;
   pagamentoAvistaDescontoPct: number;
-  /** true = essa Tabela oferece "Boleto" como forma de pagamento — simula parcelas dividindo o total de produtos (sem frete) por pagamentoBoletoValorMinimo, travando em pagamentoBoletoParcelasMax quando passar do limite (ver calcularParcelasBoleto). */
-  pagamentoBoletoHabilitado: boolean;
   pagamentoBoletoValorMinimo: number;
   pagamentoBoletoParcelasMax: number;
 }

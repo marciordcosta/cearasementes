@@ -150,24 +150,21 @@ export interface Database {
           whatsapp: string | null;
           /** true = card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — padrão false (só nome+Fornecedor). */
           mostrar_detalhes_plantio: boolean;
-          /** true = essa Tabela oferece "À vista" no modal de pagamento do Catálogo Online, com desconto de pagamento_avista_desconto_pct sobre os produtos (nunca sobre o frete). Padrão false. */
-          pagamento_avista_habilitado: boolean;
+          /** true = essa Tabela oferece pagamento no Catálogo Online — Pix (com desconto de pagamento_avista_desconto_pct sobre os produtos, nunca sobre o frete) e Boleto (parcelado, ver pagamento_boleto_*) juntos, sempre os dois quando ligado. Padrão false. */
+          pagamento_habilitado: boolean;
           pagamento_avista_desconto_pct: number;
-          /** true = essa Tabela oferece "Boleto" no modal de pagamento — total de produtos (sem frete) ÷ pagamento_boleto_valor_minimo = parcelas, travado em pagamento_boleto_parcelas_max. Padrão false. */
-          pagamento_boleto_habilitado: boolean;
           pagamento_boleto_valor_minimo: number;
           pagamento_boleto_parcelas_max: number;
           criado_em: string;
         };
         Insert: Omit<
           Database['public']['Tables']['canais_preco']['Row'],
-          'id' | 'criado_em' | 'whatsapp' | 'mostrar_detalhes_plantio' | 'pagamento_avista_habilitado' | 'pagamento_avista_desconto_pct' | 'pagamento_boleto_habilitado' | 'pagamento_boleto_valor_minimo' | 'pagamento_boleto_parcelas_max'
+          'id' | 'criado_em' | 'whatsapp' | 'mostrar_detalhes_plantio' | 'pagamento_habilitado' | 'pagamento_avista_desconto_pct' | 'pagamento_boleto_valor_minimo' | 'pagamento_boleto_parcelas_max'
         > & {
           whatsapp?: string | null;
           mostrar_detalhes_plantio?: boolean;
-          pagamento_avista_habilitado?: boolean;
+          pagamento_habilitado?: boolean;
           pagamento_avista_desconto_pct?: number;
-          pagamento_boleto_habilitado?: boolean;
           pagamento_boleto_valor_minimo?: number;
           pagamento_boleto_parcelas_max?: number;
         };
@@ -311,11 +308,9 @@ export interface Database {
           tem_transportadora: boolean;
           /** = Canal.mostrarDetalhesPlantio — true mostra VC%/Validade no card do item (além do Fornecedor), false mostra só o Fornecedor. */
           mostrar_detalhes_plantio: boolean;
-          /** = Canal.pagamentoAvistaHabilitado/pagamentoAvistaDescontoPct — se true, o Catálogo Online oferece "À vista" no modal de pagamento (antes do WhatsApp/PDF), com esse desconto sobre os produtos. */
-          pagamento_avista_habilitado: boolean;
+          /** = Canal.pagamentoHabilitado — se true, o Catálogo Online oferece Pix (desconto) e Boleto (parcelado, ver calcularParcelasBoleto) juntos no modal, antes do WhatsApp/PDF. */
+          pagamento_habilitado: boolean;
           pagamento_avista_desconto_pct: number;
-          /** = Canal.pagamentoBoletoHabilitado/pagamentoBoletoValorMinimo/pagamentoBoletoParcelasMax — se true, o Catálogo Online oferece "Boleto" no modal de pagamento (ver calcularParcelasBoleto). */
-          pagamento_boleto_habilitado: boolean;
           pagamento_boleto_valor_minimo: number;
           pagamento_boleto_parcelas_max: number;
           atualizado_em: string;

@@ -46,10 +46,8 @@ interface ChannelsPanelProps {
   onAtualizarCanalModoMargem: (canalId: string, porReferencia: boolean) => void;
   onToggleVisivel: (canalId: string, valor: boolean) => void;
   onToggleFreteIncluso: (canalId: string, valor: boolean) => void;
-  /** true = essa Tabela oferece "À vista" (com desconto) no modal de pagamento do Catálogo Online. */
-  onTogglePagamentoAvista: (canalId: string, valor: boolean) => void;
-  /** true = essa Tabela oferece "Boleto" (parcelado) no modal de pagamento do Catálogo Online. */
-  onTogglePagamentoBoleto: (canalId: string, valor: boolean) => void;
+  /** true = essa Tabela oferece pagamento (Pix com desconto + Boleto parcelado, sempre os dois juntos) no modal do Catálogo Online. */
+  onTogglePagamento: (canalId: string, valor: boolean) => void;
   onRemoverCanal: (canalId: string) => void;
   onAdicionarCanal: (input: NovoCanalInput) => void;
   /** Vincula (ou desvincula, se null) a Transportadora+Região do canal — o cálculo passa a usar o valor dela ao vivo (módulo Fretes) */
@@ -81,8 +79,7 @@ export function ChannelsPanel({
   onAtualizarCanalModoMargem,
   onToggleVisivel,
   onToggleFreteIncluso,
-  onTogglePagamentoAvista,
-  onTogglePagamentoBoleto,
+  onTogglePagamento,
   onRemoverCanal,
   onAdicionarCanal,
   onSelecionarTransportadora,
@@ -289,46 +286,31 @@ export function ChannelsPanel({
                     </span>
                   </CampoRow>
                   <div className="flex flex-col gap-1.5 border-t border-dashed border-[var(--color-line)] pt-1.5">
-                    <p className="text-[11px] font-semibold text-[var(--color-text)]">Pagamento autorizado</p>
                     <label
                       className="flex items-center justify-between gap-1.5 text-[11px]"
-                      title="Oferece 'À vista' no modal de pagamento do Catálogo Online (depois de Concluir, antes do WhatsApp/PDF) — com o desconto abaixo, só sobre os produtos, nunca sobre o frete."
+                      title="Liga Pix (com desconto) e Boleto (parcelado) juntos no modal de pagamento do Catálogo Online (depois de Concluir, antes do WhatsApp/PDF)."
                     >
-                      <span className="text-[var(--color-text-soft)]">À vista</span>
+                      <span className="font-semibold text-[var(--color-text)]">Habilitar forma de pagamento</span>
                       <input
                         type="checkbox"
-                        checked={canal.pagamentoAvistaHabilitado}
-                        onChange={(e) => onTogglePagamentoAvista(canal.id, e.target.checked)}
+                        checked={canal.pagamentoHabilitado}
+                        onChange={(e) => onTogglePagamento(canal.id, e.target.checked)}
                         className="accent-[var(--color-navy)]"
                       />
                     </label>
-                    {canal.pagamentoAvistaHabilitado && (
-                      <CampoRow label="Desconto à vista (%)">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          defaultValue={canal.pagamentoAvistaDescontoPct}
-                          onBlur={(e) => onAtualizarCampo(canal.id, 'pagamentoAvistaDescontoPct', parseFloat(e.target.value) || 0)}
-                          className={inputClass}
-                        />
-                      </CampoRow>
-                    )}
-                    <label
-                      className="flex items-center justify-between gap-1.5 text-[11px]"
-                      title="Oferece 'Boleto' no modal de pagamento — parcela o total dos produtos (sem frete) dividindo pelo Valor mínimo do boleto, travado na Qtd máxima de parcelas."
-                    >
-                      <span className="text-[var(--color-text-soft)]">Boleto</span>
-                      <input
-                        type="checkbox"
-                        checked={canal.pagamentoBoletoHabilitado}
-                        onChange={(e) => onTogglePagamentoBoleto(canal.id, e.target.checked)}
-                        className="accent-[var(--color-navy)]"
-                      />
-                    </label>
-                    {canal.pagamentoBoletoHabilitado && (
+                    {canal.pagamentoHabilitado && (
                       <>
-                        <CampoRow label="Valor mínimo do boleto (R$)">
+                        <CampoRow label="Desconto Pix (%)" title="Desconto no Pix, só sobre os produtos, nunca sobre o frete.">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            defaultValue={canal.pagamentoAvistaDescontoPct}
+                            onBlur={(e) => onAtualizarCampo(canal.id, 'pagamentoAvistaDescontoPct', parseFloat(e.target.value) || 0)}
+                            className={inputClass}
+                          />
+                        </CampoRow>
+                        <CampoRow label="Valor mínimo do boleto (R$)" title="Parcela o total dos produtos (sem frete) dividindo pelo Valor mínimo do boleto, travado na Qtd máxima de parcelas.">
                           <input
                             type="number"
                             step="0.1"
