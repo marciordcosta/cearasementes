@@ -245,6 +245,7 @@ function ModalPagamento({
   totalComFrete,
   estadoFrete,
   temTransportadora,
+  cidadeInformada,
   whatsapp,
   onCalcularFrete,
   pagamentoHabilitado,
@@ -262,6 +263,8 @@ function ModalPagamento({
   estadoFrete: EstadoFrete;
   /** false = canal Manual (sem Transportadora) — mostra o aviso de frete não informado em vez de "Calcular frete". */
   temTransportadora: boolean;
+  /** true = canal Manual E o cliente já informou a cidade (ver ModalCotacaoCidade) — Pix/Boleto somem os valores (só % e parcelas/prazo) e o aviso embaixo muda pra "serão informados após cotação". Sem cidade informada, mostra tudo normal (baseado só nos produtos) + o aviso de frete não informado. */
+  cidadeInformada: boolean;
   whatsapp: string | null;
   onCalcularFrete: () => void;
   pagamentoHabilitado: boolean;
@@ -287,12 +290,18 @@ function ModalPagamento({
   const { parcelas: parcelasMax } = calcularParcelasBoleto(totalComFrete, boletoValorMinimo, boletoParcelasMax);
   const parcelasExibidas = intervaloDias === 30 ? parcelasMax : parcelasMax * 2;
   const freteResolvido = temTransportadora ? estadoFrete === 'calculado' : true;
+  // Só esconde valor de Pix/Boleto quando o canal é Manual E o cliente JÁ informou a cidade pra
+  // cotação — sem cidade nenhuma, mostra tudo normal (baseado nos produtos, sem frete nenhum) igual
+  // sempre foi; com cidade informada, o valor "quase final" seria enganoso (frete vem depois, à parte).
+  const semValoresPagamento = !temTransportadora && cidadeInformada;
   return (
     <div
       className="fixed inset-0 z-[220] flex flex-col items-center justify-center gap-2.5 bg-black/45 p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onFechar()}
     >
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
+        {/* Sempre visível, qualquer situação (com ou sem pagamento habilitado, com ou sem frete conhecido). */}
+        <p className="mb-2 text-center text-[10px] text-[#9aa3b2]">Forma de pagamento sujeita a aprovação.</p>
         {pagamentoHabilitado && <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Formas de pagamento</p>}
         <div className="flex flex-col gap-2">
           {pagamentoHabilitado && (
@@ -304,13 +313,13 @@ function ModalPagamento({
               >
                 <p className="font-semibold text-[#1a2233]">Pix</p>
                 <p className="text-xs">
-                  {temTransportadora ? (
+                  {!semValoresPagamento ? (
                     <>
                       {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
                       <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalPixComDesconto)}</span>
                     </>
                   ) : (
-                    // Canal Manual — sem frete calculável, não dá pra mostrar um total "final" sem
+                    // Cidade já informada pra cotação — não dá pra mostrar um total "final" sem
                     // arriscar confundir com o valor real depois que o frete for cotado à parte; só o
                     // % de desconto (o Boleto abaixo segue a mesma ideia: parcelas/prazo, sem R$).
                     <span className="font-semibold text-[#0e9d74]">{avistaDescontoPct > 0 ? `${avistaDescontoPct}% de desconto` : 'à vista'}</span>
@@ -325,7 +334,7 @@ function ModalPagamento({
                 >
                   <p className="font-semibold text-[#1a2233]">Boleto</p>
                   <p className="text-xs text-[#67718a]">
-                    {temTransportadora ? (
+                    {!semValoresPagamento ? (
                       <>
                         <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete)}</span>
                         {parcelasMax > 1 ? (
@@ -361,7 +370,7 @@ function ModalPagamento({
                         <span className="text-[#1a2233]">
                           {n}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(n, intervaloDias)})</span>
                         </span>
-                        {temTransportadora && <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete / n)}</span>}
+                        {!semValoresPagamento && <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete / n)}</span>}
                       </button>
                     ))}
                   </div>
@@ -416,15 +425,9 @@ function ModalPagamento({
                       Retirar no local
                     </button>
                   )}
-                  {/* Mesmo estilo/tamanho do "Retirar no local" (canto, não esticado) — com pagamento
-                      habilitado ele fica sozinho aqui (Pix/Boleto já cobrem o "seguir sem calcular"),
-                      então não ganha flex-1: sem isso, ficava esticado e centralizado ocupando a linha
-                      inteira, chamando atenção demais pra uma opção secundária. */}
-                  <button
-                    type="button"
-                    onClick={onCalcularFrete}
-                    className={`rounded-md border border-[#e2e6ed] px-2 py-2 text-center text-xs font-semibold text-[#0e9d74] hover:bg-[#f5f7fa] ${pagamentoHabilitado ? '' : 'flex-1'}`}
-                  >
+                  {/* Só link (sem caixa/borda) — no canto, não esticado, pra não competir visualmente
+                      com "Retirar no local" nem virar um botão grande quando fica sozinho aqui. */}
+                  <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
                     Adicionar frete
                   </button>
                 </div>
@@ -432,8 +435,13 @@ function ModalPagamento({
             ) : (
               // Canal Manual (sem Transportadora) — se o cliente pulou a Cotação de frete no
               // carrinho e chegou até aqui, não repete o link (esse é o lugar certo de perguntar a
-              // cidade, ver ModalCotacaoCidade em ModalOrcamento); só avisa a situação.
-              <p className="text-[11px] text-[#67718a]">Valor de frete não informado, verifique com um consultor ou retire a mercadoria no local.</p>
+              // cidade, ver ModalCotacaoCidade em ModalOrcamento); só avisa a situação. Cidade já
+              // informada muda o aviso — o frete não é mais "desconhecido", só falta a cotação em si.
+              <p className="text-[11px] text-[#67718a]">
+                {cidadeInformada
+                  ? 'Valores do orçamento serão informados após cotação.'
+                  : 'Valor de frete não informado, verifique com um consultor ou retire a mercadoria no local.'}
+              </p>
             )}
             {temTransportadora && estadoFrete !== 'calculado' && (
               <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
@@ -806,10 +814,11 @@ function ModalOrcamento({
     if (pagamentoEscolhido.tipo === 'avista') {
       return pagamentoEscolhido.descontoPct > 0 ? `Pix (${pagamentoEscolhido.descontoPct}% de desconto nos produtos)` : 'Pix';
     }
-    // Canal Manual — mesmo texto do modal: parcelas/prazo, sem R$ (o valor calculado ali já era só
-    // dos produtos, mas mostrar um R$ "quase final" no resumo arrisca confundir com o total depois
-    // que o frete for cotado à parte).
-    if (!temTransportadora) {
+    // Canal Manual COM cidade já informada (mesma regra do modal, ver semValoresPagamento) — mesmo
+    // texto: parcelas/prazo, sem R$ (mostrar um R$ "quase final" no resumo arrisca confundir com o
+    // total depois que o frete for cotado à parte). Sem cidade informada, mostra R$ normal — o frete
+    // é que fica "a combinar" na linha de Frete do resumo, não o valor do Boleto em si.
+    if (!temTransportadora && cidadeCotacao !== null) {
       return `Boleto — ${pagamentoEscolhido.parcelas}x (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)}, valor a confirmar com o frete)`;
     }
     return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)} (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)})`;
@@ -1002,6 +1011,7 @@ function ModalOrcamento({
           totalComFrete={total}
           estadoFrete={estadoFrete}
           temTransportadora={temTransportadora}
+          cidadeInformada={cidadeCotacao !== null}
           whatsapp={whatsapp}
           onCalcularFrete={alternarFrete}
           pagamentoHabilitado={pagamentoHabilitado}
