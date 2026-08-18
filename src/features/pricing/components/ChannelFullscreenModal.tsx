@@ -6,7 +6,7 @@ import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
 import { mensagemDeErro } from '@/lib/errors';
 import { fetchConfigCatalogoPublicoPorCanal, fetchPrecosCatalogoPublicoPorCanal } from '../api';
-import { statusPublicacaoPendente, statusPublicacaoPendenteCanal } from '../calculations';
+import { calcularCanal, statusPublicacaoPendente, statusPublicacaoPendenteCanal } from '../calculations';
 import {
   calcularMargemAtualProjetada,
   calcularRepresentatividade,
@@ -27,6 +27,9 @@ import { SeletorCriterioRepresentacao } from './SeletorCriterioRepresentacao';
 
 function fmtP(v: number): string {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+function fmtR(v: number): string {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 interface ChannelFullscreenModalProps {
@@ -168,36 +171,50 @@ export function ChannelFullscreenModal({
   });
 
   /**
-   * Quantos produtos têm preço/ativação pendente desde a última publicação (ver
-   * statusPublicacaoPendente em calculations.ts) — não tem mais coluna própria na grade (ver
-   * PricingTable.tsx, o 🌐 por item saiu, o botão global já resolve). Roda sobre
-   * `produtosParaPublicar` (SEM filtro/busca) quando disponível — senão cai pra `produtos` (que já
-   * vem filtrado), mas aí "Publicar" passa a respeitar o filtro sem querer.
+   * Produtos com preço/ativação pendente desde a última publicação (ver statusPublicacaoPendente em
+   * calculations.ts) — não tem mais coluna própria na grade (ver PricingTable.tsx, o 🌐 por item
+   * saiu, o botão global já resolve). Roda sobre `produtosParaPublicar` (SEM filtro/busca) quando
+   * disponível — senão cai pra `produtos` (que já vem filtrado), mas aí "Publicar" passa a respeitar
+   * o filtro sem querer. Guarda preço atual/publicado de cada um (não só a contagem) pro tooltip do
+   * botão mostrar o valor exato — ajuda a diagnosticar quando a pendência não sai depois de publicar.
    */
-  const produtosPendentes = useMemo(() => {
-    if (!canal) return 0;
-    let n = 0;
+  const produtosPendentesDetalhe = useMemo(() => {
+    if (!canal) return [];
+    const detalhe: { nome: string; status: 'novo' | 'preco' | 'remover'; precoAtual: number; precoPublicado: number | undefined }[] = [];
     (produtosParaPublicar ?? produtos).forEach((p) => {
       const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
       const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
       const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
-      const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
-      if (status) n++;
+      const precoPublicadoBruto = precosPublicados.get(p.id);
+      const status = statusPublicacaoPendente(p, canal, precoPublicadoBruto, categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
+      if (status) {
+        const precoAtual = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi).preco;
+        detalhe.push({ nome: p.nome, status, precoAtual, precoPublicado: precoPublicadoBruto !== undefined ? Number(precoPublicadoBruto) : undefined });
+      }
     });
-    return n;
+    return detalhe;
   }, [produtos, produtosParaPublicar, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorPorId, precosPublicados]);
   /** Config (frete/whatsapp/pagamento/plantio) desatualizada desde a última publicação — mudanças na Parametrização que preço de produto nenhum reflete (ver statusPublicacaoPendenteCanal). */
   const pendenciaConfig = useMemo(() => (canal ? statusPublicacaoPendenteCanal(canal, transportadoraPorId, configPublicado) : null), [canal, transportadoraPorId, configPublicado]);
-  /** 1 linha por aspecto pendente — vira o tooltip do botão e a contagem dele. */
+  /** 1 linha por produto/aspecto pendente — vira o tooltip do botão (mostra o valor exato, pra dar pra achar por que uma pendência não sai depois de publicar) e a contagem dele. */
   const linhasPendencia = useMemo(() => {
     const linhas: string[] = [];
-    if (produtosPendentes > 0) linhas.push('Alteração de valor');
+    produtosPendentesDetalhe.forEach((d) => {
+      if (d.status === 'preco') {
+        const publicadoTxt = d.precoPublicado !== undefined ? `R$ ${fmtR(d.precoPublicado)}` : '—';
+        linhas.push(`Alteração de valor — ${d.nome} (publicado ${publicadoTxt} → atual R$ ${fmtR(d.precoAtual)})`);
+      } else if (d.status === 'novo') {
+        linhas.push(`Novo (nunca publicado) — ${d.nome} (R$ ${fmtR(d.precoAtual)})`);
+      } else {
+        linhas.push(`A remover (desativado) — ${d.nome}`);
+      }
+    });
     if (pendenciaConfig?.frete) linhas.push('Alteração de frete');
     if (pendenciaConfig?.pagamento) linhas.push('Alteração no pagamento');
     if (pendenciaConfig?.whatsapp) linhas.push('Alteração no WhatsApp');
     if (pendenciaConfig?.plantio) linhas.push('Alteração no plantio');
     return linhas;
-  }, [produtosPendentes, pendenciaConfig]);
+  }, [produtosPendentesDetalhe, pendenciaConfig]);
 
   const [publicandoPendentes, setPublicandoPendentes] = useState(false);
   const queryClient = useQueryClient();
