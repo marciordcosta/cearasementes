@@ -770,41 +770,40 @@ export function PricingTable({
           ))}
         </colgroup>
         <thead>
-          {!somenteCanal && (
-            <tr ref={linhaGrupoRef} className="sticky top-0 z-[2]">
+          <tr ref={linhaGrupoRef} className="sticky top-0 z-[2]">
+            <th
+              colSpan={colSpanColunasFixas}
+              onClick={onToggleCustoEstendido}
+              title={
+                onToggleCustoEstendido
+                  ? mostrarDetalhesFixos
+                    ? 'Recolher — volta a mostrar Frete/Encargos/ML($)/Repres.%/Ajuste completos em cada Tabela'
+                    : 'Estender pra ver Classe/ID aqui — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) em cada Tabela enquanto isso'
+                  : undefined
+              }
+              className={`bg-[var(--color-navy)] px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white ${onToggleCustoEstendido ? 'cursor-pointer hover:brightness-125' : ''}`}
+            >
+              {onToggleCustoEstendido && (
+                <>
+                  {mostrarDetalhesFixos ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
+                </>
+              )}
+            </th>
+            {canaisVisiveis.map((canal) => (
               <th
-                colSpan={colSpanColunasFixas}
-                onClick={onToggleCustoEstendido}
-                title={
-                  onToggleCustoEstendido
-                    ? mostrarDetalhesFixos
-                      ? 'Recolher — volta a mostrar Frete/Encargos/ML($)/Repres.%/Ajuste completos em cada Tabela'
-                      : 'Estender pra ver Classe/ID aqui — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) em cada Tabela enquanto isso'
-                    : undefined
-                }
-                className={`bg-[var(--color-navy)] px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white ${onToggleCustoEstendido ? 'cursor-pointer hover:brightness-125' : ''}`}
+                key={canal.id}
+                colSpan={colSpanPorCanal}
+                onClick={onAbrirCanalTelaCheia ? () => onAbrirCanalTelaCheia(canal) : undefined}
+                title={onAbrirCanalTelaCheia ? 'Clique para abrir esta tabela em tela cheia' : undefined}
+                className={`px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-white ${onAbrirCanalTelaCheia ? 'cursor-pointer hover:brightness-125' : ''}`}
+                style={{ background: gerarCorCanal(canal.corIndice).dark, borderLeft: '2px solid rgba(255,255,255,.3)' }}
               >
-                {onToggleCustoEstendido && (
-                  <>
-                    {mostrarDetalhesFixos ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
-                  </>
-                )}
+                {canal.nome}
+                {onAbrirCanalTelaCheia && <span className="opacity-75"> ⤢</span>}
               </th>
-              {canaisVisiveis.map((canal) => (
-                <th
-                  key={canal.id}
-                  colSpan={colSpanPorCanal}
-                  onClick={() => onAbrirCanalTelaCheia?.(canal)}
-                  title="Clique para abrir esta tabela em tela cheia"
-                  className="cursor-pointer px-2 py-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-white hover:brightness-125"
-                  style={{ background: gerarCorCanal(canal.corIndice).dark, borderLeft: '2px solid rgba(255,255,255,.3)' }}
-                >
-                  {canal.nome} <span className="opacity-75">⤢</span>
-                </th>
-              ))}
-              <th className="bg-[var(--color-navy)]" />
-            </tr>
-          )}
+            ))}
+            <th className="bg-[var(--color-navy)]" />
+          </tr>
           <tr className="sticky z-[2] bg-[var(--color-navy)] text-left text-white" style={{ top: alturaGrupo }}>
             {colunas.map((coluna) => (
               <th

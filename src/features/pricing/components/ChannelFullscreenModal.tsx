@@ -56,8 +56,6 @@ interface ChannelFullscreenModalProps {
   onResetPreco: (produtoId: string, canalId: string) => void;
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
-  /** Atalho de "Imprimir" (botão direito na linha) — desativa/reativa o produto em TODAS as Tabelas de uma vez. */
-  onToggleImprimir?: (produtoId: string, valor: boolean) => void;
   onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
   /** Ícone 🌐 por produto (só aqui, na tela cheia por canal) — atualiza só ESSE item no Catálogo Online já publicado, sem republicar a Tabela inteira. Devolve se deu certo. `dadosPlantio` é buscado UMA VEZ (ver publicarTodosPendentes) antes do loop, não a cada item. */
   onAtualizarItemCatalogo?: (produtoId: string, canal: Canal, dadosPlantio: DadosPlantioCatalogo) => Promise<boolean>;
@@ -79,7 +77,6 @@ export function ChannelFullscreenModal({
   onResetPreco,
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
-  onToggleImprimir,
   onAtualizarValorKg,
   onAtualizarItemCatalogo,
 }: ChannelFullscreenModalProps) {
@@ -277,18 +274,6 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setCustoEstendido((v) => !v)}
-            title={
-              custoEstendido
-                ? 'Recolher — volta a mostrar só Produto/Fornecedor/Peso'
-                : 'Estender pra ver Classe/ID/Custo também'
-            }
-            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${custoEstendido ? 'bg-[var(--color-accent)] text-[#04241A]' : 'bg-white/15 text-white hover:bg-white/25'}`}
-          >
-            {custoEstendido ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
-          </button>
           {onAtualizarItemCatalogo && publicacaoPendentePorProduto.size > 0 && (
             <button
               type="button"
@@ -330,23 +315,22 @@ export function ChannelFullscreenModal({
             canaisVisiveis={[canal]}
             todosCanais={todosCanais}
             transportadoras={transportadoras}
-            // Bloco fixo (Classe/ID/Custo) começa recolhido — só Produto/Fornecedor/Peso — e o botão
-            // "Estender" no cabeçalho do modal (acima) abre os três juntos. As colunas de cada Tabela
-            // (Preço/Frete/Encargos/ML%/ML$/Repres.%/Ajuste) ficam sempre completas aqui, com ou sem
-            // isso ligado — só 1 Tabela em tela cheia, tem espaço de sobra. (O cabeçalho de grupo com
-            // o ícone "Estender ⤢" da grade principal não existe aqui — somenteCanal esconde essa
-            // linha, já que só tem 1 Tabela; por isso o toggle vive no título do modal, não na grade.)
+            // Bloco fixo (Classe/ID/Custo) começa recolhido — só Produto/Fornecedor/Peso — e o ícone
+            // "Estender ⤢" no cabeçalho da própria grade (mesmo lugar/estilo da grade principal, ver
+            // PricingTable.tsx) abre os três juntos. As colunas de cada Tabela (Preço/Frete/Encargos/
+            // ML%/ML$/Repres.%/Ajuste) ficam sempre completas aqui, com ou sem isso ligado — só 1
+            // Tabela em tela cheia, tem espaço de sobra.
             mostrarDetalhesFixos={custoEstendido}
             mostrarCusto={custoEstendido}
             mostrarDetalhesTabelas
+            onToggleCustoEstendido={() => setCustoEstendido((v) => !v)}
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
-            // Desligado enquanto "Estender" está ligado aqui — mesmo motivo da grade principal (ver
-            // PricingPage.tsx): botão direito sem querer não pode desativar o produto em todas as
-            // Tabelas enquanto o bloco fixo (Classe/ID/Custo) está aberto pra examinar com calma.
-            onToggleImprimir={custoEstendido ? undefined : onToggleImprimir}
+            // Sem onToggleImprimir de propósito — o botão direito (desativa "Imprimir" em TODAS as
+            // Tabelas de uma vez) não existe aqui, tela cheia de 1 Tabela só, onde o ajuste sempre
+            // deve ser dessa Tabela específica (ver o botão "desativar" por canal, coluna Ajuste).
             onAtualizarValorKg={onAtualizarValorKg}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}

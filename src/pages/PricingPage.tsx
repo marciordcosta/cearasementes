@@ -1165,10 +1165,7 @@ export function PricingPage() {
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}
               onTogglePrecisaAjuste={onTogglePrecisaAjuste}
-              // Desligado enquanto "Estender" está ligado — o bloco fixo abre mais espaço pra examinar
-              // Classe/ID/Custo com calma, e um botão direito sem querer nesse modo desativaria o
-              // produto em TODAS as Tabelas por engano.
-              onToggleImprimir={custoEstendido ? undefined : onToggleImprimir}
+              onToggleImprimir={onToggleImprimir}
               onAtualizarValorKg={onAtualizarValorKg}
               onEditarProduto={setProdutoEditandoId}
               onRemoverProduto={onRemoverProduto}
@@ -1259,7 +1256,6 @@ export function PricingPage() {
         onResetPreco={onResetPreco}
         onResetTodosPrecos={onResetTodosPrecos}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
-        onToggleImprimir={onToggleImprimir}
         onAtualizarValorKg={onAtualizarValorKg}
         onAtualizarItemCatalogo={atualizarItemCatalogo}
       />
