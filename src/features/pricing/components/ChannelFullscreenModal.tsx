@@ -10,11 +10,12 @@ import { calcularCanal, statusPublicacaoPendente, statusPublicacaoPendenteCanal 
 import {
   calcularMargemAtualProjetada,
   calcularRepresentatividade,
+  construirDescontoUltimaSafraPorCanal,
   construirHistoricoPorCodigo,
   construirMargemBrutaAgregadaPorSafra,
   listarSafrasDisponiveis,
   listarTodasSafras,
-  resolverDescontoUltimaSafra,
+  resolverDescontoEfetivo,
   type CriterioRepresentacao,
   type HistoricoSafra,
   type MargemBrutaAgregada,
@@ -121,13 +122,19 @@ export function ChannelFullscreenModal({
     if (!canal) return new Map();
     return construirHistoricoPorCodigo(itemsAgregados, canal.nome);
   }, [itemsAgregados, canal]);
-  // Escopado a ESSE canal só — se `canal` (self/referência dentro de calcularCanal) for outro, não
-  // tem histórico carregado aqui pra ele (só busca o BI pro canal em tela cheia), cai pro cadastrado.
-  // Opt-in por produto (ver EditProductModal.tsx) — sem "Usar desconto real", sempre cai pro cadastrado.
+  // Por TODOS os canais (não só o aberto aqui) — precisa pra "Margem por referência" bater: dentro de
+  // calcularCanal, o canal avaliado pode ser um canal DIFERENTE do aberto (canalReferencia), e esse
+  // cálculo tem que dar o MESMO resultado usado de verdade na hora de publicar (publicarUmCatalogo em
+  // PricingPage.tsx, que também resolve o desconto real pra qualquer canal, não só um). Antes ficava
+  // restrito a ESSE canal só — uma referência pra outro canal caía pro desconto cadastrado aqui mas
+  // usava o desconto real de verdade lá, gerando uma pendência de preço que republicar nunca resolvia
+  // (o valor calculado aqui nunca batia com o que ia pro banco). Opt-in por produto (ver
+  // EditProductModal.tsx) — sem "Usar desconto real", sempre cai pro cadastrado.
+  const descontoBiPorCanalECodigo = useMemo(() => construirDescontoUltimaSafraPorCanal(todosCanais, itemsAgregados), [todosCanais, itemsAgregados]);
   const resolverDescontoBi = useMemo(
     () => (canalArg: Canal, produto: Produto) =>
-      canal && canalArg.id === canal.id && produto.usarDescontoReal ? resolverDescontoUltimaSafra(historicoPorCodigo, produto.codigo) : null,
-    [canal, historicoPorCodigo],
+      produto.usarDescontoReal ? resolverDescontoEfetivo(descontoBiPorCanalECodigo, canalArg.id, produto.codigo) : null,
+    [descontoBiPorCanalECodigo],
   );
   const safrasDisponiveis = useMemo(() => listarSafrasDisponiveis(historicoPorCodigo), [historicoPorCodigo]);
   // Sem o limite de MAX_SAFRAS_EXIBIDAS de safrasDisponiveis (essa é só pro seletor "ver uma safra específica" do gráfico).
