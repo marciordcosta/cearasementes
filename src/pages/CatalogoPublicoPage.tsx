@@ -656,8 +656,15 @@ function ModalOrcamento({
   }
 
   /** "Salvar" no convite de PDF — dispara o download em segundo plano (sem esperar) e já abre o WhatsApp. */
-  function salvarPedidoPdfESeguir() {
-    void salvarPedidoPdf();
+  /**
+   * "Salvar" no convite de PDF — espera o download ser DISPARADO (gera o PDF, cria o link, clica)
+   * antes de abrir o WhatsApp, com uma folga curta depois (o Android processar o download e mostrar
+   * a caixa de "onde salvar" antes da troca de app). Não dá pra esperar o cliente terminar de
+   * escolher o local de fato — o navegador não avisa quando essa caixa fecha, não existe esse evento.
+   */
+  async function salvarPedidoPdfESeguir() {
+    await salvarPedidoPdf();
+    await new Promise((resolve) => setTimeout(resolve, 500));
     enviarPedidoWhatsApp();
   }
 
