@@ -304,8 +304,17 @@ function ModalPagamento({
               >
                 <p className="font-semibold text-[#1a2233]">Pix</p>
                 <p className="text-xs">
-                  {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
-                  <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalPixComDesconto)}</span>
+                  {temTransportadora ? (
+                    <>
+                      {avistaDescontoPct > 0 && <span className="mr-1.5 text-[#9aa3b2] line-through">R$ {fmtR(totalComFrete)}</span>}
+                      <span className="num font-semibold text-[#0e9d74]">R$ {fmtR(totalPixComDesconto)}</span>
+                    </>
+                  ) : (
+                    // Canal Manual — sem frete calculável, não dá pra mostrar um total "final" sem
+                    // arriscar confundir com o valor real depois que o frete for cotado à parte; só o
+                    // % de desconto (o Boleto abaixo segue a mesma ideia: parcelas/prazo, sem R$).
+                    <span className="font-semibold text-[#0e9d74]">{avistaDescontoPct > 0 ? `${avistaDescontoPct}% de desconto` : 'à vista'}</span>
+                  )}
                 </p>
               </button>
               {!boletoExpandido && (
@@ -316,14 +325,24 @@ function ModalPagamento({
                 >
                   <p className="font-semibold text-[#1a2233]">Boleto</p>
                   <p className="text-xs text-[#67718a]">
-                    <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete)}</span>
-                    {parcelasMax > 1 ? (
+                    {temTransportadora ? (
                       <>
-                        {' '}
-                        em até {parcelasMax}x de R$ {fmtR(totalComFrete / parcelasMax)}
+                        <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete)}</span>
+                        {parcelasMax > 1 ? (
+                          <>
+                            {' '}
+                            em até {parcelasMax}x de R$ {fmtR(totalComFrete / parcelasMax)}
+                          </>
+                        ) : (
+                          <span className="ml-1 text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(1, 30)})</span>
+                        )}
+                      </>
+                    ) : parcelasMax > 1 ? (
+                      <>
+                        em até {parcelasMax}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(parcelasMax, 30)})</span>
                       </>
                     ) : (
-                      <span className="ml-1 text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(1, 30)})</span>
+                      <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(1, 30)})</span>
                     )}
                   </p>
                 </button>
@@ -342,7 +361,7 @@ function ModalPagamento({
                         <span className="text-[#1a2233]">
                           {n}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(n, intervaloDias)})</span>
                         </span>
-                        <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete / n)}</span>
+                        {temTransportadora && <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete / n)}</span>}
                       </button>
                     ))}
                   </div>
@@ -747,8 +766,9 @@ function ModalOrcamento({
   /**
    * "Concluir" — passa pelo ModalPagamento quando a Tabela tem pagamento habilitado (Pix/Boleto) OU
    * quando o frete ainda não foi calculado no carrinho (mesmo sem pagamento, esse modal ainda serve
-   * pra calcular o frete antes de seguir); sem nenhum dos dois, vai direto pro resumo/composição do
-   * WhatsApp (ver ModalObservacaoWhatsApp).
+   * pra calcular o frete antes de seguir) OU quando o canal é Manual (!temTransportadora — mesmo sem
+   * cidade nenhuma informada, mostra Pix/Boleto sem valores, já que o frete nunca é calculável aqui);
+   * sem nenhum dos três, vai direto pro resumo/composição do WhatsApp (ver ModalObservacaoWhatsApp).
    */
   function iniciarConclusao() {
     // Limpa a cidade de uma cotação de frete anterior (mesmo carrinho, ver ModalCotacaoCidade) —
@@ -756,7 +776,7 @@ function ModalOrcamento({
     // digitada e depois abandonada (voltou e clicou Concluir em vez de mandar aquele resumo) ficava
     // "grudada" e aparecia errado num pedido que nunca passou pela Cotação de frete de novo.
     setCidadeCotacao(null);
-    if (pagamentoHabilitado || precisaCalcularFreteAntes) setPagamentoAberto(true);
+    if (pagamentoHabilitado || precisaCalcularFreteAntes || !temTransportadora) setPagamentoAberto(true);
     else setObservacaoWhatsAppAberta(true);
   }
 
@@ -776,6 +796,12 @@ function ModalOrcamento({
     if (!pagamentoEscolhido) return undefined;
     if (pagamentoEscolhido.tipo === 'avista') {
       return pagamentoEscolhido.descontoPct > 0 ? `Pix (${pagamentoEscolhido.descontoPct}% de desconto nos produtos)` : 'Pix';
+    }
+    // Canal Manual — mesmo texto do modal: parcelas/prazo, sem R$ (o valor calculado ali já era só
+    // dos produtos, mas mostrar um R$ "quase final" no resumo arrisca confundir com o total depois
+    // que o frete for cotado à parte).
+    if (!temTransportadora) {
+      return `Boleto — ${pagamentoEscolhido.parcelas}x (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)}, valor a confirmar com o frete)`;
     }
     return `Boleto — ${pagamentoEscolhido.parcelas}x de R$ ${fmtR(pagamentoEscolhido.valorParcela)} (${prazoBoletoLabel(pagamentoEscolhido.parcelas, pagamentoEscolhido.intervaloDias)})`;
   }
@@ -815,11 +841,11 @@ function ModalOrcamento({
     setCotacaoFreteAberta(true);
   }
 
-  /** "Concluir" do ModalCotacaoCidade — guarda a cidade (entra em descreverFrete) e vai direto pro resumo/composição padrão (ModalObservacaoWhatsApp), sem passar pelo ModalPagamento: o frete ainda é uma cotação em aberto, não faz sentido perguntar forma de pagamento com o total incompleto. */
+  /** "Concluir" do ModalCotacaoCidade — guarda a cidade (entra em descreverFrete) e segue pro ModalPagamento, igual qualquer Concluir de canal Manual (ver iniciarConclusao) — Pix/Boleto aparecem sem valores lá, já que o frete ainda é uma cotação em aberto. */
   function confirmarCotacaoFrete(cidade: string) {
     setCidadeCotacao(cidade);
     setCotacaoFreteAberta(false);
-    setObservacaoWhatsAppAberta(true);
+    setPagamentoAberto(true);
   }
 
   /** Baixa o PDF do pedido (jsPDF de verdade) — parte do passo final (ver finalizarEnvio), que já espera essa geração terminar antes de abrir o WhatsApp. */
