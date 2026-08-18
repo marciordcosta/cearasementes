@@ -1242,6 +1242,7 @@ export function PricingPage() {
       <ChannelFullscreenModal
         canal={canalTelaCheia}
         produtos={produtosExibidos}
+        produtosParaPublicar={produtosAtivos}
         categorias={categorias}
         subcategorias={subcategorias}
         fornecedores={fornecedores}

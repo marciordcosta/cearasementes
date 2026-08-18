@@ -31,7 +31,13 @@ function fmtP(v: number): string {
 
 interface ChannelFullscreenModalProps {
   canal: Canal | null;
+  /** Já vem recortado pelo filtro/busca da grade principal — só pra exibir/buscar aqui dentro. */
   produtos: Produto[];
+  /** SEM filtro/busca (só respeita a desativação de Fornecedor "Grade") — usado só pra calcular
+   * publicacaoPendentePorProduto/publicarTodosPendentes, pra "Publicar" nunca deixar pendência de
+   * fora por causa de um filtro/busca esquecido na tela (mesma regra de publicarUmCatalogo em
+   * PricingPage.tsx). Sem essa prop, cai pra `produtos` (compatível, mas aí volta a respeitar o filtro). */
+  produtosParaPublicar?: Produto[];
   categorias: Categoria[];
   subcategorias: Subcategoria[];
   fornecedores: Fornecedor[];
@@ -58,6 +64,7 @@ interface ChannelFullscreenModalProps {
 export function ChannelFullscreenModal({
   canal,
   produtos,
+  produtosParaPublicar,
   categorias,
   subcategorias,
   fornecedores,
@@ -158,12 +165,14 @@ export function ChannelFullscreenModal({
    * produtoId -> tipo de mudança pendente desde a última publicação (ver statusPublicacaoPendente em
    * calculations.ts) — usado só pra saber QUANTOS/QUAIS itens publicar no botão "🌐 Publicar N
    * pendentes" (ver publicarTodosPendentes) — não tem mais coluna própria na grade (ver
-   * PricingTable.tsx, o 🌐 por item saiu, o botão global já resolve).
+   * PricingTable.tsx, o 🌐 por item saiu, o botão global já resolve). Roda sobre
+   * `produtosParaPublicar` (SEM filtro/busca) quando disponível — senão cai pra `produtos` (que já
+   * vem filtrado), mas aí "Publicar" passa a respeitar o filtro sem querer.
    */
   const publicacaoPendentePorProduto = useMemo(() => {
     if (!canal) return new Map<string, 'novo' | 'preco' | 'remover'>();
     const mapa = new Map<string, 'novo' | 'preco' | 'remover'>();
-    produtos.forEach((p) => {
+    (produtosParaPublicar ?? produtos).forEach((p) => {
       const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
       const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
       const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
@@ -171,7 +180,7 @@ export function ChannelFullscreenModal({
       if (status) mapa.set(p.id, status);
     });
     return mapa;
-  }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorPorId, precosPublicados]);
+  }, [produtos, produtosParaPublicar, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorPorId, precosPublicados]);
 
   const [publicandoPendentes, setPublicandoPendentes] = useState(false);
   const queryClient = useQueryClient();
