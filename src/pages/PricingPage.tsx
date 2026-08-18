@@ -264,9 +264,11 @@ export function PricingPage() {
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
-  const produtosFiltrados = produtos
-    // Fornecedor com "Grade" desmarcada some da Tabela de Preços inteira (e, por consequência, do PDF também).
-    .filter((p) => (p.fornecedorId ? (fornecedorPorId.get(p.fornecedorId)?.visivelGrade ?? true) : true))
+  // Fornecedor com "Grade" desmarcada some da Tabela de Preços inteira (e, por consequência, do PDF
+  // também) — isso É uma desativação de verdade (não um filtro de busca passageiro), então também
+  // vale pra "Publicar" (ver publicarUmCatalogo, que usa esta lista em vez de produtosExibidos).
+  const produtosAtivos = produtos.filter((p) => (p.fornecedorId ? (fornecedorPorId.get(p.fornecedorId)?.visivelGrade ?? true) : true));
+  const produtosFiltrados = produtosAtivos
     .filter((p) => {
       if (filtroClasse === 'todas') return true;
       if (filtroClasse.startsWith('cat:')) return p.categoriaId === filtroClasse.slice(4);
@@ -527,13 +529,16 @@ export function PricingPage() {
    * "Publicar" o Catálogo Online de UM canal — calcula o preço de cada produto elegível AGORA
    * (autenticado, com Custo/Margem em mãos com segurança) e salva só nome+preço+peso já prontos
    * (ver publicarCatalogoOnline em pricing/api.ts) — a página pública nunca lê Custo/Margem.
-   * Mesmo filtro do PDF de catálogo (Imprimir + Fornecedor visível no PDF + sem "precisa ajuste"
-   * nesse canal), mais Código cadastrado (produto sem Código não teria como ligar ao snapshot).
-   * Sem tocar em `publicandoCatalogo`/`linksCatalogoPublicado` — isso é responsabilidade de quem
-   * chama (ver publicarCatalogos, que publica 1 ou mais canais de uma vez).
+   * DIFERENTE do PDF de catálogo (esse sim respeita o filtro/busca da grade, ver produtosExibidos):
+   * a publicação usa `produtosAtivos` (sem filtro/busca) — só considera desativação de verdade
+   * (Imprimir do produto + "precisa ajuste" nesse canal + Fornecedor visível no PDF + Grade do
+   * Fornecedor), pra não publicar errado por esquecimento de um filtro/busca ainda aplicado na tela.
+   * Mais Código cadastrado (produto sem Código não teria como ligar ao snapshot). Sem tocar em
+   * `publicandoCatalogo`/`linksCatalogoPublicado` — isso é responsabilidade de quem chama (ver
+   * publicarCatalogos, que publica 1 ou mais canais de uma vez).
    */
   async function publicarUmCatalogo(canal: Canal): Promise<{ canalNome: string; url: string }> {
-    const elegiveis = produtosExibidos.filter(
+    const elegiveis = produtosAtivos.filter(
       (p) => p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (getFornecedorCatalogo(p.fornecedorId)?.visivelPdf ?? true),
     );
     // Dados de plantio (Guia de Plantio) só buscados aqui, no momento de publicar — não fazem parte
@@ -592,7 +597,9 @@ export function PricingPage() {
    * operador escolheu esse produto especificamente, mesmo que ele não apareça na publicação em lote.
    */
   async function atualizarItemCatalogo(produtoId: string, canal: Canal): Promise<boolean> {
-    const p = produtosExibidos.find((x) => x.id === produtoId);
+    // `produtos` (lista completa, sem filtro/busca) — mesmo raciocínio de publicarUmCatalogo: um
+    // filtro/busca esquecido na tela não pode fazer esse lookup falhar silenciosamente.
+    const p = produtos.find((x) => x.id === produtoId);
     if (!p) return false;
     try {
       const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
