@@ -914,7 +914,7 @@ function ModalOrcamento({
               <span>Frete</span>
               {!temTransportadora ? (
                 whatsapp ? (
-                  <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#2563eb] underline">
+                  <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#0e9d74] underline">
                     Cotação de frete
                   </button>
                 ) : (
