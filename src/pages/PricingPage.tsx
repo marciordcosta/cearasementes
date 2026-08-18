@@ -215,7 +215,7 @@ export function PricingPage() {
     queryClient.invalidateQueries({ queryKey: ['pricing', 'produtos'] });
   }
 
-  const canaisVisiveis = canais.filter((c) => c.visivel);
+  const canaisVisiveis = useMemo(() => canais.filter((c) => c.visivel), [canais]);
 
   // Selo "MB atual" na barra de ferramentas — mesma conta do modal de tela cheia por canal (ver
   // historicoBi.ts), só que somando TODAS as Tabelas visíveis de uma vez. Mesma queryKey do
@@ -272,11 +272,14 @@ export function PricingPage() {
   const margemAtualTotalFornecedor = margemAtualTotalValor - margemAtualTotalMargem;
   const produtoEditando = produtos.find((p) => p.id === produtoEditandoId) ?? null;
   const canalTelaCheia = canais.find((c) => c.id === canalTelaCheiaId) ?? null;
-  const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
+  const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
   // Fornecedor com "Grade" desmarcada some da Tabela de Preços inteira (e, por consequência, do PDF
   // também) — isso É uma desativação de verdade (não um filtro de busca passageiro), então também
   // vale pra "Publicar" (ver publicarUmCatalogo, que usa esta lista em vez de produtosExibidos).
-  const produtosAtivos = produtos.filter((p) => (p.fornecedorId ? (fornecedorPorId.get(p.fornecedorId)?.visivelGrade ?? true) : true));
+  const produtosAtivos = useMemo(
+    () => produtos.filter((p) => (p.fornecedorId ? (fornecedorPorId.get(p.fornecedorId)?.visivelGrade ?? true) : true)),
+    [produtos, fornecedorPorId],
+  );
 
   // Preço já publicado de cada Tabela visível (uma query por canal, ver fetchPrecosCatalogoPublicoPorCanal)
   // — só pra saber, na grade principal, QUANTOS produtos têm publicação pendente em QUALQUER Tabela
@@ -288,26 +291,35 @@ export function PricingPage() {
       queryFn: () => fetchPrecosCatalogoPublicoPorCanal(canal.id),
     })),
   });
+  const precosPublicadosPorCanal = precosPublicadosQueries.map((q) => q.data);
 
   /**
    * Pendências de publicação em TODAS as Tabelas visíveis de uma vez (ao contrário do 🌐 da tela
    * cheia por canal, que só olha 1) — cada entrada é 1 produto que precisa publicar (ou remover) em
    * 1 canal específico. Usa `produtosAtivos` (ignora busca/Categoria/Fornecedor da grade), mesma
-   * regra de publicarUmCatalogo/atualizarItemCatalogo: só a desativação de verdade conta.
+   * regra de publicarUmCatalogo/atualizarItemCatalogo: só a desativação de verdade conta. Roda
+   * `calcularCanal` pra cada combinação produto×canal — pesado o bastante pra travar a digitação se
+   * refeito em TODO re-render (era o que acontecia antes), por isso o useMemo: só recalcula quando
+   * produtos/canais/preços publicados realmente mudam.
    */
-  const publicacaoPendenteGrade = canaisVisiveis.flatMap((canal, indice) => {
-    const precosPublicados = precosPublicadosQueries[indice]?.data;
-    if (!precosPublicados) return [];
-    const pendentes: { canal: Canal; produtoId: string }[] = [];
-    produtosAtivos.forEach((p) => {
-      const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
-      const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
-      const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
-      const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
-      if (status) pendentes.push({ canal, produtoId: p.id });
-    });
-    return pendentes;
-  });
+  const publicacaoPendenteGrade = useMemo(
+    () =>
+      canaisVisiveis.flatMap((canal, indice) => {
+        const precosPublicados = precosPublicadosPorCanal[indice];
+        if (!precosPublicados) return [];
+        const pendentes: { canal: Canal; produtoId: string }[] = [];
+        produtosAtivos.forEach((p) => {
+          const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
+          const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
+          const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
+          const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
+          if (status) pendentes.push({ canal, produtoId: p.id });
+        });
+        return pendentes;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canaisVisiveis, produtosAtivos, categorias, subcategorias, fornecedorPorId, transportadoraPorId, canaisPorId, resolverDescontoBi, ...precosPublicadosPorCanal],
+  );
 
   const produtosFiltrados = produtosAtivos
     .filter((p) => {
