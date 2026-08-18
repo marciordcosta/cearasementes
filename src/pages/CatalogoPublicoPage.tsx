@@ -60,7 +60,15 @@ function linkWhatsApp(numero: string, texto?: string): string {
  * linhas — nome+fornecedor+peso, depois qtd × unitário = subtotal — com uma linha em branco
  * separando um item do outro.
  */
-function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], freteDescricao: string, total: number, pagamentoDescricao?: string | null): string {
+function montarMensagemOrcamento(
+  canalNome: string,
+  itens: ItemCarrinho[],
+  freteDescricao: string,
+  total: number,
+  pagamentoDescricao?: string | null,
+  /** true = canal Manual, frete ainda por cotação — `total` é só produtos, então o rótulo avisa disso em vez de "Total" seco (que soaria como valor final). */
+  freteEhCotacao = false,
+): string {
   const blocos = itens.map((i) => {
     const nomeLimpo = i.nome.replace(/[*_]/g, '');
     const linhaNome = [nomeLimpo, i.fornecedorNome, `${Math.round(i.peso)}kg`].filter(Boolean).join(' ');
@@ -69,7 +77,7 @@ function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], frete
   });
   const linhas = [`Orçamento — ${canalNome}`, '', blocos.join('\n\n'), '', `Frete: ${freteDescricao}`];
   if (pagamentoDescricao) linhas.push(`Pagamento: ${pagamentoDescricao}`);
-  linhas.push(`Total: R$ ${fmtR(total)}`);
+  linhas.push(`${freteEhCotacao ? 'Total dos produtos' : 'Total'}: R$ ${fmtR(total)}`);
   return linhas.join('\n');
 }
 
@@ -1028,7 +1036,7 @@ function ModalOrcamento({
       )}
       {observacaoWhatsAppAberta && (
         <ModalObservacaoWhatsApp
-          resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), totalComPagamento, descricaoPagamento())}
+          resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), totalComPagamento, descricaoPagamento(), !temTransportadora)}
           onEnviar={iniciarEnvioPedido}
           onFechar={() => setObservacaoWhatsAppAberta(false)}
         />
