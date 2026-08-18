@@ -101,6 +101,23 @@ body {
   background: var(--color-text-soft);
 }
 
+/* Ícone do carrinho no Catálogo Online (CatalogoPublicoPage.tsx) — dispara ao adicionar um produto. */
+@keyframes carrinho-pulso {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.25);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+}
+.animar-carrinho {
+  animation: carrinho-pulso 0.45s ease-in-out;
+}
+
 /* HTML gerado pelo mammoth (preview de .docx antes de enviar) — sem essas
    regras, tabela/parágrafo saem sem espaçamento nem borda nenhuma. */
 .preview-docx p {

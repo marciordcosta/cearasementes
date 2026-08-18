@@ -1,7 +1,7 @@
 import { Calculator, FileText, Loader2, Search, Truck, X } from 'lucide-react';
 // (arquivo tocado de propósito pra forçar um deploy novo no Vercel — os 2 últimos pushes não
 // apareceram em produção; ver commit "Força novo deploy" logo antes deste.)
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
 import {
@@ -1788,6 +1788,22 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
 
   const itensNoCarrinho = useMemo(() => itensCarrinho.filter((i) => i.qtd > 0), [itensCarrinho]);
 
+  // Ícone do carrinho "pulsa" (ver .animar-carrinho em index.css) sempre que a quantidade TOTAL no
+  // carrinho aumenta — cobre tanto marcar um produto novo quanto só somar mais um em algo que já
+  // estava lá. Só dispara em aumento (nunca ao remover/diminuir), comparando com o total anterior.
+  const totalQtdCarrinho = itensNoCarrinho.reduce((s, i) => s + i.qtd, 0);
+  const totalQtdCarrinhoAnterior = useRef(totalQtdCarrinho);
+  const [carrinhoPulsando, setCarrinhoPulsando] = useState(false);
+  useEffect(() => {
+    if (totalQtdCarrinho > totalQtdCarrinhoAnterior.current) {
+      setCarrinhoPulsando(true);
+      const t = setTimeout(() => setCarrinhoPulsando(false), 450);
+      totalQtdCarrinhoAnterior.current = totalQtdCarrinho;
+      return () => clearTimeout(t);
+    }
+    totalQtdCarrinhoAnterior.current = totalQtdCarrinho;
+  }, [totalQtdCarrinho]);
+
   // Soma da Área (ha) reversa (ver areaReversaDoItem) de cada produto que está de fato no pedido
   // (qtd>0) — calculada DIRETO da qtd real do carrinho, nunca de nada guardado em `areasPorItem`
   // (aquilo é só rascunho de edição dentro da Calculadora, nunca aplicado até "Atualizar carrinho"):
@@ -1909,7 +1925,7 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
           type="button"
           onClick={() => setOrcamentoAberto(true)}
           title="Ver orçamento"
-          className="fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110"
+          className={`fixed right-5 top-5 z-[190] flex h-12 w-12 items-center justify-center rounded-full bg-[#10233f] text-white shadow-lg hover:brightness-110 ${carrinhoPulsando ? 'animar-carrinho' : ''}`}
         >
           <Truck size={20} />
           <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#f5f7fa] bg-[#0e9d74] px-0.5 text-[10px] font-bold leading-none">
