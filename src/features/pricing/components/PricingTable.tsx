@@ -268,7 +268,7 @@ export function PricingTable({
     'col:mlpct': 90,
     'col:mlvalor': 100,
     'col:representacao': 112,
-    'col:ajuste': 52,
+    'col:ajuste': 72,
     'col:atualizar-catalogo': 40,
     'safra:espacador': 10,
     representacaoGeral: 112,
@@ -653,9 +653,9 @@ export function PricingTable({
                       onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
                     }}
                     title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-                    className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+                    className={`rounded px-1.5 py-0.5 text-[10px] ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
                   >
-                    ✕
+                    {precisaAjuste ? 'desativado' : 'desativar'}
                   </button>
                 );
               },
