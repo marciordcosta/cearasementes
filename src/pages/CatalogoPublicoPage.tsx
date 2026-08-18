@@ -287,8 +287,11 @@ function ModalPagamento({
   // Desconto Pix só sobre os produtos, mas o valor mostrado aqui já soma o frete (o que o cliente pagaria de fato agora).
   const frete = totalComFrete - valorProdutos;
   const totalPixComDesconto = valorProdutos * (1 - avistaDescontoPct / 100) + frete;
+  // Boleto (diferente do Pix) não tem desconto — parcela o total CHEIO (produtos + frete, quando já
+  // calculado), então já nasce atualizado sozinho ao calcular/retirar o frete, sem precisar de nada
+  // especial: totalComFrete já vira só valorProdutos quando o frete ainda não foi calculado.
   // parcelasMax já é o teto real pra esse total (total ÷ valor mínimo, travado na Qtd máxima cadastrada) — o cliente escolhe qualquer valor de 1 até esse teto (ou o dobro disso, fracionado).
-  const { parcelas: parcelasMax } = calcularParcelasBoleto(valorProdutos, boletoValorMinimo, boletoParcelasMax);
+  const { parcelas: parcelasMax } = calcularParcelasBoleto(totalComFrete, boletoValorMinimo, boletoParcelasMax);
   const parcelasExibidas = intervaloDias === 30 ? parcelasMax : parcelasMax * 2;
   const freteResolvido = temTransportadora ? estadoFrete === 'calculado' : true;
   return (
@@ -315,16 +318,16 @@ function ModalPagamento({
               {!boletoExpandido && (
                 <button
                   type="button"
-                  onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: valorProdutos, intervaloDias: 30 }))}
+                  onClick={() => (parcelasMax > 1 ? setBoletoExpandido(true) : onEscolher({ tipo: 'boleto', parcelas: 1, valorParcela: totalComFrete, intervaloDias: 30 }))}
                   className="rounded-md border border-[#e2e6ed] px-3 py-2.5 text-left text-sm hover:bg-[#f5f7fa]"
                 >
                   <p className="font-semibold text-[#1a2233]">Boleto</p>
                   <p className="text-xs text-[#67718a]">
-                    <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos)}</span>
+                    <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete)}</span>
                     {parcelasMax > 1 ? (
                       <>
                         {' '}
-                        em até {parcelasMax}x de R$ {fmtR(valorProdutos / parcelasMax)}
+                        em até {parcelasMax}x de R$ {fmtR(totalComFrete / parcelasMax)}
                       </>
                     ) : (
                       <span className="ml-1 text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(1, 30)})</span>
@@ -340,25 +343,23 @@ function ModalPagamento({
                       <button
                         key={n}
                         type="button"
-                        onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: valorProdutos / n, intervaloDias })}
+                        onClick={() => onEscolher({ tipo: 'boleto', parcelas: n, valorParcela: totalComFrete / n, intervaloDias })}
                         className="flex items-center justify-between rounded-md border border-[#e2e6ed] px-2.5 py-2 text-sm hover:bg-[#f5f7fa]"
                       >
                         <span className="text-[#1a2233]">
                           {n}x <span className="text-[10px] font-normal text-[#9aa3b2]">({prazoBoletoLabel(n, intervaloDias)})</span>
                         </span>
-                        <span className="num font-semibold text-[#1a2233]">R$ {fmtR(valorProdutos / n)}</span>
+                        <span className="num font-semibold text-[#1a2233]">R$ {fmtR(totalComFrete / n)}</span>
                       </button>
                     ))}
                   </div>
-                  {intervaloDias === 30 && (
-                    <button
-                      type="button"
-                      onClick={() => setIntervaloDias(15)}
-                      className="mt-1.5 block w-full text-center text-[11px] text-[#0e9d74] underline"
-                    >
-                      Fracionar boletos
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIntervaloDias(intervaloDias === 30 ? 15 : 30)}
+                    className="mt-1.5 block w-full text-center text-[11px] text-[#0e9d74] underline"
+                  >
+                    {intervaloDias === 30 ? 'Fracionar boletos' : 'Desfazer fracionamento'}
+                  </button>
                 </div>
               )}
             </>
@@ -368,11 +369,8 @@ function ModalPagamento({
             {temTransportadora ? (
               estadoFrete === 'calculado' ? (
                 pagamentoHabilitado ? (
-                  <button type="button" onClick={onCalcularFrete} className="num text-left text-[11px] text-[#67718a] underline">
-                    Valor sem o frete: R$ {fmtR(valorProdutos)}
-                    {avistaDescontoPct > 0 && (
-                      <span className="text-[#0e9d74]"> (R$ {fmtR(valorProdutos * (1 - avistaDescontoPct / 100))} no Pix)</span>
-                    )}
+                  <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] text-[#67718a] underline">
+                    Retirar no local
                   </button>
                 ) : (
                   <div className="space-y-1 text-xs text-[#67718a]">
