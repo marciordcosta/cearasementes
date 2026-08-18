@@ -391,9 +391,20 @@ function ModalPagamento({
                   </div>
                 )
               ) : (
-                <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
-                  Calcular frete
-                </button>
+                <div className="flex flex-col gap-1">
+                  <button type="button" onClick={onCalcularFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
+                    Calcular frete
+                  </button>
+                  {/* Frete nunca é obrigatório — sem pagamento habilitado, o "Continuar" abaixo só aparece
+                      depois de calcular (ver freteResolvido); esse aqui deixa seguir direto pra retirada,
+                      sem precisar calcular nada. Com pagamento habilitado, Pix/Boleto já servem pra isso
+                      (nenhum dos dois exige frete calculado), então não repete o botão. */}
+                  {!pagamentoHabilitado && (
+                    <button type="button" onClick={onContinuar} className="text-left text-[11px] font-semibold text-[#67718a] underline">
+                      Retirar no local
+                    </button>
+                  )}
+                </div>
               )
             ) : whatsapp ? (
               <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#0e9d74] underline">
