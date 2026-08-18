@@ -404,10 +404,14 @@ function ModalPagamento({
                       Retirar no local
                     </button>
                   )}
+                  {/* Mesmo estilo/tamanho do "Retirar no local" (canto, não esticado) — com pagamento
+                      habilitado ele fica sozinho aqui (Pix/Boleto já cobrem o "seguir sem calcular"),
+                      então não ganha flex-1: sem isso, ficava esticado e centralizado ocupando a linha
+                      inteira, chamando atenção demais pra uma opção secundária. */}
                   <button
                     type="button"
                     onClick={onCalcularFrete}
-                    className="flex-1 text-center text-[11px] font-semibold text-[#0e9d74] underline"
+                    className={`rounded-md border border-[#e2e6ed] px-2 py-2 text-center text-xs font-semibold text-[#0e9d74] hover:bg-[#f5f7fa] ${pagamentoHabilitado ? '' : 'flex-1'}`}
                   >
                     Calcular frete
                   </button>
