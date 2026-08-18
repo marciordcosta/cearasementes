@@ -41,6 +41,7 @@ import {
   inserirProduto,
   inserirSubcategoria,
   publicarCatalogoOnline,
+  removerItemCatalogoPublico,
   upsertCategoriaMargem,
   upsertCategoriaMargemTolerancia,
   upsertCategoriaReferencia,
@@ -593,15 +594,22 @@ export function PricingPage() {
    * Atualiza só 1 produto no Catálogo Online já publicado desse canal (ver atualizarItemCatalogoPublico
    * em pricing/api.ts) — pro botão 🌐 na tela cheia por canal, quando só esse item mudou e não vale
    * republicar a Tabela inteira. Devolve se deu certo (pro botão mostrar ✓/⚠ sem precisar de alert
-   * pro caminho feliz). Não passa pelo filtro de elegibilidade do publicarCatalogo de propósito — o
-   * operador escolheu esse produto especificamente, mesmo que ele não apareça na publicação em lote.
+   * pro caminho feliz). Ignora Código/Fornecedor-visível-no-PDF de propósito (o operador escolheu
+   * esse produto especificamente, mesmo que ele não apareça na publicação em lote) — mas RESPEITA
+   * desativação (Imprimir do produto ou "precisa ajuste" nesse canal): nesse caso remove o item do
+   * Catálogo já publicado em vez de tentar atualizar um preço que não devia mais estar lá.
    */
   async function atualizarItemCatalogo(produtoId: string, canal: Canal): Promise<boolean> {
     // `produtos` (lista completa, sem filtro/busca) — mesmo raciocínio de publicarUmCatalogo: um
     // filtro/busca esquecido na tela não pode fazer esse lookup falhar silenciosamente.
     const p = produtos.find((x) => x.id === produtoId);
     if (!p) return false;
+    const desativado = !p.imprimir || (p.precos[canal.id]?.precisaAjuste ?? false);
     try {
+      if (desativado) {
+        await removerItemCatalogoPublico(canal.id, produtoId);
+        return true;
+      }
       const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
         fetchArquivosLaudos(),
         fetchParametrizacaoProdutos(),

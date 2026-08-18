@@ -735,6 +735,25 @@ export async function atualizarItemCatalogoPublico(canalId: string, item: ItemCa
   if (error) throw error;
 }
 
+/** Remove só 1 item já publicado desse canal (produto desativado/"precisa ajuste" depois da última publicação) — sem mexer no resto do snapshot. Não reclama se o item já não estava lá (idempotente). */
+export async function removerItemCatalogoPublico(canalId: string, produtoId: string): Promise<void> {
+  const { error } = await supabase.from('catalogo_publico_itens').delete().eq('canal_id', canalId).eq('produto_id', produtoId);
+  if (error) throw error;
+}
+
+/**
+ * produto_id -> preço já publicado desse canal — só o suficiente pra detectar "mudança pendente"
+ * (preço diferente do calculado agora, ou item ativo/inativo divergindo do que está publicado) na
+ * tela cheia por canal (ver ChannelFullscreenModal.tsx), sem trazer o item inteiro. Autenticado, mas
+ * lê a mesma tabela pública — sem novidade de segurança, só um recorte de colunas.
+ */
+export async function fetchPrecosCatalogoPublicoPorCanal(canalId: string): Promise<Map<string, number>> {
+  const rows = await fetchAllRows<{ produto_id: string; preco: number }>((from, to) =>
+    supabase.from('catalogo_publico_itens').select('produto_id, preco').eq('canal_id', canalId).range(from, to),
+  );
+  return new Map(rows.map((r) => [r.produto_id, r.preco]));
+}
+
 export interface CatalogoPublico {
   canalNome: string | null;
   freteKgEfetivo: number;

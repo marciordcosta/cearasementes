@@ -116,6 +116,13 @@ interface PricingTableProps {
   somenteCanal?: boolean;
   /** Ícone 🌐 por produto (só aparece com somenteCanal) — atualiza só ESSE item no Catálogo Online já publicado desse canal, sem republicar a Tabela inteira. Devolve se deu certo. */
   onAtualizarItemCatalogo?: (produtoId: string, canal: Canal) => Promise<boolean>;
+  /**
+   * produtoId -> tipo de mudança pendente desde a última publicação desse canal ('novo' = ainda não
+   * publicado, 'preco' = preço calculado agora difere do publicado, 'remover' = publicado mas não
+   * elegível mais) — destaca o 🌐 quando há algo pendente (ver ChannelFullscreenModal.tsx). Ausente
+   * do mapa = já está em dia, nada pendente pra esse produto.
+   */
+  publicacaoPendentePorProduto?: Map<string, 'novo' | 'preco' | 'remover'>;
 }
 
 function AlcaRedimensionar({ onMouseDown, claro }: { onMouseDown: (e: React.MouseEvent) => void; claro?: boolean }) {
@@ -162,6 +169,7 @@ export function PricingTable({
   onAbrirGraficoProduto,
   somenteCanal = false,
   onAtualizarItemCatalogo,
+  publicacaoPendentePorProduto,
 }: PricingTableProps) {
   // Modo compacto (só Preço + ML (%) em cada Tabela) é o padrão — mostrarDetalhesTabelas ligado mostra tudo.
   const modoResumo = !mostrarDetalhesTabelas;
@@ -671,6 +679,15 @@ export function PricingTable({
               canalId: canal.id,
               render: (p: Produto) => {
                 const status = statusAtualizarCatalogo[p.id];
+                const pendente = publicacaoPendentePorProduto?.get(p.id);
+                const tituloPendente =
+                  pendente === 'novo'
+                    ? 'Ainda não publicado — clique pra publicar só este produto'
+                    : pendente === 'preco'
+                      ? 'Preço mudou desde a última publicação — clique pra atualizar só este produto'
+                      : pendente === 'remover'
+                        ? 'Desativado depois da última publicação — clique pra remover só este produto do Catálogo Online'
+                        : 'Atualizar só este produto no Catálogo Online já publicado (sem republicar a Tabela inteira)';
                 return (
                   <button
                     type="button"
@@ -680,8 +697,10 @@ export function PricingTable({
                       e.stopPropagation();
                       clicarAtualizarCatalogo(p.id, canal);
                     }}
-                    title="Atualizar só este produto no Catálogo Online já publicado (sem republicar a Tabela inteira)"
-                    className="rounded px-1.5 py-0.5 text-[var(--color-text-soft)] hover:bg-[var(--color-line)] disabled:cursor-wait disabled:opacity-60"
+                    title={tituloPendente}
+                    className={`rounded px-1.5 py-0.5 disabled:cursor-wait disabled:opacity-60 ${
+                      pendente && status === undefined ? 'bg-warn-soft text-[#8A5B10] hover:brightness-95' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'
+                    }`}
                   >
                     {status === 'carregando' ? '⏳' : status === 'sucesso' ? '✅' : status === 'erro' ? '⚠️' : '🌐'}
                   </button>

@@ -1,9 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
+import { fetchPrecosCatalogoPublicoPorCanal } from '../api';
+import { calcularCanal } from '../calculations';
 import {
   calcularMargemAtualProjetada,
   calcularRepresentatividade,
@@ -141,6 +143,69 @@ export function ChannelFullscreenModal({
   );
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
+
+  // Preço já publicado de cada produto desse canal (ver fetchPrecosCatalogoPublicoPorCanal) — só
+  // pra comparar com o preço calculado agora e destacar o 🌐 quando há algo pendente (ver
+  // publicacaoPendentePorProduto abaixo). Refaz sempre que abre um canal diferente.
+  const { data: precosPublicados = new Map<string, number>() } = useQuery({
+    queryKey: ['pricing', 'catalogoPublicoPrecos', canal?.id],
+    queryFn: () => fetchPrecosCatalogoPublicoPorCanal(canal!.id),
+    enabled: canal !== null,
+  });
+
+  /**
+   * produtoId -> tipo de mudança pendente desde a última publicação (ver PricingTable.tsx, que
+   * destaca o 🌐 com isso) — 'novo' (elegível agora, nunca publicado), 'preco' (elegível, publicado,
+   * mas o preço calculado agora é diferente do salvo) ou 'remover' (publicado, mas não elegível mais
+   * — Imprimir desligado ou "precisa ajuste" nesse canal). Tolerância de 1 centavo na comparação de
+   * preço pra não acusar diferença por arredondamento de ponto flutuante.
+   */
+  const publicacaoPendentePorProduto = useMemo(() => {
+    if (!canal) return new Map<string, 'novo' | 'preco' | 'remover'>();
+    const mapa = new Map<string, 'novo' | 'preco' | 'remover'>();
+    produtos.forEach((p) => {
+      const elegivel = p.imprimir && p.codigo && !(p.precos[canal.id]?.precisaAjuste ?? false) && (fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true);
+      const precoPublicado = precosPublicados.get(p.id);
+      if (!elegivel) {
+        if (precoPublicado !== undefined) mapa.set(p.id, 'remover');
+        return;
+      }
+      if (precoPublicado === undefined) {
+        mapa.set(p.id, 'novo');
+        return;
+      }
+      const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
+      const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
+      const precoAtual = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi).preco;
+      if (Math.abs(precoAtual - precoPublicado) > 0.005) mapa.set(p.id, 'preco');
+    });
+    return mapa;
+  }, [produtos, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorPorId, precosPublicados]);
+
+  const [publicandoPendentes, setPublicandoPendentes] = useState(false);
+  const queryClient = useQueryClient();
+
+  /** Envolve o 🌐 (individual e em lote) pra invalidar precosPublicados depois de publicar/remover — senão o destaque de pendência ficava desatualizado até fechar e reabrir o modal. */
+  async function atualizarItemEinvalidar(produtoId: string, canalArg: Canal): Promise<boolean> {
+    if (!onAtualizarItemCatalogo) return false;
+    const ok = await onAtualizarItemCatalogo(produtoId, canalArg);
+    if (ok) queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canalArg.id] });
+    return ok;
+  }
+
+  /** Botão "global" — publica (ou remove) de uma vez todos os itens com pendência (ver publicacaoPendentePorProduto), reaproveitando o MESMO onAtualizarItemCatalogo do 🌐 por item, um de cada vez. */
+  async function publicarTodosPendentes() {
+    if (!canal || !onAtualizarItemCatalogo || publicacaoPendentePorProduto.size === 0) return;
+    setPublicandoPendentes(true);
+    try {
+      for (const produtoId of publicacaoPendentePorProduto.keys()) {
+        await atualizarItemEinvalidar(produtoId, canal);
+      }
+    } finally {
+      setPublicandoPendentes(false);
+    }
+  }
+
   const produtosFiltrados = useMemo(() => {
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const filtrados =
@@ -206,6 +271,17 @@ export function ChannelFullscreenModal({
           >
             {custoEstendido ? 'Recolher' : 'Estender'}
           </button>
+          {onAtualizarItemCatalogo && publicacaoPendentePorProduto.size > 0 && (
+            <button
+              type="button"
+              onClick={publicarTodosPendentes}
+              disabled={publicandoPendentes}
+              title="Publica (ou remove) de uma vez só os produtos com preço/ativação pendente desde a última publicação, sem mexer no resto"
+              className="shrink-0 rounded-full bg-warn px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-[#4A2E00] hover:brightness-95 disabled:cursor-wait disabled:opacity-70"
+            >
+              {publicandoPendentes ? 'Publicando…' : `🌐 Publicar ${publicacaoPendentePorProduto.size} pendente${publicacaoPendentePorProduto.size > 1 ? 's' : ''}`}
+            </button>
+          )}
           <span className="ml-auto">
             <SeletorCriterioRepresentacao
               criterio={criterioRepresentacao}
@@ -245,7 +321,8 @@ export function ChannelFullscreenModal({
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
             onAtualizarValorKg={onAtualizarValorKg}
-            onAtualizarItemCatalogo={onAtualizarItemCatalogo}
+            onAtualizarItemCatalogo={onAtualizarItemCatalogo ? atualizarItemEinvalidar : undefined}
+            publicacaoPendentePorProduto={publicacaoPendentePorProduto}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
             margemAgregadaPorSafra={margemAgregadaPorSafra}
