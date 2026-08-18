@@ -1423,11 +1423,11 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     };
   }, []);
 
-  // Aba do navegador mostra "Catálogo Ceará Sementes" aqui (não o título genérico "ERP Ceará
-  // Sementes" do resto do app) — volta ao normal ao sair da página.
+  // Aba do navegador mostra "Ceará Sementes" aqui (não o título genérico "ERP Ceará Sementes"
+  // do resto do app) — volta ao normal ao sair da página.
   useEffect(() => {
     const tituloAnterior = document.title;
-    document.title = 'Catálogo Ceará Sementes';
+    document.title = 'Ceará Sementes';
     return () => {
       document.title = tituloAnterior;
     };
