@@ -343,7 +343,10 @@ export function ChannelFullscreenModal({
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
-            onToggleImprimir={onToggleImprimir}
+            // Desligado enquanto "Estender" está ligado aqui — mesmo motivo da grade principal (ver
+            // PricingPage.tsx): botão direito sem querer não pode desativar o produto em todas as
+            // Tabelas enquanto o bloco fixo (Classe/ID/Custo) está aberto pra examinar com calma.
+            onToggleImprimir={custoEstendido ? undefined : onToggleImprimir}
             onAtualizarValorKg={onAtualizarValorKg}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}
