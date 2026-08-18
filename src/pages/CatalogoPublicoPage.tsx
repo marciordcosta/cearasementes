@@ -739,7 +739,7 @@ function ModalOrcamento({
   }
 
   function descreverFrete(): string {
-    if (!temTransportadora) return cidadeCotacao ? `Cotação de frete — entrega em ${cidadeCotacao}` : 'a combinar (cotação à parte)';
+    if (!temTransportadora) return cidadeCotacao ? `Cotação de frete — entrega em ${cidadeCotacao}` : 'não informado';
     if (estadoFrete === 'calculado') return `R$ ${fmtR(freteCalculado)}`;
     return 'Retirada';
   }
@@ -751,6 +751,11 @@ function ModalOrcamento({
    * WhatsApp (ver ModalObservacaoWhatsApp).
    */
   function iniciarConclusao() {
+    // Limpa a cidade de uma cotação de frete anterior (mesmo carrinho, ver ModalCotacaoCidade) —
+    // esse é o caminho "normal" (com ou sem pagamento), não o de pedir cotação; sem isso, uma cidade
+    // digitada e depois abandonada (voltou e clicou Concluir em vez de mandar aquele resumo) ficava
+    // "grudada" e aparecia errado num pedido que nunca passou pela Cotação de frete de novo.
+    setCidadeCotacao(null);
     if (pagamentoHabilitado || precisaCalcularFreteAntes) setPagamentoAberto(true);
     else setObservacaoWhatsAppAberta(true);
   }
