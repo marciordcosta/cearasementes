@@ -308,9 +308,9 @@ function ModalPagamento({
       onMouseDown={(e) => e.target === e.currentTarget && onFechar()}
     >
       <div className="w-full max-w-xs rounded-xl bg-white p-4 shadow-2xl">
+        {pagamentoHabilitado && <p className="mb-1 text-center text-sm font-semibold text-[#1a2233]">Formas de pagamento</p>}
         {/* Sempre visível, qualquer situação (com ou sem pagamento habilitado, com ou sem frete conhecido). */}
-        <p className="mb-2 text-center text-[10px] text-[#9aa3b2]">Forma de pagamento sujeita a aprovação.</p>
-        {pagamentoHabilitado && <p className="mb-3 text-center text-sm font-semibold text-[#1a2233]">Formas de pagamento</p>}
+        <p className="mb-3 text-center text-[10px] text-[#9aa3b2]">Forma de pagamento sujeita a aprovação.</p>
         <div className="flex flex-col gap-2">
           {pagamentoHabilitado && (
             <>
