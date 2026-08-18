@@ -170,7 +170,6 @@ export function PricingPage() {
   const [abaParametrizacao, setAbaParametrizacao] = useState<'tabelas' | 'categorias' | 'fornecedores' | 'custos'>('tabelas');
   const [buscaProduto, setBuscaProduto] = useState('');
   const [filtroClasse, setFiltroClasse] = useState('todas');
-  const [mostrarMaisDetalhes, setMostrarMaisDetalhes] = useState(false);
   const [modalMargemAberto, setModalMargemAberto] = useState(false);
   const [modalCompraAberto, setModalCompraAberto] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
@@ -1015,15 +1014,6 @@ export function PricingPage() {
                 onEscolherCategorias={() => setModalOrdemTipo('categorias')}
                 onEscolherCanais={() => setModalOrdemTipo('canais')}
               />
-              <label className="flex items-center gap-1.5 text-xs text-[var(--color-text-soft)]">
-                <input
-                  type="checkbox"
-                  checked={mostrarMaisDetalhes}
-                  onChange={(e) => setMostrarMaisDetalhes(e.target.checked)}
-                  className="accent-[var(--color-navy)]"
-                />
-                Mais detalhes
-              </label>
               <div className="flex-1" />
               <SeletorCriterioRepresentacao
                 criterio={criterioRepresentacao}
@@ -1055,7 +1045,10 @@ export function PricingPage() {
               canaisVisiveis={canaisVisiveis}
               todosCanais={canais}
               transportadoras={transportadoras}
-              mostrarMaisDetalhes={mostrarMaisDetalhes}
+              // Grade compacta principal — sempre resumida (a versão detalhada agora só vive na
+              // tela cheia por canal, ver ChannelFullscreenModal.tsx).
+              mostrarDetalhesFixos={false}
+              mostrarDetalhesTabelas={false}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}

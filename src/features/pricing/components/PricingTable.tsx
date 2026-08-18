@@ -60,11 +60,19 @@ interface PricingTableProps {
   todosCanais: Canal[];
   transportadoras: Transportadora[];
   /**
-   * "Mais detalhes" na barra de ferramentas — liga/desliga Classe, ID e Representação Geral,
-   * e também Frete/Encargos/ML ($)/Repres. (por canal)/Ajuste em cada Tabela de Preço (por
-   * padrão, ou seja com essa flag desligada, cada Tabela mostra só Preço e ML (%)).
+   * Bloco fixo de identificação (Classe, ID e Representação Geral) — só existe na tela cheia por
+   * canal, como o lado "estendido" do toggle de lá (ver ChannelFullscreenModal.tsx): desligado
+   * (padrão), a tela cheia mostra só Nome/Fornecedor/Peso; ligado, mostra Classe+ID também — e
+   * nesse caso `mostrarDetalhesTabelas` cai pra dar lugar. Sempre `false` na grade principal.
    */
-  mostrarMaisDetalhes: boolean;
+  mostrarDetalhesFixos: boolean;
+  /**
+   * Frete/Encargos/ML ($)/Repres. (%)/Ajuste em cada Tabela de Preço — por padrão (desligada),
+   * cada Tabela mostra só Preço e ML (%). `false` sempre na grade principal (resumida); na tela
+   * cheia por canal, começa `true` (o "como funciona hoje") e vira `false` quando o bloco fixo
+   * de custo é estendido (ver mostrarDetalhesFixos), pra não empilhar as duas coisas ao mesmo tempo.
+   */
+  mostrarDetalhesTabelas: boolean;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
@@ -133,7 +141,8 @@ export function PricingTable({
   canaisVisiveis,
   todosCanais,
   transportadoras,
-  mostrarMaisDetalhes,
+  mostrarDetalhesFixos,
+  mostrarDetalhesTabelas,
   onUpdatePreco,
   onResetPreco,
   onResetTodosPrecos,
@@ -154,8 +163,8 @@ export function PricingTable({
   somenteCanal = false,
   onAtualizarItemCatalogo,
 }: PricingTableProps) {
-  // Modo compacto (só Preço + ML (%) em cada Tabela) é o padrão — "Mais detalhes" ligado mostra tudo.
-  const modoResumo = !mostrarMaisDetalhes;
+  // Modo compacto (só Preço + ML (%) em cada Tabela) é o padrão — mostrarDetalhesTabelas ligado mostra tudo.
+  const modoResumo = !mostrarDetalhesTabelas;
   const getCategoria = (id: string) => categorias.find((c) => c.id === id) ?? categorias[0];
   const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
@@ -312,7 +321,7 @@ export function PricingTable({
             ),
           } satisfies ColunaDef,
         ]),
-    ...(mostrarMaisDetalhes
+    ...(mostrarDetalhesFixos
       ? [
           {
             chave: 'classe',
@@ -332,7 +341,7 @@ export function PricingTable({
       // Fica colado logo depois de "Classe" ao rolar (quando "Mais detalhes" está ligado — senão,
       // colado direto depois de "Excluir"+"Editar") — o deslocamento acompanha a largura ATUAL
       // de "Excluir"+"Editar"+"Classe" (que agora podem ser redimensionadas), não um valor fixo.
-      stickyLeft: larguraExcluirEditar + (mostrarMaisDetalhes ? largura('classe') : 0),
+      stickyLeft: larguraExcluirEditar + (mostrarDetalhesFixos ? largura('classe') : 0),
       render: (p) => {
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
@@ -390,7 +399,7 @@ export function PricingTable({
           </div>
         ),
     },
-    ...(mostrarMaisDetalhes && representatividadeGeralPorProduto
+    ...(mostrarDetalhesFixos && representatividadeGeralPorProduto
       ? [
           {
             chave: 'representacaoGeral',
@@ -622,33 +631,36 @@ export function PricingTable({
             } satisfies ColunaDef,
           ]
         : []),
-      // Diferente de Frete/Encargos/ML($) (essas sim somem no modo Resumido), essa coluna fica
-      // visível SEMPRE — é como o operador desativa um produto daquele canal (some do PDF), não é
-      // um detalhe a mais, então precisa continuar acessível mesmo na grade compacta.
-      {
-        chave: `${canal.id}:ajuste`,
-        rotulo: '',
-        larguraPadrao: defaults['col:ajuste'],
-        larguraChave: 'col:ajuste',
-        canalId: canal.id,
-        render: (p: Produto) => {
-          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
-          return (
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
-              }}
-              title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-              className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
-            >
-              ✕
-            </button>
-          );
-        },
-      } satisfies ColunaDef,
+      // Mesmo grupo de Frete/Encargos/ML($) agora — some no modo Resumido (grade compacta principal),
+      // volta junto com o resto no modo detalhado (tela cheia por canal, sem "estender" o bloco de custo).
+      ...(modoResumo
+        ? []
+        : [
+            {
+              chave: `${canal.id}:ajuste`,
+              rotulo: '',
+              larguraPadrao: defaults['col:ajuste'],
+              larguraChave: 'col:ajuste',
+              canalId: canal.id,
+              render: (p: Produto) => {
+                const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+                return (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
+                    }}
+                    title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
+                    className={`rounded px-1.5 py-0.5 ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+                  >
+                    ✕
+                  </button>
+                );
+              },
+            } satisfies ColunaDef,
+          ]),
       ...(somenteCanal && onAtualizarItemCatalogo
         ? [
             {
@@ -758,21 +770,21 @@ export function PricingTable({
 
   // Ponto exato (em px) onde termina a última coluna fixa (Excluir + Editar + Classe + Produto) — é ali
   // que a faixa de sombra precisa ficar grudada enquanto rola pro lado.
-  const finalColunasFixas = larguraExcluirEditar + (mostrarMaisDetalhes ? largura('classe') : 0) + largura('produto');
+  const finalColunasFixas = larguraExcluirEditar + (mostrarDetalhesFixos ? largura('classe') : 0) + largura('produto');
 
   // "Produto" só termina de grudar na posição final depois que "ID" (a única
   // coluna entre Classe e Produto que não é fixa) escorrega por baixo — até lá,
   // ela ainda está "andando" junto com o scroll, e mostrar sombra nesse
   // meio-tempo é prematuro (nada foi realmente coberto ainda).
-  const limiarComecoCobertura = mostrarMaisDetalhes ? largura('id') : 0;
+  const limiarComecoCobertura = mostrarDetalhesFixos ? largura('id') : 0;
 
   // Quantas colunas fixas (fora dos blocos por canal/safra) existem antes do cabeçalho de canal
   // começar — Excluir+Editar+Produto+Peso+Custo sempre, + Classe/ID quando "Mais detalhes" está
   // ligado, + Repres. Geral quando além disso houver dado pra ela.
-  const colSpanColunasFixas = 5 + (mostrarMaisDetalhes ? 2 : 0) + (mostrarMaisDetalhes && representatividadeGeralPorProduto ? 1 : 0);
+  const colSpanColunasFixas = 5 + (mostrarDetalhesFixos ? 2 : 0) + (mostrarDetalhesFixos && representatividadeGeralPorProduto ? 1 : 0);
   // Preço+Frete+Encargos+ML%+ML$+Ajuste (6) e mais Repres. quando essa coluna existir — no modo
-  // Resumo, Preço+ML%+Ajuste (Ajuste fica visível nos dois modos, ver colunas do canal acima).
-  const colSpanPorCanal = modoResumo ? 3 : 6 + (representatividadePorProduto ? 1 : 0);
+  // Resumo, só Preço+ML% (Ajuste agora some junto com o resto do grupo detalhado).
+  const colSpanPorCanal = modoResumo ? 2 : 6 + (representatividadePorProduto ? 1 : 0);
 
   return (
     <div className="relative" ref={containerRef}>

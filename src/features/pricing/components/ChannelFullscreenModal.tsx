@@ -71,6 +71,11 @@ export function ChannelFullscreenModal({
   onAtualizarItemCatalogo,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
+  // Desligado (padrão) = bloco fixo de identificação (Classe/ID) some, só Nome/Fornecedor/Peso —
+  // as colunas por canal (Frete/Encargos/ML($)/Repres.%/Ajuste) ficam completas, "como já funciona
+  // hoje". Ligado = o bloco fixo abre tudo (Classe/ID de volta), e as colunas por canal encolhem
+  // pro resumido (só Preço+ML%) pra não empilhar as duas coisas ao mesmo tempo — ver PricingTable.tsx.
+  const [custoEstendido, setCustoEstendido] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoAberto, setGraficoAberto] = useState(false);
@@ -87,6 +92,7 @@ export function ChannelFullscreenModal({
       setGraficoAberto(false);
       setProdutoGraficoLinha(null);
       setSafraSelecionadaGrafico(null);
+      setCustoEstendido(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
@@ -188,6 +194,18 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setCustoEstendido((v) => !v)}
+            title={
+              custoEstendido
+                ? 'Mostrando Classe/ID — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
+                : 'Estender pra ver Classe/ID — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
+            }
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${custoEstendido ? 'bg-[var(--color-accent)] text-[#04241A]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+          >
+            {custoEstendido ? 'Recolher' : 'Estender'}
+          </button>
           <span className="ml-auto">
             <SeletorCriterioRepresentacao
               criterio={criterioRepresentacao}
@@ -218,10 +236,10 @@ export function ChannelFullscreenModal({
             canaisVisiveis={[canal]}
             todosCanais={todosCanais}
             transportadoras={transportadoras}
-            // Sempre "Mais detalhes" aqui — é a tela cheia de UMA Tabela, tem espaço de sobra
-            // e o usuário já veio pra examinar essa Tabela a fundo (o toggle da barra de
-            // ferramentas principal segue só valendo pra grade compacta com várias Tabelas lado a lado).
-            mostrarMaisDetalhes
+            // Ver o toggle "Estender" (setCustoEstendido) no cabeçalho — as duas nunca ficam
+            // detalhadas ao mesmo tempo, senão a grade fica larga demais mesmo em tela cheia.
+            mostrarDetalhesFixos={custoEstendido}
+            mostrarDetalhesTabelas={!custoEstendido}
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
