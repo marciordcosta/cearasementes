@@ -247,7 +247,6 @@ function ModalPagamento({
   temTransportadora,
   whatsapp,
   onCalcularFrete,
-  onCotarFrete,
   pagamentoHabilitado,
   avistaDescontoPct,
   boletoValorMinimo,
@@ -261,11 +260,10 @@ function ModalPagamento({
   totalComFrete: number;
   /** Mesmo estado do botão "Frete" no Orçamento — alterna entre "Calcular frete" e "Valor sem o frete"/totais, só ligado a temTransportadora. */
   estadoFrete: EstadoFrete;
-  /** false = canal Manual (sem Transportadora) — usa "Cotação de frete" (WhatsApp) em vez de "Calcular frete". */
+  /** false = canal Manual (sem Transportadora) — mostra o aviso de frete não informado em vez de "Calcular frete". */
   temTransportadora: boolean;
   whatsapp: string | null;
   onCalcularFrete: () => void;
-  onCotarFrete: () => void;
   pagamentoHabilitado: boolean;
   avistaDescontoPct: number;
   boletoValorMinimo: number;
@@ -412,14 +410,13 @@ function ModalPagamento({
                   </button>
                 </div>
               )
-            ) : whatsapp ? (
-              <button type="button" onClick={onCotarFrete} className="text-left text-[11px] font-semibold text-[#2563eb] underline">
-                Cotação de frete
-              </button>
             ) : (
-              <p className="text-[11px] text-[#67718a]">Frete a combinar</p>
+              // Canal Manual (sem Transportadora) — se o cliente pulou a Cotação de frete no
+              // carrinho e chegou até aqui, não repete o link (esse é o lugar certo de perguntar a
+              // cidade, ver ModalCotacaoCidade em ModalOrcamento); só avisa a situação.
+              <p className="text-[11px] text-[#67718a]">Valor de frete não informado, verifique com um consultor ou retire a mercadoria no local.</p>
             )}
-            {!(temTransportadora && estadoFrete === 'calculado') && (
+            {temTransportadora && estadoFrete !== 'calculado' && (
               <p className="mt-0.5 text-[10px] text-[#9aa3b2]">Sem o frete informado, o produto deve ser retirado na loja.</p>
             )}
           </div>
@@ -967,7 +964,6 @@ function ModalOrcamento({
           temTransportadora={temTransportadora}
           whatsapp={whatsapp}
           onCalcularFrete={alternarFrete}
-          onCotarFrete={pedirCotacaoFrete}
           pagamentoHabilitado={pagamentoHabilitado}
           avistaDescontoPct={pagamentoAvistaDescontoPct}
           boletoValorMinimo={pagamentoBoletoValorMinimo}
