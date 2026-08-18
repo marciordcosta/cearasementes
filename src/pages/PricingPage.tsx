@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Gauge, Loader2, Truck } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
@@ -285,10 +285,14 @@ export function PricingPage() {
   // — só pra saber, na grade principal, QUANTOS produtos têm publicação pendente em QUALQUER Tabela
   // visível de uma vez só (ver publicacaoPendenteGrade abaixo e o botão "🌐 Publicar N pendentes" da
   // barra de ferramentas). Mesma queryKey já usada na tela cheia por canal — cache compartilhado.
+  // `enabled` só liga depois que a carga principal (produtos/categorias/etc.) e o BI já terminaram —
+  // sem isso, essas N requisições extras competiam com o carregamento crítico da página e o F5 ficava
+  // pesado. Não precisa ser instantâneo: é só o botão "Publicar pendentes", pode aparecer um instante depois.
   const precosPublicadosQueries = useQueries({
     queries: canaisVisiveis.map((canal) => ({
       queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id],
       queryFn: () => fetchPrecosCatalogoPublicoPorCanal(canal.id),
+      enabled: seeded.current && !carregandoBi,
     })),
   });
   const precosPublicadosPorCanal = precosPublicadosQueries.map((q) => q.data);
@@ -298,28 +302,32 @@ export function PricingPage() {
    * cheia por canal, que só olha 1) — cada entrada é 1 produto que precisa publicar (ou remover) em
    * 1 canal específico. Usa `produtosAtivos` (ignora busca/Categoria/Fornecedor da grade), mesma
    * regra de publicarUmCatalogo/atualizarItemCatalogo: só a desativação de verdade conta. Roda
-   * `calcularCanal` pra cada combinação produto×canal — pesado o bastante pra travar a digitação se
-   * refeito em TODO re-render (era o que acontecia antes), por isso o useMemo: só recalcula quando
-   * produtos/canais/preços publicados realmente mudam.
+   * `calcularCanal` pra cada combinação produto×canal — pesado o bastante pra travar a pintura da
+   * grade se rodasse direto no render (mesmo memoizado, a primeira vez que os dados chegam ainda
+   * travava por um instante) — por isso vira estado calculado num efeito, dentro de startTransition,
+   * pra rodar em baixa prioridade sem segurar o carregamento da tabela.
    */
-  const publicacaoPendenteGrade = useMemo(
-    () =>
-      canaisVisiveis.flatMap((canal, indice) => {
+  const [publicacaoPendenteGrade, setPublicacaoPendenteGrade] = useState<{ canal: Canal; produtoId: string }[]>([]);
+  const [, iniciarTransicaoPendentes] = useTransition();
+  useEffect(() => {
+    iniciarTransicaoPendentes(() => {
+      const pendentes = canaisVisiveis.flatMap((canal, indice) => {
         const precosPublicados = precosPublicadosPorCanal[indice];
         if (!precosPublicados) return [];
-        const pendentes: { canal: Canal; produtoId: string }[] = [];
+        const lista: { canal: Canal; produtoId: string }[] = [];
         produtosAtivos.forEach((p) => {
           const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
           const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
           const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
           const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
-          if (status) pendentes.push({ canal, produtoId: p.id });
+          if (status) lista.push({ canal, produtoId: p.id });
         });
-        return pendentes;
-      }),
+        return lista;
+      });
+      setPublicacaoPendenteGrade(pendentes);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canaisVisiveis, produtosAtivos, categorias, subcategorias, fornecedorPorId, transportadoraPorId, canaisPorId, resolverDescontoBi, ...precosPublicadosPorCanal],
-  );
+  }, [canaisVisiveis, produtosAtivos, categorias, subcategorias, fornecedorPorId, transportadoraPorId, canaisPorId, resolverDescontoBi, ...precosPublicadosPorCanal]);
 
   const produtosFiltrados = produtosAtivos
     .filter((p) => {
