@@ -566,8 +566,17 @@ function ModalNumeroWhatsApp({ enviando, onEnviar, onFechar }: { enviando: boole
  * dentro da linha de Frete do resumo. Cidade é texto livre — sem CEP/autocomplete, só o suficiente
  * pra dar contexto pra quem for cotar o frete manualmente.
  */
-function ModalCotacaoCidade({ onConcluir, onFechar }: { onConcluir: (cidade: string) => void; onFechar: () => void }) {
-  const [cidade, setCidade] = useState('');
+function ModalCotacaoCidade({
+  cidadeInicial,
+  onConcluir,
+  onFechar,
+}: {
+  /** Já digitada antes (voltou sem prosseguir no ModalPagamento) — abre preenchida, pra corrigir em vez de digitar tudo de novo. */
+  cidadeInicial: string;
+  onConcluir: (cidade: string) => void;
+  onFechar: () => void;
+}) {
+  const [cidade, setCidade] = useState(cidadeInicial);
   return (
     <div className="fixed inset-0 z-[225] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl">
@@ -834,7 +843,7 @@ function ModalOrcamento({
     onFechar();
   }
 
-  /** Abre o ModalCotacaoCidade em vez de ir direto pro WhatsApp — fecha o ModalPagamento se tiver aberto (é chamado de lá também, ver onCotarFrete), pra nunca ter os dois abertos ao mesmo tempo. */
+  /** Abre o ModalCotacaoCidade em vez de ir direto pro WhatsApp — fecha o ModalPagamento se tiver aberto, pra nunca ter os dois abertos ao mesmo tempo (o cliente pode ter voltado do ModalPagamento sem prosseguir e clicado aqui de novo, pra corrigir a cidade). */
   function pedirCotacaoFrete() {
     if (!whatsapp) return;
     setPagamentoAberto(false);
@@ -946,7 +955,7 @@ function ModalOrcamento({
               {!temTransportadora ? (
                 whatsapp ? (
                   <button type="button" onClick={pedirCotacaoFrete} className="text-xs font-semibold text-[#0e9d74] underline">
-                    Cotação de frete
+                    {cidadeCotacao ? `Cotação de frete para ${cidadeCotacao}` : 'Cotação de frete'}
                   </button>
                 ) : (
                   <span className="text-xs">A combinar</span>
@@ -1004,7 +1013,9 @@ function ModalOrcamento({
           onFechar={() => setPagamentoAberto(false)}
         />
       )}
-      {cotacaoFreteAberta && <ModalCotacaoCidade onConcluir={confirmarCotacaoFrete} onFechar={() => setCotacaoFreteAberta(false)} />}
+      {cotacaoFreteAberta && (
+        <ModalCotacaoCidade cidadeInicial={cidadeCotacao ?? ''} onConcluir={confirmarCotacaoFrete} onFechar={() => setCotacaoFreteAberta(false)} />
+      )}
       {observacaoWhatsAppAberta && (
         <ModalObservacaoWhatsApp
           resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), totalComPagamento, descricaoPagamento())}
