@@ -634,7 +634,7 @@ export function PricingTable({
                       onTogglePrecisaAjuste(p.id, canal.id, !precisaAjuste);
                     }}
                     title={precisaAjuste ? 'Marcado para ajuste — some do PDF deste canal' : 'Marcar como "precisa de ajuste" (some do PDF deste canal)'}
-                    className={`rounded px-1.5 py-0.5 text-[10px] ${precisaAjuste ? 'bg-bad-soft text-bad' : 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]'}`}
+                    className={`rounded px-1.5 py-0.5 text-[10px] ${precisaAjuste ? 'text-[var(--color-text-soft)] hover:bg-[var(--color-line)]' : 'bg-bad-soft text-bad'}`}
                   >
                     {precisaAjuste ? 'ativar' : 'desativar'}
                   </button>
