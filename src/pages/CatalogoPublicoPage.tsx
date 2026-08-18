@@ -510,9 +510,8 @@ function ModalObservacaoWhatsApp({ resumo, onEnviar, onFechar }: { resumo: strin
 /**
  * Aberto depois de "Enviar pedido" no resumo/composição (ver iniciarEnvioPedido em ModalOrcamento),
  * MAS ainda antes de abrir o WhatsApp de fato — fica no meio do caminho, pergunta se quer salvar o
- * PDF do pedido também. Qualquer escolha (Salvar ou Não) abre o WhatsApp com a mensagem já composta
- * (ver enviarPedidoWhatsApp); "Salvar" dispara o download em segundo plano antes (ver
- * salvarPedidoPdfESeguir), sem esperar nem travar a navegação. Sem compartilhamento nativo aqui de
+ * PDF do pedido também. Qualquer escolha (Salvar ou Não) segue pro passo final (ver finalizarEnvio),
+ * que mostra "Enviando pedido…" e só depois abre o WhatsApp. Sem compartilhamento nativo aqui de
  * propósito — pedir número como fallback não é prático, e essa etapa roda antes do cliente sair pro
  * WhatsApp mesmo, evitando o problema de perder o convite quando ele volta do app.
  */
@@ -529,6 +528,18 @@ function ModalOfertaPdf({ onSalvar, onFechar }: { onSalvar: () => void; onFechar
             Não, obrigado
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** "Enviando pedido…" — cobre o passo final antes de abrir o WhatsApp (ver finalizarEnvio em ModalOrcamento), pra não trocar de app de repente, sem aviso nenhum. Sem botão nenhum de propósito — é só uma pausa curta, não precisa (nem dá tempo) de cancelar. */
+function ModalEnviandoPedido() {
+  return (
+    <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/45 p-4">
+      <div className="flex items-center gap-2.5 rounded-xl bg-white px-5 py-4 shadow-2xl">
+        <Loader2 size={18} className="animate-spin text-[#0e9d74]" />
+        <span className="text-sm font-semibold text-[#1a2233]">Enviando pedido…</span>
       </div>
     </div>
   );
@@ -585,11 +596,14 @@ function ModalOrcamento({
   const [pagamentoEscolhido, setPagamentoEscolhido] = useState<PagamentoEscolhido | null>(null);
   const [observacaoWhatsAppAberta, setObservacaoWhatsAppAberta] = useState(false);
   // Depois do resumo/composição (ModalObservacaoWhatsApp), antes de abrir o WhatsApp de fato —
-  // pergunta se quer salvar o PDF também (ver iniciarEnvioPedido/enviarPedidoWhatsApp/salvarESeguir).
+  // pergunta se quer salvar o PDF também (ver iniciarEnvioPedido/finalizarEnvio).
   const [ofertaPdfAberta, setOfertaPdfAberta] = useState(false);
   // Mensagem final já composta (resumo + observação) — guardada aqui pra sobreviver o passo do
   // ModalOfertaPdf no meio do caminho, sendo enviada só depois que o cliente decidir sobre o PDF.
   const [mensagemPendente, setMensagemPendente] = useState<string | null>(null);
+  // "Enviando pedido…" — cobre o tempo de gerar o PDF (se escolhido) + uma pausa mínima visível,
+  // pra não abrir o WhatsApp "do nada" (ver finalizarEnvio/ModalEnviandoPedido).
+  const [enviandoPedido, setEnviandoPedido] = useState(false);
   // Sempre nasce "não calculado" — some quando o Orçamento fecha (desmonta) e volta a pedir clique
   // na próxima vez que abrir, mesmo pro mesmo carrinho. Só faz sentido quando temTransportadora (a
   // "Cotação de frete" do canal Manual é um fluxo à parte, ver pedirCotacaoFrete).
@@ -649,23 +663,21 @@ function ModalOrcamento({
     setOfertaPdfAberta(true);
   }
 
-  /** Abre o WhatsApp de fato com a mensagem guardada (ver iniciarEnvioPedido) e fecha o ciclo do pedido — chamado pelas duas opções do ModalOfertaPdf (Salvar ou Não). */
-  function enviarPedidoWhatsApp() {
-    if (whatsapp && mensagemPendente) window.open(linkWhatsApp(whatsapp, mensagemPendente), '_blank');
-    finalizarPedido();
-  }
-
-  /** "Salvar" no convite de PDF — dispara o download em segundo plano (sem esperar) e já abre o WhatsApp. */
   /**
-   * "Salvar" no convite de PDF — espera o download ser DISPARADO (gera o PDF, cria o link, clica)
-   * antes de abrir o WhatsApp, com uma folga curta depois (o Android processar o download e mostrar
-   * a caixa de "onde salvar" antes da troca de app). Não dá pra esperar o cliente terminar de
-   * escolher o local de fato — o navegador não avisa quando essa caixa fecha, não existe esse evento.
+   * Passo final — chamado pelas duas opções do ModalOfertaPdf (Salvar ou Não). Mostra "Enviando
+   * pedido…" (ver ModalEnviandoPedido) cobrindo o tempo de gerar o PDF (quando `comPdf`) mais uma
+   * pausa mínima visível, pra não abrir o WhatsApp "do nada" feito algo quebrado; só depois abre o
+   * WhatsApp de fato com a mensagem guardada (ver iniciarEnvioPedido) e zera o carrinho.
    */
-  async function salvarPedidoPdfESeguir() {
-    await salvarPedidoPdf();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    enviarPedidoWhatsApp();
+  async function finalizarEnvio(comPdf: boolean) {
+    setOfertaPdfAberta(false);
+    setEnviandoPedido(true);
+    if (comPdf) await salvarPedidoPdf();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    if (whatsapp && mensagemPendente) window.open(linkWhatsApp(whatsapp, mensagemPendente), '_blank');
+    setEnviandoPedido(false);
+    onLimparCarrinho();
+    onFechar();
   }
 
   function pedirCotacaoFrete() {
@@ -673,14 +685,7 @@ function ModalOrcamento({
     window.open(linkWhatsApp(whatsapp, montarMensagemCotacaoFrete(canalNome, itens)), '_blank');
   }
 
-  /** Saída do fluxo do pedido — depois do WhatsApp abrir (ver enviarPedidoWhatsApp), zera o carrinho e fecha o Orçamento de vez. */
-  function finalizarPedido() {
-    setOfertaPdfAberta(false);
-    onLimparCarrinho();
-    onFechar();
-  }
-
-  /** Baixa o PDF do pedido (jsPDF de verdade) — chamado sem esperar (ver salvarPedidoPdfESeguir), o download roda em segundo plano enquanto já abre o WhatsApp. */
+  /** Baixa o PDF do pedido (jsPDF de verdade) — parte do passo final (ver finalizarEnvio), que já espera essa geração terminar antes de abrir o WhatsApp. */
   async function salvarPedidoPdf() {
     const blob = await gerarOrcamentoPdfBlob(canalNome, itensParaPdf(), descreverFrete(), totalComPagamento, descricaoPagamento());
     const url = URL.createObjectURL(blob);
@@ -845,8 +850,9 @@ function ModalOrcamento({
         />
       )}
       {ofertaPdfAberta && (
-        <ModalOfertaPdf onSalvar={salvarPedidoPdfESeguir} onFechar={enviarPedidoWhatsApp} />
+        <ModalOfertaPdf onSalvar={() => void finalizarEnvio(true)} onFechar={() => void finalizarEnvio(false)} />
       )}
+      {enviandoPedido && <ModalEnviandoPedido />}
     </div>
   );
 }
