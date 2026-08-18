@@ -68,6 +68,8 @@ interface PricingTableProps {
    * canal (ver ChannelFullscreenModal.tsx) é sempre `true` (não tem esse trade-off, espaço sobra).
    */
   mostrarDetalhesFixos: boolean;
+  /** Coluna "Custo (R$)" — independente de `mostrarDetalhesFixos` (a grade principal sempre passa `true` aqui; só a tela cheia por canal liga isso junto com o "Estender", pra some/aparece com Classe/ID). */
+  mostrarCusto: boolean;
   /**
    * Frete/Encargos/ML ($)/Repres. (%)/Ajuste em cada Tabela de Preço — por padrão (ligada), cada
    * Tabela mostra tudo; cai pra `false` (só Preço + ML%) quando `mostrarDetalhesFixos` liga (ver
@@ -143,6 +145,7 @@ export function PricingTable({
   todosCanais,
   transportadoras,
   mostrarDetalhesFixos,
+  mostrarCusto,
   mostrarDetalhesTabelas,
   onToggleCustoEstendido,
   onUpdatePreco,
@@ -343,43 +346,47 @@ export function PricingTable({
       },
     },
     { chave: 'peso', rotulo: 'Peso (Kg)', larguraPadrao: defaults.peso, render: (p) => <span className="num">{Math.round(p.peso)}kg</span> },
-    {
-      // Normalmente não editável (custo = Valor Kg x Peso, calculado e salvo no Editar Produto) —
-      // o ícone ✎ libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
-      chave: 'custo',
-      rotulo: (
-        <span className="inline-flex items-center gap-1" title={edicaoCustoLote ? 'Editando Valor Kg' : undefined}>
-          {edicaoCustoLote ? 'Editando' : 'Custo (R$)'}
-          {onAtualizarValorKg && (
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => setEdicaoCustoLote((v) => !v)}
-              title={edicaoCustoLote ? 'Concluir edição em lote' : 'Editar Valor Kg em lote, sem abrir cada produto'}
-              className={`rounded px-1 ${edicaoCustoLote ? 'bg-[var(--color-accent)] text-white' : 'hover:bg-white/15'}`}
-            >
-              ✎
-            </button>
-          )}
-        </span>
-      ),
-      larguraPadrao: defaults.custo,
-      render: (p, destacada) =>
-        edicaoCustoLote && onAtualizarValorKg ? (
-          <NumeroSincronizado
-            valor={p.valorKg}
-            step="0.01"
-            onCommit={(val) => onAtualizarValorKg(p.id, val)}
-            className={`num w-full rounded border border-[var(--color-accent)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right font-semibold text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
-          />
-        ) : (
-          <div
-            className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
-          >
-            {fmtR(p.custo)}
-          </div>
-        ),
-    },
+    ...(mostrarCusto
+      ? [
+          {
+            // Normalmente não editável (custo = Valor Kg x Peso, calculado e salvo no Editar Produto) —
+            // o ícone ✎ libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
+            chave: 'custo',
+            rotulo: (
+              <span className="inline-flex items-center gap-1" title={edicaoCustoLote ? 'Editando Valor Kg' : undefined}>
+                {edicaoCustoLote ? 'Editando' : 'Custo (R$)'}
+                {onAtualizarValorKg && (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setEdicaoCustoLote((v) => !v)}
+                    title={edicaoCustoLote ? 'Concluir edição em lote' : 'Editar Valor Kg em lote, sem abrir cada produto'}
+                    className={`rounded px-1 ${edicaoCustoLote ? 'bg-[var(--color-accent)] text-white' : 'hover:bg-white/15'}`}
+                  >
+                    ✎
+                  </button>
+                )}
+              </span>
+            ),
+            larguraPadrao: defaults.custo,
+            render: (p: Produto, destacada: boolean) =>
+              edicaoCustoLote && onAtualizarValorKg ? (
+                <NumeroSincronizado
+                  valor={p.valorKg}
+                  step="0.01"
+                  onCommit={(val) => onAtualizarValorKg(p.id, val)}
+                  className={`num w-full rounded border border-[var(--color-accent)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right font-semibold text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+                />
+              ) : (
+                <div
+                  className={`num w-full rounded border border-[var(--color-line)] bg-[var(--color-surface)] px-1.5 py-0.5 text-right text-[var(--color-text)] ${destacada ? 'shadow-[inset_0_0_0_999px_var(--color-highlight-row-subtle)]' : ''}`}
+                >
+                  {fmtR(p.custo)}
+                </div>
+              ),
+          } satisfies ColunaDef,
+        ]
+      : []),
     ...(mostrarDetalhesFixos && representatividadeGeralPorProduto
       ? [
           {
@@ -731,9 +738,10 @@ export function PricingTable({
   const limiarComecoCobertura = mostrarDetalhesFixos ? largura('id') : 0;
 
   // Quantas colunas fixas (fora dos blocos por canal/safra) existem antes do cabeçalho de canal
-  // começar — Excluir+Editar+Produto+Peso+Custo sempre, + Classe/ID quando "Mais detalhes" está
-  // ligado, + Repres. Geral quando além disso houver dado pra ela.
-  const colSpanColunasFixas = 5 + (mostrarDetalhesFixos ? 2 : 0) + (mostrarDetalhesFixos && representatividadeGeralPorProduto ? 1 : 0);
+  // começar — Excluir+Editar+Produto+Peso sempre, + Custo quando `mostrarCusto`, + Classe/ID quando
+  // "Estender" está ligado, + Repres. Geral quando além disso houver dado pra ela.
+  const colSpanColunasFixas =
+    4 + (mostrarCusto ? 1 : 0) + (mostrarDetalhesFixos ? 2 : 0) + (mostrarDetalhesFixos && representatividadeGeralPorProduto ? 1 : 0);
   // Preço+Frete+Encargos+ML%+ML$+Ajuste (6) e mais Repres. quando essa coluna existir — no modo
   // Resumo, só Preço+ML% (Ajuste agora some junto com o resto do grupo detalhado).
   const colSpanPorCanal = modoResumo ? 2 : 6 + (representatividadePorProduto ? 1 : 0);

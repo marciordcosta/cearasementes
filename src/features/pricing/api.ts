@@ -3,6 +3,14 @@ import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { inferirNomeCategoriaDoNome, inferirPesoDoNome } from './produtoInferencia';
 import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from './types';
+import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from '@/features/arquivos/types';
+
+/** Pacote de dados de plantio (Guia de Plantio) buscado UMA VEZ antes de publicar 1+ itens no Catálogo Online — ver construirItemCatalogo, publicarUmCatalogo e atualizarItemCatalogo em PricingPage.tsx. */
+export interface DadosPlantioCatalogo {
+  arquivosLaudos: ArquivoLaudo[];
+  parametrizacaoProdutos: ProdutoParametrizacao[];
+  fatoresPlantio: FatorPlantio[];
+}
 
 type CanalRow = Database['public']['Tables']['canais_preco']['Row'];
 type CategoriaRow = Database['public']['Tables']['categorias']['Row'];

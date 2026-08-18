@@ -49,6 +49,7 @@ import {
   upsertCategoriaReferenciaAjuste,
   upsertProdutoPreco,
   upsertSubcategoriaMargem,
+  type DadosPlantioCatalogo,
   type ItemCatalogoPublicoInput,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
@@ -658,8 +659,12 @@ export function PricingPage() {
    * esse produto especificamente, mesmo que ele não apareça na publicação em lote) — mas RESPEITA
    * desativação (Imprimir do produto ou "precisa ajuste" nesse canal): nesse caso remove o item do
    * Catálogo já publicado em vez de tentar atualizar um preço que não devia mais estar lá.
+   * `dadosPlantio` é OBRIGATÓRIO de propósito (não busca sozinho) — quem chama em loop (publicar
+   * vários pendentes de uma vez) precisa buscar isso UMA VEZ só antes do loop; buscar de novo a cada
+   * item (como era antes) multiplicava 3 requisições paginadas por item pendente e travava a tela
+   * inteira com poucas dezenas de pendências.
    */
-  async function atualizarItemCatalogo(produtoId: string, canal: Canal): Promise<boolean> {
+  async function atualizarItemCatalogo(produtoId: string, canal: Canal, dadosPlantio: DadosPlantioCatalogo): Promise<boolean> {
     // `produtos` (lista completa, sem filtro/busca) — mesmo raciocínio de publicarUmCatalogo: um
     // filtro/busca esquecido na tela não pode fazer esse lookup falhar silenciosamente.
     const p = produtos.find((x) => x.id === produtoId);
@@ -670,12 +675,7 @@ export function PricingPage() {
         await removerItemCatalogoPublico(canal.id, produtoId);
         return true;
       }
-      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
-        fetchArquivosLaudos(),
-        fetchParametrizacaoProdutos(),
-        fetchFatoresPlantio(),
-      ]);
-      const item = construirItemCatalogo(p, canal, 0, arquivosLaudos, parametrizacaoProdutos, fatoresPlantio);
+      const item = construirItemCatalogo(p, canal, 0, dadosPlantio.arquivosLaudos, dadosPlantio.parametrizacaoProdutos, dadosPlantio.fatoresPlantio);
       await atualizarItemCatalogoPublico(canal.id, item);
       return true;
     } catch (e) {
@@ -689,8 +689,14 @@ export function PricingPage() {
     if (publicacaoPendenteGrade.length === 0) return;
     setPublicandoPendentesGrade(true);
     try {
+      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
+        fetchArquivosLaudos(),
+        fetchParametrizacaoProdutos(),
+        fetchFatoresPlantio(),
+      ]);
+      const dadosPlantio: DadosPlantioCatalogo = { arquivosLaudos, parametrizacaoProdutos, fatoresPlantio };
       for (const { canal, produtoId } of publicacaoPendenteGrade) {
-        await atualizarItemCatalogo(produtoId, canal);
+        await atualizarItemCatalogo(produtoId, canal, dadosPlantio);
       }
       canaisVisiveis.forEach((canal) => queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id] }));
     } finally {
@@ -1152,6 +1158,7 @@ export function PricingPage() {
               // detalhado por Tabela só existe na tela cheia por canal (ver ChannelFullscreenModal.tsx,
               // que tem espaço de sobra por ser só 1 Tabela).
               mostrarDetalhesFixos={custoEstendido}
+              mostrarCusto
               mostrarDetalhesTabelas={false}
               onToggleCustoEstendido={() => setCustoEstendido((v) => !v)}
               onUpdatePreco={onUpdatePreco}

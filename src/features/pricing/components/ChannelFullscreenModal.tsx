@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { fetchArquivosLaudos, fetchFatoresPlantio, fetchParametrizacaoProdutos } from '@/features/arquivos/api';
 import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
-import { fetchPrecosCatalogoPublicoPorCanal } from '../api';
+import { fetchPrecosCatalogoPublicoPorCanal, type DadosPlantioCatalogo } from '../api';
 import { statusPublicacaoPendente } from '../calculations';
 import {
   calcularMargemAtualProjetada,
@@ -50,8 +51,8 @@ interface ChannelFullscreenModalProps {
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
   onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
-  /** Ícone 🌐 por produto (só aqui, na tela cheia por canal) — atualiza só ESSE item no Catálogo Online já publicado, sem republicar a Tabela inteira. Devolve se deu certo. */
-  onAtualizarItemCatalogo?: (produtoId: string, canal: Canal) => Promise<boolean>;
+  /** Ícone 🌐 por produto (só aqui, na tela cheia por canal) — atualiza só ESSE item no Catálogo Online já publicado, sem republicar a Tabela inteira. Devolve se deu certo. `dadosPlantio` é buscado UMA VEZ (ver publicarTodosPendentes) antes do loop, não a cada item. */
+  onAtualizarItemCatalogo?: (produtoId: string, canal: Canal, dadosPlantio: DadosPlantioCatalogo) => Promise<boolean>;
 }
 
 export function ChannelFullscreenModal({
@@ -73,6 +74,11 @@ export function ChannelFullscreenModal({
   onAtualizarItemCatalogo,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
+  // Desligado (padrão) = bloco fixo mostra só Produto/Fornecedor/Peso (Classe, ID e Custo somem).
+  // Ligado ("Estender") = abre Classe/ID/Custo também — as colunas de cada Tabela (Preço/Frete/
+  // Encargos/ML%/ML$/Repres.%/Ajuste) ficam sempre completas aqui, com ou sem isso ligado (só 1
+  // Tabela em tela cheia, tem espaço de sobra — ver mostrarDetalhesTabelas fixo abaixo).
+  const [custoEstendido, setCustoEstendido] = useState(false);
   const [ordenarPorRepresentacao, setOrdenarPorRepresentacao] = useState(false);
   const [criterioRepresentacao, setCriterioRepresentacao] = useState<CriterioRepresentacao>('valor');
   const [graficoAberto, setGraficoAberto] = useState(false);
@@ -89,6 +95,7 @@ export function ChannelFullscreenModal({
       setGraficoAberto(false);
       setProdutoGraficoLinha(null);
       setSafraSelecionadaGrafico(null);
+      setCustoEstendido(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canal?.id]);
@@ -170,20 +177,31 @@ export function ChannelFullscreenModal({
   const queryClient = useQueryClient();
 
   /** Envolve o 🌐 (individual e em lote) pra invalidar precosPublicados depois de publicar/remover — senão o destaque de pendência ficava desatualizado até fechar e reabrir o modal. */
-  async function atualizarItemEinvalidar(produtoId: string, canalArg: Canal): Promise<boolean> {
+  async function atualizarItemEinvalidar(produtoId: string, canalArg: Canal, dadosPlantio: DadosPlantioCatalogo): Promise<boolean> {
     if (!onAtualizarItemCatalogo) return false;
-    const ok = await onAtualizarItemCatalogo(produtoId, canalArg);
+    const ok = await onAtualizarItemCatalogo(produtoId, canalArg, dadosPlantio);
     if (ok) queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canalArg.id] });
     return ok;
   }
 
-  /** Botão "global" — publica (ou remove) de uma vez todos os itens com pendência (ver publicacaoPendentePorProduto), reaproveitando o MESMO onAtualizarItemCatalogo do 🌐 por item, um de cada vez. */
+  /**
+   * Botão "global" — publica (ou remove) de uma vez todos os itens com pendência (ver
+   * publicacaoPendentePorProduto), reaproveitando o MESMO onAtualizarItemCatalogo do 🌐 por item, um
+   * de cada vez. Busca os dados de plantio UMA VEZ antes do loop (não a cada item) — buscar de novo
+   * por item multiplicava 3 requisições paginadas por pendência e travava a tela com poucas dezenas.
+   */
   async function publicarTodosPendentes() {
     if (!canal || !onAtualizarItemCatalogo || publicacaoPendentePorProduto.size === 0) return;
     setPublicandoPendentes(true);
     try {
+      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
+        fetchArquivosLaudos(),
+        fetchParametrizacaoProdutos(),
+        fetchFatoresPlantio(),
+      ]);
+      const dadosPlantio: DadosPlantioCatalogo = { arquivosLaudos, parametrizacaoProdutos, fatoresPlantio };
       for (const produtoId of publicacaoPendentePorProduto.keys()) {
-        await atualizarItemEinvalidar(produtoId, canal);
+        await atualizarItemEinvalidar(produtoId, canal, dadosPlantio);
       }
     } finally {
       setPublicandoPendentes(false);
@@ -243,6 +261,18 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => setCustoEstendido((v) => !v)}
+            title={
+              custoEstendido
+                ? 'Recolher — volta a mostrar só Produto/Fornecedor/Peso'
+                : 'Estender pra ver Classe/ID/Custo também'
+            }
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-normal whitespace-nowrap ${custoEstendido ? 'bg-[var(--color-accent)] text-[#04241A]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+          >
+            {custoEstendido ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
+          </button>
           {onAtualizarItemCatalogo && publicacaoPendentePorProduto.size > 0 && (
             <button
               type="button"
@@ -284,10 +314,14 @@ export function ChannelFullscreenModal({
             canaisVisiveis={[canal]}
             todosCanais={todosCanais}
             transportadoras={transportadoras}
-            // Sempre tudo aqui — é a tela cheia de UMA Tabela, tem espaço de sobra e o usuário já
-            // veio pra examinar essa Tabela a fundo (o "Estender" fica só na grade principal, ver
-            // PricingPage.tsx, que é quem precisa desse trade-off por ter várias Tabelas lado a lado).
-            mostrarDetalhesFixos
+            // Bloco fixo (Classe/ID/Custo) começa recolhido — só Produto/Fornecedor/Peso — e o botão
+            // "Estender" no cabeçalho do modal (acima) abre os três juntos. As colunas de cada Tabela
+            // (Preço/Frete/Encargos/ML%/ML$/Repres.%/Ajuste) ficam sempre completas aqui, com ou sem
+            // isso ligado — só 1 Tabela em tela cheia, tem espaço de sobra. (O cabeçalho de grupo com
+            // o ícone "Estender ⤢" da grade principal não existe aqui — somenteCanal esconde essa
+            // linha, já que só tem 1 Tabela; por isso o toggle vive no título do modal, não na grade.)
+            mostrarDetalhesFixos={custoEstendido}
+            mostrarCusto={custoEstendido}
             mostrarDetalhesTabelas
             onUpdatePreco={onUpdatePreco}
             onResetPreco={onResetPreco}
