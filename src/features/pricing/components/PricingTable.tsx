@@ -350,23 +350,20 @@ export function PricingTable({
       ? [
           {
             // Normalmente não editável (custo = Valor Kg x Peso, calculado e salvo no Editar Produto) —
-            // o ícone ✎ libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
+            // clicar no rótulo libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
             chave: 'custo',
-            rotulo: (
-              <span className="inline-flex items-center gap-1" title={edicaoCustoLote ? 'Editando Valor Kg' : undefined}>
+            rotulo: onAtualizarValorKg ? (
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setEdicaoCustoLote((v) => !v)}
+                title={edicaoCustoLote ? 'Concluir edição em lote' : 'Editar Valor Kg em lote, sem abrir cada produto'}
+                className={`underline decoration-dotted underline-offset-2 hover:decoration-solid ${edicaoCustoLote ? 'text-[var(--color-accent)]' : ''}`}
+              >
                 {edicaoCustoLote ? 'Editando' : 'Custo (R$)'}
-                {onAtualizarValorKg && (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => setEdicaoCustoLote((v) => !v)}
-                    title={edicaoCustoLote ? 'Concluir edição em lote' : 'Editar Valor Kg em lote, sem abrir cada produto'}
-                    className={`rounded px-1 ${edicaoCustoLote ? 'bg-[var(--color-accent)] text-white' : 'hover:bg-white/15'}`}
-                  >
-                    ✎
-                  </button>
-                )}
-              </span>
+              </button>
+            ) : (
+              'Custo (R$)'
             ),
             larguraPadrao: defaults.custo,
             render: (p: Produto, destacada: boolean) =>
