@@ -1,12 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { fetchArquivosLaudos, fetchFatoresPlantio, fetchParametrizacaoProdutos } from '@/features/arquivos/api';
 import { fetchVendaItens, fetchVendas } from '@/features/bi/api';
 import { agregarItens } from '@/features/bi/aggregate';
 import type { Transportadora } from '@/features/fretes/types';
-import { fetchPrecosCatalogoPublicoPorCanal, type DadosPlantioCatalogo } from '../api';
-import { statusPublicacaoPendente } from '../calculations';
+import { mensagemDeErro } from '@/lib/errors';
+import { fetchConfigCatalogoPublicoPorCanal, fetchPrecosCatalogoPublicoPorCanal } from '../api';
+import { statusPublicacaoPendente, statusPublicacaoPendenteCanal } from '../calculations';
 import {
   calcularMargemAtualProjetada,
   calcularRepresentatividade,
@@ -34,8 +34,8 @@ interface ChannelFullscreenModalProps {
   /** Já vem recortado pelo filtro/busca da grade principal — só pra exibir/buscar aqui dentro. */
   produtos: Produto[];
   /** SEM filtro/busca (só respeita a desativação de Fornecedor "Grade") — usado só pra calcular
-   * publicacaoPendentePorProduto/publicarTodosPendentes, pra "Publicar" nunca deixar pendência de
-   * fora por causa de um filtro/busca esquecido na tela (mesma regra de publicarUmCatalogo em
+   * produtosPendentes/publicarTodosPendentes, pra "Publicar" nunca deixar pendência de fora por
+   * causa de um filtro/busca esquecido na tela (mesma regra de publicarUmCatalogo em
    * PricingPage.tsx). Sem essa prop, cai pra `produtos` (compatível, mas aí volta a respeitar o filtro). */
   produtosParaPublicar?: Produto[];
   categorias: Categoria[];
@@ -57,8 +57,8 @@ interface ChannelFullscreenModalProps {
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
   onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
-  /** Ícone 🌐 por produto (só aqui, na tela cheia por canal) — atualiza só ESSE item no Catálogo Online já publicado, sem republicar a Tabela inteira. Devolve se deu certo. `dadosPlantio` é buscado UMA VEZ (ver publicarTodosPendentes) antes do loop, não a cada item. */
-  onAtualizarItemCatalogo?: (produtoId: string, canal: Canal, dadosPlantio: DadosPlantioCatalogo) => Promise<boolean>;
+  /** Botão "🌐 Publicar N pendentes" do título — republica essa Tabela inteira (preço/ativação de produto E config — frete/whatsapp/pagamento/plantio, ver statusPublicacaoPendenteCanal). Sem essa prop, o botão não aparece. */
+  onPublicar?: (canal: Canal) => Promise<{ canalNome: string; url: string }>;
 }
 
 export function ChannelFullscreenModal({
@@ -78,7 +78,7 @@ export function ChannelFullscreenModal({
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
   onAtualizarValorKg,
-  onAtualizarItemCatalogo,
+  onPublicar,
 }: ChannelFullscreenModalProps) {
   const [busca, setBusca] = useState('');
   // Desligado (padrão) = bloco fixo mostra só Produto/Fornecedor/Peso (Classe, ID e Custo somem).
@@ -152,66 +152,66 @@ export function ChannelFullscreenModal({
 
   const fornecedorPorId = useMemo(() => new Map(fornecedores.map((f) => [f.id, f])), [fornecedores]);
 
-  // Preço já publicado de cada produto desse canal (ver fetchPrecosCatalogoPublicoPorCanal) — só
-  // pra comparar com o preço calculado agora e destacar o 🌐 quando há algo pendente (ver
-  // publicacaoPendentePorProduto abaixo). Refaz sempre que abre um canal diferente.
+  // Preço e config já publicados desse canal (ver fetchPrecosCatalogoPublicoPorCanal/
+  // fetchConfigCatalogoPublicoPorCanal) — só pra comparar com o calculado/cadastrado agora e
+  // destacar o 🌐 quando há algo pendente (ver linhasPendencia abaixo). Refaz sempre que abre um
+  // canal diferente.
   const { data: precosPublicados = new Map<string, number>() } = useQuery({
     queryKey: ['pricing', 'catalogoPublicoPrecos', canal?.id],
     queryFn: () => fetchPrecosCatalogoPublicoPorCanal(canal!.id),
     enabled: canal !== null,
   });
+  const { data: configPublicado } = useQuery({
+    queryKey: ['pricing', 'catalogoPublicoConfig', canal?.id],
+    queryFn: () => fetchConfigCatalogoPublicoPorCanal(canal!.id),
+    enabled: canal !== null,
+  });
 
   /**
-   * produtoId -> tipo de mudança pendente desde a última publicação (ver statusPublicacaoPendente em
-   * calculations.ts) — usado só pra saber QUANTOS/QUAIS itens publicar no botão "🌐 Publicar N
-   * pendentes" (ver publicarTodosPendentes) — não tem mais coluna própria na grade (ver
+   * Quantos produtos têm preço/ativação pendente desde a última publicação (ver
+   * statusPublicacaoPendente em calculations.ts) — não tem mais coluna própria na grade (ver
    * PricingTable.tsx, o 🌐 por item saiu, o botão global já resolve). Roda sobre
    * `produtosParaPublicar` (SEM filtro/busca) quando disponível — senão cai pra `produtos` (que já
    * vem filtrado), mas aí "Publicar" passa a respeitar o filtro sem querer.
    */
-  const publicacaoPendentePorProduto = useMemo(() => {
-    if (!canal) return new Map<string, 'novo' | 'preco' | 'remover'>();
-    const mapa = new Map<string, 'novo' | 'preco' | 'remover'>();
+  const produtosPendentes = useMemo(() => {
+    if (!canal) return 0;
+    let n = 0;
     (produtosParaPublicar ?? produtos).forEach((p) => {
       const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
       const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
       const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
       const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
-      if (status) mapa.set(p.id, status);
+      if (status) n++;
     });
-    return mapa;
+    return n;
   }, [produtos, produtosParaPublicar, canal, categorias, subcategorias, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorPorId, precosPublicados]);
+  /** Config (frete/whatsapp/pagamento/plantio) desatualizada desde a última publicação — mudanças na Parametrização que preço de produto nenhum reflete (ver statusPublicacaoPendenteCanal). */
+  const pendenciaConfig = useMemo(() => (canal ? statusPublicacaoPendenteCanal(canal, transportadoraPorId, configPublicado) : null), [canal, transportadoraPorId, configPublicado]);
+  /** 1 linha por aspecto pendente — vira o tooltip do botão e a contagem dele. */
+  const linhasPendencia = useMemo(() => {
+    const linhas: string[] = [];
+    if (produtosPendentes > 0) linhas.push('Alteração de valor');
+    if (pendenciaConfig?.frete) linhas.push('Alteração de frete');
+    if (pendenciaConfig?.pagamento) linhas.push('Alteração no pagamento');
+    if (pendenciaConfig?.whatsapp) linhas.push('Alteração no WhatsApp');
+    if (pendenciaConfig?.plantio) linhas.push('Alteração no plantio');
+    return linhas;
+  }, [produtosPendentes, pendenciaConfig]);
 
   const [publicandoPendentes, setPublicandoPendentes] = useState(false);
   const queryClient = useQueryClient();
 
-  /** Envolve o 🌐 (individual e em lote) pra invalidar precosPublicados depois de publicar/remover — senão o destaque de pendência ficava desatualizado até fechar e reabrir o modal. */
-  async function atualizarItemEinvalidar(produtoId: string, canalArg: Canal, dadosPlantio: DadosPlantioCatalogo): Promise<boolean> {
-    if (!onAtualizarItemCatalogo) return false;
-    const ok = await onAtualizarItemCatalogo(produtoId, canalArg, dadosPlantio);
-    if (ok) queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canalArg.id] });
-    return ok;
-  }
-
-  /**
-   * Botão "global" — publica (ou remove) de uma vez todos os itens com pendência (ver
-   * publicacaoPendentePorProduto), reaproveitando o MESMO onAtualizarItemCatalogo do 🌐 por item, um
-   * de cada vez. Busca os dados de plantio UMA VEZ antes do loop (não a cada item) — buscar de novo
-   * por item multiplicava 3 requisições paginadas por pendência e travava a tela com poucas dezenas.
-   */
+  /** Botão "global" do título — republica essa Tabela inteira (é o único jeito de corrigir pendência de CONFIG também, não só preço de produto). */
   async function publicarTodosPendentes() {
-    if (!canal || !onAtualizarItemCatalogo || publicacaoPendentePorProduto.size === 0) return;
+    if (!canal || !onPublicar || linhasPendencia.length === 0) return;
     setPublicandoPendentes(true);
     try {
-      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
-        fetchArquivosLaudos(),
-        fetchParametrizacaoProdutos(),
-        fetchFatoresPlantio(),
-      ]);
-      const dadosPlantio: DadosPlantioCatalogo = { arquivosLaudos, parametrizacaoProdutos, fatoresPlantio };
-      for (const produtoId of publicacaoPendentePorProduto.keys()) {
-        await atualizarItemEinvalidar(produtoId, canal, dadosPlantio);
-      }
+      await onPublicar(canal);
+      queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id] });
+      queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoConfig', canal.id] });
+    } catch (e) {
+      alert(mensagemDeErro(e, 'Falha ao publicar essa Tabela.'));
     } finally {
       setPublicandoPendentes(false);
     }
@@ -274,15 +274,15 @@ export function ChannelFullscreenModal({
               M.C prevista: {fmtP(margemAtualProjetada.margemLiquidaPct)}%
             </span>
           )}
-          {onAtualizarItemCatalogo && publicacaoPendentePorProduto.size > 0 && (
+          {onPublicar && linhasPendencia.length > 0 && (
             <button
               type="button"
               onClick={publicarTodosPendentes}
               disabled={publicandoPendentes}
-              title="Publica (ou remove) de uma vez só os produtos com preço/ativação pendente desde a última publicação, sem mexer no resto"
+              title={linhasPendencia.join('\n')}
               className="shrink-0 rounded-full bg-warn px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-[#4A2E00] hover:brightness-95 disabled:cursor-wait disabled:opacity-70"
             >
-              {publicandoPendentes ? 'Publicando…' : `🌐 Publicar ${publicacaoPendentePorProduto.size} pendente${publicacaoPendentePorProduto.size > 1 ? 's' : ''}`}
+              {publicandoPendentes ? 'Publicando…' : `🌐 Publicar ${linhasPendencia.length} pendente${linhasPendencia.length > 1 ? 's' : ''}`}
             </button>
           )}
           <span className="ml-auto">

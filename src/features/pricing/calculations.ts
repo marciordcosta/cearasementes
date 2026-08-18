@@ -1,4 +1,5 @@
 import type { Transportadora } from '@/features/fretes/types';
+import type { ConfigCatalogoPublicoCanal } from './api';
 import type { Canal, Categoria, Produto, ResultadoCalculo, Subcategoria } from './types';
 
 /**
@@ -307,6 +308,49 @@ export function statusPublicacaoPendente(
   if (precoPublicado === undefined) return 'novo';
   const precoAtual = calcularCanal(produto, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi).preco;
   return Math.abs(precoAtual - precoPublicado) > 0.005 ? 'preco' : null;
+}
+
+/** Quais aspectos da CONFIG de 1 canal (não de produto) estão divergentes do que já foi publicado — ver statusPublicacaoPendenteCanal. */
+export interface PendenciaConfigCanal {
+  frete: boolean;
+  whatsapp: boolean;
+  pagamento: boolean;
+  plantio: boolean;
+}
+
+/**
+ * Diferente de statusPublicacaoPendente (por produto): aqui é a CONFIG do canal em si (frete
+ * cobrado do cliente, WhatsApp, pagamento habilitado/desconto/boleto, "mostrar detalhes de
+ * plantio") que pode ficar desatualizada no Catálogo Online já publicado — mudar isso na
+ * Parametrização não toca preço de produto nenhum, então statusPublicacaoPendente nunca detectava.
+ * `null` = sem pendência de config (ou canal nunca publicado — nesse caso os itens "novo" já cobrem
+ * a pendência, republicar tudo já resolve a config junto). Tolerância de 0.0001 nos números, só pra
+ * não acusar diferença por arredondamento de ponto flutuante.
+ */
+export function statusPublicacaoPendenteCanal(
+  canal: Canal,
+  transportadoraPorId: Map<string, Transportadora>,
+  publicado: ConfigCatalogoPublicoCanal | null | undefined,
+): PendenciaConfigCanal | null {
+  if (!publicado) return null;
+  const { freteKgEfetivo, fretePctEfetivo, freteFixo, freteMinimo } = resolverFreteCatalogo(canal, transportadoraPorId);
+  const temTransportadora = canal.transportadoraId !== null;
+  const dif = (a: number, b: number) => Math.abs(a - b) > 0.0001;
+  const frete =
+    dif(freteKgEfetivo, publicado.freteKgEfetivo) ||
+    dif(fretePctEfetivo, publicado.fretePctEfetivo) ||
+    dif(freteFixo, publicado.freteFixo) ||
+    dif(freteMinimo, publicado.freteMinimo) ||
+    temTransportadora !== publicado.temTransportadora;
+  const whatsapp = (canal.whatsapp ?? null) !== (publicado.whatsapp ?? null);
+  const pagamento =
+    canal.pagamentoHabilitado !== publicado.pagamentoHabilitado ||
+    dif(canal.pagamentoAvistaDescontoPct, publicado.pagamentoAvistaDescontoPct) ||
+    dif(canal.pagamentoBoletoValorMinimo, publicado.pagamentoBoletoValorMinimo) ||
+    canal.pagamentoBoletoParcelasMax !== publicado.pagamentoBoletoParcelasMax;
+  const plantio = canal.mostrarDetalhesPlantio !== publicado.mostrarDetalhesPlantio;
+  if (!frete && !whatsapp && !pagamento && !plantio) return null;
+  return { frete, whatsapp, pagamento, plantio };
 }
 
 export function margemClasse(margemPct: number, alvo: number): 'good' | 'warn' | 'bad' {

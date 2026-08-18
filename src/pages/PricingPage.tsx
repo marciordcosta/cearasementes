@@ -25,11 +25,11 @@ import {
   atualizarCategoria,
   atualizarCustoPersonalizado,
   atualizarFornecedor,
-  atualizarItemCatalogoPublico,
   atualizarPrecisaAjuste,
   atualizarProduto,
   fetchCanais,
   fetchCategorias,
+  fetchConfigCatalogoPublicoPorCanal,
   fetchCustosPersonalizados,
   fetchFornecedores,
   fetchPrecosCatalogoPublicoPorCanal,
@@ -42,18 +42,23 @@ import {
   inserirProduto,
   inserirSubcategoria,
   publicarCatalogoOnline,
-  removerItemCatalogoPublico,
   upsertCategoriaMargem,
   upsertCategoriaMargemTolerancia,
   upsertCategoriaReferencia,
   upsertCategoriaReferenciaAjuste,
   upsertProdutoPreco,
   upsertSubcategoriaMargem,
-  type DadosPlantioCatalogo,
   type ItemCatalogoPublicoInput,
 } from '@/features/pricing/api';
 import { gerarCatalogoGerenciamentoPDF, gerarCatalogoPDF } from '@/features/pricing/catalogoPdf';
-import { calcularCanal, ordenarProdutos, resolverFreteCatalogo, statusPublicacaoPendente } from '@/features/pricing/calculations';
+import {
+  calcularCanal,
+  ordenarProdutos,
+  resolverFreteCatalogo,
+  statusPublicacaoPendente,
+  statusPublicacaoPendenteCanal,
+  type PendenciaConfigCanal,
+} from '@/features/pricing/calculations';
 import { AddProductForm } from '@/features/pricing/components/AddProductForm';
 import { CategoryMarginsPanel } from '@/features/pricing/components/CategoryMarginsPanel';
 import { ChannelFullscreenModal } from '@/features/pricing/components/ChannelFullscreenModal';
@@ -282,13 +287,14 @@ export function PricingPage() {
     [produtos, fornecedorPorId],
   );
 
-  // Preço já publicado de cada Tabela visível (uma query por canal, ver fetchPrecosCatalogoPublicoPorCanal)
-  // — só pra saber, na grade principal, QUANTOS produtos têm publicação pendente em QUALQUER Tabela
-  // visível de uma vez só (ver publicacaoPendenteGrade abaixo e o botão "🌐 Publicar N pendentes" da
-  // barra de ferramentas). Mesma queryKey já usada na tela cheia por canal — cache compartilhado.
-  // `enabled` só liga depois que a carga principal (produtos/categorias/etc.) e o BI já terminaram —
-  // sem isso, essas N requisições extras competiam com o carregamento crítico da página e o F5 ficava
-  // pesado. Não precisa ser instantâneo: é só o botão "Publicar pendentes", pode aparecer um instante depois.
+  // Preço e config (frete/whatsapp/pagamento/plantio) já publicados de cada Tabela visível (uma
+  // query por canal cada) — só pra saber, na grade principal, o que está pendente de publicar em
+  // QUALQUER Tabela visível de uma vez só (ver pendenciasPorCanal abaixo e o botão "🌐 Publicar N
+  // pendentes" da barra de ferramentas). Mesma queryKey já usada na tela cheia por canal — cache
+  // compartilhado. `enabled` só liga depois que a carga principal (produtos/categorias/etc.) e o BI
+  // já terminaram — sem isso, essas requisições extras competiam com o carregamento crítico da
+  // página e o F5 ficava pesado. Não precisa ser instantâneo: é só o botão "Publicar pendentes",
+  // pode aparecer um instante depois.
   const precosPublicadosQueries = useQueries({
     queries: canaisVisiveis.map((canal) => ({
       queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id],
@@ -297,38 +303,78 @@ export function PricingPage() {
     })),
   });
   const precosPublicadosPorCanal = precosPublicadosQueries.map((q) => q.data);
+  const configsPublicadosQueries = useQueries({
+    queries: canaisVisiveis.map((canal) => ({
+      queryKey: ['pricing', 'catalogoPublicoConfig', canal.id],
+      queryFn: () => fetchConfigCatalogoPublicoPorCanal(canal.id),
+      enabled: seeded.current && !carregandoBi,
+    })),
+  });
+  const configsPublicadosPorCanal = configsPublicadosQueries.map((q) => q.data);
 
   /**
    * Pendências de publicação em TODAS as Tabelas visíveis de uma vez (ao contrário do 🌐 da tela
-   * cheia por canal, que só olha 1) — cada entrada é 1 produto que precisa publicar (ou remover) em
-   * 1 canal específico. Usa `produtosAtivos` (ignora busca/Categoria/Fornecedor da grade), mesma
-   * regra de publicarUmCatalogo/atualizarItemCatalogo: só a desativação de verdade conta. Roda
+   * cheia por canal, que só olha 1) — uma entrada por Tabela com pendência, juntando 2 fontes bem
+   * diferentes: preço/ativação por produto (statusPublicacaoPendente, ignora busca/Categoria/
+   * Fornecedor da grade — só a desativação de verdade conta) E config do canal em si (frete/
+   * whatsapp/pagamento/plantio, ver statusPublicacaoPendenteCanal — mudanças na Parametrização que
+   * NENHUM preço de produto reflete, então statusPublicacaoPendente nunca detectava). Roda
    * `calcularCanal` pra cada combinação produto×canal — pesado o bastante pra travar a pintura da
    * grade se rodasse direto no render (mesmo memoizado, a primeira vez que os dados chegam ainda
    * travava por um instante) — por isso vira estado calculado num efeito, dentro de startTransition,
    * pra rodar em baixa prioridade sem segurar o carregamento da tabela.
    */
-  const [publicacaoPendenteGrade, setPublicacaoPendenteGrade] = useState<{ canal: Canal; produtoId: string }[]>([]);
+  interface PendenciaCanal {
+    canal: Canal;
+    produtosPendentes: number;
+    config: PendenciaConfigCanal | null;
+  }
+  const [pendenciasPorCanal, setPendenciasPorCanal] = useState<PendenciaCanal[]>([]);
   const [, iniciarTransicaoPendentes] = useTransition();
   useEffect(() => {
     iniciarTransicaoPendentes(() => {
-      const pendentes = canaisVisiveis.flatMap((canal, indice) => {
-        const precosPublicados = precosPublicadosPorCanal[indice];
-        if (!precosPublicados) return [];
-        const lista: { canal: Canal; produtoId: string }[] = [];
-        produtosAtivos.forEach((p) => {
-          const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
-          const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
-          const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
-          const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
-          if (status) lista.push({ canal, produtoId: p.id });
-        });
-        return lista;
-      });
-      setPublicacaoPendenteGrade(pendentes);
+      const pendencias = canaisVisiveis
+        .map((canal, indice) => {
+          const precosPublicados = precosPublicadosPorCanal[indice];
+          let produtosPendentes = 0;
+          if (precosPublicados) {
+            produtosAtivos.forEach((p) => {
+              const categoria = categorias.find((c) => c.id === p.categoriaId) ?? categorias[0];
+              const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
+              const fornecedorVisivelPdf = fornecedorPorId.get(p.fornecedorId ?? '')?.visivelPdf ?? true;
+              const status = statusPublicacaoPendente(p, canal, precosPublicados.get(p.id), categoria, subcategoria, transportadoraPorId, canaisPorId, resolverDescontoBi, fornecedorVisivelPdf);
+              if (status) produtosPendentes++;
+            });
+          }
+          const config = statusPublicacaoPendenteCanal(canal, transportadoraPorId, configsPublicadosPorCanal[indice]);
+          return { canal, produtosPendentes, config };
+        })
+        .filter((p) => p.produtosPendentes > 0 || p.config !== null);
+      setPendenciasPorCanal(pendencias);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canaisVisiveis, produtosAtivos, categorias, subcategorias, fornecedorPorId, transportadoraPorId, canaisPorId, resolverDescontoBi, ...precosPublicadosPorCanal]);
+  }, [
+    canaisVisiveis,
+    produtosAtivos,
+    categorias,
+    subcategorias,
+    fornecedorPorId,
+    transportadoraPorId,
+    canaisPorId,
+    resolverDescontoBi,
+    ...precosPublicadosPorCanal,
+    ...configsPublicadosPorCanal,
+  ]);
+  /** 1 linha por Tabela+aspecto pendente — vira o tooltip do botão "Publicar pendentes" e a contagem dele. */
+  const linhasPendenciaGrade = pendenciasPorCanal.flatMap(({ canal, produtosPendentes, config }) => {
+    const linhas: string[] = [];
+    if (produtosPendentes > 0) linhas.push(`Alteração de valor — Tabela ${canal.nome}`);
+    if (config?.frete) linhas.push(`Alteração de frete — Tabela ${canal.nome}`);
+    if (config?.pagamento) linhas.push(`Alteração no pagamento — Tabela ${canal.nome}`);
+    if (config?.whatsapp) linhas.push(`Alteração no WhatsApp — Tabela ${canal.nome}`);
+    if (config?.plantio) linhas.push(`Alteração no plantio — Tabela ${canal.nome}`);
+    return linhas;
+  });
 
   const produtosFiltrados = produtosAtivos
     .filter((p) => {
@@ -657,53 +703,27 @@ export function PricingPage() {
   }
 
   /**
-   * Atualiza só 1 produto no Catálogo Online já publicado desse canal (ver atualizarItemCatalogoPublico
-   * em pricing/api.ts) — pro botão 🌐 na tela cheia por canal, quando só esse item mudou e não vale
-   * republicar a Tabela inteira. Devolve se deu certo (pro botão mostrar ✓/⚠ sem precisar de alert
-   * pro caminho feliz). Ignora Código/Fornecedor-visível-no-PDF de propósito (o operador escolheu
-   * esse produto especificamente, mesmo que ele não apareça na publicação em lote) — mas RESPEITA
-   * desativação (Imprimir do produto ou "precisa ajuste" nesse canal): nesse caso remove o item do
-   * Catálogo já publicado em vez de tentar atualizar um preço que não devia mais estar lá.
-   * `dadosPlantio` é OBRIGATÓRIO de propósito (não busca sozinho) — quem chama em loop (publicar
-   * vários pendentes de uma vez) precisa buscar isso UMA VEZ só antes do loop; buscar de novo a cada
-   * item (como era antes) multiplicava 3 requisições paginadas por item pendente e travava a tela
-   * inteira com poucas dezenas de pendências.
+   * Botão "global" (grade principal e tela cheia por canal) — republica de uma vez só TODAS as
+   * Tabelas com alguma pendência (preço/ativação de produto OU config do canal — frete/whatsapp/
+   * pagamento/plantio, ver pendenciasPorCanal/linhasPendenciaGrade). Republicar a Tabela inteira
+   * (em vez de atualizar item por item) é o único jeito de corrigir pendência de CONFIG — preço de
+   * produto nenhum reflete isso — e de quebra simplifica: 1 chamada por canal, sempre consistente.
    */
-  async function atualizarItemCatalogo(produtoId: string, canal: Canal, dadosPlantio: DadosPlantioCatalogo): Promise<boolean> {
-    // `produtos` (lista completa, sem filtro/busca) — mesmo raciocínio de publicarUmCatalogo: um
-    // filtro/busca esquecido na tela não pode fazer esse lookup falhar silenciosamente.
-    const p = produtos.find((x) => x.id === produtoId);
-    if (!p) return false;
-    const desativado = !p.imprimir || (p.precos[canal.id]?.precisaAjuste ?? false);
-    try {
-      if (desativado) {
-        await removerItemCatalogoPublico(canal.id, produtoId);
-        return true;
-      }
-      const item = construirItemCatalogo(p, canal, 0, dadosPlantio.arquivosLaudos, dadosPlantio.parametrizacaoProdutos, dadosPlantio.fatoresPlantio);
-      await atualizarItemCatalogoPublico(canal.id, item);
-      return true;
-    } catch (e) {
-      alert(mensagemDeErro(e, 'Falha ao atualizar esse produto no Catálogo Online.'));
-      return false;
-    }
-  }
-
-  /** Botão "global" da grade principal — publica (ou remove) de uma vez todas as pendências de TODAS as Tabelas visíveis (ver publicacaoPendenteGrade), reaproveitando atualizarItemCatalogo um item de cada vez. */
   async function publicarTodosPendentesGrade() {
-    if (publicacaoPendenteGrade.length === 0) return;
+    if (pendenciasPorCanal.length === 0) return;
     setPublicandoPendentesGrade(true);
+    const falhas: string[] = [];
     try {
-      const [arquivosLaudos, parametrizacaoProdutos, fatoresPlantio] = await Promise.all([
-        fetchArquivosLaudos(),
-        fetchParametrizacaoProdutos(),
-        fetchFatoresPlantio(),
-      ]);
-      const dadosPlantio: DadosPlantioCatalogo = { arquivosLaudos, parametrizacaoProdutos, fatoresPlantio };
-      for (const { canal, produtoId } of publicacaoPendenteGrade) {
-        await atualizarItemCatalogo(produtoId, canal, dadosPlantio);
+      for (const { canal } of pendenciasPorCanal) {
+        try {
+          await publicarUmCatalogo(canal);
+          queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id] });
+          queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoConfig', canal.id] });
+        } catch (e) {
+          falhas.push(`${canal.nome}: ${mensagemDeErro(e, 'falha ao publicar')}`);
+        }
       }
-      canaisVisiveis.forEach((canal) => queryClient.invalidateQueries({ queryKey: ['pricing', 'catalogoPublicoPrecos', canal.id] }));
+      if (falhas.length > 0) alert(`Falha ao publicar pendências de:\n${falhas.join('\n')}`);
     } finally {
       setPublicandoPendentesGrade(false);
     }
@@ -1109,15 +1129,15 @@ export function PricingPage() {
                 onEscolherCategorias={() => setModalOrdemTipo('categorias')}
                 onEscolherCanais={() => setModalOrdemTipo('canais')}
               />
-              {publicacaoPendenteGrade.length > 0 && (
+              {linhasPendenciaGrade.length > 0 && (
                 <button
                   type="button"
                   onClick={publicarTodosPendentesGrade}
                   disabled={publicandoPendentesGrade}
-                  title="Publica (ou remove) de uma vez só, em TODAS as Tabelas visíveis, os produtos com preço/ativação pendente desde a última publicação"
+                  title={linhasPendenciaGrade.join('\n')}
                   className="shrink-0 rounded-full border border-warn/40 bg-warn-soft px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-[#8A5B10] hover:brightness-95 disabled:cursor-wait disabled:opacity-70"
                 >
-                  {publicandoPendentesGrade ? 'Publicando…' : `🌐 Publicar ${publicacaoPendenteGrade.length} pendente${publicacaoPendenteGrade.length > 1 ? 's' : ''}`}
+                  {publicandoPendentesGrade ? 'Publicando…' : `🌐 Publicar ${linhasPendenciaGrade.length} pendente${linhasPendenciaGrade.length > 1 ? 's' : ''}`}
                 </button>
               )}
               <div className="flex-1" />
@@ -1257,7 +1277,7 @@ export function PricingPage() {
         onResetTodosPrecos={onResetTodosPrecos}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
         onAtualizarValorKg={onAtualizarValorKg}
-        onAtualizarItemCatalogo={atualizarItemCatalogo}
+        onPublicar={publicarUmCatalogo}
       />
 
       <OrderModal

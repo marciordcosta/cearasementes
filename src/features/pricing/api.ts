@@ -3,14 +3,6 @@ import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { inferirNomeCategoriaDoNome, inferirPesoDoNome } from './produtoInferencia';
 import type { Canal, Categoria, CustoPersonalizado, Fornecedor, FreteAdicionalTipo, Produto, Subcategoria, TipoImposto } from './types';
-import type { ArquivoLaudo, FatorPlantio, ProdutoParametrizacao } from '@/features/arquivos/types';
-
-/** Pacote de dados de plantio (Guia de Plantio) buscado UMA VEZ antes de publicar 1+ itens no Catálogo Online — ver construirItemCatalogo, publicarUmCatalogo e atualizarItemCatalogo em PricingPage.tsx. */
-export interface DadosPlantioCatalogo {
-  arquivosLaudos: ArquivoLaudo[];
-  parametrizacaoProdutos: ProdutoParametrizacao[];
-  fatoresPlantio: FatorPlantio[];
-}
 
 type CanalRow = Database['public']['Tables']['canais_preco']['Row'];
 type CategoriaRow = Database['public']['Tables']['categorias']['Row'];
@@ -640,7 +632,7 @@ export interface ItemCatalogoPublicoInput {
   ordem: number;
 }
 
-/** Mapeia um item calculado (ver ItemCatalogoPublicoInput) pra linha de `catalogo_publico_itens` — compartilhado entre publicarCatalogoOnline (lote) e atualizarItemCatalogoPublico (1 item só). */
+/** Mapeia um item calculado (ver ItemCatalogoPublicoInput) pra linha de `catalogo_publico_itens` — usado por publicarCatalogoOnline (insere o lote inteiro de uma vez). */
 function itemCatalogoParaRow(canalId: string, item: ItemCatalogoPublicoInput) {
   return {
     canal_id: canalId,
@@ -724,29 +716,6 @@ export async function publicarCatalogoOnline(
 }
 
 /**
- * Atualiza só UM item já publicado (ou publica ele pela 1ª vez nesse canal) sem mexer no resto do
- * snapshot — pro botão 🌐 na tela cheia por canal (ver ChannelFullscreenModal.tsx/PricingTable.tsx),
- * quando só 1 produto mudou e não vale republicar a Tabela inteira. Preserva a `ordem` já salva
- * (se o item já existia); item nunca publicado nesse canal entra no fim da lista.
- */
-export async function atualizarItemCatalogoPublico(canalId: string, item: ItemCatalogoPublicoInput): Promise<void> {
-  const { data: existente } = await supabase.from('catalogo_publico_itens').select('ordem').eq('canal_id', canalId).eq('produto_id', item.produtoId).maybeSingle();
-  let ordem = existente?.ordem;
-  if (ordem == null) {
-    const { count } = await supabase.from('catalogo_publico_itens').select('*', { count: 'exact', head: true }).eq('canal_id', canalId);
-    ordem = count ?? 0;
-  }
-  const { error } = await supabase.from('catalogo_publico_itens').upsert(itemCatalogoParaRow(canalId, { ...item, ordem }), { onConflict: 'canal_id,produto_id' });
-  if (error) throw error;
-}
-
-/** Remove só 1 item já publicado desse canal (produto desativado/"precisa ajuste" depois da última publicação) — sem mexer no resto do snapshot. Não reclama se o item já não estava lá (idempotente). */
-export async function removerItemCatalogoPublico(canalId: string, produtoId: string): Promise<void> {
-  const { error } = await supabase.from('catalogo_publico_itens').delete().eq('canal_id', canalId).eq('produto_id', produtoId);
-  if (error) throw error;
-}
-
-/**
  * produto_id -> preço já publicado desse canal — só o suficiente pra detectar "mudança pendente"
  * (preço diferente do calculado agora, ou item ativo/inativo divergindo do que está publicado) na
  * tela cheia por canal (ver ChannelFullscreenModal.tsx), sem trazer o item inteiro. Autenticado, mas
@@ -757,6 +726,47 @@ export async function fetchPrecosCatalogoPublicoPorCanal(canalId: string): Promi
     supabase.from('catalogo_publico_itens').select('produto_id, preco').eq('canal_id', canalId).range(from, to),
   );
   return new Map(rows.map((r) => [r.produto_id, r.preco]));
+}
+
+/** Config (frete/whatsapp/pagamento/plantio) já publicada de 1 canal — ver statusPublicacaoPendenteCanal em calculations.ts, que compara isso com a config atual pra saber se precisa republicar. */
+export interface ConfigCatalogoPublicoCanal {
+  freteKgEfetivo: number;
+  fretePctEfetivo: number;
+  freteFixo: number;
+  freteMinimo: number;
+  temTransportadora: boolean;
+  whatsapp: string | null;
+  mostrarDetalhesPlantio: boolean;
+  pagamentoHabilitado: boolean;
+  pagamentoAvistaDescontoPct: number;
+  pagamentoBoletoValorMinimo: number;
+  pagamentoBoletoParcelasMax: number;
+}
+
+/** Null quando esse canal nunca foi publicado (nesse caso, item "novo" já cobre a pendência — não é config desatualizada, é primeira publicação). */
+export async function fetchConfigCatalogoPublicoPorCanal(canalId: string): Promise<ConfigCatalogoPublicoCanal | null> {
+  const { data, error } = await supabase
+    .from('catalogo_publico_canais')
+    .select(
+      'frete_kg_efetivo, frete_pct_efetivo, frete_fixo, frete_minimo, tem_transportadora, whatsapp, mostrar_detalhes_plantio, pagamento_habilitado, pagamento_avista_desconto_pct, pagamento_boleto_valor_minimo, pagamento_boleto_parcelas_max',
+    )
+    .eq('canal_id', canalId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    freteKgEfetivo: data.frete_kg_efetivo,
+    fretePctEfetivo: data.frete_pct_efetivo,
+    freteFixo: data.frete_fixo,
+    freteMinimo: data.frete_minimo,
+    temTransportadora: data.tem_transportadora,
+    whatsapp: data.whatsapp,
+    mostrarDetalhesPlantio: data.mostrar_detalhes_plantio,
+    pagamentoHabilitado: data.pagamento_habilitado,
+    pagamentoAvistaDescontoPct: data.pagamento_avista_desconto_pct,
+    pagamentoBoletoValorMinimo: data.pagamento_boleto_valor_minimo,
+    pagamentoBoletoParcelasMax: data.pagamento_boleto_parcelas_max,
+  };
 }
 
 export interface CatalogoPublico {
