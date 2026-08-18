@@ -83,6 +83,8 @@ interface PricingTableProps {
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
+  /** Atalho de "Imprimir" (botão direito na linha) — desativa/reativa o produto em TODAS as Tabelas de uma vez, sem abrir Editar Produto. Sem essa prop, o botão direito não faz nada especial. */
+  onToggleImprimir?: (produtoId: string, valor: boolean) => void;
   /** Ícone ✎ ao lado de "Custo (R$)" liga um modo de edição em lote do Valor Kg direto na grade — sem esse prop, o ícone não aparece. */
   onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
   onEditarProduto?: (produtoId: string) => void;
@@ -152,6 +154,7 @@ export function PricingTable({
   onResetPreco,
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
+  onToggleImprimir,
   onAtualizarValorKg,
   onEditarProduto,
   onRemoverProduto,
@@ -452,7 +455,7 @@ export function PricingTable({
         corFundo: cor.soft,
         canalId: canal.id,
         render: (p, destacada) => {
-          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          const precisaAjuste = (p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir;
           if (precisaAjuste) return null;
           const categoria = getCategoria(p.categoriaId);
           const subcategoria = getSubcategoria(p.subcategoriaId);
@@ -495,7 +498,7 @@ export function PricingTable({
               larguraChave: 'col:frete',
               canalId: canal.id,
               render: (p: Produto) => {
-                if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
+                if ((p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir) return null;
                 const categoria = getCategoria(p.categoriaId);
                 const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
                 const freteIncluso = canal.freteIncluso !== false;
@@ -513,7 +516,7 @@ export function PricingTable({
               larguraChave: 'col:encargos',
               canalId: canal.id,
               render: (p: Produto) => {
-                if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
+                if ((p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir) return null;
                 const categoria = getCategoria(p.categoriaId);
                 const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
                 return (
@@ -531,7 +534,7 @@ export function PricingTable({
         larguraChave: 'col:mlpct',
         canalId: canal.id,
         render: (p) => {
-          const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+          const precisaAjuste = (p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir;
           if (precisaAjuste) return null;
           const categoria = getCategoria(p.categoriaId);
           const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
@@ -567,7 +570,7 @@ export function PricingTable({
               larguraChave: 'col:mlvalor',
               canalId: canal.id,
               render: (p: Produto) => {
-                if (p.precos[canal.id]?.precisaAjuste ?? false) return null;
+                if ((p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir) return null;
                 const categoria = getCategoria(p.categoriaId);
                 const subcategoria = getSubcategoria(p.subcategoriaId);
                 const r = calcularCanal(p, canal, categoria, subcategoria, transportadoraPorId, canaisPorId, true, resolverDescontoBi);
@@ -629,6 +632,20 @@ export function PricingTable({
               canalId: canal.id,
               render: (p: Produto) => {
                 const precisaAjuste = p.precos[canal.id]?.precisaAjuste ?? false;
+                // Produto com "Imprimir" desligado (botão direito na linha, ou Editar Produto) já
+                // está desativado em TODAS as Tabelas de uma vez — o toggle por canal aqui não faz
+                // sentido nesse estado (reativar só essa Tabela não muda nada enquanto Imprimir
+                // seguir desligado), então vira um selo fixo em vez de botão.
+                if (!p.imprimir) {
+                  return (
+                    <span
+                      className="rounded bg-bad-soft px-1.5 py-0.5 text-[10px] text-bad"
+                      title="Produto com 'Imprimir' desligado — desativado em todas as Tabelas (PDF e Catálogo Online). Botão direito na linha, ou Editar Produto, pra reativar."
+                    >
+                      desativado
+                    </span>
+                  );
+                }
                 return (
                   <button
                     type="button"
@@ -833,10 +850,18 @@ export function PricingTable({
                 <tr
                   key={produto.id}
                   onClick={() => setLinhaDestacada(produto.id)}
+                  onContextMenu={(e) => {
+                    if (!onToggleImprimir) return;
+                    e.preventDefault();
+                    onToggleImprimir(produto.id, !produto.imprimir);
+                  }}
+                  title={onToggleImprimir ? 'Botão direito: liga/desliga "Imprimir" (desativa em todas as Tabelas de uma vez)' : undefined}
                   className={`border-b border-[var(--color-line)] ${linhaEspessa ? (divisorPrincipalMudou ? 'border-t-2 border-t-good' : 'border-t-2 border-t-[var(--color-line)]') : ''}`}
                 >
                   {colunas.map((coluna) => {
-                    const precisaAjuste = coluna.canalId !== undefined && (produto.precos[coluna.canalId]?.precisaAjuste ?? false);
+                    // Precisa de ajuste NESSE canal, ou "Imprimir" desligado globalmente (desativa em
+                    // TODAS as Tabelas de uma vez) — mesma formatação nos dois casos.
+                    const precisaAjuste = coluna.canalId !== undefined && ((produto.precos[coluna.canalId]?.precisaAjuste ?? false) || !produto.imprimir);
                     return (
                       <td
                         key={coluna.chave}

@@ -56,6 +56,8 @@ interface ChannelFullscreenModalProps {
   onResetPreco: (produtoId: string, canalId: string) => void;
   onResetTodosPrecos: (canalId: string) => void;
   onTogglePrecisaAjuste: (produtoId: string, canalId: string, valor: boolean) => void;
+  /** Atalho de "Imprimir" (botão direito na linha) — desativa/reativa o produto em TODAS as Tabelas de uma vez. */
+  onToggleImprimir?: (produtoId: string, valor: boolean) => void;
   onAtualizarValorKg?: (produtoId: string, valorKg: number) => void;
   /** Ícone 🌐 por produto (só aqui, na tela cheia por canal) — atualiza só ESSE item no Catálogo Online já publicado, sem republicar a Tabela inteira. Devolve se deu certo. `dadosPlantio` é buscado UMA VEZ (ver publicarTodosPendentes) antes do loop, não a cada item. */
   onAtualizarItemCatalogo?: (produtoId: string, canal: Canal, dadosPlantio: DadosPlantioCatalogo) => Promise<boolean>;
@@ -77,6 +79,7 @@ export function ChannelFullscreenModal({
   onResetPreco,
   onResetTodosPrecos,
   onTogglePrecisaAjuste,
+  onToggleImprimir,
   onAtualizarValorKg,
   onAtualizarItemCatalogo,
 }: ChannelFullscreenModalProps) {
@@ -340,6 +343,7 @@ export function ChannelFullscreenModal({
             onResetPreco={onResetPreco}
             onResetTodosPrecos={onResetTodosPrecos}
             onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+            onToggleImprimir={onToggleImprimir}
             onAtualizarValorKg={onAtualizarValorKg}
             historicoSafras={safrasDisponiveis}
             historicoPorCodigo={historicoPorCodigo}

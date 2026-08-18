@@ -437,6 +437,12 @@ export function PricingPage() {
     salvarAgora(() => atualizarPrecisaAjuste(produtoId, canalId, valor).then(invalidarProdutosPreco));
   }
 
+  /** Atalho de "Imprimir" (botão direito na linha da grade) — desativa/reativa o produto em TODAS as Tabelas de uma vez (PDF e Catálogo Online), sem abrir Editar Produto. */
+  function onToggleImprimir(produtoId: string, valor: boolean) {
+    setProdutos((prev) => prev.map((p) => (p.id === produtoId ? { ...p, imprimir: valor } : p)));
+    salvarAgora(() => atualizarProduto(produtoId, { imprimir: valor }).then(invalidarProdutosPreco));
+  }
+
   function onRemoverProduto(produtoId: string) {
     setProdutos((prev) => prev.filter((p) => p.id !== produtoId));
     salvarAgora(() => apagarProduto(produtoId).then(invalidarProdutosPreco));
@@ -1165,6 +1171,7 @@ export function PricingPage() {
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}
               onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+              onToggleImprimir={onToggleImprimir}
               onAtualizarValorKg={onAtualizarValorKg}
               onEditarProduto={setProdutoEditandoId}
               onRemoverProduto={onRemoverProduto}
@@ -1255,6 +1262,7 @@ export function PricingPage() {
         onResetPreco={onResetPreco}
         onResetTodosPrecos={onResetTodosPrecos}
         onTogglePrecisaAjuste={onTogglePrecisaAjuste}
+        onToggleImprimir={onToggleImprimir}
         onAtualizarValorKg={onAtualizarValorKg}
         onAtualizarItemCatalogo={atualizarItemCatalogo}
       />
