@@ -1339,6 +1339,16 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     };
   }, []);
 
+  // Aba do navegador mostra "Catálogo Ceará Sementes" aqui (não o título genérico "ERP Ceará
+  // Sementes" do resto do app) — volta ao normal ao sair da página.
+  useEffect(() => {
+    const tituloAnterior = document.title;
+    document.title = 'Catálogo Ceará Sementes';
+    return () => {
+      document.title = tituloAnterior;
+    };
+  }, []);
+
   const [cache] = useState(() => lerCache(slug));
   const { data, isLoading, isFetching, isError } = useQuery({
     queryKey: ['catalogo-publico', slug],
