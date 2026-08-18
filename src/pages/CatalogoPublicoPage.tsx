@@ -435,7 +435,14 @@ function ModalPagamento({
               Continuar
             </button>
           )}
-          <button type="button" onClick={onFechar} className="mt-1 text-xs text-[#67718a] hover:underline">
+          <button
+            type="button"
+            // Nessa tela (sem pagamento, frete já calculado) "Cancelar" só desfaz o cálculo e volta pra
+            // escolha "Retirar no local" / "Calcular frete" — fechar o modal inteiro aqui seria demais,
+            // o cliente só quer revisar a decisão do frete, não desistir do pedido.
+            onClick={!pagamentoHabilitado && temTransportadora && estadoFrete === 'calculado' ? onCalcularFrete : onFechar}
+            className="mt-1 text-xs text-[#67718a] hover:underline"
+          >
             Cancelar
           </button>
         </div>
