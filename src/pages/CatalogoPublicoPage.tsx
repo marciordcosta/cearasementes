@@ -73,11 +73,6 @@ function montarMensagemOrcamento(canalNome: string, itens: ItemCarrinho[], frete
   return linhas.join('\n');
 }
 
-function montarMensagemCotacaoFrete(canalNome: string, itens: ItemCarrinho[]): string {
-  const linhas = itens.map((i) => `${i.qtd}x ${i.nome.replace(/[*_]/g, '')}`);
-  return [`Olá! Gostaria de uma cotação de frete — ${canalNome}`, '', ...linhas].join('\n');
-}
-
 /** Mesmo formato de lista usada no Orçamento (qtd×nome — R$ subtotal), sem Frete/Total geral — aqui é só contexto extra numa mensagem de contato solta, não um orçamento formal. Carrinho vazio devolve a mensagem base sem alteração. */
 function montarMensagemComCarrinho(mensagemBase: string, itens: ItemCarrinho[]): string {
   if (itens.length === 0) return mensagemBase;
@@ -548,6 +543,47 @@ function ModalNumeroWhatsApp({ enviando, onEnviar, onFechar }: { enviando: boole
   );
 }
 
+/**
+ * Canal Manual (sem Transportadora) não tem como calcular frete sozinho — em vez de abrir o
+ * WhatsApp direto com uma mensagem solta (como era antes), pergunta a cidade/estado de entrega e
+ * segue pro resumo/composição padrão (ver confirmarCotacaoFrete em ModalOrcamento), com a cidade já
+ * dentro da linha de Frete do resumo. Cidade é texto livre — sem CEP/autocomplete, só o suficiente
+ * pra dar contexto pra quem for cotar o frete manualmente.
+ */
+function ModalCotacaoCidade({ onConcluir, onFechar }: { onConcluir: (cidade: string) => void; onFechar: () => void }) {
+  const [cidade, setCidade] = useState('');
+  return (
+    <div className="fixed inset-0 z-[225] flex items-end justify-center bg-black/45 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
+      <div className="w-full max-w-sm rounded-t-2xl bg-white p-4 shadow-2xl sm:rounded-2xl">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-bold text-[#1a2233]">Cotação de frete</p>
+          <button type="button" onClick={onFechar} className="rounded-md p-1 text-[#67718a] hover:bg-[#f5f7fa]">
+            <X size={18} />
+          </button>
+        </div>
+        <label className="mb-1 block text-xs font-semibold text-[#67718a]">Qual a cidade e estado de entrega?</label>
+        <input
+          type="text"
+          value={cidade}
+          onChange={(e) => setCidade(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && cidade.trim() && onConcluir(cidade.trim())}
+          placeholder="Ex.: Fortaleza - CE"
+          autoFocus
+          className="w-full rounded-md border border-[#e2e6ed] bg-white p-2.5 text-sm text-[#1a2233] placeholder:text-[#9aa3b2]"
+        />
+        <button
+          type="button"
+          disabled={!cidade.trim()}
+          onClick={() => onConcluir(cidade.trim())}
+          className="mt-3 w-full rounded-md bg-[#10233f] py-2.5 text-sm font-semibold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Concluir
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Igual ModalMensagemWhatsApp (mesmo padrão de "compor antes de enviar"), só que pro Orçamento: o resumo calculado (itens/frete/total) fica travado (editar ali poderia descombinar do que o PDF mostra) — só a observação embaixo é livre, some do texto final se ficar em branco. */
 function ModalObservacaoWhatsApp({ resumo, onEnviar, onFechar }: { resumo: string; onEnviar: (mensagemFinal: string) => void; onFechar: () => void }) {
   const [observacao, setObservacao] = useState('');
@@ -685,6 +721,10 @@ function ModalOrcamento({
   // iniciarConclusao) — mas só faz sentido nisso quando dá pra calcular de verdade (temTransportadora)
   // e ainda não foi calculado; sem Transportadora, ou já calculado, não tem o que perguntar ali.
   const precisaCalcularFreteAntes = temTransportadora && estadoFrete !== 'calculado';
+  const [cotacaoFreteAberta, setCotacaoFreteAberta] = useState(false);
+  // Cidade/estado informados no ModalCotacaoCidade — null até o cliente preencher (canal Manual,
+  // sem Transportadora). Entra na descrição do frete (ver descreverFrete) assim que preenchido.
+  const [cidadeCotacao, setCidadeCotacao] = useState<string | null>(null);
 
   const valorProdutos = itens.reduce((s, i) => s + i.preco * i.qtd, 0);
   const pesoTotalUsado = itens.reduce((s, i) => s + i.pesoUsado * i.qtd, 0);
@@ -702,7 +742,7 @@ function ModalOrcamento({
   }
 
   function descreverFrete(): string {
-    if (!temTransportadora) return 'a combinar (cotação à parte)';
+    if (!temTransportadora) return cidadeCotacao ? `Cotação de frete — entrega em ${cidadeCotacao}` : 'a combinar (cotação à parte)';
     if (estadoFrete === 'calculado') return `R$ ${fmtR(freteCalculado)}`;
     return 'Retirada';
   }
@@ -766,9 +806,18 @@ function ModalOrcamento({
     onFechar();
   }
 
+  /** Abre o ModalCotacaoCidade em vez de ir direto pro WhatsApp — fecha o ModalPagamento se tiver aberto (é chamado de lá também, ver onCotarFrete), pra nunca ter os dois abertos ao mesmo tempo. */
   function pedirCotacaoFrete() {
     if (!whatsapp) return;
-    window.open(linkWhatsApp(whatsapp, montarMensagemCotacaoFrete(canalNome, itens)), '_blank');
+    setPagamentoAberto(false);
+    setCotacaoFreteAberta(true);
+  }
+
+  /** "Concluir" do ModalCotacaoCidade — guarda a cidade (entra em descreverFrete) e vai direto pro resumo/composição padrão (ModalObservacaoWhatsApp), sem passar pelo ModalPagamento: o frete ainda é uma cotação em aberto, não faz sentido perguntar forma de pagamento com o total incompleto. */
+  function confirmarCotacaoFrete(cidade: string) {
+    setCidadeCotacao(cidade);
+    setCotacaoFreteAberta(false);
+    setObservacaoWhatsAppAberta(true);
   }
 
   /** Baixa o PDF do pedido (jsPDF de verdade) — parte do passo final (ver finalizarEnvio), que já espera essa geração terminar antes de abrir o WhatsApp. */
@@ -928,6 +977,7 @@ function ModalOrcamento({
           onFechar={() => setPagamentoAberto(false)}
         />
       )}
+      {cotacaoFreteAberta && <ModalCotacaoCidade onConcluir={confirmarCotacaoFrete} onFechar={() => setCotacaoFreteAberta(false)} />}
       {observacaoWhatsAppAberta && (
         <ModalObservacaoWhatsApp
           resumo={montarMensagemOrcamento(canalNome, itens, descreverFrete(), totalComPagamento, descricaoPagamento())}
