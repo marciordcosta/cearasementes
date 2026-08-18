@@ -413,7 +413,7 @@ function ModalPagamento({
                     onClick={onCalcularFrete}
                     className={`rounded-md border border-[#e2e6ed] px-2 py-2 text-center text-xs font-semibold text-[#0e9d74] hover:bg-[#f5f7fa] ${pagamentoHabilitado ? '' : 'flex-1'}`}
                   >
-                    Calcular frete
+                    Adicionar frete
                   </button>
                 </div>
               )
