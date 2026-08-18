@@ -673,7 +673,7 @@ function ModalOrcamento({
     setOfertaPdfAberta(false);
     setEnviandoPedido(true);
     if (comPdf) await salvarPedidoPdf();
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     if (whatsapp && mensagemPendente) window.open(linkWhatsApp(whatsapp, mensagemPendente), '_blank');
     setEnviandoPedido(false);
     onLimparCarrinho();
