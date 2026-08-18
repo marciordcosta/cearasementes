@@ -333,13 +333,17 @@ export function PricingTable({
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
           <span className="flex w-full items-start gap-1.5">
-            <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[var(--color-text)]">
+            <span className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap ${p.imprimir ? 'text-[var(--color-text)]' : 'text-[var(--color-text-soft)]'}`}>
               <NomeComDestaque nome={p.nome} />
             </span>
             {fornecedor && (
               <span
-                className="shrink-0 rounded-full px-1 py-0 text-[8px] font-medium leading-[1.4] text-white"
-                style={{ background: gerarCorCanal(fornecedor.ordem).dark }}
+                className="shrink-0 rounded-full px-1 py-0 text-[8px] font-medium leading-[1.4]"
+                style={
+                  p.imprimir
+                    ? { background: gerarCorCanal(fornecedor.ordem).dark, color: '#fff' }
+                    : { background: 'var(--color-line)', color: 'var(--color-text-soft)' }
+                }
               >
                 {fornecedor.nome}
               </span>
@@ -635,17 +639,9 @@ export function PricingTable({
                 // Produto com "Imprimir" desligado (botão direito na linha, ou Editar Produto) já
                 // está desativado em TODAS as Tabelas de uma vez — o toggle por canal aqui não faz
                 // sentido nesse estado (reativar só essa Tabela não muda nada enquanto Imprimir
-                // seguir desligado), então vira um selo fixo em vez de botão.
-                if (!p.imprimir) {
-                  return (
-                    <span
-                      className="rounded bg-bad-soft px-1.5 py-0.5 text-[10px] text-bad"
-                      title="Produto com 'Imprimir' desligado — desativado em todas as Tabelas (PDF e Catálogo Online). Botão direito na linha, ou Editar Produto, pra reativar."
-                    >
-                      desativado
-                    </span>
-                  );
-                }
+                // seguir desligado); a linha inteira já fica esmaecida (ver coluna "produto"), então
+                // fica em branco aqui, sem selo nenhum.
+                if (!p.imprimir) return null;
                 return (
                   <button
                     type="button"
