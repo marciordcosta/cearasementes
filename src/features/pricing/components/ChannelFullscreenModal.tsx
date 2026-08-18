@@ -223,14 +223,18 @@ export function ChannelFullscreenModal({
       palavras.length === 0
         ? produtos
         : produtos.filter((p) => {
+            // Mesmos campos da busca da grade principal (ver produtosFiltrados em PricingPage.tsx) —
+            // nome, fornecedor, categoria, subcategoria (Processo) e cultivar, não só nome/fornecedor.
             const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
-            const descricao = `${p.nome} ${fornecedor?.nome ?? ''}`.toLowerCase();
+            const categoria = categorias.find((c) => c.id === p.categoriaId);
+            const subcategoria = p.subcategoriaId ? subcategorias.find((s) => s.id === p.subcategoriaId) : undefined;
+            const descricao = `${p.nome} ${fornecedor?.nome ?? ''} ${categoria?.nome ?? ''} ${subcategoria?.nome ?? ''} ${p.cultivar ?? ''}`.toLowerCase();
             return palavras.every((palavra) => descricao.includes(palavra));
           });
     if (!ordenarPorRepresentacao) return filtrados;
     // Maior Representação primeiro — produto sem dado (Código não batendo) vai pro final.
     return [...filtrados].sort((a, b) => (representatividadePorProduto.get(b.id)?.pct ?? -1) - (representatividadePorProduto.get(a.id)?.pct ?? -1));
-  }, [produtos, busca, fornecedorPorId, ordenarPorRepresentacao, representatividadePorProduto]);
+  }, [produtos, busca, fornecedorPorId, categorias, subcategorias, ordenarPorRepresentacao, representatividadePorProduto]);
 
   // Mesma regra da grade principal (PricingPage.tsx): filtro ativo (de fora, via "Filtrar:" na
   // grade — `produtos` já vem recortado por ele — E/OU a busca local aqui) vira o gráfico de
