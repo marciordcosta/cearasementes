@@ -1127,11 +1127,12 @@ export function PricingPage() {
               transportadoras={transportadoras}
               // Toggle "Estender" (setCustoEstendido) vive no próprio cabeçalho da grade, em cima do
               // bloco fixo (ver onToggleCustoEstendido abaixo e a célula "Estender ⤢" em
-              // PricingTable.tsx) — as duas nunca ficam detalhadas ao mesmo tempo, senão a grade fica
-              // larga demais com várias Tabelas lado a lado (a tela cheia por canal, essa sim, sempre
-              // mostra tudo — ver ChannelFullscreenModal.tsx, que tem espaço de sobra por ser só 1 Tabela).
+              // PricingTable.tsx) — só abre/fecha o bloco fixo (Classe/ID). As colunas de cada Tabela
+              // continuam SEMPRE resumidas (Preço+ML%) na grade principal, estendido ou não — o modo
+              // detalhado por Tabela só existe na tela cheia por canal (ver ChannelFullscreenModal.tsx,
+              // que tem espaço de sobra por ser só 1 Tabela).
               mostrarDetalhesFixos={custoEstendido}
-              mostrarDetalhesTabelas={!custoEstendido}
+              mostrarDetalhesTabelas={false}
               onToggleCustoEstendido={() => setCustoEstendido((v) => !v)}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
