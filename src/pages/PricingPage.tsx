@@ -1083,18 +1083,6 @@ export function PricingPage() {
                 onEscolherCategorias={() => setModalOrdemTipo('categorias')}
                 onEscolherCanais={() => setModalOrdemTipo('canais')}
               />
-              <button
-                type="button"
-                onClick={() => setCustoEstendido((v) => !v)}
-                title={
-                  custoEstendido
-                    ? 'Mostrando Classe/ID em todas as Tabelas — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
-                    : 'Estender pra ver Classe/ID em todas as Tabelas — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) enquanto isso'
-                }
-                className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${custoEstendido ? 'bg-[var(--color-accent)] text-white' : 'bg-transparent text-[var(--color-text)] border border-[var(--color-line)] hover:bg-[var(--color-line)]/40'}`}
-              >
-                {custoEstendido ? 'Recolher' : 'Estender'}
-              </button>
               {publicacaoPendenteGrade.length > 0 && (
                 <button
                   type="button"
@@ -1137,12 +1125,14 @@ export function PricingPage() {
               canaisVisiveis={canaisVisiveis}
               todosCanais={canais}
               transportadoras={transportadoras}
-              // Ver o toggle "Estender" (setCustoEstendido) na barra de ferramentas acima — as duas
-              // nunca ficam detalhadas ao mesmo tempo, senão a grade fica larga demais com várias
-              // Tabelas lado a lado (a tela cheia por canal, essa sim, sempre mostra tudo — ver
-              // ChannelFullscreenModal.tsx, que tem espaço de sobra por ser só 1 Tabela).
+              // Toggle "Estender" (setCustoEstendido) vive no próprio cabeçalho da grade, em cima do
+              // bloco fixo (ver onToggleCustoEstendido abaixo e a célula "Estender ⤢" em
+              // PricingTable.tsx) — as duas nunca ficam detalhadas ao mesmo tempo, senão a grade fica
+              // larga demais com várias Tabelas lado a lado (a tela cheia por canal, essa sim, sempre
+              // mostra tudo — ver ChannelFullscreenModal.tsx, que tem espaço de sobra por ser só 1 Tabela).
               mostrarDetalhesFixos={custoEstendido}
               mostrarDetalhesTabelas={!custoEstendido}
+              onToggleCustoEstendido={() => setCustoEstendido((v) => !v)}
               onUpdatePreco={onUpdatePreco}
               onResetPreco={onResetPreco}
               onResetTodosPrecos={onResetTodosPrecos}

@@ -60,19 +60,22 @@ interface PricingTableProps {
   todosCanais: Canal[];
   transportadoras: Transportadora[];
   /**
-   * Bloco fixo de identificação (Classe, ID e Representação Geral) — só existe na tela cheia por
-   * canal, como o lado "estendido" do toggle de lá (ver ChannelFullscreenModal.tsx): desligado
-   * (padrão), a tela cheia mostra só Nome/Fornecedor/Peso; ligado, mostra Classe+ID também — e
-   * nesse caso `mostrarDetalhesTabelas` cai pra dar lugar. Sempre `false` na grade principal.
+   * Bloco fixo de identificação (Classe, ID e Representação Geral) — desligado (padrão), some,
+   * só Nome/Fornecedor/Peso/Custo; ligado ("Estender"), mostra Classe+ID também e, junto, faz
+   * `mostrarDetalhesTabelas` cair pra dar lugar (não empilha as duas coisas ao mesmo tempo). Na
+   * grade principal (`somenteCanal` false), o toggle fica no cabeçalho do bloco fixo (ver
+   * `onToggleCustoEstendido`) e afeta TODAS as Tabelas visíveis de uma vez. Na tela cheia por
+   * canal (ver ChannelFullscreenModal.tsx) é sempre `true` (não tem esse trade-off, espaço sobra).
    */
   mostrarDetalhesFixos: boolean;
   /**
-   * Frete/Encargos/ML ($)/Repres. (%)/Ajuste em cada Tabela de Preço — por padrão (desligada),
-   * cada Tabela mostra só Preço e ML (%). `false` sempre na grade principal (resumida); na tela
-   * cheia por canal, começa `true` (o "como funciona hoje") e vira `false` quando o bloco fixo
-   * de custo é estendido (ver mostrarDetalhesFixos), pra não empilhar as duas coisas ao mesmo tempo.
+   * Frete/Encargos/ML ($)/Repres. (%)/Ajuste em cada Tabela de Preço — por padrão (ligada), cada
+   * Tabela mostra tudo; cai pra `false` (só Preço + ML%) quando `mostrarDetalhesFixos` liga (ver
+   * comentário acima), pra não empilhar as duas coisas ao mesmo tempo.
    */
   mostrarDetalhesTabelas: boolean;
+  /** Clique no cabeçalho do bloco fixo (célula "Estender ⤢", ver colSpanColunasFixas) — só a grade principal passa isso; sem essa prop, a célula fica vazia (é o caso da tela cheia por canal). */
+  onToggleCustoEstendido?: () => void;
   onUpdatePreco: (produtoId: string, canalId: string, preco: number) => void;
   onResetPreco: (produtoId: string, canalId: string) => void;
   /** Restaura o preço sugerido de TODOS os produtos dessa tabela de uma vez (ícone ↺ ao lado do rótulo "Preço"). */
@@ -141,6 +144,7 @@ export function PricingTable({
   transportadoras,
   mostrarDetalhesFixos,
   mostrarDetalhesTabelas,
+  onToggleCustoEstendido,
   onUpdatePreco,
   onResetPreco,
   onResetTodosPrecos,
@@ -746,7 +750,24 @@ export function PricingTable({
         <thead>
           {!somenteCanal && (
             <tr ref={linhaGrupoRef} className="sticky top-0 z-[2]">
-              <th className="bg-[var(--color-navy)] px-2 py-2" colSpan={colSpanColunasFixas} />
+              <th
+                colSpan={colSpanColunasFixas}
+                onClick={onToggleCustoEstendido}
+                title={
+                  onToggleCustoEstendido
+                    ? mostrarDetalhesFixos
+                      ? 'Recolher — volta a mostrar Frete/Encargos/ML($)/Repres.%/Ajuste completos em cada Tabela'
+                      : 'Estender pra ver Classe/ID aqui — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) em cada Tabela enquanto isso'
+                    : undefined
+                }
+                className={`bg-[var(--color-navy)] px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white ${onToggleCustoEstendido ? 'cursor-pointer hover:brightness-125' : ''}`}
+              >
+                {onToggleCustoEstendido && (
+                  <>
+                    {mostrarDetalhesFixos ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
+                  </>
+                )}
+              </th>
               {canaisVisiveis.map((canal) => (
                 <th
                   key={canal.id}
