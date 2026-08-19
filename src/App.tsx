@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useAuth } from './features/auth/AuthProvider';
 import { LoginPage } from './features/auth/LoginPage';
 import { ArquivosPage } from './pages/ArquivosPage';
@@ -42,7 +43,15 @@ export default function App() {
   }, [location.pathname]);
 
   const matchCatalogoPublico = REGEX_CATALOGO_PUBLICO.exec(location.pathname);
-  if (matchCatalogoPublico) return <CatalogoPublicoPage slug={matchCatalogoPublico[1]} />;
+  if (matchCatalogoPublico)
+    return (
+      // Única página do app sem login — sem o boundary, uma exceção de render (ex.: campo
+      // inesperado vindo do snapshot publicado) deixava a tela em BRANCO pro cliente final, sem
+      // "Tentar novamente" nenhum (todas as páginas internas já têm isso via AppShell).
+      <ErrorBoundary>
+        <CatalogoPublicoPage slug={matchCatalogoPublico[1]} />
+      </ErrorBoundary>
+    );
 
   if (carregando) return null;
   if (!session) return <LoginPage />;

@@ -1,6 +1,4 @@
 import { Calculator, FileText, Loader2, Search, Truck, X } from 'lucide-react';
-// (arquivo tocado de propósito pra forçar um deploy novo no Vercel — os 2 últimos pushes não
-// apareceram em produção; ver commit "Força novo deploy" logo antes deste.)
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { NomeComDestaque } from '@/components/ui/NomeComDestaque';
