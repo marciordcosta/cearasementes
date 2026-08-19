@@ -272,7 +272,7 @@ export function ChannelsPanel({
                       className="flex items-center justify-between gap-1.5 text-[11px]"
                       title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
                     >
-                      <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostra detalhes no catálogo</span>
+                      <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Detalhes do laudo</span>
                       <input
                         type="checkbox"
                         checked={canal.mostrarDetalhesPlantio}

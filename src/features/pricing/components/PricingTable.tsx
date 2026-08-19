@@ -266,6 +266,17 @@ export function PricingTable({
   // início fixo da tabela; as demais colunas fixas (Classe/Produto) acompanham essa largura.
   const larguraExcluirEditar = somenteCanal ? 0 : largura('remover') + largura('editar');
 
+  // Bloco fixo inteiro (tudo sob o cabeçalho "Estender") — Excluir/Editar, Classe/ID (se
+  // "Estender" ligado), Produto, Peso, Custo (se mostrarCusto) e Repres% Geral (se aplicável).
+  // Cada um gruda no scroll horizontal (stickyLeft) na sequência exata em que aparece, formando
+  // UM bloco sólido só — as Tabelas (por canal) é que correm por trás dele, nunca o contrário.
+  const larguraClasseId = mostrarDetalhesFixos ? largura('classe') + largura('id') : 0;
+  const stickyLeftId = larguraExcluirEditar + largura('classe');
+  const stickyLeftProduto = larguraExcluirEditar + larguraClasseId;
+  const stickyLeftPeso = stickyLeftProduto + largura('produto');
+  const stickyLeftCusto = stickyLeftPeso + largura('peso');
+  const stickyLeftRepresentacaoGeral = stickyLeftCusto + (mostrarCusto ? largura('custo') : 0);
+
   const colunas: ColunaDef[] = [
     ...(somenteCanal
       ? []
@@ -318,17 +329,23 @@ export function PricingTable({
             stickyLeft: larguraExcluirEditar,
             render: (p: Produto) => getCategoria(p.categoriaId).nome,
           } satisfies ColunaDef,
-          { chave: 'id', rotulo: 'ID', larguraPadrao: defaults.id, render: (p: Produto) => <span className="num">{p.codigo}</span> } satisfies ColunaDef,
+          {
+            chave: 'id',
+            rotulo: 'ID',
+            larguraPadrao: defaults.id,
+            stickyLeft: stickyLeftId,
+            render: (p: Produto) => <span className="num">{p.codigo}</span>,
+          } satisfies ColunaDef,
         ]
       : []),
     {
       chave: 'produto',
       rotulo: 'Produto',
       larguraPadrao: defaults.produto,
-      // Fica colado logo depois de "Classe" ao rolar (quando "Mais detalhes" está ligado — senão,
-      // colado direto depois de "Excluir"+"Editar") — o deslocamento acompanha a largura ATUAL
-      // de "Excluir"+"Editar"+"Classe" (que agora podem ser redimensionadas), não um valor fixo.
-      stickyLeft: larguraExcluirEditar + (mostrarDetalhesFixos ? largura('classe') : 0),
+      // Fica colado logo depois de "Classe"+"ID" ao rolar (quando "Mais detalhes" está ligado —
+      // senão, colado direto depois de "Excluir"+"Editar") — o deslocamento acompanha a largura
+      // ATUAL dessas colunas (que agora podem ser redimensionadas), não um valor fixo.
+      stickyLeft: stickyLeftProduto,
       render: (p) => {
         const fornecedor = getFornecedor(p.fornecedorId);
         return (
@@ -376,6 +393,7 @@ export function PricingTable({
           'Peso (Kg)'
         ),
       larguraPadrao: defaults.peso,
+      stickyLeft: stickyLeftPeso,
       render: (p) => <span className="num">{Math.round(p.peso)}kg</span>,
     },
     ...(mostrarCusto
@@ -384,6 +402,7 @@ export function PricingTable({
             // Normalmente não editável (custo = Valor Kg x Peso, calculado e salvo no Editar Produto) —
             // clicar no rótulo libera editar o Valor Kg direto aqui, pra não precisar abrir cada produto.
             chave: 'custo',
+            stickyLeft: stickyLeftCusto,
             rotulo: onAtualizarValorKg ? (
               <button
                 type="button"
@@ -420,6 +439,7 @@ export function PricingTable({
       ? [
           {
             chave: 'representacaoGeral',
+            stickyLeft: stickyLeftRepresentacaoGeral,
             rotulo: onAbrirGraficoRepresentacao ? (
               <button type="button" onClick={onAbrirGraficoRepresentacao} title="Ver gráfico" className="hover:underline">
                 Repres%
@@ -768,15 +788,14 @@ export function PricingTable({
       : []),
   ];
 
-  // Ponto exato (em px) onde termina a última coluna fixa (Excluir + Editar + Classe + Produto) — é ali
-  // que a faixa de sombra precisa ficar grudada enquanto rola pro lado.
-  const finalColunasFixas = larguraExcluirEditar + (mostrarDetalhesFixos ? largura('classe') : 0) + largura('produto');
+  // Ponto exato (em px) onde termina o bloco fixo inteiro (Excluir+Editar+Classe/ID+Produto+Peso+
+  // Custo+Repres% Geral) — é ali que a faixa de sombra fica grudada enquanto rola pro lado, e é a
+  // borda contra a qual a primeira coluna da última Tabela para (ver maxScrollLeft, no JSX).
+  const finalColunasFixas = stickyLeftRepresentacaoGeral + (mostrarDetalhesFixos && representatividadeGeralPorProduto ? largura('representacaoGeral') : 0);
 
-  // "Produto" só termina de grudar na posição final depois que "ID" (a única
-  // coluna entre Classe e Produto que não é fixa) escorrega por baixo — até lá,
-  // ela ainda está "andando" junto com o scroll, e mostrar sombra nesse
-  // meio-tempo é prematuro (nada foi realmente coberto ainda).
-  const limiarComecoCobertura = mostrarDetalhesFixos ? largura('id') : 0;
+  // Agora que "ID" também gruda (faz parte do bloco fixo inteiro, não escorrega mais por baixo),
+  // a sombra pode aparecer assim que o scroll sair do zero.
+  const limiarComecoCobertura = 0;
 
   // Quantas colunas fixas (fora dos blocos por canal/safra) existem antes do cabeçalho de canal
   // começar — Excluir+Editar (só fora da tela cheia por canal, ver somenteCanal) +Produto+Peso
@@ -791,9 +810,33 @@ export function PricingTable({
   // Resumo, só Preço+ML% (Ajuste agora some junto com o resto do grupo detalhado).
   const colSpanPorCanal = modoResumo ? 2 : 6 + (representatividadePorProduto ? 1 : 0);
 
+  // Trava o scroll horizontal assim que a primeira coluna da ÚLTIMA Tabela visível encosta na
+  // borda direita do bloco fixo — rolar além disso só empurraria o início dela pra trás do bloco
+  // (escondido, coberto pelo sticky), sem revelar nada de novo: é a última, não vem mais nenhuma.
+  const ultimoCanalId = canaisVisiveis[canaisVisiveis.length - 1]?.id;
+  let inicioUltimoCanal = finalColunasFixas;
+  {
+    let acumulado = 0;
+    for (const c of colunas) {
+      if (ultimoCanalId !== undefined && c.canalId === ultimoCanalId) {
+        inicioUltimoCanal = acumulado;
+        break;
+      }
+      acumulado += largura(c.larguraChave ?? c.chave);
+    }
+  }
+  const maxScrollLeft = Math.max(0, inicioUltimoCanal - finalColunasFixas);
+
   return (
     <div className="relative" ref={containerRef}>
-      <div className="max-h-[70vh] overflow-auto" onScroll={(e) => setRoladoLateral(e.currentTarget.scrollLeft > limiarComecoCobertura)}>
+      <div
+        className="max-h-[70vh] overflow-auto"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (el.scrollLeft > maxScrollLeft) el.scrollLeft = maxScrollLeft;
+          setRoladoLateral(el.scrollLeft > limiarComecoCobertura);
+        }}
+      >
       <table className="table-fixed text-xs" style={{ width: colunas.reduce((s, c) => s + largura(c.larguraChave ?? c.chave), 0) }}>
         <colgroup>
           {colunas.map((c) => (
@@ -813,7 +856,7 @@ export function PricingTable({
                       : 'Estender pra ver Classe/ID aqui — Frete/Encargos/ML($)/Repres.%/Ajuste ficam resumidos (só Preço+ML%) em cada Tabela enquanto isso'
                     : undefined
                 }
-                className={`bg-[var(--color-navy)] px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white ${onToggleCustoEstendido ? 'cursor-pointer hover:brightness-125' : ''}`}
+                className={`sticky left-0 z-[3] bg-[var(--color-navy)] px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-white ${onToggleCustoEstendido ? 'cursor-pointer hover:brightness-125' : ''}`}
               >
                 {onToggleCustoEstendido && (
                   <>
