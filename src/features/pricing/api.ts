@@ -578,7 +578,7 @@ export async function sincronizarProdutosCusto(itens: { codigo: string; nome: st
     if (error) throw error;
 
     if (canais.length > 0 && data.length > 0) {
-      const precos = data.flatMap((p) => canais.map((c) => ({ produto_id: p.id, canal_id: c.id, preco: null, manual: false })));
+      const precos = data.flatMap((p) => canais.map((c) => ({ produto_id: p.id, canal_id: c.id, preco: null, manual: false, precisa_ajuste: false })));
       const { error: errPrecos } = await supabase.from('produto_precos').insert(precos);
       if (errPrecos) throw errPrecos;
     }
@@ -813,8 +813,9 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
   const { data: canalRows } = await supabase.from('catalogo_publico_canais').select('*').eq('slug', slug).order('atualizado_em', { ascending: false }).limit(1);
   const canalRow = canalRows?.[0];
   if (!canalRow) return null;
-  const { data: itensRows, error: errItens } = await supabase.from('catalogo_publico_itens').select('*').eq('canal_id', canalRow.canal_id).order('ordem');
-  if (errItens) throw errItens;
+  const itensRows = await fetchAllRows<Database['public']['Tables']['catalogo_publico_itens']['Row']>((from, to) =>
+    supabase.from('catalogo_publico_itens').select('*').eq('canal_id', canalRow.canal_id).order('ordem').range(from, to),
+  );
   return {
     canalNome: canalRow.nome,
     freteKgEfetivo: canalRow.frete_kg_efetivo,
@@ -828,7 +829,7 @@ export async function fetchCatalogoPublicoPorSlug(slug: string): Promise<Catalog
     pagamentoAvistaDescontoPct: canalRow.pagamento_avista_desconto_pct,
     pagamentoBoletoValorMinimo: canalRow.pagamento_boleto_valor_minimo,
     pagamentoBoletoParcelasMax: canalRow.pagamento_boleto_parcelas_max,
-    itens: (itensRows ?? []).map((i) => ({
+    itens: itensRows.map((i) => ({
       id: i.id,
       nome: i.nome,
       categoriaNome: i.categoria_nome,

@@ -11,11 +11,20 @@ export function useDebouncedCallback<Args extends unknown[]>(fn: (...args: Args)
   const fnRef = useRef(fn);
   fnRef.current = fn;
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // Guarda os args mais recentes de cada key pendente — se desmontar antes do timer disparar
+  // (ex.: usuário edita um campo e navega pra outra página dentro do delay), o cleanup usa isso
+  // pra DISPARAR o salvamento na hora em vez de só cancelar (que perdia a edição em silêncio).
+  const argsPendentes = useRef(new Map<string, Args>());
 
   useEffect(() => {
     const timersAtUnmount = timers.current;
+    const argsAtUnmount = argsPendentes.current;
     return () => {
-      timersAtUnmount.forEach((timer) => clearTimeout(timer));
+      timersAtUnmount.forEach((timer, key) => {
+        clearTimeout(timer);
+        const args = argsAtUnmount.get(key);
+        if (args) fnRef.current(...args);
+      });
     };
   }, []);
 
@@ -23,8 +32,10 @@ export function useDebouncedCallback<Args extends unknown[]>(fn: (...args: Args)
     (key: string, ...args: Args) => {
       const existing = timers.current.get(key);
       if (existing) clearTimeout(existing);
+      argsPendentes.current.set(key, args);
       const timer = setTimeout(() => {
         timers.current.delete(key);
+        argsPendentes.current.delete(key);
         fnRef.current(...args);
       }, delayMs);
       timers.current.set(key, timer);

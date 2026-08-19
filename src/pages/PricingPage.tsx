@@ -738,12 +738,12 @@ export function PricingPage() {
   function onAtualizarWhatsappCanal(canalId: string, valor: string) {
     const whatsapp = valor || null;
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, whatsapp } : c)));
-    atualizarCanal(canalId, { whatsapp });
+    salvarAgora(() => atualizarCanal(canalId, { whatsapp }));
   }
 
   function onAtualizarMostrarDetalhesCanal(canalId: string, valor: boolean) {
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, mostrarDetalhesPlantio: valor } : c)));
-    atualizarCanal(canalId, { mostrar_detalhes_plantio: valor });
+    salvarAgora(() => atualizarCanal(canalId, { mostrar_detalhes_plantio: valor }));
   }
 
   async function onSelecionarTransportadora(canalId: string, transportadoraId: string | null) {

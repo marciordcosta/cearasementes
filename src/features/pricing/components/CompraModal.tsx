@@ -238,6 +238,8 @@ export function CompraModal({ open, onFechar, produtos, produtosFiltrados, forne
                   <thead>
                     <tr className="bg-[var(--color-navy)] text-left text-white">
                       <th className="px-3 py-2 font-semibold">Produto</th>
+                      <th className="px-3 py-2 text-right font-semibold">Qtd Projetada</th>
+                      <th className="px-3 py-2 text-right font-semibold">Outros Fornecedores</th>
                       <th className="px-3 py-2 text-right font-semibold">
                         <span className="inline-flex items-center gap-1.5">
                           <button
@@ -248,11 +250,9 @@ export function CompraModal({ open, onFechar, produtos, produtosFiltrados, forne
                           >
                             <RotateCcw size={12} />
                           </button>
-                          Qtd Projetada
+                          Estoque Atual
                         </span>
                       </th>
-                      <th className="px-3 py-2 text-right font-semibold">Outros Fornecedores</th>
-                      <th className="px-3 py-2 text-right font-semibold">Estoque Atual</th>
                       <th className="px-3 py-2 text-right font-semibold">Pedido</th>
                       <th className="px-3 py-2 text-right font-semibold">Peso (kg)</th>
                       <th className="px-3 py-2" />

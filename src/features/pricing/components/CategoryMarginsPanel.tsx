@@ -21,7 +21,12 @@ function CampoTolerancia({
       defaultValue={valor ?? ''}
       onBlur={(e) => {
         const texto = e.target.value.trim();
-        onAtualizar(texto === '' ? null : parseFloat(texto) || 0);
+        const valorSalvo = texto === '' ? null : parseFloat(texto) || 0;
+        onAtualizar(valorSalvo);
+        // Reescreve o campo com o valor de verdade salvo — sem isso, digitar algo não numérico
+        // (ex.: "abc") salvava 0/null mas deixava o texto inválido visível no campo pra sempre
+        // (input não controlado, defaultValue não remonta o node sozinho).
+        e.target.value = valorSalvo === null ? '' : String(valorSalvo);
       }}
       className="num w-11 shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-right text-[var(--color-text)] placeholder:text-[9px]"
     />
@@ -152,7 +157,11 @@ export function CategoryMarginsPanel({
                           step="0.1"
                           min="0"
                           defaultValue={cat.estadual}
-                          onBlur={(e) => onAtualizarCategoria(cat.id, 'estadual', parseFloat(e.target.value) || 0)}
+                          onBlur={(e) => {
+                            const valor = parseFloat(e.target.value) || 0;
+                            onAtualizarCategoria(cat.id, 'estadual', valor);
+                            e.target.value = String(valor);
+                          }}
                           className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                         />
                       </td>
@@ -162,7 +171,11 @@ export function CategoryMarginsPanel({
                           step="0.1"
                           min="0"
                           defaultValue={cat.interestadual}
-                          onBlur={(e) => onAtualizarCategoria(cat.id, 'interestadual', parseFloat(e.target.value) || 0)}
+                          onBlur={(e) => {
+                            const valor = parseFloat(e.target.value) || 0;
+                            onAtualizarCategoria(cat.id, 'interestadual', valor);
+                            e.target.value = String(valor);
+                          }}
                           className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                         />
                       </td>
@@ -194,7 +207,11 @@ export function CategoryMarginsPanel({
                                 title="Ajuste (%) sobre a Margem R$ da referência — positivo ou negativo"
                                 placeholder="0%"
                                 defaultValue={cat.referenciaAjustePct[canal.id] || ''}
-                                onBlur={(e) => onAtualizarCategoriaReferenciaAjuste(cat.id, canal.id, parseFloat(e.target.value) || 0)}
+                                onBlur={(e) => {
+                                  const valor = parseFloat(e.target.value) || 0;
+                                  onAtualizarCategoriaReferenciaAjuste(cat.id, canal.id, valor);
+                                  e.target.value = valor === 0 ? '' : String(valor);
+                                }}
                                 className="w-14 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-1 py-1 text-[11px] text-[var(--color-text)]"
                               />
                             </td>
@@ -213,7 +230,11 @@ export function CategoryMarginsPanel({
                                 step="0.1"
                                 min="0"
                                 defaultValue={cat.margens[canal.id] ?? 20}
-                                onBlur={(e) => onAtualizarMargem(cat.id, canal.id, parseFloat(e.target.value) || 0)}
+                                onBlur={(e) => {
+                                  const valor = parseFloat(e.target.value) || 0;
+                                  onAtualizarMargem(cat.id, canal.id, valor);
+                                  e.target.value = String(valor);
+                                }}
                                 className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)]"
                               />
                             </td>
@@ -261,7 +282,9 @@ export function CategoryMarginsPanel({
                                   defaultValue={sub.margens[canal.id] ?? ''}
                                   onBlur={(e) => {
                                     const texto = e.target.value.trim();
-                                    onAtualizarMargemSubcategoria(sub.id, canal.id, texto === '' ? null : parseFloat(texto) || 0);
+                                    const valorSalvo = texto === '' ? null : parseFloat(texto) || 0;
+                                    onAtualizarMargemSubcategoria(sub.id, canal.id, valorSalvo);
+                                    e.target.value = valorSalvo === null ? '' : String(valorSalvo);
                                   }}
                                   className="num w-20 rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1 text-right text-[var(--color-text)] placeholder:text-[var(--color-text-soft)]"
                                 />
