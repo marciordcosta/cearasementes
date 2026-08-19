@@ -195,6 +195,24 @@ export function PricingTable({
   // atrás dela (scrollLeft > 0), senão fica uma sombra parada sem sentido.
   const [roladoLateral, setRoladoLateral] = useState(false);
 
+  // Barra de rolagem horizontal PRÓPRIA (não a nativa do navegador) — fica só embaixo das Tabelas,
+  // nunca embaixo do bloco fixo (que não rola). A nativa continua existindo por baixo (scroll via
+  // roda do mouse/trackpad segue funcionando normal), só a barra visual/arrastável é escondida via
+  // CSS (.grade-scroll-x-custom, ver index.css) e substituída por esta.
+  const scrollDivRef = useRef<HTMLDivElement>(null);
+  const [larguraVisivel, setLarguraVisivel] = useState(0);
+  const [scrollLeftAtual, setScrollLeftAtual] = useState(0);
+  const [arrastandoBarra, setArrastandoBarra] = useState<{ scrollLeftInicial: number; pointerXInicial: number } | null>(null);
+  useEffect(() => {
+    const el = scrollDivRef.current;
+    if (!el) return;
+    const atualizar = () => setLarguraVisivel(el.clientWidth);
+    atualizar();
+    const ro = new ResizeObserver(atualizar);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Ícone ✎ ao lado de "Custo (R$)" — liga a edição em lote do Valor Kg direto na grade, sem
   // precisar abrir o Editar Produto de cada linha.
   const [edicaoCustoLote, setEdicaoCustoLote] = useState(false);
@@ -340,7 +358,27 @@ export function PricingTable({
       : []),
     {
       chave: 'produto',
-      rotulo: 'Produto',
+      rotulo:
+        somenteCanal && onToggleCustoEstendido ? (
+          <span className="inline-flex items-center gap-1">
+            Produto
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={onToggleCustoEstendido}
+              title={
+                mostrarDetalhesFixos
+                  ? 'Recolher — volta a mostrar só Produto/Fornecedor/Peso'
+                  : 'Estender pra ver Classe/ID/Custo também'
+              }
+              className="rounded px-1 hover:bg-white/15"
+            >
+              {mostrarDetalhesFixos ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
+            </button>
+          </span>
+        ) : (
+          'Produto'
+        ),
       larguraPadrao: defaults.produto,
       // Fica colado logo depois de "Classe"+"ID" ao rolar (quando "Mais detalhes" está ligado —
       // senão, colado direto depois de "Excluir"+"Editar") — o deslocamento acompanha a largura
@@ -371,27 +409,7 @@ export function PricingTable({
     },
     {
       chave: 'peso',
-      rotulo:
-        somenteCanal && onToggleCustoEstendido ? (
-          <span className="inline-flex items-center gap-1">
-            Peso (Kg)
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={onToggleCustoEstendido}
-              title={
-                mostrarDetalhesFixos
-                  ? 'Recolher — volta a mostrar só Produto/Fornecedor/Peso'
-                  : 'Estender pra ver Classe/ID/Custo também'
-              }
-              className="rounded px-1 hover:bg-white/15"
-            >
-              {mostrarDetalhesFixos ? 'Recolher' : 'Estender'} <span className="opacity-75">⤢</span>
-            </button>
-          </span>
-        ) : (
-          'Peso (Kg)'
-        ),
+      rotulo: 'Peso (Kg)',
       larguraPadrao: defaults.peso,
       stickyLeft: stickyLeftPeso,
       render: (p) => <span className="num">{Math.round(p.peso)}kg</span>,
@@ -813,6 +831,8 @@ export function PricingTable({
   // Trava o scroll horizontal assim que a primeira coluna da ÚLTIMA Tabela visível encosta na
   // borda direita do bloco fixo — rolar além disso só empurraria o início dela pra trás do bloco
   // (escondido, coberto pelo sticky), sem revelar nada de novo: é a última, não vem mais nenhuma.
+  // Só vale na grade principal (várias Tabelas lado a lado) — na tela cheia por canal (somenteCanal)
+  // só existe UMA Tabela, então não há "próxima" pra travar contra: rola livre até a última coluna.
   const ultimoCanalId = canaisVisiveis[canaisVisiveis.length - 1]?.id;
   let inicioUltimoCanal = finalColunasFixas;
   {
@@ -825,19 +845,54 @@ export function PricingTable({
       acumulado += largura(c.larguraChave ?? c.chave);
     }
   }
-  const maxScrollLeft = Math.max(0, inicioUltimoCanal - finalColunasFixas);
+  const maxScrollLeft = somenteCanal ? Infinity : Math.max(0, inicioUltimoCanal - finalColunasFixas);
+
+  const larguraTabelaTotal = colunas.reduce((s, c) => s + largura(c.larguraChave ?? c.chave), 0);
+  const maxScrollNatural = Math.max(0, larguraTabelaTotal - larguraVisivel);
+  // Sem cap na tela cheia por canal (maxScrollLeft = Infinity ali) — usa só o limite natural do
+  // conteúdo. Na grade principal, usa o menor dos dois (o cap nunca deveria passar do natural, mas
+  // por segurança — Tabelas muito estreitas — não deixa a barra "sobrar" além do que existe).
+  const maxScrollEfetivo = Math.min(maxScrollLeft, maxScrollNatural);
+  const larguraTrack = Math.max(0, larguraVisivel - finalColunasFixas);
+  const larguraPaneVisivel = larguraTrack;
+  const larguraThumb = maxScrollEfetivo <= 0 ? larguraTrack : Math.max(30, larguraTrack * (larguraPaneVisivel / (larguraPaneVisivel + maxScrollEfetivo)));
+  const offsetThumb = maxScrollEfetivo <= 0 ? 0 : (Math.min(scrollLeftAtual, maxScrollEfetivo) / maxScrollEfetivo) * (larguraTrack - larguraThumb);
+
+  // Arrastar a barra própria (fora do fluxo normal de eventos do <div> porque o ponteiro pode sair
+  // dela no meio do arrasto) — escuta o documento inteiro enquanto `arrastandoBarra` está ativo.
+  useEffect(() => {
+    if (!arrastandoBarra) return;
+    function mover(e: PointerEvent) {
+      const el = scrollDivRef.current;
+      if (!el || !arrastandoBarra) return;
+      const deltaPx = e.clientX - arrastandoBarra.pointerXInicial;
+      const escala = maxScrollEfetivo / Math.max(1, larguraTrack - larguraThumb);
+      el.scrollLeft = Math.min(maxScrollEfetivo, Math.max(0, arrastandoBarra.scrollLeftInicial + deltaPx * escala));
+    }
+    function soltar() {
+      setArrastandoBarra(null);
+    }
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar);
+    return () => {
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', soltar);
+    };
+  }, [arrastandoBarra, maxScrollEfetivo, larguraTrack, larguraThumb]);
 
   return (
     <div className="relative" ref={containerRef}>
       <div
-        className="max-h-[70vh] overflow-auto"
+        ref={scrollDivRef}
+        className="grade-scroll-x-custom max-h-[70vh] overflow-auto"
         onScroll={(e) => {
           const el = e.currentTarget;
           if (el.scrollLeft > maxScrollLeft) el.scrollLeft = maxScrollLeft;
           setRoladoLateral(el.scrollLeft > limiarComecoCobertura);
+          setScrollLeftAtual(el.scrollLeft);
         }}
       >
-      <table className="table-fixed text-xs" style={{ width: colunas.reduce((s, c) => s + largura(c.larguraChave ?? c.chave), 0) }}>
+      <table className="table-fixed text-xs" style={{ width: larguraTabelaTotal }}>
         <colgroup>
           {colunas.map((c) => (
             <col key={c.chave} style={{ width: largura(c.larguraChave ?? c.chave) }} />
@@ -963,6 +1018,22 @@ export function PricingTable({
           className="pointer-events-none absolute bottom-0 z-20 w-2.5"
           style={{ left: finalColunasFixas, top: alturaGrupo, background: 'linear-gradient(to right, rgba(0,0,0,0.32), rgba(0,0,0,0))' }}
         />
+      )}
+      {maxScrollEfetivo > 0 && (
+        <div
+          className="absolute bottom-0.5 z-20 h-2.5 rounded-full bg-[var(--color-line)]"
+          style={{ left: finalColunasFixas, width: larguraTrack }}
+        >
+          <div
+            onPointerDown={(e) => {
+              e.preventDefault();
+              (e.target as HTMLElement).setPointerCapture(e.pointerId);
+              setArrastandoBarra({ scrollLeftInicial: scrollDivRef.current?.scrollLeft ?? 0, pointerXInicial: e.clientX });
+            }}
+            className="h-2.5 cursor-grab rounded-full bg-[var(--color-text-soft)] opacity-60 hover:opacity-90 active:cursor-grabbing active:opacity-90"
+            style={{ width: larguraThumb, transform: `translateX(${offsetThumb}px)` }}
+          />
+        </div>
       )}
     </div>
   );

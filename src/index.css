@@ -93,6 +93,15 @@ body {
   height: 10px;
   width: 10px;
 }
+
+/* Grade de Precificação (PricingTable.tsx) — some só com a barra de rolagem HORIZONTAL nativa (a
+   vertical continua igual); uma barra própria, desenhada só embaixo das Tabelas (nunca do bloco
+   fixo, que não rola), substitui a interação de arrastar. Só Chrome/Edge/Safari suportam o seletor
+   `:horizontal` — no Firefox a nativa continua aparecendo por baixo de tudo, sem quebrar nada. */
+.grade-scroll-x-custom::-webkit-scrollbar:horizontal {
+  height: 0px;
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: var(--color-line);
   border-radius: 4px;
