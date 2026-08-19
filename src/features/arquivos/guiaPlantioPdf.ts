@@ -75,8 +75,8 @@ function blocoProduto(l: LinhaGuiaPlantioPdf): string {
     <div class="produto">
       <div class="produto-cabecalho">
         <div class="produto-titulo">
-          <span class="produto-nome">${l.nomeProduto}</span>
-          <span class="produto-lote">Lote ${l.lote ?? '—'}</span>
+          <span class="produto-nome">${escapeHtml(l.nomeProduto)}</span>
+          <span class="produto-lote">Lote ${escapeHtml(l.lote ?? '—')}</span>
         </div>
         <div class="produto-totais">
           <span>Total de sacos: <strong>${l.totalSacos}</strong></span>

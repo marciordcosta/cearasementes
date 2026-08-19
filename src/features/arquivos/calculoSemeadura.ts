@@ -88,15 +88,6 @@ export function calcularKgPorHectareNumero(a: ArquivoLaudo, produtos: ProdutoPar
   return (sementesPorM2 * pms) / 100;
 }
 
-/** Igual calcularKgPorHectareNumero, mas já formatado (arredondado pra cima, número fechado) pra exibir. */
-export function calcularKgPorHectare(a: ArquivoLaudo, produtos: ProdutoParametrizacao[], fatorModo: number, fatorCondicao: number): string {
-  const kgHa = calcularKgPorHectareNumero(a, produtos, fatorModo, fatorCondicao);
-  // Arredonda sempre pra cima (nunca pra baixo) e pro inteiro fechado — é uma
-  // recomendação de dosagem, então erra pra margem maior (mais semente, não
-  // menos) e vira um número redondo, fácil de medir/comunicar no campo.
-  return kgHa === null ? '—' : `${Math.ceil(kgHa)} kg/ha`;
-}
-
 /**
  * Covas por m² = 10.000 cm² (1 m²) ÷ (espaçamento entre covas na linha ×
  * espaçamento do corredor entre linhas), os dois em cm.
@@ -150,12 +141,19 @@ export function precisaPesoPorCova(laudo: Pick<ArquivoLaudo, 'processo'>): boole
   return (laudo.processo ?? '').toLowerCase().includes('tradicional');
 }
 
-/** Validade no formato "MM/AAAA" (texto livre, digitado pelo operador) — convertida num número comparável (ano×12+mês). Sem validade cadastrada vai pro fim da lista (usado pra ordenar laudos do mais recente pro mais antigo). */
+/**
+ * Validade em "MM/AAAA" OU "DD/MM/AAAA" (texto livre, digitado pelo operador — os dois formatos
+ * são válidos, ver chaveOrdenacaoValidade em ListaArquivos.tsx) — convertida num número comparável
+ * (ano×12+mês). Antes só reconhecia "MM/AAAA" (2 partes); qualquer validade com dia (3 partes) caía
+ * em -Infinity, ou seja, era tratada como a MAIS ANTIGA possível mesmo sendo a mais recente — e essa
+ * função decide qual laudo "vence" em encontrarLaudoParaProduto. Sem validade cadastrada (ou não
+ * reconhecida) vai pro fim da lista (usado pra ordenar laudos do mais recente pro mais antigo).
+ */
 export function validadeParaOrdenacao(validade: string | null): number {
-  const partes = (validade ?? '').split('/');
-  if (partes.length !== 2) return -Infinity;
-  const mes = Number(partes[0]);
-  const ano = Number(partes[1]);
+  const partes = (validade ?? '').trim().split('/');
+  const [mesTxt, anoTxt] = partes.length === 3 ? [partes[1], partes[2]] : partes.length === 2 ? [partes[0], partes[1]] : [];
+  const mes = Number(mesTxt);
+  const ano = Number(anoTxt);
   if (!Number.isFinite(mes) || !Number.isFinite(ano)) return -Infinity;
   return ano * 12 + mes;
 }

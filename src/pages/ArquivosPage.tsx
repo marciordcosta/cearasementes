@@ -112,13 +112,13 @@ export function ArquivosPage() {
 
   async function confirmarApagar() {
     if (!paraApagar) return;
-    try {
-      await Promise.all(paraApagar.map((laudo) => apagarLaudo(laudo)));
-      setParaApagar(null);
-      invalidar();
-    } catch (e) {
-      setErro(mensagemDeErro(e, 'Falha ao excluir o(s) laudo(s).'));
-    }
+    // allSettled (não all) — se um dos laudos falhar ao excluir, os outros que já tinham sido
+    // excluídos com sucesso no servidor não podem ficar "presos" na tela sem invalidar a grade.
+    const resultados = await Promise.allSettled(paraApagar.map((laudo) => apagarLaudo(laudo)));
+    setParaApagar(null);
+    invalidar();
+    const falhas = resultados.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (falhas.length > 0) setErro(mensagemDeErro(falhas[0].reason, `Falha ao excluir ${falhas.length} de ${paraApagar.length} laudo(s).`));
   }
 
   async function onSalvarEdicao(
