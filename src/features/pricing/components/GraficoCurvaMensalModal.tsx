@@ -423,7 +423,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
             </p>
             <div className="h-96">
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <Chart type="pie" data={chartDataPizza as any} options={chartOptionsPizza as any} />
+              <Chart key="pizza" type="pie" data={chartDataPizza as any} options={chartOptionsPizza as any} />
             </div>
           </>
         )
@@ -442,7 +442,7 @@ export function GraficoCurvaMensalModal({ produto, onFechar, criterio, onEscolhe
           </p>
           <div className="h-96">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <Chart type="line" data={chartData as any} options={chartOptions as any} plugins={chartPlugins as any} />
+            <Chart key="linha" type="line" data={chartData as any} options={chartOptions as any} plugins={chartPlugins as any} />
           </div>
         </>
       )}
