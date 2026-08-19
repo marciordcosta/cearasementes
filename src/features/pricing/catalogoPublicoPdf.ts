@@ -1,7 +1,7 @@
 // Import só de tipo — jsPDF só entra no bundle de verdade na hora do clique (import dinâmico lá
 // embaixo, mesmo padrão de etiquetaFretePdf.ts), não no carregamento inicial da página pública.
 import type { jsPDF } from 'jspdf';
-import { abrirEImprimir, escapeHtml, gerarQrCodeSvg, nomeComDestaqueHtml } from './catalogoPdf';
+import { gerarQrCodeSvg } from './catalogoPdf';
 import { chaveComparacaoProduto } from './calculations';
 
 const LINK_CATALOGO = 'https://linktr.ee/cearasementes';
@@ -14,156 +14,6 @@ export interface ItemCatalogoPublicoPdf {
   peso: number;
   /** Usado pra agrupar "mesmo produto" (ver chaveComparacaoProduto) — prioriza Cultivar cadastrado, sem Categoria/Classe interferindo. */
   cultivar: string | null;
-}
-
-/** Igual tamanhoNomeCh em catalogoPdf.ts, só que a partir de texto solto (nome/fornecedor) em vez de `Produto`/`Fornecedor` — aqui só temos o snapshot já publicado. */
-function tamanhoNomeCh(nome: string, fornecedorNome: string | null): number {
-  let ch = nome.replace(/[*_]/g, '').length * 1.05;
-  if (fornecedorNome) ch += fornecedorNome.replace(/[*_]/g, '').length * 0.65 + 2;
-  return ch;
-}
-
-/**
- * Catálogo em PDF (via janela de impressão) pro Catálogo Online PÚBLICO — mesmo layout/estilo do
- * catálogo "padrão" gerado de dentro da Precificação (ver gerarCatalogoPDF em catalogoPdf.ts), só
- * que a partir do snapshot já publicado (nome/categoria/fornecedor/preço/peso, ver
- * fetchCatalogoPublicoPorSlug) — nunca recalcula nada, nunca vê Custo/Margem. `itens` já vem
- * filtrado pela busca/categoria que o visitante tiver aplicado na tela (mesmo princípio do
- * catálogo interno, que também respeita o filtro já aplicado).
- */
-export function gerarCatalogoPublicoPdf(canalNome: string, itens: ItemCatalogoPublicoPdf[]): void {
-  const categoriasPresentes = new Map<string, ItemCatalogoPublicoPdf[]>();
-  itens.forEach((item) => {
-    const lista = categoriasPresentes.get(item.categoriaNome) ?? [];
-    lista.push(item);
-    categoriasPresentes.set(item.categoriaNome, lista);
-  });
-
-  const categoriasOrdenadas = Array.from(categoriasPresentes.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-
-  const larguraProdutoCh = Math.ceil(Math.max(4, ...itens.map((i) => tamanhoNomeCh(i.nome, i.fornecedorNome))) + 2);
-
-  const f = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  let corpoHtml = '';
-  categoriasOrdenadas.forEach((cat) => {
-    const itensCat = [...(categoriasPresentes.get(cat) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-    let linhas = '';
-    itensCat.forEach((item, indice) => {
-      const tagFornecedor = item.fornecedorNome ? ` <span class="tag-fornecedor">${escapeHtml(item.fornecedorNome)}</span>` : '';
-      const produtoMudou = indice > 0 && chaveComparacaoProduto(item) !== chaveComparacaoProduto(itensCat[indice - 1]);
-      linhas += `
-        <tr class="${produtoMudou ? 'divisor' : ''}">
-          <td>${nomeComDestaqueHtml(item.nome)}${tagFornecedor}</td>
-          <td class="valor">R$ ${f(item.preco)}</td>
-          <td class="peso">${Math.round(item.peso)}kg</td>
-        </tr>
-      `;
-    });
-
-    corpoHtml += `
-      <h2 class="cat-titulo">${escapeHtml(cat)}</h2>
-      <table class="tabela-catalogo">
-        <thead>
-          <tr><th>Produto</th><th class="valor">Valor (R$)</th><th class="peso">Peso (Kg)</th></tr>
-        </thead>
-        <tbody>${linhas}</tbody>
-      </table>
-    `;
-  });
-
-  if (categoriasOrdenadas.length === 0) {
-    corpoHtml = `<p class="vazio">Nenhum produto encontrado para o filtro atual.</p>`;
-  }
-
-  const dataEmissao = new Date().toLocaleDateString('pt-BR');
-  const htmlCompleto = `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Catálogo — ${escapeHtml(canalNome)}</title>
-      <style>
-        @page{ margin:18mm 14mm; }
-        *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
-        body{
-          font-family:'Inter',Arial,sans-serif; color:#000000; background:#FFFFFF;
-          margin:0; padding:0 4mm;
-        }
-        .cabecalho{
-          display:flex; justify-content:space-between; align-items:flex-start;
-          border-bottom:2px solid #000000; padding-bottom:8px; margin-bottom:18px;
-        }
-        .cabecalho .marca{ display:flex; flex-direction:column; gap:2px; }
-        .cabecalho h1{font-size:20px; font-weight:700; margin:0; letter-spacing:.3px;}
-        .cabecalho .subtitulo{font-size:12.5px; font-weight:400; color:#333333; margin:0;}
-        .cabecalho .lado-direito{ display:flex; align-items:flex-start; gap:12px; }
-        .cabecalho .meta{font-size:11px; color:#333333; text-align:right; line-height:1.5; white-space:nowrap;}
-        .cabecalho .qrcode{ display:flex; flex-direction:column; align-items:center; gap:2px; }
-        .cabecalho .qrcode svg{ width:50px; height:50px; }
-        .cabecalho .qrcode p{ font-size:7.5px; color:#333333; margin:0; white-space:nowrap; }
-        .cat-titulo{
-          font-size:13.5px; text-transform:uppercase; letter-spacing:.6px;
-          background:#EFEFEF; color:#000000; padding:7px 10px; margin:20px 0 0;
-          border-left:4px solid #000000; page-break-after:avoid;
-        }
-        table.tabela-catalogo{
-          width:auto; max-width:100%; border-collapse:collapse; font-size:12px; margin:0 0 4px;
-        }
-        table.tabela-catalogo thead th{
-          text-align:left; padding:7px 10px; border-bottom:1px solid #000000;
-          font-weight:700; color:#000000; white-space:nowrap;
-        }
-        table.tabela-catalogo tbody td{
-          padding:6px 10px; border-bottom:1px solid #CCCCCC; color:#000000;
-        }
-        table.tabela-catalogo tbody tr{ page-break-inside:avoid; }
-        table.tabela-catalogo tbody tr.divisor td{ border-top:2px solid #888888; }
-        table.tabela-catalogo th:first-child, table.tabela-catalogo td:first-child{ min-width:${larguraProdutoCh}ch; }
-        table.tabela-catalogo th.valor, table.tabela-catalogo td.valor{ width:80px; padding-right:4px; text-align:right; font-weight:700; }
-        table.tabela-catalogo th.peso, table.tabela-catalogo td.peso{ width:50px; padding-left:4px; text-align:right; }
-        .tag-fornecedor{
-          display:inline-block; margin-left:8px; font-size:9px; font-weight:500; color:#777777;
-          text-transform:uppercase; letter-spacing:.3px; vertical-align:middle;
-        }
-        .vazio{ font-size:13px; color:#000000; padding:20px 0; }
-        .rodape{
-          margin-top:24px; padding-top:10px; border-top:1px solid #CCCCCC;
-          page-break-inside:avoid;
-        }
-        .rodape .titulo{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#000000; margin:0 0 3px; }
-        .rodape p{ font-size:10.5px; color:#555555; margin:0; }
-        @media print{
-          .cabecalho{ position:running(head); }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="cabecalho">
-        <div class="marca">
-          <h1>Ceará Sementes</h1>
-          <p class="subtitulo">Rua Engenheiro Henrique Morize, 236, Cajazeiras, Fortaleza-CE</p>
-          <p class="subtitulo">Fone/Whatsapp: (85) 3275-2074</p>
-          <p class="subtitulo">${escapeHtml(canalNome)}</p>
-        </div>
-        <div class="lado-direito">
-          <div class="meta">${dataEmissao}</div>
-          <div class="qrcode">
-            ${gerarQrCodeSvg(LINK_CATALOGO)}
-            <p>linktr.ee/cearasementes</p>
-          </div>
-        </div>
-      </div>
-      ${corpoHtml}
-      <div class="rodape">
-        <p class="titulo">Atenção</p>
-        <p>Os valores podem ser alterados sem aviso prévio, tabela válida por 15 dias ou até durar o estoque (lote em questão).</p>
-      </div>
-    </body>
-    </html>
-  `;
-
-  abrirEImprimir(htmlCompleto);
 }
 
 const PDF_MARGEM = 15;
@@ -255,14 +105,16 @@ export function desenharNomeComDestaque(doc: jsPDF, nome: string, x: number, y: 
 }
 
 /**
- * Mesmos dados (e mais: detalhes de plantio + agrupamento por produto) de gerarCatalogoPublicoPdf,
- * mas como um arquivo PDF de verdade (jsPDF, ver gerarEtiquetaFretePdf em etiquetaFretePdf.ts pro
- * mesmo padrão) em vez de uma janela de impressão — necessário pra "Enviar por WhatsApp"
- * (ModalNumeroWhatsApp em CatalogoPublicoPage.tsx), que precisa baixar um arquivo de verdade pro
- * cliente anexar na conversa, algo que window.print() não permite. Layout mais simples que o
- * catálogo "oficial" só na formatação da tabela em si (sem bordas de categoria coloridas) — o
- * cabeçalho (marca + QR), o agrupamento "colado" por produto (ver chaveComparacaoProduto) e o destaque
- * em negrito do nome seguem o mesmo padrão.
+ * Catálogo em PDF de verdade (jsPDF, ver gerarEtiquetaFretePdf em etiquetaFretePdf.ts pro mesmo
+ * padrão) — ÚNICO gerador do Catálogo Online público, usado tanto por "Salvar em PDF" quanto por
+ * "Enviar por WhatsApp" (ModalConcluir em CatalogoPublicoPage.tsx); antes eram dois caminhos
+ * diferentes (uma janela de impressão só pra salvar, sem detalhes de plantio), unificados aqui
+ * porque o WhatsApp precisa de um arquivo de verdade pro cliente anexar na conversa, algo que
+ * window.print() não permite — então esse virou o padrão dos dois. Nunca recalcula nada, nunca vê
+ * Custo/Margem: só o snapshot já publicado (ver fetchCatalogoPublicoPorSlug). Grade compacta, o
+ * mais próxima possível do catálogo "oficial" da Precificação (ver gerarCatalogoGerenciamentoPDF em
+ * catalogoPdf.ts) — o cabeçalho (marca + QR), o agrupamento "colado" por produto (ver
+ * chaveComparacaoProduto) e o destaque em negrito do nome seguem o mesmo padrão.
  */
 export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: ItemCatalogoPublicoPdfDetalhado[]): Promise<Blob> {
   const { jsPDF } = await import('jspdf');
@@ -318,62 +170,74 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
     doc.text('Nenhum produto encontrado para o filtro atual.', PDF_MARGEM, y);
   }
 
+  // Grade mais compacta — o mais próximo possível do catálogo "oficial" (ver gerarCatalogoGerenciamentoPDF
+  // em catalogoPdf.ts): fonte menor, linhas mais próximas. `alturaLinhaTexto` espelha o espaçamento de
+  // linha DE VERDADE que o jsPDF usa por baixo dos panos (fator 1.15, padrão da lib) — usar esse valor
+  // exato pra posicionar tudo que vem depois do nome é o que evita a linha separadora (ou o fornecedor)
+  // cortando o texto quando um nome comprido quebra em 2+ linhas.
+  const FONTE_NOME = 9.5;
+  const FONTE_INFO = 7.5;
+  const alturaLinhaTexto = (fontePt: number) => fontePt * 0.3527 * 1.15;
+  const ALTURA_LINHA_NOME = alturaLinhaTexto(FONTE_NOME);
+  const ALTURA_LINHA_INFO = alturaLinhaTexto(FONTE_INFO);
+  const GAP_ITEM = 1.8; // respiro padrão entre um item e o próximo (mesma cultivar, "colados")
+  const GAP_DIVISOR = 1.4; // respiro de cada lado da linha que separa cultivares diferentes
+
   categoriasOrdenadas.forEach((cat) => {
-    if (y > PDF_Y_LIMITE - 14) y = pdfNovaPagina(doc);
+    if (y > PDF_Y_LIMITE - 12) y = pdfNovaPagina(doc);
     doc.setFillColor(239, 239, 239);
-    doc.rect(PDF_MARGEM, y - 4.5, PDF_LARGURA_UTIL, 6.5, 'F');
+    doc.rect(PDF_MARGEM, y - 4, PDF_LARGURA_UTIL, 6, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(0);
     doc.text(cat.toUpperCase(), PDF_MARGEM + 2, y);
-    y += 7;
+    y += 6;
 
     const itensCat = [...(categoriasPresentes.get(cat) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     itensCat.forEach((item, indice) => {
-      if (y > PDF_Y_LIMITE - 8) y = pdfNovaPagina(doc);
       // Mesmo critério "colado" do catálogo oficial e da grade interna (ver chaveComparacaoProduto em
       // calculations.ts) — variantes do mesmo produto (fornecedor/tratamento) ficam juntas, sem
-      // espaço extra entre elas; produto DIFERENTE do anterior ganha uma linha fina separando.
+      // espaço extra entre elas; produto DIFERENTE do anterior ganha uma linha fina separando, com
+      // respiro reservado ANTES de desenhar (nunca em cima do texto do item anterior ou deste).
       const produtoMudou = indice > 0 && chaveComparacaoProduto(item) !== chaveComparacaoProduto(itensCat[indice - 1]);
+      if (produtoMudou) y += GAP_DIVISOR;
+      if (y > PDF_Y_LIMITE - 10) y = pdfNovaPagina(doc);
       if (produtoMudou) {
-        doc.setDrawColor(170);
-        doc.line(PDF_MARGEM, y - 2, PDF_LARGURA - PDF_MARGEM, y - 2);
+        doc.setDrawColor(150);
+        doc.line(PDF_MARGEM, y - GAP_DIVISOR / 2, PDF_LARGURA - PDF_MARGEM, y - GAP_DIVISOR / 2);
+        y += GAP_DIVISOR;
       }
 
       doc.setTextColor(0);
-      const larguraNome = PDF_LARGURA_UTIL - 45;
-      const linhasNome = desenharNomeComDestaque(doc, item.nome, PDF_MARGEM, y, larguraNome, 10);
+      const larguraNome = PDF_LARGURA_UTIL - 40;
+      const linhasNome = desenharNomeComDestaque(doc, item.nome, PDF_MARGEM, y, larguraNome, FONTE_NOME);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
+      doc.setFontSize(FONTE_NOME);
       doc.text(`R$ ${f(item.preco)}`, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(120);
-      doc.text(`${Math.round(item.peso)}kg`, PDF_LARGURA - PDF_MARGEM, y + 4, { align: 'right' });
-      let alturaLinha = linhasNome * 4.5;
 
-      // Mesma ordem do card na tela (Fornecedor > VC% > PMS > Validade, ver LinhaProduto em
-      // CatalogoPublicoPage.tsx) — só entra quando o Canal E o Produto permitem (mostrarDetalhes já
-      // vem combinado do chamador).
+      // Fornecedor logo abaixo do nome, sem espaço nenhum (colado na última linha do nome) — Peso vai
+      // na mesma linha, alinhado à direita. Sem Fornecedor/VC%/PMS/Validade, ainda assim mostra o Peso
+      // aqui — mantém sempre a mesma estrutura de 2 linhas por item, previsível.
+      const yInfo = y + linhasNome * ALTURA_LINHA_NOME;
       const infoPartes = [
         item.fornecedorNome,
         item.mostrarDetalhes && item.plantioVc != null ? `VC ${Math.round(item.plantioVc)}%` : null,
         item.mostrarDetalhes && item.plantioPmsManual ? `PMS ${item.plantioPmsManual}` : null,
         item.mostrarDetalhes && item.plantioValidade ? `Val. ${item.plantioValidade}` : null,
       ].filter((parte): parte is string => !!parte);
-      if (infoPartes.length > 0) {
-        doc.setFontSize(8);
-        doc.setTextColor(120);
-        doc.text(infoPartes.join('   ·   '), PDF_MARGEM, y + alturaLinha + 3);
-        alturaLinha += 4;
-      }
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(FONTE_INFO);
+      doc.setTextColor(120);
+      if (infoPartes.length > 0) doc.text(infoPartes.join('   ·   '), PDF_MARGEM, yInfo);
+      doc.text(`${Math.round(item.peso)}kg`, PDF_LARGURA - PDF_MARGEM, yInfo, { align: 'right' });
+
+      const alturaTotalItem = linhasNome * ALTURA_LINHA_NOME + ALTURA_LINHA_INFO;
       doc.setTextColor(0);
-      alturaLinha = Math.max(alturaLinha, 8);
-      doc.setDrawColor(220);
-      doc.line(PDF_MARGEM, y + alturaLinha, PDF_LARGURA - PDF_MARGEM, y + alturaLinha);
-      y += alturaLinha + 4;
+      doc.setDrawColor(225);
+      doc.line(PDF_MARGEM, y + alturaTotalItem + 0.6, PDF_LARGURA - PDF_MARGEM, y + alturaTotalItem + 0.6);
+      y += alturaTotalItem + 0.6 + GAP_ITEM;
     });
-    y += 3;
+    y += 2;
   });
 
   return doc.output('blob');

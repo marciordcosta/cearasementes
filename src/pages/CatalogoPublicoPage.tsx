@@ -16,7 +16,7 @@ import {
 import { paraNumero } from '@/features/arquivos/metricas';
 import { calcularParcelasBoleto, chaveComparacaoProduto } from '@/features/pricing/calculations';
 import { fetchCatalogoPublicoPorSlug, type CatalogoPublico } from '@/features/pricing/api';
-import { gerarCatalogoPublicoPdf, gerarCatalogoPublicoPdfBlob } from '@/features/pricing/catalogoPublicoPdf';
+import { gerarCatalogoPublicoPdfBlob } from '@/features/pricing/catalogoPublicoPdf';
 import { gerarOrcamentoPdfBlob, type ItemOrcamentoPdf } from '@/features/pricing/orcamentoPdf';
 
 type ItemCatalogo = CatalogoPublico['itens'][number];
@@ -1707,6 +1707,21 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     }
   }
 
+  /** Clique em "Salvar em PDF" — mesmo gerador jsPDF do WhatsApp (ver gerarCatalogoPublicoPdfBlob), só
+   *  baixando o arquivo direto em vez de abrir o WhatsApp — um único formato de catálogo pros dois botões. */
+  async function baixarPdfCatalogo() {
+    if (!data) return;
+    const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensParaPdfWhatsApp);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Catálogo ${data.canalNome ?? 'Ceará Sementes'}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
   const categorias = useMemo(() => {
     const vistas = new Set<string>();
     const lista: string[] = [];
@@ -1983,8 +1998,8 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
             void iniciarEnvioPdf();
           }}
           onPdf={() => {
-            gerarCatalogoPublicoPdf(data.canalNome ?? '', itensFiltrados);
             setPdfEscolhaAberta(false);
+            void baixarPdfCatalogo();
           }}
           onFechar={() => setPdfEscolhaAberta(false)}
         />
