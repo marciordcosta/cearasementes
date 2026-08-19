@@ -520,24 +520,30 @@ export function PricingTable({
       ...(modoResumo
         ? []
         : [
-            {
-              chave: `${canal.id}:frete`,
-              rotulo: 'Frete (R$)',
-              larguraPadrao: defaults['col:frete'],
-              larguraChave: 'col:frete',
-              canalId: canal.id,
-              render: (p: Produto) => {
-                if ((p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir) return null;
-                const categoria = getCategoria(p.categoriaId);
-                const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
-                const freteIncluso = canal.freteIncluso !== false;
-                return (
-                  <span className={`num ${freteIncluso ? '' : 'text-[var(--color-text-soft)] line-through opacity-80'}`} title={montarTituloFrete(r, freteIncluso)}>
-                    R$ {fmtR(r.freteReais)}
-                  </span>
-                );
-              },
-            } satisfies ColunaDef,
+            // Modo "Total" (Frete cobrado do cliente = Transportadora): a tabela não embute frete
+            // nenhum na margem/preço, então a coluna nem faz sentido aparecer aqui — o Catálogo
+            // Online continua calculando e cobrando o frete cheio normalmente no checkout.
+            ...(canal.freteAdicionalTipo === 'transportadora'
+              ? []
+              : [
+                  {
+                    chave: `${canal.id}:frete`,
+                    rotulo: 'Frete (R$)',
+                    larguraPadrao: defaults['col:frete'],
+                    larguraChave: 'col:frete',
+                    canalId: canal.id,
+                    render: (p: Produto) => {
+                      if ((p.precos[canal.id]?.precisaAjuste ?? false) || !p.imprimir) return null;
+                      const categoria = getCategoria(p.categoriaId);
+                      const r = calcularCanal(p, canal, categoria, getSubcategoria(p.subcategoriaId), transportadoraPorId, canaisPorId, true, resolverDescontoBi);
+                      return (
+                        <span className="num" title={montarTituloFrete(r)}>
+                          R$ {fmtR(r.freteReais)}
+                        </span>
+                      );
+                    },
+                  } satisfies ColunaDef,
+                ]),
             {
               chave: `${canal.id}:encargos`,
               rotulo: 'Encargos (R$)',

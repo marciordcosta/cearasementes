@@ -282,8 +282,8 @@ export function gerarCatalogoGerenciamentoPDF(
   const getSubcategoria = (id: string | null) => (id ? subcategorias.find((s) => s.id === id) : undefined);
   const getFornecedor = (id: string | null) => (id ? fornecedores.find((f) => f.id === id) : undefined);
   const canaisPorId = new Map(todosCanais.map((c) => [c.id, c]));
-  // Mesma regra do cálculo (calculations.ts) — frete só entra na margem quando o canal considera "frete incluso".
-  const freteConsiderado = canal.freteIncluso !== false;
+  // Mesma regra do cálculo (calculations.ts) — no modo "Total" (Transportadora) o frete não entra na margem.
+  const freteConsiderado = canal.freteAdicionalTipo !== 'transportadora';
 
   const produtosParaImprimir = produtosFiltrados.filter((p) => p.imprimir && !(p.precos[canal.id]?.precisaAjuste ?? false));
 

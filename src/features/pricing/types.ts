@@ -1,4 +1,4 @@
-/** 'transportadora' = Frete cobrado do cliente passa a ser o valor AO VIVO da Transportadora vinculada ao canal (mesma fonte usada no custo interno), não um valor fixo/por Kg digitado à mão — ver freteAdicionalReais em calculations.ts. */
+/** 'transportadora' (rótulo na UI: "Total") = Frete cobrado do cliente passa a ser o valor cheio AO VIVO da Transportadora vinculada ao canal (mesma fonte usada no custo interno), não um valor fixo/por Kg digitado à mão — ver freteAdicionalReais em calculations.ts. Nesse modo o frete NÃO entra na margem/preço sugerido (ver freteConsiderado em calculations.ts) e a coluna Frete some da grade. */
 export type FreteAdicionalTipo = 'fixo' | 'kg' | 'transportadora';
 export type TipoImposto = 'estadual' | 'interestadual';
 
@@ -15,7 +15,6 @@ export interface Canal {
   freteAdicionalValor: number;
   tipoImposto: TipoImposto;
   visivel: boolean;
-  freteIncluso: boolean;
   corIndice: number;
   ordem: number;
   /** Transportadora+Região (módulo Fretes) que alimentou frete_kg/frete_pct — null se preenchido manualmente */

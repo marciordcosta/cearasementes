@@ -139,7 +139,6 @@ export interface Database {
           frete_adicional_valor: number;
           tipo_imposto: 'estadual' | 'interestadual';
           visivel: boolean;
-          frete_incluso: boolean;
           cor_indice: number;
           ordem: number;
           /** Transportadora+Região (tabela `transportadoras`) usada pra alimentar frete_kg/frete_pct automaticamente */

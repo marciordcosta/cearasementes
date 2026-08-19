@@ -192,7 +192,11 @@ export function calcularCanal(
   const descontoFonte: 'bi' | 'cadastro' = descontoBi !== null ? 'bi' : 'cadastro';
   const encargosPct = descontoPct + canal.comissao + canal.cartao;
   const outrosEncargos = canal.outrosEncargos || 0;
-  const freteConsiderado = canal.freteIncluso !== false;
+  // Modo "Total" (freteAdicionalTipo === 'transportadora'): o frete cobrado do cliente é o valor
+  // cheio da Transportadora, então NÃO faz sentido embutir nenhuma parcela dele (Kg ou %) na
+  // margem/preço sugerido — a tabela não "absorve" frete nenhum nesse modo. Qualquer outro modo
+  // (Fixo, R$/Kg, nenhum) sempre considera o frete na margem, como sempre foi.
+  const freteConsiderado = canal.freteAdicionalTipo !== 'transportadora';
 
   const pesoCubadoValor = calcularPesoCubado(produto.cubagem);
   const pesoUsado = pesoCubadoValor ?? produto.peso;
@@ -222,7 +226,7 @@ export function calcularCanal(
         : 0;
 
   const custoBase = Math.max(0, produto.custo + freteKgComponente + outrosEncargos + valorDespesaExtra - freteAdicionalReais);
-  const totalPct = impostoPct + encargosPct + fretePctEfetivo + margemAlvo;
+  const totalPct = impostoPct + encargosPct + (freteConsiderado ? fretePctEfetivo : 0) + margemAlvo;
 
   const referenciaCanalId = canal.margemPorReferencia ? categoria.referenciaCanalId[canal.id] : undefined;
   const canalReferencia = permitirReferencia && referenciaCanalId ? canaisPorId.get(referenciaCanalId) : undefined;
@@ -372,16 +376,13 @@ export function alertaTolerancia(margemPct: number, margemAlvo: number, toleranc
   return null;
 }
 
-export function montarTituloFrete(r: ResultadoCalculo, freteIncluso: boolean): string {
+export function montarTituloFrete(r: ResultadoCalculo): string {
   const partes: string[] = [];
   if (r.freteAdicionalReais > 0) {
     partes.push(`Valor do Frete R$ ${r.freteBruto.toFixed(2)} — Cobrado do Cliente R$ ${r.freteAdicionalReais.toFixed(2)}`);
   }
   if (r.pesoCubado) {
     partes.push(`Frete calculado com peso cubado (${r.pesoUsado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg)`);
-  }
-  if (!freteIncluso) {
-    partes.push('Frete não considerado no cálculo da margem');
   }
   return partes.join(' — ');
 }

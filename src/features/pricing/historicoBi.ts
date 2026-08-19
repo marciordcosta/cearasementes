@@ -452,7 +452,7 @@ export interface MargemAtualProjetada {
   margemLiquidaProjetada: number;
   /** "M.C. prevista" — margem líquida (ML $, já com imposto/encargos/frete) projetada, em % do valor projetado. */
   margemLiquidaPct: number;
-  /** Frete projetado (R$) — só quando o canal considera frete na margem (freteIncluso !== false), igual à conta de margemLiquidaProjetada. Usado no DRE (ver MargemResumoModal.tsx). */
+  /** Frete projetado (R$) — só quando o canal considera frete na margem (todo modo, exceto "Total"/Transportadora), igual à conta de margemLiquidaProjetada. Usado no DRE (ver MargemResumoModal.tsx). */
   freteProjetado: number;
   /** Encargos projetado (R$) — imposto + desconto/comissão/cartão + outros encargos, mesma soma da coluna "Encargos (R$)" da grade. Usado no DRE (ali, Descontos é mostrado à parte — ver descontoProjetado). */
   encargosProjetado: number;
@@ -478,7 +478,7 @@ export function calcularMargemAtualProjetada(
   canaisPorId: Map<string, Canal>,
   historicoPorCodigo: Map<string, Map<string, HistoricoSafra>>,
 ): MargemAtualProjetada {
-  const freteConsiderado = canal.freteIncluso !== false;
+  const freteConsiderado = canal.freteAdicionalTipo !== 'transportadora';
   let valorProjetado = 0;
   let margemProjetada = 0;
   let margemLiquidaProjetada = 0;

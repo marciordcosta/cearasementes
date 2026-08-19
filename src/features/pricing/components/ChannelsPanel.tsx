@@ -45,7 +45,6 @@ interface ChannelsPanelProps {
   /** true = margem sugerida dessa Tabela vem de "Outra Tabela" (referência, escolhida por Categoria em Categorias); false = vem direto da % cadastrada por Categoria ("Categorias"). Mesmo campo de sempre (Canal.margemPorReferencia) — só mudou de tela, ver Categorias > Gerenciamento de Categorias pro comportamento em si. */
   onAtualizarCanalModoMargem: (canalId: string, porReferencia: boolean) => void;
   onToggleVisivel: (canalId: string, valor: boolean) => void;
-  onToggleFreteIncluso: (canalId: string, valor: boolean) => void;
   /** true = essa Tabela oferece pagamento (Pix com desconto + Boleto parcelado, sempre os dois juntos) no modal do Catálogo Online. */
   onTogglePagamento: (canalId: string, valor: boolean) => void;
   onRemoverCanal: (canalId: string) => void;
@@ -78,7 +77,6 @@ export function ChannelsPanel({
   onAtualizarFreteAdicionalTipo,
   onAtualizarCanalModoMargem,
   onToggleVisivel,
-  onToggleFreteIncluso,
   onTogglePagamento,
   onRemoverCanal,
   onAdicionarCanal,
@@ -145,10 +143,6 @@ export function ChannelsPanel({
                 <label className="flex items-center justify-between gap-1.5 border-b border-dashed border-[var(--color-line)] pb-1.5 text-[11px]">
                   <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Exibir na Tabela Principal</span>
                   <input type="checkbox" checked={canal.visivel} onChange={(e) => onToggleVisivel(canal.id, e.target.checked)} className="accent-[var(--color-navy)]" />
-                </label>
-                <label className="flex items-center justify-between gap-1.5 text-[11px]">
-                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Frete Incluso na Margem</span>
-                  <input type="checkbox" checked={canal.freteIncluso} onChange={(e) => onToggleFreteIncluso(canal.id, e.target.checked)} className="accent-accent" />
                 </label>
                 <label
                   className="flex items-center justify-between gap-1.5 text-[11px]"
@@ -245,7 +239,7 @@ export function ChannelsPanel({
                 <div className="flex flex-col gap-1.5 rounded-md bg-[var(--color-page)] p-2">
                   <CampoRow
                     label="Frete cobrado do cliente"
-                    title="O que se cobra do cliente pelo frete — Fixo/R$ por Kg digitados à mão, ou 'Transportadora' pra cobrar exatamente o valor ao vivo dela (mesmo usado no custo interno). Vale tanto pro cálculo interno de preço/margem quanto pro frete calculado no Catálogo Online."
+                    title="O que se cobra do cliente pelo frete — Fixo/R$ por Kg digitados à mão, ou 'Total' pra cobrar exatamente o valor cheio ao vivo da Transportadora vinculada (mesmo usado no custo interno). Nesse modo o frete não entra na margem/preço sugerido (a coluna Frete some da grade) — só o Catálogo Online calcula e cobra o valor cheio no checkout."
                   >
                     <span className="flex gap-1.5">
                       <select
@@ -255,7 +249,7 @@ export function ChannelsPanel({
                       >
                         <option value="fixo" className="text-[var(--color-text)]">R$ Fixo</option>
                         <option value="kg" className="text-[var(--color-text)]">R$/Kg</option>
-                        <option value="transportadora" className="text-[var(--color-text)]">Transportadora</option>
+                        <option value="transportadora" className="text-[var(--color-text)]">Total</option>
                       </select>
                       {canal.freteAdicionalTipo !== 'transportadora' && (
                         <input

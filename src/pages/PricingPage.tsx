@@ -789,11 +789,6 @@ export function PricingPage() {
     salvarAgora(() => atualizarCanal(canalId, { visivel: valor }));
   }
 
-  function onToggleFreteIncluso(canalId: string, valor: boolean) {
-    setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, freteIncluso: valor } : c)));
-    salvarAgora(() => atualizarCanal(canalId, { frete_incluso: valor }));
-  }
-
   function onTogglePagamento(canalId: string, valor: boolean) {
     setCanais((prev) => prev.map((c) => (c.id === canalId ? { ...c, pagamentoHabilitado: valor } : c)));
     salvarAgora(() => atualizarCanal(canalId, { pagamento_habilitado: valor }));
@@ -1419,7 +1414,6 @@ export function PricingPage() {
             onAtualizarFreteAdicionalTipo={onAtualizarFreteAdicionalTipo}
             onAtualizarCanalModoMargem={onAtualizarCanalModoMargem}
             onToggleVisivel={onToggleVisivel}
-            onToggleFreteIncluso={onToggleFreteIncluso}
             onTogglePagamento={onTogglePagamento}
             onRemoverCanal={onRemoverCanal}
             onAdicionarCanal={onAdicionarCanal}
