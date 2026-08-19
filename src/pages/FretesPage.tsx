@@ -79,7 +79,10 @@ export function FretesPage() {
           frete_minimo: input.freteMinimo,
         });
       } else {
-        await inserirTransportadora(input, transportadoras.length);
+        // Maior `ordem` existente + 1 (não só `.length`) — evita colidir com a próxima transportadora
+        // se alguma já tiver sido excluída (deixando um "buraco" na sequência de índices).
+        const proximaOrdem = transportadoras.reduce((max, t) => Math.max(max, t.ordem), -1) + 1;
+        await inserirTransportadora(input, proximaOrdem);
       }
       fecharModalForm();
       invalidar();

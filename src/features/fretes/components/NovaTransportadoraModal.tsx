@@ -80,7 +80,17 @@ function CampoValorDual({
       </div>
       <div>
         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-soft)]">Tipo</label>
-        <select value={tipo} onChange={(e) => onChangeTipo(e.target.value as TipoValorFrete)} className={campoClasse}>
+        <select
+          value={tipo}
+          onChange={(e) => {
+            // Trocar o tipo (%/R$ fixo) SEM zerar o valor reinterpretava o número guardado sob a
+            // unidade nova (ex.: R$ 50 fixo virava "50%" ao trocar pra percentual) — zera aqui,
+            // forçando redigitar na unidade certa, em vez de arriscar um valor absurdo silencioso.
+            onChangeValor(0);
+            onChangeTipo(e.target.value as TipoValorFrete);
+          }}
+          className={campoClasse}
+        >
           <option value="percentual" className="text-[var(--color-text)]">% do valor</option>
           <option value="fixo" className="text-[var(--color-text)]">R$ fixo</option>
         </select>

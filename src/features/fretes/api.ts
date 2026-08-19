@@ -149,9 +149,10 @@ export async function fetchRotaParametros(): Promise<RotaParametros> {
 
 /** Cidades já usadas em rotas anteriores (geocodificadas e cacheadas) — reforça a sugestão de autocomplete da Rota além das cidades das transportadoras. */
 export async function fetchCidadesRotaCache(): Promise<string[]> {
-  const { data, error } = await supabase.from('rota_cidades_cache').select('cidade_exibicao').order('cidade_exibicao');
-  if (error) throw error;
-  return data.map((r) => r.cidade_exibicao);
+  const rows = await fetchAllRows<{ cidade_exibicao: string }>((from, to) =>
+    supabase.from('rota_cidades_cache').select('cidade_exibicao').order('cidade_exibicao').range(from, to),
+  );
+  return rows.map((r) => r.cidade_exibicao);
 }
 
 export async function salvarRotaParametros(input: RotaParametros): Promise<void> {

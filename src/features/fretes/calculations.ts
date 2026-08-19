@@ -122,15 +122,18 @@ export function chegadaDoTrecho(kmAcumulado: number, parametros: RotaParametros)
 
 /** Cidade + UF de toda transportadora cadastrada — usado como sugestão de autocomplete (Cotação de Frete e Rota de Frota Própria), sempre com o estado junto pra não confundir cidades homônimas. */
 export function cidadesDasTransportadoras(transportadoras: Transportadora[]): { valor: string; meta: string }[] {
-  const ufPorCidade = new Map<string, string>();
+  // Chave por cidade+UF junto (não só cidade) — cidades brasileiras homônimas em estados
+  // diferentes (nome real repetido) precisam virar sugestões SEPARADAS, cada uma com sua UF
+  // certa; agrupar só por nome mantinha a UF da primeira transportadora vista, "roubando" a
+  // cidade de uma Região pra outra na hora de geocodificar (ver orsClient.geocodificarCidade).
+  const vistas = new Map<string, { valor: string; meta: string }>();
   transportadoras.forEach((t) =>
     t.prazos.forEach((p) => {
-      if (!ufPorCidade.has(p.cidade)) ufPorCidade.set(p.cidade, t.uf);
+      const chave = `${p.cidade}|${t.uf}`;
+      if (!vistas.has(chave)) vistas.set(chave, { valor: p.cidade, meta: t.uf });
     }),
   );
-  return Array.from(ufPorCidade.entries())
-    .map(([cidade, uf]) => ({ valor: cidade, meta: uf }))
-    .sort((a, b) => a.valor.localeCompare(b.valor, 'pt-BR'));
+  return Array.from(vistas.values()).sort((a, b) => a.valor.localeCompare(b.valor, 'pt-BR') || a.meta.localeCompare(b.meta, 'pt-BR'));
 }
 
 export function normalizarCidade(cidade: string): string {

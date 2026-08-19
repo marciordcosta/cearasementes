@@ -76,7 +76,12 @@ export function AutocompleteInput({
         onFocus={() => setAberto(true)}
         onBlur={onBlur}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && filtradas.length > 0) selecionar(filtradas[0].valor);
+          if (e.key === 'Enter') {
+            // Sem nenhuma sugestão batendo (cidade nova, ainda não vista) — usa o texto digitado
+            // direto, senão não existe NENHUM jeito de cadastrar uma cidade genuinamente nova.
+            if (filtradas.length > 0) selecionar(filtradas[0].valor);
+            else if (value.trim()) selecionar(value.trim());
+          }
           if (e.key === 'Escape') setAberto(false);
         }}
         placeholder={placeholder}
@@ -88,7 +93,7 @@ export function AutocompleteInput({
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-[var(--color-line)] bg-[var(--color-surface)] shadow-lg">
           {filtradas.map((op) => (
             <button
-              key={op.valor}
+              key={`${op.valor}|${op.meta ?? ''}`}
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => selecionar(op.valor)}

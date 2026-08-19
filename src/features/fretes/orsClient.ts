@@ -48,7 +48,12 @@ export async function geocodificarCidade(cidade: string): Promise<Coordenada> {
   if (!feature) throw new Error(`Cidade "${cidade}" não encontrada — tente incluir o estado (ex.: "Sobral, CE").`);
 
   const [lon, lat] = feature.geometry.coordinates as [number, number];
-  await supabase.from('rota_cidades_cache').insert({ cidade_normalizada: chave, cidade_exibicao: cidade, latitude: lat, longitude: lon });
+  // Best-effort: falha em gravar o cache (RLS, rede) não deve derrubar a geocodificação, que já
+  // funcionou — só loga, senão a cidade volta a gastar cota da API toda vez sem ninguém perceber.
+  const { error: erroCache } = await supabase
+    .from('rota_cidades_cache')
+    .insert({ cidade_normalizada: chave, cidade_exibicao: cidade, latitude: lat, longitude: lon });
+  if (erroCache) console.error('Falha ao gravar cache de cidade geocodificada:', erroCache);
   return { lat, lon };
 }
 
