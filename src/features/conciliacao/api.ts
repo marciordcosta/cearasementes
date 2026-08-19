@@ -187,13 +187,10 @@ export async function detectarConflitosConciliados(registros: RegistroBancoParse
   const fitids = registros.map((r) => r.fitid).filter((f): f is string => f !== null);
   if (fitids.length === 0) return [];
 
-  const { data: existentes, error } = await supabase
-    .from('conciliacao_lancamentos_banco')
-    .select('fitid, data, valor, descricao')
-    .in('fitid', fitids)
-    .eq('conciliado', true);
-  if (error) throw error;
-  if (!existentes || existentes.length === 0) return [];
+  const existentes = await fetchAllRows<{ fitid: string | null; data: string; valor: number; descricao: string | null }>((from, to) =>
+    supabase.from('conciliacao_lancamentos_banco').select('fitid, data, valor, descricao').in('fitid', fitids).eq('conciliado', true).range(from, to),
+  );
+  if (existentes.length === 0) return [];
 
   const existentePorFitid = new Map(existentes.map((e) => [e.fitid as string, e]));
   const conflitos: ConflitoRegistroBanco[] = [];
@@ -305,13 +302,10 @@ export async function detectarConflitosConciliadosSistema(registros: RegistroSis
   const chaves = [...porChave.keys()];
   if (chaves.length === 0) return [];
 
-  const { data: existentes, error } = await supabase
-    .from('conciliacao_lancamentos_sistema')
-    .select('id, chave_dedup, data, valor')
-    .in('chave_dedup', chaves)
-    .eq('conciliado', true);
-  if (error) throw error;
-  if (!existentes || existentes.length === 0) return [];
+  const existentes = await fetchAllRows<{ id: string; chave_dedup: string | null; data: string | null; valor: number }>((from, to) =>
+    supabase.from('conciliacao_lancamentos_sistema').select('id, chave_dedup, data, valor').in('chave_dedup', chaves).eq('conciliado', true).range(from, to),
+  );
+  if (existentes.length === 0) return [];
 
   const conflitos: ConflitoRegistroSistema[] = [];
   for (const existente of existentes) {

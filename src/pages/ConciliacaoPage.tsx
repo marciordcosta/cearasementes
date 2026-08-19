@@ -165,6 +165,10 @@ export function ConciliacaoPage() {
   const [descartadosModalAberto, setDescartadosModalAberto] = useState(false);
   const [pendenteSoma, setPendenteSoma] = useState<{ direcao: 'banco'; item: LancamentoBanco } | { direcao: 'sistema'; item: LancamentoSistema } | null>(null);
   const [pendenteSemNf, setPendenteSemNf] = useState<{ bancoIds: string[]; sistemaIds: string[]; avisoDiferenca: string | null } | null>(null);
+  // Trava os botões "Conciliar"/"Sim" enquanto a chamada está em voo — sem isso, um duplo-clique
+  // (ou clique + rede lenta) dispara duas conciliações concorrentes pra mesma seleção, duplicando o
+  // grupo em conciliacao_grupos e, se envolver CARTAO, dobrando a taxa de cartão contabilizada.
+  const [conciliandoSelecionados, setConciliandoSelecionados] = useState(false);
   const [grupoAvisoAberto, setGrupoAvisoAberto] = useState<string | null>(null);
   const [itemObservacao, setItemObservacao] = useState<LancamentoBanco | null>(null);
   const [itemObservacaoSistema, setItemObservacaoSistema] = useState<LancamentoSistema | null>(null);
@@ -479,22 +483,26 @@ export function ConciliacaoPage() {
       });
     }
     const termo = buscaBanco.trim().toLowerCase();
-    const filtrado = base.filter((b) => {
-      const camposBanco = [
-        b.descricao,
-        b.bancoNome,
-        b.data,
-        fmtDataBR(b.data),
-        fmtDataBRSemZero(b.data),
-        b.valor,
-        fmtBRL.format(b.valor),
-        b.grupoId ? infoSistemaPorGrupo.get(b.grupoId) : null,
-        b.grupoId ? criterioPorGrupo.get(b.grupoId) : null,
-      ];
-      if (filtros.busca && !correspondeBusca(filtros.busca.toLowerCase(), camposBanco)) return false;
-      if (termo && !correspondeBusca(termo, camposBanco)) return false;
-      return true;
-    });
+    // Só monta os campos formatados (data/moeda) se realmente existe algo pra buscar — sem isso,
+    // TODO lançamento era reformatado a cada recomputo do useMemo, mesmo sem nenhuma busca digitada.
+    const filtrado = !filtros.busca && !termo
+      ? base
+      : base.filter((b) => {
+          const camposBanco = [
+            b.descricao,
+            b.bancoNome,
+            b.data,
+            fmtDataBR(b.data),
+            fmtDataBRSemZero(b.data),
+            b.valor,
+            fmtBRL.format(b.valor),
+            b.grupoId ? infoSistemaPorGrupo.get(b.grupoId) : null,
+            b.grupoId ? criterioPorGrupo.get(b.grupoId) : null,
+          ];
+          if (filtros.busca && !correspondeBusca(filtros.busca.toLowerCase(), camposBanco)) return false;
+          if (termo && !correspondeBusca(termo, camposBanco)) return false;
+          return true;
+        });
     return ordenarPorData(filtrado, ordemData);
   }, [banco, filtros, buscaBanco, infoSistemaPorGrupo, criterioPorGrupo, sistemaSemNfPorGrupo, sistemaPreLancamentoPorGrupo, avisoPorGrupo, filtroIdsSugestaoBanco, filtroGrupoBanco, ordemData]);
 
@@ -528,21 +536,23 @@ export function ConciliacaoPage() {
       });
     }
     const termo = buscaSistema.trim().toLowerCase();
-    const filtrado = base.filter((s) => {
-      const camposSistema = [
-        s.cliente,
-        s.documento,
-        s.nf,
-        s.data,
-        s.data ? fmtDataBR(s.data) : null,
-        s.data ? fmtDataBRSemZero(s.data) : null,
-        s.valor,
-        fmtBRL.format(s.valor),
-      ];
-      if (filtros.busca && !correspondeBusca(filtros.busca.toLowerCase(), camposSistema)) return false;
-      if (termo && !correspondeBusca(termo, camposSistema)) return false;
-      return true;
-    });
+    const filtrado = !filtros.busca && !termo
+      ? base
+      : base.filter((s) => {
+          const camposSistema = [
+            s.cliente,
+            s.documento,
+            s.nf,
+            s.data,
+            s.data ? fmtDataBR(s.data) : null,
+            s.data ? fmtDataBRSemZero(s.data) : null,
+            s.valor,
+            fmtBRL.format(s.valor),
+          ];
+          if (filtros.busca && !correspondeBusca(filtros.busca.toLowerCase(), camposSistema)) return false;
+          if (termo && !correspondeBusca(termo, camposSistema)) return false;
+          return true;
+        });
     return ordenarPorData(filtrado, ordemData);
   }, [sistema, filtros, buscaSistema, filtroGrupoSistema, filtroIdsSugestaoSistema, filtroNfSistema, avisoPorGrupo, ordemData]);
 
@@ -813,12 +823,14 @@ export function ConciliacaoPage() {
   }
 
   async function onConciliarSelecionados(sistemaIdsForcados?: string[]) {
+    if (conciliandoSelecionados) return;
     const bancoIds = Array.from(selecionadosBanco);
     const sistemaIds = sistemaIdsForcados ?? Array.from(selecionadosSistema);
     if (algumSemNf(sistemaIds)) {
       setPendenteSemNf({ bancoIds, sistemaIds, avisoDiferenca: avisoSelecao });
       return;
     }
+    setConciliandoSelecionados(true);
     try {
       const { bancoAtualizados, sistemaAtualizados } = await conciliar(bancoIds, sistemaIds, avisoSelecao);
       aplicarAtualizacaoBanco(bancoAtualizados);
@@ -829,6 +841,8 @@ export function ConciliacaoPage() {
       setSugestaoAtiva(null);
     } catch (e) {
       tratarErro(e);
+    } finally {
+      setConciliandoSelecionados(false);
     }
   }
 
@@ -1429,20 +1443,22 @@ export function ConciliacaoPage() {
                 </button>
                 <button
                   type="button"
+                  disabled={conciliandoSelecionados}
                   onClick={() => onConciliarSelecionados()}
-                  className="whitespace-nowrap rounded-md bg-[#8a6d1f] px-3 py-1.5 text-xs font-bold text-white hover:brightness-110"
+                  className="whitespace-nowrap rounded-md bg-[#8a6d1f] px-3 py-1.5 text-xs font-bold text-white hover:brightness-110 disabled:opacity-60"
                 >
-                  Sim
+                  {conciliandoSelecionados ? 'Conciliando…' : 'Sim'}
                 </button>
               </div>
             </div>
           ) : (
             <button
               type="button"
+              disabled={conciliandoSelecionados}
               onClick={() => onConciliarSelecionados()}
-              className="w-full rounded-lg bg-[var(--color-accent)] py-2.5 text-sm font-bold text-white hover:brightness-105"
+              className="w-full rounded-lg bg-[var(--color-accent)] py-2.5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-60"
             >
-              Conciliar {selecionadosBanco.size} do banco com {selecionadosSistema.size} do sistema
+              {conciliandoSelecionados ? 'Conciliando…' : `Conciliar ${selecionadosBanco.size} do banco com ${selecionadosSistema.size} do sistema`}
             </button>
           ))}
 
