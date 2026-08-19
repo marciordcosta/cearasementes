@@ -19,11 +19,15 @@ export interface GrupoComparacaoFornecedores {
 }
 
 /**
- * Agrupa produtos de fornecedores DIFERENTES com o mesmo nome "destacado" no cadastro e mesma
- * Classe (subcategoria) — mesmo critério da busca inteligente do Planejamento de Compra (ver
- * chaveComparacaoNome em calculations.ts e compra.ts) — só que aqui pra comparar preço (R$/Kg),
- * não demanda. Só entram grupos com mais de 1 fornecedor (senão não tem o que comparar);
- * ordenados alfabeticamente pelo nome, cada um com os fornecedores do mais barato pro mais caro.
+ * Agrupa produtos de fornecedores DIFERENTES com o mesmo Cultivar (ou nome "destacado", ver
+ * chaveComparacaoProduto em calculations.ts) E o mesmo Processo (Subcategoria) — diferente das
+ * outras telas que reaproveitam essa mesma chave (Tabela de Preços, Representação), que agrupam só
+ * por Cultivar, sem olhar Processo. Aqui precisa dos dois: é uma comparação de COMPRA entre
+ * fornecedores do MESMO produto (Incrustado com Incrustado, Tradicional com Tradicional...) — do
+ * jeito que a Tabela de Preços agrupa, Incrustado e Tradicional do mesmo Cultivar cairiam juntos,
+ * mas são produtos/preços bem diferentes pra decidir de quem comprar. Só entram grupos com mais de
+ * 1 fornecedor (senão não tem o que comparar); ordenados alfabeticamente pelo nome, cada um com os
+ * fornecedores do mais barato pro mais caro.
  */
 export function calcularComparacaoFornecedores(produtos: Produto[], fornecedores: Fornecedor[]): GrupoComparacaoFornecedores[] {
   const fornecedorPorId = new Map(fornecedores.map((f) => [f.id, f]));
@@ -34,7 +38,7 @@ export function calcularComparacaoFornecedores(produtos: Produto[], fornecedores
     const fornecedor = fornecedorPorId.get(produto.fornecedorId);
     if (!fornecedor) continue;
     const nomeLimpo = produto.nome.replace(/[*_]/g, '');
-    const chave = chaveComparacaoProduto(produto);
+    const chave = `${chaveComparacaoProduto(produto)}::${produto.subcategoriaId ?? ''}`;
     const grupo = grupos.get(chave) ?? { nomeGrupo: nomeLimpo, itens: [] };
     grupo.itens.push({ fornecedorNome: fornecedor.nome, produtoNome: produto.nome, valorKg: produto.valorKg, valorSaco: produto.custo });
     grupos.set(chave, grupo);
