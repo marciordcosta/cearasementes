@@ -180,8 +180,13 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
   const alturaLinhaTexto = (fontePt: number) => fontePt * 0.3527 * 1.15;
   const ALTURA_LINHA_NOME = alturaLinhaTexto(FONTE_NOME);
   const ALTURA_LINHA_INFO = alturaLinhaTexto(FONTE_INFO);
-  const GAP_ITEM = 1.8; // respiro padrão entre um item e o próximo (mesma cultivar, "colados")
-  const GAP_DIVISOR = 1.4; // respiro de cada lado da linha que separa cultivares diferentes
+  // UMA linha só entre cada par de itens consecutivos (nunca duas linhas grudadas) — fina/clara
+  // quando é a mesma cultivar (variantes "coladas" do mesmo produto), mais espessa/escura quando
+  // muda de cultivar (separador de verdade). O respiro de cada lado da linha entra no espaço ANTES
+  // de desenhar o próximo item, nunca depois do anterior — assim nunca fica em cima de texto
+  // nenhum, mesmo quando o nome anterior quebrou em 2+ linhas.
+  const GAP_MEIA_MESMA_CULTIVAR = 1.2;
+  const GAP_MEIA_CULTIVAR_DIFERENTE = 1.7;
 
   categoriasOrdenadas.forEach((cat) => {
     if (y > PDF_Y_LIMITE - 12) y = pdfNovaPagina(doc);
@@ -196,16 +201,21 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
     const itensCat = [...(categoriasPresentes.get(cat) ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     itensCat.forEach((item, indice) => {
       // Mesmo critério "colado" do catálogo oficial e da grade interna (ver chaveComparacaoProduto em
-      // calculations.ts) — variantes do mesmo produto (fornecedor/tratamento) ficam juntas, sem
-      // espaço extra entre elas; produto DIFERENTE do anterior ganha uma linha fina separando, com
-      // respiro reservado ANTES de desenhar (nunca em cima do texto do item anterior ou deste).
+      // calculations.ts) — variantes do mesmo produto (fornecedor/tratamento) só levam a linha fina
+      // entre elas; produto DIFERENTE do anterior leva a linha espessa. Primeiro item da categoria
+      // não leva linha nenhuma antes (a faixa cinza do cabeçalho já fecha visualmente ali).
       const produtoMudou = indice > 0 && chaveComparacaoProduto(item) !== chaveComparacaoProduto(itensCat[indice - 1]);
-      if (produtoMudou) y += GAP_DIVISOR;
-      if (y > PDF_Y_LIMITE - 10) y = pdfNovaPagina(doc);
-      if (produtoMudou) {
-        doc.setDrawColor(150);
-        doc.line(PDF_MARGEM, y - GAP_DIVISOR / 2, PDF_LARGURA - PDF_MARGEM, y - GAP_DIVISOR / 2);
-        y += GAP_DIVISOR;
+      if (indice > 0) {
+        const meioGap = produtoMudou ? GAP_MEIA_CULTIVAR_DIFERENTE : GAP_MEIA_MESMA_CULTIVAR;
+        y += meioGap;
+        if (y > PDF_Y_LIMITE - 10) y = pdfNovaPagina(doc);
+        doc.setDrawColor(produtoMudou ? 130 : 210);
+        doc.setLineWidth(produtoMudou ? 0.45 : 0.15);
+        doc.line(PDF_MARGEM, y - meioGap / 2, PDF_LARGURA - PDF_MARGEM, y - meioGap / 2);
+        doc.setLineWidth(0.2);
+        y += meioGap;
+      } else if (y > PDF_Y_LIMITE - 10) {
+        y = pdfNovaPagina(doc);
       }
 
       doc.setTextColor(0);
@@ -233,11 +243,9 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
 
       const alturaTotalItem = linhasNome * ALTURA_LINHA_NOME + ALTURA_LINHA_INFO;
       doc.setTextColor(0);
-      doc.setDrawColor(225);
-      doc.line(PDF_MARGEM, y + alturaTotalItem + 0.6, PDF_LARGURA - PDF_MARGEM, y + alturaTotalItem + 0.6);
-      y += alturaTotalItem + 0.6 + GAP_ITEM;
+      y += alturaTotalItem;
     });
-    y += 2;
+    y += 4;
   });
 
   return doc.output('blob');
