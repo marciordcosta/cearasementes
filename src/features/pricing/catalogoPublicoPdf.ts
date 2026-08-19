@@ -180,13 +180,17 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
   const alturaLinhaTexto = (fontePt: number) => fontePt * 0.3527 * 1.15;
   const ALTURA_LINHA_NOME = alturaLinhaTexto(FONTE_NOME);
   const ALTURA_LINHA_INFO = alturaLinhaTexto(FONTE_INFO);
-  // UMA linha só entre cada par de itens consecutivos (nunca duas linhas grudadas) — fina/clara
-  // quando é a mesma cultivar (variantes "coladas" do mesmo produto), mais espessa/escura quando
-  // muda de cultivar (separador de verdade). O respiro de cada lado da linha entra no espaço ANTES
-  // de desenhar o próximo item, nunca depois do anterior — assim nunca fica em cima de texto
-  // nenhum, mesmo quando o nome anterior quebrou em 2+ linhas.
-  const GAP_MEIA_MESMA_CULTIVAR = 1.2;
-  const GAP_MEIA_CULTIVAR_DIFERENTE = 1.7;
+  // `doc.text(..., y)` desenha com `y` sendo a LINHA DE BASE do texto — as letras (principalmente
+  // maiúsculas, sem descendentes) sobem a partir dali, não descem. Por isso a linha separadora não
+  // pode ficar perto da baseline do PRÓXIMO item (ainda dentro da altura das letras, cortando o
+  // nome) — precisa de espaço equivalente à ALTURA da letra (aproximação de caixa-alta em
+  // Helvetica, ~0.72× o tamanho da fonte) acima dessa baseline pra realmente ficar por cima do texto.
+  const alturaMaiuscula = (fontePt: number) => fontePt * 0.3527 * 0.72;
+  // Respiro ANTES da linha (logo abaixo da última linha do item anterior — Peso/Fornecedor, fonte
+  // pequena, quase sem descendente) e DEPOIS dela (antes do topo do nome do próximo item — precisa
+  // limpar a altura da letra maiúscula inteira, senão a linha corta o nome por cima).
+  const RESPIRO_ANTES_LINHA = 1;
+  const RESPIRO_DEPOIS_LINHA = alturaMaiuscula(FONTE_NOME) + 1;
 
   categoriasOrdenadas.forEach((cat) => {
     if (y > PDF_Y_LIMITE - 12) y = pdfNovaPagina(doc);
@@ -206,14 +210,13 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
       // não leva linha nenhuma antes (a faixa cinza do cabeçalho já fecha visualmente ali).
       const produtoMudou = indice > 0 && chaveComparacaoProduto(item) !== chaveComparacaoProduto(itensCat[indice - 1]);
       if (indice > 0) {
-        const meioGap = produtoMudou ? GAP_MEIA_CULTIVAR_DIFERENTE : GAP_MEIA_MESMA_CULTIVAR;
-        y += meioGap;
+        y += RESPIRO_ANTES_LINHA;
         if (y > PDF_Y_LIMITE - 10) y = pdfNovaPagina(doc);
         doc.setDrawColor(produtoMudou ? 130 : 210);
         doc.setLineWidth(produtoMudou ? 0.45 : 0.15);
-        doc.line(PDF_MARGEM, y - meioGap / 2, PDF_LARGURA - PDF_MARGEM, y - meioGap / 2);
+        doc.line(PDF_MARGEM, y, PDF_LARGURA - PDF_MARGEM, y);
         doc.setLineWidth(0.2);
-        y += meioGap;
+        y += RESPIRO_DEPOIS_LINHA;
       } else if (y > PDF_Y_LIMITE - 10) {
         y = pdfNovaPagina(doc);
       }
