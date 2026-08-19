@@ -144,18 +144,6 @@ export function ChannelsPanel({
                   <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Exibir na Tabela Principal</span>
                   <input type="checkbox" checked={canal.visivel} onChange={(e) => onToggleVisivel(canal.id, e.target.checked)} className="accent-[var(--color-navy)]" />
                 </label>
-                <label
-                  className="flex items-center justify-between gap-1.5 text-[11px]"
-                  title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
-                >
-                  <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostra detalhes no catálogo</span>
-                  <input
-                    type="checkbox"
-                    checked={canal.mostrarDetalhesPlantio}
-                    onChange={(e) => onAtualizarMostrarDetalhes(canal.id, e.target.checked)}
-                    className="accent-[var(--color-navy)]"
-                  />
-                </label>
                 <CampoRow
                   label="Média de Desconto (%)"
                   title="Só usado quando não há desconto real medido no BI (última Safra vendida) pra um produto — a fonte primária agora é o histórico de vendas, não mais esse valor cadastrado."
@@ -168,6 +156,9 @@ export function ChannelsPanel({
                 <CampoRow label="Taxa de Cartão (%)">
                   <input type="number" step="0.1" min="0" defaultValue={canal.cartao} onBlur={(e) => onAtualizarCampo(canal.id, 'cartao', parseFloat(e.target.value) || 0)} className={inputClass} />
                 </CampoRow>
+                <CampoRow label="Outros Encargos (R$)">
+                  <input type="number" step="0.1" min="0" defaultValue={canal.outrosEncargos} onBlur={(e) => onAtualizarCampo(canal.id, 'outrosEncargos', parseFloat(e.target.value) || 0)} className={inputClass} />
+                </CampoRow>
                 <CampoRow label="Tipo de Imposto (ICMS)">
                   <select
                     defaultValue={canal.tipoImposto}
@@ -177,9 +168,6 @@ export function ChannelsPanel({
                     <option value="estadual" className="text-[var(--color-text)]">Estadual</option>
                     <option value="interestadual" className="text-[var(--color-text)]">Interestadual</option>
                   </select>
-                </CampoRow>
-                <CampoRow label="Outros Encargos (R$)">
-                  <input type="number" step="0.1" min="0" defaultValue={canal.outrosEncargos} onBlur={(e) => onAtualizarCampo(canal.id, 'outrosEncargos', parseFloat(e.target.value) || 0)} className={inputClass} />
                 </CampoRow>
                 <CampoRow
                   label="Base de precificação"
@@ -280,6 +268,18 @@ export function ChannelsPanel({
                     </span>
                   </CampoRow>
                   <div className="flex flex-col gap-1.5 border-t border-dashed border-[var(--color-line)] pt-1.5">
+                    <label
+                      className="flex items-center justify-between gap-1.5 text-[11px]"
+                      title="Card do Catálogo Online desse canal mostra VC%/Validade além do Fornecedor — desmarcado, mostra só o nome padrão e o Fornecedor"
+                    >
+                      <span className="whitespace-nowrap font-semibold text-[var(--color-text)]">Mostra detalhes no catálogo</span>
+                      <input
+                        type="checkbox"
+                        checked={canal.mostrarDetalhesPlantio}
+                        onChange={(e) => onAtualizarMostrarDetalhes(canal.id, e.target.checked)}
+                        className="accent-[var(--color-navy)]"
+                      />
+                    </label>
                     <label
                       className="flex items-center justify-between gap-1.5 text-[11px]"
                       title="Liga Pix (com desconto) e Boleto (parcelado) juntos no modal de pagamento do Catálogo Online (depois de Concluir, antes do WhatsApp/PDF)."
