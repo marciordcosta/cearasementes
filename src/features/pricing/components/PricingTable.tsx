@@ -471,7 +471,7 @@ export function PricingTable({
               if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
               const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades, somando todas as Tabelas${onAbrirGraficoProduto ? ' — clique pra ver a curva mensal' : ''}`;
               return (
-                <span className="inline-flex items-center gap-1" title={titulo}>
+                <span className={`inline-flex items-center gap-1 ${p.imprimir ? '' : 'opacity-40'}`} title={titulo}>
                   {onAbrirGraficoProduto ? (
                     <button
                       type="button"
@@ -670,7 +670,7 @@ export function PricingTable({
                 if (repr === undefined) return <span className="text-[var(--color-text-soft)]">—</span>;
                 const titulo = `Média de ${Math.round(repr.qtdMedia)} unidades${onAbrirGraficoProduto ? ' — clique pra ver a curva mensal' : ''}`;
                 return (
-                  <span className="inline-flex items-center gap-1" title={titulo}>
+                  <span className={`inline-flex items-center gap-1 ${p.imprimir ? '' : 'opacity-40'}`} title={titulo}>
                     {onAbrirGraficoProduto ? (
                       <button
                         type="button"
