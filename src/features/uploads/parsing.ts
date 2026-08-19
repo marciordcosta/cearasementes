@@ -99,8 +99,12 @@ export function parseBRNumber(raw: unknown): number {
   if (s === '' || s === '-') return NaN;
   const hasComma = s.includes(',');
   const hasDot = s.includes('.');
+  // Formato BR: "." é separador de milhar, "," é decimal — nunca o contrário. Um ponto sozinho (sem
+  // vírgula) também é milhar, não decimal (ex.: "1.234" = 1234, não 1,234) — antes caía direto no
+  // parseFloat e virava 1.234 (fator 1000 errado) sempre que o valor vinha sem centavos.
   if (hasComma && hasDot) s = s.replace(/\./g, '').replace(',', '.');
   else if (hasComma) s = s.replace(',', '.');
+  else if (hasDot) s = s.replace(/\./g, '');
   return parseFloat(s);
 }
 

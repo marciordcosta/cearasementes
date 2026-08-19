@@ -14,6 +14,16 @@ const val = (row: unknown[], mapeamento: MapeamentoColunas, chave: string): unkn
   return idx === null || idx === undefined ? undefined : row[idx];
 };
 
+/**
+ * Rodapé/linha de rótulo (ex.: "Total", "Total Geral", "Retirada", o cabeçalho "Entregador"
+ * repetido como linha) — precisa bater a linha INTEIRA, não só conter a palavra em algum lugar.
+ * Antes usava /total/i e /retirada/i soltos, que descartavam silenciosamente qualquer
+ * transportadora de verdade cujo nome contivesse essas palavras (ex.: "Total Express").
+ */
+function ehRodapeOuRotulo(nome: string): boolean {
+  return /^(entregador|total( geral)?|retirada)\s*:?\s*$/i.test(nome);
+}
+
 /** Relatório 124: cada linha vira uma entrega. Pula rodapés/linhas de rótulo, igual ao BI local original. */
 export function construirRegistros124(grupo: GrupoLinhas, mapeamento: MapeamentoColunas): Resultado<EntregaInsert> {
   const registros: EntregaInsert[] = [];
@@ -21,7 +31,7 @@ export function construirRegistros124(grupo: GrupoLinhas, mapeamento: Mapeamento
 
   for (const row of grupo.rows) {
     const nome = String(val(row, mapeamento, 'transportadora') ?? '').trim();
-    if (!nome || /entregador/i.test(nome) || /total/i.test(nome) || /retirada/i.test(nome)) {
+    if (!nome || ehRodapeOuRotulo(nome)) {
       ignoradas++;
       continue;
     }

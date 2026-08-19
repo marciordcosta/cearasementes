@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -168,10 +168,12 @@ export function UploadLog() {
     enabled: ehGrupoConciliacao && !!paraApagar?.tabelaPreco,
   });
 
-  const grupos = agruparUploads(uploads);
-  const linhas = montarLinhas(grupos);
-  const linhasRelatorios = linhas.filter((l) => !ehConciliacao(l));
-  const linhasConciliacao = linhas.filter(ehConciliacao);
+  // `uploads` traz o HISTÓRICO inteiro (ver listarUploadsRecentes), não só os recentes — sem
+  // memoizar, esse agrupamento roda de novo em qualquer re-render do componente (ex.: abrir o
+  // modal de exclusão), incluindo o histórico completo.
+  const linhas = useMemo(() => montarLinhas(agruparUploads(uploads)), [uploads]);
+  const linhasRelatorios = useMemo(() => linhas.filter((l) => !ehConciliacao(l)), [linhas]);
+  const linhasConciliacao = useMemo(() => linhas.filter(ehConciliacao), [linhas]);
 
   const { mutate: confirmarExclusao, isPending: apagando } = useMutation({
     mutationFn: async (grupo: ResumoGrupo) => {

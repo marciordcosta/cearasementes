@@ -7,6 +7,7 @@ import type {
   FilteredPriceTableView,
   ItemAgg,
   MonthAggregate,
+  MonthlyPriceTable,
   PeriodMode,
   PeriodStats,
   PriceTableAgg,
@@ -65,6 +66,25 @@ export function tablePeriodStats(ctx: PeriodContext, t: PriceTableAgg, periodKey
     registros: months.reduce((s, m) => s + m.registros, 0),
     qtdCliente: clientSet.size + avulsos,
   };
+}
+
+/**
+ * Contagem de clientes DEDUPLICADA entre Tabelas de Preço diferentes — um cliente que comprou em
+ * "Varejo" e "Atacado" no mesmo período conta 1 vez, não 2. `qtdCliente` de `PeriodStats`/
+ * `FilteredPriceTableView` já dedup DENTRO de uma tabela só; somar esses valores entre tabelas
+ * (como os totais faziam antes) infla a contagem pra qualquer cliente que compra em mais de uma
+ * Tabela. Mesma técnica já usada em `getMonthAggregate` (Set único compartilhado antes do `.size`).
+ */
+export function qtdClientesDeduplicados(tabelas: { monthly: MonthlyPriceTable[] }[]): number {
+  const clientSet = new Set<string>();
+  let avulsos = 0;
+  tabelas.forEach((t) =>
+    t.monthly.forEach((m) => {
+      m.clientSet.forEach((code) => clientSet.add(code));
+      avulsos += m.avulsos;
+    }),
+  );
+  return clientSet.size + avulsos;
 }
 
 /** Junta faturamento (tabelas de preço) + transportadoras de um mês/ano específico. */

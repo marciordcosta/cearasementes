@@ -8,6 +8,7 @@ import {
   getPeriodKeyFor,
   getPeriodLabel,
   getPeriodMonthlyBreakdown,
+  qtdClientesDeduplicados,
   tablePeriodStats,
   type PeriodContext,
 } from '../calculations';
@@ -75,7 +76,11 @@ export function YearComparisonTable({ ctx, priceTables, carriers, selectedPeriod
     const stats = priceTables.map((t) => tablePeriodStats(ctx, t, period)).filter((s): s is NonNullable<typeof s> => s !== null);
     const valorLiquido = stats.reduce((s, st) => s + st.valorLiquido, 0);
     const totalReg = stats.reduce((s, st) => s + st.registros, 0);
-    const qtdCliente = stats.reduce((s, st) => s + st.qtdCliente, 0);
+    // Dedup entre Tabelas de Preço (ver qtdClientesDeduplicados) — somar stats[].qtdCliente
+    // infla a contagem, já que cada um dedup só DENTRO da própria tabela.
+    const qtdCliente = qtdClientesDeduplicados(
+      priceTables.map((t) => ({ monthly: t.monthly.filter((m) => getPeriodKeyFor(ctx, m.year, m.month) === period) })),
+    );
 
     let pedidos = 0;
     let valorTransportado = 0;

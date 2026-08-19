@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/Card';
 import { TabelaDados } from '@/components/ui/TabelaDados';
 import { fmtBRL, fmtInt, fmtPct, MESES_PT } from '@/lib/format';
 import { palette } from '@/lib/chartSetup';
-import { getFilteredPriceTables, mesesDoPeriodo, posicaoNoPeriodo, type PeriodContext } from '../calculations';
+import { getFilteredPriceTables, mesesDoPeriodo, posicaoNoPeriodo, qtdClientesDeduplicados, type PeriodContext } from '../calculations';
 import type { FilteredPriceTableView, PriceTableAgg } from '../types';
 import { MultiLineChart } from './MultiLineChart';
 
@@ -16,7 +16,9 @@ interface Vendas396SectionProps {
 
 export function Vendas396Section({ ctx, priceTables, selectedPeriod, isDark }: Vendas396SectionProps) {
   const [mostrarGrafico, setMostrarGrafico] = useState(false);
-  const filtered = getFilteredPriceTables(ctx, priceTables, selectedPeriod);
+  // useMemo — sem isso, os useMemo abaixo que dependem de `filtered` recalculam sempre (identidade
+  // nova a cada render), tornando a memoização deles inútil.
+  const filtered = useMemo(() => getFilteredPriceTables(ctx, priceTables, selectedPeriod), [ctx, priceTables, selectedPeriod]);
   const colors = palette(isDark);
   const tableColor = (t: FilteredPriceTableView) => colors[priceTables.indexOf(t.ref) % colors.length];
 
@@ -136,7 +138,7 @@ export function Vendas396Section({ ctx, priceTables, selectedPeriod, isDark }: V
                   cabecalho: 'Clientes',
                   alinhamento: 'right',
                   render: (t) => {
-                    const totalCli = filtered.reduce((s, x) => s + x.qtdCliente, 0);
+                    const totalCli = qtdClientesDeduplicados(filtered);
                     return (
                       <>
                         {fmtInt.format(t.qtdCliente)} <span className="text-xs text-[var(--color-text-soft)]">({fmtPct(t.qtdCliente, totalCli)})</span>

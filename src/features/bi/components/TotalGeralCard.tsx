@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/Card';
 import { CardMetrica } from '@/components/ui/CardMetrica';
 import { fmtBRL, fmtInt, fmtPct } from '@/lib/format';
-import { getFilteredPriceTables, type PeriodContext } from '../calculations';
+import { getFilteredPriceTables, qtdClientesDeduplicados, type PeriodContext } from '../calculations';
 import type { PriceTableAgg } from '../types';
 
 interface TotalGeralCardProps {
@@ -19,7 +19,9 @@ export function TotalGeralCard({ ctx, priceTables, selectedPeriod }: TotalGeralC
   const totalDesconto = filtered.reduce((s, t) => s + t.desconto, 0);
   const totalLiquido = filtered.reduce((s, t) => s + t.valorLiquido, 0);
   const totalReg = filtered.reduce((s, t) => s + t.totalReg, 0);
-  const totalCli = filtered.reduce((s, t) => s + t.qtdCliente, 0);
+  // Dedup entre Tabelas de Preço (um cliente que compra em mais de uma conta 1 vez só) — somar
+  // t.qtdCliente direto infla a contagem, já que cada um dedup só DENTRO da própria tabela.
+  const totalCli = qtdClientesDeduplicados(filtered);
 
   return (
     <Card className="p-4">
