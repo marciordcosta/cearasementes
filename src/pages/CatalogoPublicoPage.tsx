@@ -1763,8 +1763,15 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
         plantioPmsManual: item.plantioPmsManual,
         plantioValidade: item.plantioValidade,
         mostrarDetalhes: (data?.mostrarDetalhesPlantio ?? false) && item.mostrarDetalhesCatalogo,
+        // Preço + frete desse produto sozinho (peso dele × Frete Kg + preço dele × Frete NF% + Frete
+        // Fixo) — mesma regra "informada" pro canal (ver resolverFreteCatalogo), sem o Frete Mínimo
+        // (piso por PEDIDO inteiro, não dá pra ratear por produto). Só quando a Tabela tem
+        // Transportadora vinculada — sem isso, o frete real só se sabe pedindo a cidade do cliente.
+        precoComFrete: data?.temTransportadora
+          ? item.preco + (data.freteFixo ?? 0) + item.pesoUsado * (data.freteKgEfetivo ?? 0) + (item.preco * (data.fretePctEfetivo ?? 0)) / 100
+          : null,
       })),
-    [itensFiltrados, data?.mostrarDetalhesPlantio],
+    [itensFiltrados, data?.mostrarDetalhesPlantio, data?.temTransportadora, data?.freteFixo, data?.freteKgEfetivo, data?.fretePctEfetivo],
   );
 
   // Categoria -> blocos "colados" (mesmo produto/variantes, ver chaveComparacaoProduto — mesma

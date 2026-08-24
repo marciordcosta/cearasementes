@@ -14,6 +14,15 @@ export interface ItemCatalogoPublicoPdf {
   peso: number;
   /** Usado pra agrupar "mesmo produto" (ver chaveComparacaoProduto) — prioriza Cultivar cadastrado, sem Categoria/Classe interferindo. */
   cultivar: string | null;
+  /**
+   * Preço + frete estimado desse produto sozinho (peso dele × Frete Kg + preço dele × Frete NF% +
+   * Frete Fixo — mesmas taxas resolvidas pro Canal, ver resolverFreteCatalogo em calculations.ts),
+   * mostrado ao lado do preço líquido no PDF. Só quando a Tabela tem Transportadora vinculada (sem
+   * isso, o frete real só se sabe pedindo a cidade do cliente — não dá pra estimar por produto
+   * aqui); NÃO inclui o Frete Mínimo (piso por PEDIDO inteiro, não por produto, não faz sentido
+   * ratear por item) — é só uma referência, o valor exato do pedido sai no carrinho de verdade.
+   */
+  precoComFrete: number | null;
 }
 
 const PDF_MARGEM = 15;
@@ -191,6 +200,11 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
   // limpar a altura da letra maiúscula inteira, senão a linha corta o nome por cima).
   const RESPIRO_ANTES_LINHA = 1;
   const RESPIRO_DEPOIS_LINHA = alturaMaiuscula(FONTE_NOME) + 1;
+  // Sobra mais espaço reservado à direita (nome quebra antes) quando algum item mostra o valor
+  // com frete ao lado do preço — as duas strings juntas ("R$ X c/ frete" + "R$ Y") não cabem no
+  // mesmo espaço reservado de quando só existe o preço sozinho.
+  const temAlgumFrete = itens.some((i) => i.precoComFrete !== null);
+  const larguraNome = PDF_LARGURA_UTIL - (temAlgumFrete ? 75 : 40);
 
   categoriasOrdenadas.forEach((cat) => {
     if (y > PDF_Y_LIMITE - 12) y = pdfNovaPagina(doc);
@@ -222,11 +236,23 @@ export async function gerarCatalogoPublicoPdfBlob(canalNome: string, itens: Item
       }
 
       doc.setTextColor(0);
-      const larguraNome = PDF_LARGURA_UTIL - 40;
       const linhasNome = desenharNomeComDestaque(doc, item.nome, PDF_MARGEM, y, larguraNome, FONTE_NOME);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(FONTE_NOME);
-      doc.text(`R$ ${f(item.preco)}`, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+      const textoPreco = `R$ ${f(item.preco)}`;
+      doc.text(textoPreco, PDF_LARGURA - PDF_MARGEM, y, { align: 'right' });
+      if (item.precoComFrete !== null) {
+        // Preço + frete estimado desse produto sozinho, ao lado do preço líquido (mesma linha) — só
+        // aparece pra Tabelas com Transportadora vinculada (ver ItemCatalogoPublicoPdfDetalhado).
+        const larguraPreco = doc.getTextWidth(textoPreco);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(FONTE_INFO);
+        doc.setTextColor(120);
+        doc.text(`R$ ${f(item.precoComFrete)} c/ frete`, PDF_LARGURA - PDF_MARGEM - larguraPreco - 3, y, { align: 'right' });
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(FONTE_NOME);
+        doc.setTextColor(0);
+      }
 
       // Fornecedor logo abaixo do nome, sem espaço nenhum (colado na última linha do nome) — Peso vai
       // na mesma linha, alinhado à direita. Sem Fornecedor/VC%/PMS/Validade, ainda assim mostra o Peso
