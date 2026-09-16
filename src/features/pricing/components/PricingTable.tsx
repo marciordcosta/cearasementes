@@ -881,7 +881,7 @@ export function PricingTable({
   }, [arrastandoBarra, maxScrollEfetivo, larguraTrack, larguraThumb]);
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative flex flex-col" ref={containerRef}>
       <div
         ref={scrollDivRef}
         className="grade-scroll-x-custom max-h-[70vh] overflow-auto"
@@ -1020,9 +1020,12 @@ export function PricingTable({
         />
       )}
       {maxScrollEfetivo > 0 && (
+        // Fica NO FLUXO normal (não sobreposta) — reserva a própria altura logo abaixo da grade,
+        // em vez de flutuar por cima da última linha (era `position:absolute`, sem reservar
+        // espaço nenhum, cobrindo/atrapalhando a visualização e edição da linha de baixo).
         <div
-          className="absolute bottom-0.5 z-20 h-2.5 rounded-full bg-[var(--color-line)]"
-          style={{ left: finalColunasFixas, width: larguraTrack }}
+          className="z-20 mt-1.5 h-2.5 shrink-0 rounded-full bg-[var(--color-line)]"
+          style={{ marginLeft: finalColunasFixas, width: larguraTrack }}
         >
           <div
             onPointerDown={(e) => {
