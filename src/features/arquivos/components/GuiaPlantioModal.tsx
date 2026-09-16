@@ -30,6 +30,7 @@ import {
   resolverModoPlantio,
   resolverPmsBaseTexto,
 } from '../parametrizacaoProdutos';
+import { resultadoTeste, statusTeste } from '../testeGerminacao';
 import type { ArquivoLaudo, ChecklistPergunta, FatorPlantio, ManualPlantio, ProdutoParametrizacao } from '../types';
 import { ChecklistCondicaoModal } from './ChecklistCondicaoModal';
 
@@ -758,7 +759,15 @@ export function GuiaPlantioModal({
                       onClick={() => selecionar(a)}
                       className="flex w-full flex-col px-3 py-1 pl-4 text-left text-xs font-normal text-[var(--color-text-soft)] hover:bg-[var(--color-accent)]/15 hover:text-[var(--color-text)]"
                     >
-                      Lote {a.lote ?? '—'} · Val. {a.validade ?? '—'} · {a.fornecedor ?? '—'}
+                      {`Lote ${a.lote ?? '—'} · Val. ${a.validade ?? '—'}`}
+                      {statusTeste(a) !== 'sem_teste' && (
+                        // Teste de Campo (quando existe) tem PRIORIDADE sobre o VC/Pureza real no cálculo
+                        // de kg/ha (ver germinacaoParaSemeadura em calculoSemeadura.ts) — mostrar aqui
+                        // ajuda a explicar de cara por que a Taxa de Semeadura desse lote não muda ao
+                        // corrigir o VC/PMS na Parametrização.
+                        <span className="font-semibold text-[var(--color-accent)]">{` · Teste ${resultadoTeste(a, pmsNumericoDoLaudo(a, produtos))}`}</span>
+                      )}
+                      {` · ${a.fornecedor ?? '—'}`}
                     </button>
                   ))}
                 </div>
