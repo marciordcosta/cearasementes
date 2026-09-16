@@ -20,14 +20,48 @@ type LaudoParaSemeadura = Pick<
 >;
 
 /**
+ * Pureza REAL (%) — diferente da Pureza que o laboratório reporta no laudo: aqui, "quanto do peso
+ * do saco é semente de verdade" vem comparando o PMS do laudo (peso de 1.000 sementes DO LOTE, como
+ * vendido — no Incrustado já inclui o revestimento) contra o PMS da semente pura (cadastrado na
+ * Parametrização de Produtos, campo "PMS" — peso de 1.000 sementes sem incrustamento nem impureza
+ * nenhuma). Quanto mais pesado o PMS do laudo em relação ao PMS puro, menor a fração real de
+ * semente — o resto é revestimento (Incrustado) ou impureza mesmo (terra, palha, semente de outra
+ * planta). Ainda multiplica pela Pureza% do laudo por cima (as duas perdas de pureza — peso agregado
+ * E impureza medida em laboratório — entram juntas). Sem PMS puro cadastrado (ou sem PMS do lote pra
+ * comparar), não dá pra calcular essa correção — cai na Pureza crua do laudo, sem ajuste nenhum.
+ */
+function purezaRealPct(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
+  const purezaLaudo = paraNumero(a.pureza);
+  if (purezaLaudo === null) return null;
+  const pmsPuro = resolverPmsBase(a, produtos);
+  const pmsLaudo = resolverPmsDoLaudo(a, produtos);
+  if (pmsPuro === null || pmsPuro <= 0 || pmsLaudo === null || pmsLaudo <= 0) return purezaLaudo;
+  return (pmsPuro / pmsLaudo) * purezaLaudo;
+}
+
+/**
+ * VC REAL (%) — igual a calcularVCNumero (Pureza × Germinação), só que usando a Pureza REAL (ver
+ * purezaRealPct) em vez da Pureza crua do laudo. É o VC usado pra CALCULAR (kg/ha, Sementes/m² etc,
+ * ver germinacaoParaSemeadura) — o "VC" mostrado pro cliente no Catálogo Online e na grade de
+ * Arquivos continua sendo o VC de laboratório de sempre (calcularVCNumero), sem esse ajuste: é o
+ * valor que consta no documento oficial, não um número recalculado internamente.
+ */
+function vcRealNumero(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
+  const pureza = purezaRealPct(a, produtos);
+  const germinacao = paraNumero(a.germinacao);
+  if (pureza === null || germinacao === null) return null;
+  return (pureza * germinacao) / 100;
+}
+
+/**
  * % "de germinação usada" na conta de semeadura — na prática, a taxa geral
  * de sucesso (sementes que viram planta estabelecida):
  *
  * - Teste de campo (o nosso, feito com frequência): já é medido na terra de
  *   verdade, então já reflete a sobrevivência real — usa direto, sem
  *   multiplicar mais nada por cima.
- * - Sem teste de campo: cai pro VC do laudo (Pureza × Germinação, medidos em
- *   laboratório) corrigido pelo Índice de Sobrevivência do produto — o
+ * - Sem teste de campo: cai pro VC REAL do laudo (ver vcRealNumero — Pureza REAL × Germinação,
+ *   medidos em laboratório) corrigido pelo Índice de Sobrevivência do produto — o
  *   laboratório não capta perdas de campo (seca, praga, forma de plantio),
  *   por isso a correção só entra aqui, nunca em cima do teste de campo.
  *   Sempre o LAUDO de verdade (o último lote) — nunca um valor genérico
@@ -38,7 +72,7 @@ type LaudoParaSemeadura = Pick<
 export function germinacaoParaSemeadura(a: LaudoParaSemeadura, produtos: ProdutoParametrizacao[]): number | null {
   const doTeste = resultadoTesteNumero(a, resolverPmsDoLaudo(a, produtos));
   if (doTeste !== null) return doTeste;
-  const vc = calcularVCNumero(a);
+  const vc = vcRealNumero(a, produtos);
   if (vc === null) return null;
   const sobrevivencia = resolverIndiceSobrevivencia(a, produtos);
   return sobrevivencia === null ? vc : vc * sobrevivencia;

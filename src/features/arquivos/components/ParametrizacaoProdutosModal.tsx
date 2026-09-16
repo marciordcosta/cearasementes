@@ -300,7 +300,7 @@ function LinhaParametrizacao({
       />
       <input
         defaultValue={camposAtuais.pmsBase}
-        title="Peso de Mil Sementes (g)"
+        title="PMS da semente PURA (g) — peso de 1.000 sementes sem incrustamento nem impureza nenhuma. Usado pra comparar com o PMS do laudo (do lote) e achar a Pureza REAL (ver germinacaoParaSemeadura) — mesmo Cultivar em Processos diferentes deve ter o mesmo valor aqui, já que a semente pura não muda com o processo."
         onBlur={(e) => {
           const valor = e.target.value.trim();
           if (valor !== camposAtuais.pmsBase) onSalvar({ ...camposAtuais, pmsBase: valor }, idExistente);
@@ -406,7 +406,7 @@ function LinhaParametrizacao({
   );
 }
 
-/** PMS base, Densidade base (plantas/m²) e Índice de Sobrevivência (%) por Cultivar+Processo — cadastrado uma vez aqui, usado automaticamente no cálculo de kg/ha de todo laudo desse Cultivar+Processo. */
+/** PMS da semente pura (g, sem incrustamento/impureza — usado pra achar a Pureza REAL, ver germinacaoParaSemeadura em calculoSemeadura.ts), Densidade base (plantas/m²) e Índice de Sobrevivência (%) por Cultivar+Processo — cadastrado uma vez aqui, usado automaticamente no cálculo de kg/ha de todo laudo desse Cultivar+Processo. */
 export function ParametrizacaoProdutosModal({
   open,
   produtos,
@@ -523,7 +523,9 @@ export function ParametrizacaoProdutosModal({
             <div className="flex items-center gap-2 px-3 text-[11px] font-semibold text-[var(--color-text-soft)]">
               <span className="w-28 shrink-0">Cultivar</span>
               <span className="w-24 shrink-0">Processo</span>
-              <span className="w-16 shrink-0 text-center">PMS</span>
+              <span className="w-16 shrink-0 text-center" title="PMS da semente PURA (g) — sem incrustamento nem impureza. Mesmo Cultivar em Processos diferentes deve ter o mesmo valor.">
+                PMS
+              </span>
               <span className="w-16 shrink-0 text-center">Plant/m²</span>
               <span className="w-16 shrink-0 text-center">Plant/linear</span>
               <span className="w-16 shrink-0 text-center">Plant/cova</span>
