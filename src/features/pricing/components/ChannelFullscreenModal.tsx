@@ -242,11 +242,16 @@ export function ChannelFullscreenModal({
   }
 
   const produtosFiltrados = useMemo(() => {
+    // Desativado GERAL (Imprimir desligado em todas as Tabelas) nunca aparece aqui — a tela cheia
+    // por canal mostra "como essa Tabela está de verdade" (o que publica/vai pro PDF), e um produto
+    // assim já está fora dela de qualquer jeito; ao contrário da grade principal (onde ele some pro
+    // bloco de baixo, mas continua visível pra poder reativar pelo botão direito).
+    const ativos = produtos.filter((p) => p.imprimir);
     const palavras = busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const filtrados =
       palavras.length === 0
-        ? produtos
-        : produtos.filter((p) => {
+        ? ativos
+        : ativos.filter((p) => {
             // Mesmos campos da busca da grade principal (ver produtosFiltrados em PricingPage.tsx) —
             // nome, fornecedor, categoria, subcategoria (Processo) e cultivar, não só nome/fornecedor.
             const fornecedor = p.fornecedorId ? fornecedorPorId.get(p.fornecedorId) : undefined;
