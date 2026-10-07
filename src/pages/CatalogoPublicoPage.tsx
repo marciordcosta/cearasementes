@@ -1705,15 +1705,38 @@ export function CatalogoPublicoPage({ slug }: { slug: string }) {
     }
   }
 
-  /** Clique em "Salvar em PDF" — mesmo gerador jsPDF do WhatsApp (ver gerarCatalogoPublicoPdfBlob), só
-   *  baixando o arquivo direto em vez de abrir o WhatsApp — um único formato de catálogo pros dois botões. */
+  /**
+   * Clique em "Salvar em PDF" — mesmo gerador jsPDF do WhatsApp (ver gerarCatalogoPublicoPdfBlob).
+   * `<a download>` com blob: URL não é confiável em navegador de celular (Safari/iOS em particular
+   * nunca deu suporte de verdade — o clique só abre o PDF numa aba/visualizador, sem salvar nada,
+   * mesmo bug que fazia "Salvar em PDF" não funcionar no celular enquanto no PC baixava normal).
+   * Tenta o Web Share nativo primeiro (mesma API/suporte do "Enviar por WhatsApp", ver
+   * tentarCompartilharPdf) — no celular abre a folha de compartilhar com "Salvar em Arquivos"/
+   * "Salvar no dispositivo", que É o jeito certo de salvar lá; sem suporte (a maioria dos
+   * computadores), cai no download direto de sempre.
+   */
   async function baixarPdfCatalogo() {
     if (!data) return;
     const blob = await gerarCatalogoPublicoPdfBlob(data.canalNome ?? '', itensParaPdfWhatsApp);
+    const nomeArquivo = `Catálogo ${data.canalNome ?? 'Ceará Sementes'}.pdf`;
+    const nav = navigator as Navigator & { canShare?: (dados?: { files?: File[] }) => boolean; share?: (dados: { files?: File[]; title?: string }) => Promise<void> };
+    if (typeof nav.share === 'function' && typeof nav.canShare === 'function') {
+      const file = new File([blob], nomeArquivo, { type: 'application/pdf' });
+      if (nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({ files: [file], title: nomeArquivo });
+          return;
+        } catch (erro) {
+          // Cancelou a folha de compartilhar de propósito — não insiste com o download direto por cima.
+          if (erro instanceof Error && erro.name === 'AbortError') return;
+          // Qualquer outro erro do Web Share — segue pro fallback de baixar direto abaixo.
+        }
+      }
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Catálogo ${data.canalNome ?? 'Ceará Sementes'}.pdf`;
+    a.download = nomeArquivo;
     document.body.appendChild(a);
     a.click();
     a.remove();
