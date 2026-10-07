@@ -330,6 +330,11 @@ export function ChannelFullscreenModal({
       }
       onClose={onFechar}
       widthClassName="max-w-[95vw]"
+      // Um pouco mais alto que o padrão (85vh) — sem isso, numa tela menos alta o modal não cobria o
+      // fundo até embaixo, deixando a barra de rolagem própria da grade de trás (PricingPage) aparecer
+      // por baixo da borda do modal, bem perto da barra de rolagem própria DESSA grade — confundia as
+      // duas.
+      heightClassName="max-h-[92vh]"
     >
       <div className="max-h-[75vh]">
         {canal && carregandoHistorico && (
