@@ -431,11 +431,17 @@ export function PricingPage() {
   );
 
   // Maior Representação Geral primeiro — produto sem dado (Código não batendo) vai pro final.
-  const produtosExibidos = !ordenarPorRepresentacao
+  const produtosOrdenados = !ordenarPorRepresentacao
     ? produtosFiltrados
     : [...produtosFiltrados].sort(
         (a, b) => (representatividadeGeralPorProduto.get(b.id)?.pct ?? -1) - (representatividadeGeralPorProduto.get(a.id)?.pct ?? -1),
       );
+  // Desativado GERAL (Imprimir desligado em todas as Tabelas, ver onToggleImprimir) vai pro bloco
+  // de baixo — mantém a ordenação de cima (Personalizada ou por Representação) DENTRO de cada
+  // bloco, já que `.sort` é estável (ES2019+): só reparte ativos/inativos, nunca embaralha quem já
+  // estava ordenado. NÃO vale pra "precisa ajuste" por Tabela (desativação só naquela Tabela) —
+  // só a desativação geral move a linha de posição.
+  const produtosExibidos = [...produtosOrdenados].sort((a, b) => Number(b.imprimir) - Number(a.imprimir));
 
   // ---------- Produtos ----------
   function onUpdatePreco(produtoId: string, canalId: string, preco: number) {
